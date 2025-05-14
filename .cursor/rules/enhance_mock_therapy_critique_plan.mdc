@@ -1,0 +1,57 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Plan: Enhance Mock Therapy Workflow with Critical Review & Next Steps
+
+**Goal:** To make the mock therapeutic recommendations more insightful by including specific analysis of simulated strengths/weaknesses and outlining conceptual next steps (both in silico and experimental) based on the simulated results. This will enhance the demonstration of an AI agent guiding a user through complex scientific design.
+
+## Part 1: Backend Modifications (`[ai_research_assistant.py](mdc:ai_research_assistant.py)`)
+
+The primary focus will be on the `calculate_mock_system_design_score` function and the structure of the recommendation dictionary it produces.
+
+### Task 1.1: Enhance `calculate_mock_system_design_score` Function
+  - **1.1.1: More Specific Rationale Generation:**
+    - Modify the rationale to be dynamic, referencing specific simulated metric values (e.g., mock pLDDT, mock off-target count, mock on-target score) and how they contributed to the overall score.
+  - **1.1.2: Identify Simulated Strengths/Weaknesses:**
+    - Implement logic to categorize simulated metrics based on predefined thresholds (e.g., mock pLDDT < 0.7 = weakness, mock off-target count > 2 = weakness, mock on-target score < 0.7 = weakness).
+    - Store these as lists (e.g., `strengths: ["High mock on-target score (0.9)", "Low mock off-target count (0)"]`, `weaknesses: ["Low mock pLDDT for component X (0.6)"]`).
+  - **1.1.3: Generate Simulated Next Steps/Suggestions:**
+    - Based on identified simulated strengths/weaknesses, and generally for any design, generate a structured list of conceptual next steps.
+    - **Structure:**
+        - `in_silico_refinement`: Suggestions like "Simulate alternative guide RNAs to potentially improve on-target score or reduce off-targets if problematic," or "Consider sequence optimization for Component Y if mock pLDDT is low."
+        - `experimental_validation_plan`: Conceptual steps like "Plan *in vitro* cleavage assay for guide RNA validation," "Design cell line experiments to assess editing efficiency and functional knockout/repair," "Outline strategy for experimental off-target analysis (e.g., GUIDE-seq, Cas-OFFinder)."
+        - `broader_therapeutic_considerations`: Points like "Evaluate potential delivery mechanisms suitable for the designed system," "Consider preclinical models for efficacy testing," "Assess potential immunogenicity and safety aspects."
+
+### Task 1.2: Update Recommendation Dictionary Structure
+  - Add new keys to the dictionary returned by `calculate_mock_system_design_score` (which is part of each `mock_recommendation` in `handle_design_therapy_interaction`).
+  - **New Keys Example:**
+    - `detailed_rationale`: (String) The enhanced, specific rationale.
+    - `simulated_findings`: (Dict) Containing lists of `strengths` and `weaknesses`.
+      - `strengths`: (List of strings)
+      - `weaknesses`: (List of strings)
+    - `suggested_next_steps`: (Dict) Structured as:
+      - `in_silico_refinement`: (List of strings)
+      - `experimental_validation_plan`: (List of strings)
+      - `broader_therapeutic_considerations`: (List of strings)
+
+## Part 2: Frontend Modifications (`[pages/3_Mock_Therapy_Design.py](mdc:pages/3_Mock_Therapy_Design.py)`)
+
+Modify the Streamlit page to display the new information effectively.
+
+### Task 2.1: Update Recommendation Display
+  - **2.1.1: Display Enhanced Rationale and Findings:**
+    - Within each recommendation expander, display the `detailed_rationale`.
+    - Clearly present the `simulated_findings`. Use formatting to distinguish strengths (e.g., ✅ or green text) and weaknesses (e.g., ⚠️ or orange/red text).
+  - **2.1.2: Display Suggested Next Steps:**
+    - Add a new section or use `st.tabs` within each recommendation expander dedicated to `suggested_next_steps`.
+    - Display the suggestions under their respective categories: "In Silico Refinement," "Experimental Validation Plan," and "Broader Therapeutic Considerations."
+    - Use Markdown for readability (e.g., bullet points, bolding key terms).
+    - Ensure explanations for each step are informative.
+
+## Overall Aim:
+By implementing these changes, the Streamlit application will present each mock therapy system recommendation with:
+1.  A confidence score and a more **specific, actionable rationale**.
+2.  A clear summary of **simulated strengths and weaknesses** based on the mock data.
+3.  A **structured list of conceptual next steps**, guiding the user on potential in silico refinements, experimental validation strategies, and broader therapeutic considerations.

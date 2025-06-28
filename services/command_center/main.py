@@ -180,12 +180,23 @@ class CommandCenter:
             
             mutated_window = max(dna_matches, key=len)
 
-            if len(mutated_window) == WINDOW_SIZE:
+            # Allow for some length variation from the model, but not too much.
+            # Then, pad or truncate to ensure the window size is exactly correct.
+            TOLERANCE = 100 # Allow for a +/- 100 character difference
+            if abs(len(mutated_window) - WINDOW_SIZE) <= TOLERANCE:
+                # Pad the sequence if it's shorter to maintain overall length
+                if len(mutated_window) < WINDOW_SIZE:
+                    padding = "N" * (WINDOW_SIZE - len(mutated_window))
+                    mutated_window += padding
+                
+                # Truncate if it's slightly longer
+                mutated_window = mutated_window[:WINDOW_SIZE]
+
                 # Reconstruct the full gene with the mutated window
                 full_mutated_sequence = wild_type_dna[:start_pos] + mutated_window + wild_type_dna[start_pos + WINDOW_SIZE:]
                 generated_sequences.append(full_mutated_sequence)
             else:
-                print(f"    ⚠️ Oracle returned sequence of incorrect length ({len(mutated_window)} vs {WINDOW_SIZE}). Skipping.")
+                print(f"    ⚠️ Oracle returned sequence of significantly different length ({len(mutated_window)} vs {WINDOW_SIZE}). Skipping.")
                 generated_sequences.append(None)
 
         print("✅ Generation complete.")

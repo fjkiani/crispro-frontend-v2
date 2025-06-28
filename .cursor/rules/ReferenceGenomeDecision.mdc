@@ -1,0 +1,35 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Decision Record: Primary Reference Genome Build
+
+This document records the analysis and final decision regarding the primary human genome reference build for Project Ascension.
+
+## 1. Analysis of Key Data Sources
+
+The choice between `hg19/GRCh37` and `hg38/GRCh38` was evaluated based on compatibility with our most likely sources of RUNX1-FPD and related cancer genomics data.
+
+*   **LOVD3 Platform (Global Variome shared LOVD):** This critical resource for RUNX1 variant data is primarily configured to use **`hg19/GRCh37`**. While some `hg38` mappings exist, full API support is not yet implemented, and `hg19` ensures maximum compatibility with the existing dataset.
+
+*   **TCGA (The Cancer Genome Atlas):** TCGA data presents a mixed environment.
+    *   **Version 31.0:** Uses GENCODE 22, aligned to **`hg19/GRCh37`**.
+    *   **Version 32.0:** Uses GENCODE 36, aligned to `hg38/GRCh38`.
+    *   While `hg38` is more recent, using `hg19` ensures compatibility with a significant portion of available TCGA data without requiring complex mapping operations.
+
+*   **General Genomic Tools & Vendor Data:** Many established bioinformatics tools, exome enrichment kits, and vendor reports still standardize on **`hg19/GRCh37`** or its derivatives (e.g., b37+decoy).
+
+## 2. Recommendation and Final Decision
+
+Based on the analysis, a definitive decision has been made.
+
+**Primary Build:** **`hg19/GRCh37`**
+
+**Rationale:**
+
+1.  **Maximal Compatibility:** Adopting `hg19` provides the most straightforward compatibility with the LOVD3 platform, a primary source for our specific target.
+2.  **Reduced Complexity:** It avoids the need for on-the-fly conversion or mapping of `hg38` data, reducing the risk of errors and ensuring consistency.
+3.  **Broad Tool Support:** It aligns with a wide array of existing and legacy datasets and bioinformatics tools that are still prevalent in the research community.
+
+All subsequent sequence extractions and analyses in Project Ascension will consistently use the `hg19/GRCh37` build to ensure data integrity and prevent mapping errors.

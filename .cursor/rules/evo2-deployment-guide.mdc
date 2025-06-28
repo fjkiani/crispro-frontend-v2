@@ -1,0 +1,53 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Evo2 Deployment Guide
+
+This guide documents the hard-won lessons from deploying a discriminative `evo2` model on Modal. The process involves navigating a complex set of dependency issues between the Python version, `numpy`, and the `evo2` library's build system. Follow these steps to ensure a successful deployment for similar endpoints.
+
+A complete, working example can be found in [deploy_discriminative_evo2.py](mdc:deploy_discriminative_evo2.py).
+
+### 1. Environment and Build Configuration
+
+The core of a successful deployment is creating the correct build environment in the Modal image.
+
+#### Key Configuration Steps:
+
+1.  **Base Image and Python Version**:
+    *   Use the `nvidia/cuda:12.4.0-devel-ubuntu22.04` image as a base.
+    *   Crucially, use **Python 3.11** (`.add_python("3.11")`). Python 3.12 has build tool conflicts with older `numpy` versions, and Python 3.10 is not supported by `evo2`.
+
+2.  **Fix the `numpy` Build**:
+    *   The `evo2` library's runtime code requires `numpy==1.22.0` to avoid errors with deprecated functions like `fromstring`.
+    *   However, `numpy==1.22.0` has a buggy build script that looks for the `ar` archiver at a hardcoded, non-standard path.
+    *   To fix this, you **must** create a symbolic link from the system's `ar` tool to the path the build script expects.
+
+    ```python
+    .run_commands(
+        "mkdir -p /tools/llvm/bin",
+        "ln -s /usr/bin/ar /tools/llvm/bin/llvm-ar",
+    )
+    ```
+
+3.  **Installation Order**:
+    *   First, clone and install the `evo2` library from source.
+    *   Immediately after, uninstall the default `transformer-engine` and install the pinned, compatible version (`'transformer_engine[pytorch]==1.13'`).
+    *   Finally, install all other Python packages, ensuring `numpy` is pinned to `1.22.0`.
+
+### 2. Modal Application Logic
+
+Correctly handling the Modal runtime is essential to avoid errors after a successful build.
+
+1.  **Asynchronous Web Endpoints**:
+    *   Any web endpoint (`@modal.fastapi_endpoint`) that calls another remote method on the same class **must** be declared as `async def`.
+
+2.  **Calling Remote Methods**:
+    *   From within an `async` endpoint, use `await self.method_name.remote.aio(...)` to call the other method. This correctly waits for the result without blocking the event loop. Using `.get()` or a direct call will lead to runtime errors.
+
+3.  **JSON Serialization**:
+    *   Models often return data in special numeric types (e.g., `numpy.float32`). The standard `json` library cannot serialize these.
+    *   You **must** explicitly cast all numerical results to standard Python types (e.g., `float()`) before returning them in a `JSONResponse`.
+
+By following these steps, you can avoid the dependency traps and runtime errors encountered during this deployment.

@@ -1,0 +1,74 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Evo 2 Variant Effect Prediction Integration Plan
+
+## 1. Motivation & Benefits
+
+The integration of Evo 2, a state-of-the-art DNA language model, aims to significantly enhance the therapeutic context within the CRISPR Assistant. By predicting the functional impact of genetic variants (SNVs), we can provide users with deeper insights:
+
+*   **Understand Disease Mechanisms:** Help users assess whether a specific genetic variant is likely to be pathogenic or benign, which is crucial for understanding its role in disease.
+*   **Guide Therapeutic Strategy Design:**
+    *   **Gene Correction:** Validate if a target variant is indeed functionally disruptive and thus a good candidate for correction.
+    *   **Gene Knockout/Modulation:** Understand the baseline functional state of a gene/allele before attempting knockout or modulation.
+*   **Prioritize CRISPR Targets:** If multiple variants or gene targets are under consideration, Evo 2 predictions can help prioritize those with the most significant predicted functional consequences, focusing experimental efforts.
+*   **Enhance Therapeutic Relevance:** Directly ties into the project\'s goal of adding context relevant to therapeutic development challenges by providing an *in silico* assessment of variant pathogenicity.
+
+## 2. How it Fits into the Application
+
+The integration will follow the plan outlined in **Phase 8** of the project\'s scratchpad in the main [`.cursorrules`](mdc:.cursorrules) file. Key aspects include:
+
+*   **User Interface:**
+    *   A new page or a dedicated section (e.g., "Advanced Design Tools" or "Variant Functional Assessment") where users can input:
+        *   Gene symbol.
+        *   Variant details (chromosome, position, reference allele, alternate allele).
+        *   Optionally, paths to reference genome files and specific Evo 2 model files (as advanced settings).
+    *   Display of the Evo 2 delta likelihood score and an LLM-generated interpretation.
+*   **Backend Module (`tools/evo_variant_predictor.py`):**
+    *   Functions adapted from the Evo 2 demonstration notebook to:
+        *   Parse user-provided variant details.
+        *   Fetch/handle reference genome sequences around the variant.
+        *   Load the selected Evo 2 model (e.g., `evo2_1b_base.pt` or larger models).
+        *   Score reference and variant sequences.
+        *   Calculate and return the delta likelihood score.
+*   **LLM Enhancement:**
+    *   LLM prompts will be developed to take the gene, variant, and the raw Evo 2 delta score as input.
+    *   The LLM will generate a human-readable interpretation of the score\'s potential functional and therapeutic relevance, considering the gene context.
+    *   This interpretation will be displayed alongside the raw score in the UI.
+*   **Workflow Integration:**
+    *   Initially, it can be a standalone tool.
+    *   Later, it could be linked from other parts of the application, for instance, when a user defines a target mutation for CHOPCHOP or therapeutic design, they could be prompted to run an Evo 2 assessment.
+
+## 3. Synergy with CRISPR and AlphaFold Functionalities
+
+Evo 2 predictions complement the existing and planned CRISPR and AlphaFold (simulated) functionalities:
+
+*   **CRISPR Design & Analysis (e.g., CHOPCHOP, CRISPResso2):**
+    *   **Target Validation:** Evo 2 helps validate *why* a particular genomic locus (containing a variant) is being targeted by CRISPR. If Evo 2 predicts a variant is benign, editing it might not have the desired therapeutic effect. Conversely, a "likely disruptive" prediction strengthens the rationale for editing.
+    *   **Interpretation of Editing Outcomes:** When analyzing CRISPResso2 results, knowing the predicted functional status of the alleles (wild-type vs. variant vs. edited) can add significant context. For example, successfully editing a "likely disruptive" variant to wild-type would be a more significant result than editing a "likely benign" one.
+*   **AlphaFold (Simulated Structural Prediction):**
+    *   Evo 2 predicts the functional consequence of a variant at the DNA sequence level (how it affects the sequence\'s likelihood).
+    *   AlphaFold (as simulated in our project for protein/RNA components of a therapeutic system) predicts the structural integrity and interactions of the *designed therapeutic molecules* (e.g., Cas protein, guide RNA, repair templates).
+    *   **Combined Power:**
+        1.  Evo 2 can help **identify and validate the therapeutic target** (e.g., "Is this *BRCA1* SNV functionally important?").
+        2.  AlphaFold can then help **design and validate the therapeutic tool** (e.g., "Will my engineered Cas protein and guide RNA form a stable complex predicted to access and edit this validated *BRCA1* SNV?").
+    *   This creates a more holistic *in silico* assessment pipeline: from understanding the problem (variant impact via Evo 2) to designing a solution (CRISPR tool structure/function via AlphaFold).
+
+## 4. Potential Future Improvements
+
+Beyond the initial integration (Phase 8):
+
+*   **Batch Processing:** Allow users to input a list of variants (e.g., from a VCF file snippet) for batch prediction.
+*   **Larger Evo 2 Models:** Provide options and guidance for using larger, potentially more accurate Evo 2 models (e.g., 7B, 40B), including information on their computational resource requirements.
+*   **Automated Genome Fetching:** Integrate with APIs (e.g., Ensembl, NCBI) to automatically fetch reference genome sequences for specified coordinates, reducing user burden.
+*   **Enhanced LLM Interpretation:**
+    *   Incorporate gene-specific information (e.g., known protein domains, clinical significance from databases like ClinVar or OMIM) into the LLM prompts for more nuanced interpretations of the delta scores.
+    *   Provide LLM-generated summaries of literature related to the gene and variant.
+*   **Caching:** Cache Evo 2 predictions for frequently queried variants to speed up results for common requests.
+*   **Comparative Visualizations:** If multiple variants for a gene are analyzed, provide visualizations (e.g., bar charts) comparing their delta likelihood scores.
+*   **Direct VCF Input:** Allow users to upload a VCF file and select variants for annotation with Evo 2 scores.
+*   **Integration with Delivery System Design:** Evo 2 could potentially be adapted or fine-tuned in the future to assess sequences relevant to delivery vectors (e.g., viral LTRs, packaging signals), though this is more speculative.
+
+This integration will provide a scientifically relevant and computationally advanced feature, pushing the CRISPR Assistant towards a more comprehensive therapeutic design and analysis platform.

@@ -1,0 +1,151 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Use Case: Bridging Genetic Test Results with CRISPR Therapeutic Design
+
+
+This document outlines how the CRISPR Therapeutic Design Assistant, with its integrated (simulated) Evo2, AlphaFold, and AI agent capabilities, can bridge the gap between various genetic test findings and the initial stages of designing potential CRISPR-based therapeutic interventions. The core logic for simulations resides in [`ai_research_assistant.py`](mdc:ai_research_assistant.py), with agent interactions often powered by [`tools/llm_api.py`](mdc:tools/llm_api.py).
+
+## 1. From Clinical/Genomic Test Result to Therapeutic Exploration & Design
+
+**Scenario:** A patient receives results from Whole Genome Sequencing (WGS) or a clinical genetic panel, identifying one or more variants potentially linked to their condition.
+
+**CRISPR Assistant's Role:**
+
+*   **1.1. Target Validation & Prioritization:**
+    *   **Input:** Identified genetic variant(s).
+    *   **Assistant's Action (Simulated Evo2 & Agents):**
+        *   Assess the functional impact of variants (e.g., using logic similar to `Mock Original Variant Evo2 Confidence` within the system).
+        *   An "Intelligent Prioritization Agent" uses simulated impact scores and data from the platform's knowledge graph (gene-disease associations, pathways) to rank variants for therapeutic potential.
+*   **1.2. Therapeutic Strategy Selection:**
+    *   **Assistant's Action (Simulated Evo2, Agents & Knowledge Graph):**
+        *   A "Therapeutic Strategy Agent" proposes optimal CRISPR approaches (Knockout, HDR Correction, Base/Prime Editing, CRISPRa/i) based on variant type and disease context.
+        *   This leverages and expands functions like `simulate_therapeutic_development_planning` in [`ai_research_assistant.py`](mdc:ai_research_assistant.py).
+*   **1.3. CRISPR System Design & In Silico Evaluation:**
+    *   **Assistant's Action (Simulated CHOPCHOP, AlphaFold & Agents):**
+        *   `Guide RNA Optimization Agent`: Designs and evaluates gRNAs for on-target efficacy, off-targets, and stability (MFE), similar to CHOPCHOP analysis.
+        *   `Protein Component Optimizer Agent`: For novel Cas variants or fusions, simulates AlphaFold-like structural predictions for 3D structure, stability, and interactions.
+        *   `Repair Template Optimization Agent`: Designs and evaluates repair templates for HDR strategies.
+        *   Integrates evaluations into an overall "therapeutic candidate score" for early *in silico* risk/benefit assessment.
+
+## 2. Addressing Variants of Uncertain Significance (VUS)
+
+**Scenario:** Genetic testing identifies a VUS, posing a challenge for clinical interpretation and action.
+
+**CRISPR Assistant's Role (Research & Hypothesis Generation):**
+
+*   **2.1. Functional Impact Prediction:**
+    *   **Assistant's Action (Simulated Evo2 & AlphaFold):**
+        *   Simulate VUS impact on protein structure, stability (AlphaFold).
+        *   Predict changes in molecular interactions.
+        *   Compare VUS features to known pathogenic variants (Evo2-like pattern recognition).
+*   **2.2. In Silico Experiment Design:**
+    *   **Assistant's Action ("VUS Investigation Agent"):**
+        *   Design *in silico* CRISPR experiments to probe VUS function (e.g., simulate correction to wild-type and predict structural restoration; simulate VUS introduction and predict perturbations).
+        *   Generate testable hypotheses for wet-lab validation.
+
+## 3. Designing for Somatic Mutations (e.g., Cancer) & Considering Mosaicism
+
+**Scenario:** WGS of a tumor reveals somatic driver mutations. Tumor heterogeneity and mosaicism are key considerations.
+
+**CRISPR Assistant's Role:**
+
+*   **3.1. Tumor-Specific Therapeutic Design:**
+    *   **Assistant's Action:** Design CRISPR systems targeting somatic mutations unique to cancer cells, emphasizing high precision and fidelity.
+*   **3.2. Modeling Mosaicism & Editing Efficiency:**
+    *   **Assistant's Action:** If the variant allele frequency in the tumor is known, model the required CRISPR editing efficiency for therapeutic effect and assess the risk of resistance from unedited cells.
+*   **3.3. Delivery System Simulation:**
+    *   **Assistant's Action:** The `simulate_delivery_system_optimization` agent (from [`ai_research_assistant.py`](mdc:ai_research_assistant.py)) explores strategies for effective delivery to heterogeneous tumor tissues.
+
+## 4. Bridging Different Genetic Test Types (DTC vs. Clinical)
+
+**Scenario:** Users may have results from Direct-to-Consumer (DTC) tests, which differ significantly from clinical-grade sequencing.
+
+**CRISPR Assistant's Role (Educational & Preparatory):**
+
+*   **4.1. Contextual Information:**
+    *   **Assistant's Action ("Educational Agent"):** Explain the scope and limitations of DTC tests versus clinical tests, emphasizing that the assistant's advanced therapeutic design simulations are intended for clinically validated variants.
+*   **4.2. Facilitating Clinical Dialogue:**
+    *   **Assistant's Action:** Help users (or their healthcare providers) formulate informed questions if they transition from DTC findings to clinical investigation and subsequent therapeutic exploration with the assistant.
+
+## 5. Central Role of Simulated Evo2, AlphaFold, and AI Agents
+
+*   **Simulated Evo2:** Fundamental for interpreting variant effects, generating novel therapeutic components (e.g., optimized Cas proteins, synthetic regulatory elements), and proposing overarching therapeutic strategies based on the underlying genetic defect and its context.
+*   **Simulated AlphaFold:** Crucial for assessing the structural impact of identified genetic variants on proteins, validating the 3D structural integrity of all designed CRISPR components (proteins, RNAs) and their complexes, and predicting how engineered therapeutic molecules might interact within a cellular environment.
+*   **AI Agents (powered by [`tools/llm_api.py`](mdc:tools/llm_api.py) and interacting with simulations in [`ai_research_assistant.py`](mdc:ai_research_assistant.py)):**
+    *   **Data Interpretation Agents:** Assist in understanding complex genetic findings (e.g., VUS, mosaicism).
+    *   **Workflow Guidance Agents:** Steer users from raw genetic variant data to a comprehensively designed and *in silico*-evaluated therapeutic system candidate.
+    *   **Component Optimization Agents:** Iteratively refine therapeutic components (gRNAs, proteins, templates) based on simulated performance metrics and defined therapeutic goals.
+    *   **Risk/Feasibility Assessment Agents:** Synthesize diverse simulation data into actionable insights and preliminary risk assessments for potential therapeutic strategies.
+
+By integrating these capabilities, the CRISPR Therapeutic Design Assistant can significantly enhance the translation of genetic discoveries into rational, *in silico*-validated therapeutic concepts.
+
+
+Let's break down some key use-cases and connections:
+1. From Clinical/Genomic Test Result to Therapeutic Exploration & Design
+Scenario: A patient undergoes Whole Genome Sequencing (WGS) or a targeted clinical genetic panel. A specific variant (or several) is identified as potentially pathogenic or a strong candidate for causing their condition (e.g., a rare disease, cancer driver). The text highlights that even WGS is often focused on "answering specific clinical questions" (00:38:40).
+CRISPR Assistant's Role:
+Target Validation & Prioritization (Simulated Evo2 & Agents):
+Input: The identified variant(s) from the genetic test.
+Assistant's Action: Our platform, using Evo2-like simulations, could assess the functional impact of the variant (similar to our current "Mock Original Variant Evo2 Confidence"). It could predict if the variant likely disrupts protein structure, function, or regulatory elements. This goes beyond simple database lookups, offering a dynamic assessment.
+If multiple variants are found (common, as "each individual has tens of thousands of genetic variants" (00:43:25)), an "Intelligent Prioritization Agent" could use simulated impact scores and data from our knowledge graph (gene-disease associations, pathway involvement) to help researchers prioritize which variants are the most promising therapeutic targets.
+Therapeutic Strategy Selection (Simulated Evo2, Agents & Knowledge Graph):
+Assistant's Action: Based on the nature of the validated target variant (e.g., loss-of-function, gain-of-function, dominant negative) and the disease context, a "Therapeutic Strategy Agent" could propose optimal CRISPR approaches:
+Knockout/Disruption (NHEJ)
+Correction/Insertion (HDR)
+Base Editing / Prime Editing
+Transcriptional Activation/Repression (CRISPRa/i)
+This agent would draw on our simulate_therapeutic_development_planning logic but enhanced with deeper biological rationale.
+CRISPR System Design & In Silico Evaluation (Simulated CHOPCHOP, AlphaFold & Agents):
+Assistant's Action: Once a strategy is chosen:
+Guide RNA Optimization Agent: Simulates CHOPCHOP-like analysis to design and evaluate gRNAs for on-target efficacy, off-target potential, and structural stability (MFE).
+Protein Component Optimizer Agent: If novel Cas variants or fusion proteins are needed (e.g., for base/prime editors, CRISPRa/i effectors), simulates AlphaFold-like predictions for their 3D structure, stability, and potential interactions with gRNA and DNA.
+Repair Template Optimization Agent: For HDR strategies, designs and evaluates repair templates.
+The system integrates these evaluations into an overall "therapeutic candidate score," providing an early in silico risk/benefit assessment.
+2. Addressing Variants of Uncertain Significance (VUS)
+Scenario: Genetic testing identifies a VUS. The text mentions that "not all of it can be interpreted" and "over 50% of genes without a known gene-disease association" (00:40:18). This is a major clinical challenge.
+CRISPR Assistant's Role (Research & Hypothesis Generation):
+Functional Impact Prediction (Simulated Evo2 & AlphaFold):
+Assistant's Action: The platform could take a VUS and:
+Simulate its impact on protein structure and stability (AlphaFold).
+Predict changes in interactions with other proteins or DNA.
+Compare its sequence/structural features to known pathogenic variants in the same gene or pathway (Evo2-like pattern recognition).
+In Silico Experiment Design (Agents):
+Assistant's Action: A "VUS Investigation Agent" could help researchers design in silico CRISPR experiments to probe the VUS's function:
+Correction Simulation: Design a CRISPR strategy to correct the VUS to wild-type in a cellular model. Simulate (AlphaFold) if this restores normal protein structure.
+Introduction Simulation: Design a CRISPR strategy to introduce the VUS into a wild-type background. Simulate potential structural or functional perturbations.
+These simulations can generate testable hypotheses for wet-lab validation, helping to clarify the VUS's role.
+3. Designing Therapies for Somatic Mutations (e.g., Cancer) and Considering Mosaicism
+Scenario: WGS of a tumor reveals somatic mutations driving cancer. The text states, "cancer can be considered a genetic disease, but often it is not caused by the genes a person is born with, but rather by the changes that occur over their lifetime" (00:45:28). The concept of genetic mosaicism (00:44:32) is also highly relevant here, as tumors are often mosaic.
+CRISPR Assistant's Role:
+Tumor-Specific Therapeutic Design:
+Assistant's Action: The platform would focus on designing CRISPR systems that specifically target somatic mutations found only in cancer cells, aiming to minimize impact on healthy cells. This requires highly precise guide RNAs and potentially engineered Cas enzymes with higher fidelity.
+Modeling Mosaicism & Editing Efficiency:
+Assistant's Action: If the percentage of tumor cells carrying a specific targetable mutation is known (e.g., from deep sequencing), the platform could help model:
+The required CRISPR editing efficiency in the targeted cell population to achieve a therapeutic effect.
+The potential impact of failing to edit a fraction of the cancer cells (e.g., risk of resistance).
+Delivery System Simulation for Heterogeneous Tissues:
+Assistant's Action: The simulate_delivery_system_optimization agent would be crucial for exploring strategies to effectively deliver the CRISPR components to a sufficient number of cancer cells within a mosaic tumor environment, considering barriers like tumor penetration and varied cell accessibility.
+4. Bridging the Gap Between Different Genetic Test Types
+Scenario: A user might have results from a DTC test (00:35:11) that flags a variant, which, while not a clinical diagnosis, piques their interest or concern. They might then pursue clinical testing.
+CRISPR Assistant's Role (Educational & Preparatory):
+Contextual Information Agent: While not providing medical advice, an "Educational Agent" could explain the types of variants DTC tests often report on and why they might not be clinically actionable alone.
+Facilitating Questions for Clinicians: If a user later gets clinical WGS, the platform could help them (or their genetic counselor/clinician) formulate questions about specific variants found, and then explore potential research-level therapeutic design simulations if a variant is deemed relevant by a healthcare professional.
+Clarifying Scope: The assistant can emphasize the difference between DTC tests and clinical-grade sequencing, reinforcing that its advanced therapeutic design simulations are meant for variants identified and validated through rigorous clinical and functional genomics, not casual DTC findings.
+How Evo2, AlphaFold, and Agents are Central:
+Evo2 (Simulated):
+Interpreting variant effects identified by any genetic test.
+Generating novel therapeutic components (e.g., optimized Cas variants, synthetic promoters tailored to specific cell types).
+Proposing overarching therapeutic strategies based on the genetic defect.
+AlphaFold (Simulated):
+Visualizing and assessing the structural impact of a variant from a genetic test.
+Validating the structural integrity of every designed CRISPR protein, RNA, and their complexes.
+Predicting how engineered components might interact.
+Agents:
+Data Interpretation Agent: Helps users understand complex genetic test results (e.g., VUS, mosaicism) in the context of potential CRISPR intervention.
+Workflow Guidance Agents: Lead researchers from a raw genetic variant to a fully designed and in silico-evaluated therapeutic system.
+Optimization Agents: Iteratively refine components (gRNAs, proteins) based on simulated performance metrics.
+Risk/Feasibility Assessment Agent: Synthesizes all simulation data to provide a mock "go/no-go" early assessment.
+By integrating these advanced simulation tools and intelligent agents, our CRISPR assistant can become a vital link in the chain from genetic testing and discovery to the rational design and preclinical evaluation of novel gene therapies, directly addressing many of the complexities and opportunities highlighted in the provided text. It helps translate raw genetic data into actionable therapeutic hypotheses.

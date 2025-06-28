@@ -629,3 +629,459 @@ def handle_design_therapy_interaction(target_mutation_details: dict, conversatio
 #     # handle_chopchop_config_interaction([])
 #     # handle_chopchop_execution_interaction([])
 #     # handle_crispresso_execution_interaction([])
+
+def simulate_guide_rna_optimization(initial_on_target, initial_off_targets, initial_mfe, display_callback=print):
+    """
+    Simulates the optimization of a guide RNA.
+    Returns a dictionary with initial and optimized metrics, and an explanation.
+    """
+    display_callback("AI Research Assistant (Sim): Optimizing guide RNA...")
+    time.sleep(0.1) # Simulate work
+
+    optimized_on_target = min(1.0, initial_on_target + random.uniform(0.05, 0.15))
+    optimized_off_targets = max(0, initial_off_targets - random.randint(0, 3))
+    optimized_mfe = initial_mfe - random.uniform(0.5, 2.5)
+
+    explanation = (
+        f"The guide RNA optimization process aimed to improve on-target efficacy while reducing off-target potential. "
+        f"Initial on-target score was {initial_on_target:.2f}, which improved to {optimized_on_target:.2f}. "
+        f"Off-target count was reduced from {initial_off_targets} to {optimized_off_targets}. "
+        f"The MFE (Minimum Free Energy) changed from {initial_mfe:.2f} to {optimized_mfe:.2f}, indicating potential changes in structural stability. "
+        f"Further in-depth analysis and experimental validation are recommended."
+    )
+
+    display_callback("AI Research Assistant (Sim): Guide RNA optimization simulation complete.")
+    # The run_interactive_agent expects a slightly different structure for guide_optimization
+    return {
+        "changes": {
+            "original_metrics": {
+                "chopchop_on_target_score": initial_on_target,
+                "chopchop_off_target_count": initial_off_targets,
+                "chopchop_mfe": initial_mfe,
+            },
+            "new_metrics": {
+                "chopchop_on_target_score": round(optimized_on_target, 2),
+                "chopchop_off_target_count": optimized_off_targets,
+                "chopchop_mfe": round(optimized_mfe, 2),
+            }
+        },
+        "explanation": explanation
+    }
+
+def simulate_component_sequence_refinement(component_type="protein", sequence="MOCK_SEQUENCE", component_name="cas_protein_sequence", recommendation=None, display_callback=print):
+    """
+    Simulates the refinement of a component sequence (e.g., protein, RNA, DNA).
+    Uses mock AlphaFold metrics if available in recommendation.
+    """
+    display_callback(f"AI Research Assistant (Sim): Refining {component_type} component: {component_name} (sequence: {sequence[:20]}...)")
+    time.sleep(0.1)
+    
+    original_metrics = {"mock_plddt_score": random.uniform(0.5, 0.8), "mock_ranking_score": random.uniform(0.5, 0.8)}
+    if recommendation and recommendation.get('mock_alphafold_system_metrics', {}).get(component_name):
+        original_comp_metrics = recommendation['mock_alphafold_system_metrics'][component_name]
+        original_metrics["mock_plddt_score"] = original_comp_metrics.get('mock_plddt_score', original_metrics["mock_plddt_score"])
+        original_metrics["mock_ranking_score"] = original_comp_metrics.get('mock_ranking_score', original_metrics["mock_ranking_score"])
+        display_callback(f"AI Research Assistant (Sim): Using initial metrics for {component_name} from recommendation.")
+
+    refined_sequence = sequence + "_REFINED_" + ''.join(random.choices("ATCG" if component_type != "protein" else "ACDEFGHIKLMNPQRSTVWY", k=3))
+    
+    new_metrics = {
+        "mock_plddt_score": min(0.99, original_metrics["mock_plddt_score"] + random.uniform(0.05, 0.15)),
+        "mock_ranking_score": min(0.99, original_metrics["mock_ranking_score"] + random.uniform(0.05, 0.15))
+    }
+
+    explanation = (f"Simulated refinement of {component_type} component '{component_name}'. Sequence was altered. "
+                   f"pLDDT changed from {original_metrics['mock_plddt_score']:.2f} to {new_metrics['mock_plddt_score']:.2f}. "
+                   f"Ranking score changed from {original_metrics['mock_ranking_score']:.2f} to {new_metrics['mock_ranking_score']:.2f}. "
+                   "This could represent enhanced stability or activity. Experimental validation is key.")
+    display_callback("AI Research Assistant (Sim): Component sequence refinement simulation complete.")
+    return {
+        "component_name": component_name,
+        "original_sequence_snippet": sequence[:20] + "...",
+        "refined_sequence_snippet": refined_sequence[:20] + "...",
+        "changes": {
+            "original_metrics": original_metrics,
+            "new_metrics": new_metrics
+        },
+        "explanation": explanation
+    }
+
+def simulate_off_target_analysis(guide_sequence, genome="hg38", display_callback=print):
+    """
+    Simulates an in silico off-target analysis for a guide RNA.
+    """
+    display_callback(f"AI Research Assistant (Sim): Performing in silico off-target analysis for guide: {guide_sequence[:20]}... against {genome} genome.")
+    time.sleep(0.2)
+    num_potential_off_targets = random.randint(0, 15)
+    top_off_targets = []
+    for i in range(min(num_potential_off_targets, 3)):
+        top_off_targets.append({
+            "sequence": guide_sequence[:15] + ''.join(random.choices("ATCG", k=5)) + "NGG",
+            "chromosome": f"chr{random.randint(1,22)}",
+            "position": random.randint(100000, 200000000),
+            "mismatches": random.randint(1,4),
+            "score": round(random.uniform(0.1, 0.8),2)
+        })
+    
+    explanation = (f"Simulated off-target analysis for {guide_sequence[:20]}... found {num_potential_off_targets} potential off-target sites in the {genome} genome. "
+                   f"Top candidates have been listed. Further investigation, including assessing the genomic context and potential functional impact of these sites, is crucial. "
+                   f"Experimental validation (e.g., GUIDE-seq) is recommended.")
+    display_callback("AI Research Assistant (Sim): Off-target analysis simulation complete.")
+    return {
+        "guide_sequence": guide_sequence,
+        "genome": genome,
+        "potential_off_target_count": num_potential_off_targets,
+        "top_off_targets": top_off_targets,
+        "explanation": explanation
+    }
+
+def simulate_repair_template_optimization(target_sequence, desired_edit="SNV_CORRECTION", display_callback=print):
+    """
+    Simulates the optimization of a repair template for HDR.
+    """
+    display_callback(f"AI Research Assistant (Sim): Optimizing repair template for {desired_edit} at {target_sequence[:20]}...")
+    time.sleep(0.1)
+    template_length = random.randint(80, 200) # bps
+    optimized_homology_arm_length_left = random.randint(30,70)
+    optimized_homology_arm_length_right = random.randint(30,70)
+    mock_predicted_hdr_efficiency = random.uniform(0.05, 0.4)
+
+    explanation = (
+        f"Simulated optimization of a repair template for {desired_edit}. "
+        f"The optimized template has a total length of {template_length}bp, with homology arms of "
+        f"{optimized_homology_arm_length_left}bp (left) and {optimized_homology_arm_length_right}bp (right). "
+        f"Predicted HDR efficiency with this template is {mock_predicted_hdr_efficiency*100:.1f}%. "
+        f"Considerations for template design include minimizing secondary structures and ensuring correct edit incorporation."
+    )
+    display_callback("AI Research Assistant (Sim): Repair template optimization simulation complete.")
+    return {
+        "target_sequence_context": target_sequence,
+        "desired_edit": desired_edit,
+        "optimized_template_length_bp": template_length,
+        "homology_arm_left_bp": optimized_homology_arm_length_left,
+        "homology_arm_right_bp": optimized_homology_arm_length_right,
+        "predicted_hdr_efficiency": round(mock_predicted_hdr_efficiency,3),
+        "explanation": explanation
+    }
+
+def simulate_in_vitro_characterization(component="Cas9 RNP", guide_sequence=None, display_callback=print):
+    """
+    Simulates in vitro characterization of a CRISPR component (e.g., RNP cleavage assay).
+    """
+    display_callback(f"AI Research Assistant (Sim): Performing in vitro characterization of {component}...")
+    if guide_sequence:
+        display_callback(f"AI Research Assistant (Sim):   Using guide: {guide_sequence[:20]}...")
+    time.sleep(0.2)
+    
+    cleavage_efficiency = random.uniform(0.5, 0.95)
+    specificity_metric = random.uniform(0.7, 0.99) 
+    
+    interpretation_text = ""
+    if cleavage_efficiency > 0.85:
+        interpretation_text = "Excellent cleavage activity observed. "
+    elif cleavage_efficiency > 0.6:
+        interpretation_text = "Good cleavage activity observed. "
+    else:
+        interpretation_text = "Moderate cleavage activity, optimization may be beneficial. "
+
+    if specificity_metric > 0.9:
+        interpretation_text += "High on-target preference detected."
+    elif specificity_metric > 0.75:
+        interpretation_text += "Good on-target preference detected."
+    else:
+        interpretation_text += "On-target preference could be improved."
+        
+    explanation = (
+        f"Simulated in vitro characterization of {component}. "
+        f"Results indicate a cleavage efficiency of {cleavage_efficiency*100:.1f}%. "
+        f"A mock specificity metric suggests an on-target preference of {specificity_metric*100:.1f}%. "
+        f"{interpretation_text} These results are promising but should be confirmed in cell-based assays."
+    )
+    display_callback("AI Research Assistant (Sim): In vitro characterization simulation complete.")
+    return {
+        "component_characterized": component,
+        "guide_sequence_used": guide_sequence,
+        "results": { # Nested structure as per UI expectation
+            "cleavage_efficiency": cleavage_efficiency, # As a float 0.0-1.0
+            "specificity_metric_raw": round(specificity_metric, 2),
+            "interpretation": interpretation_text
+        },
+        "explanation": explanation
+    }
+
+def simulate_cell_based_assay(cell_line="HEK293T", guide_sequence="MOCKGUIDE", experiment_type="NHEJ_KNOCKOUT", display_callback=print):
+    """
+    Simulates a cell-based assay to assess CRISPR editing efficiency and outcomes.
+    """
+    display_callback(f"AI Research Assistant (Sim): Performing cell-based assay in {cell_line} for {experiment_type} with guide {guide_sequence[:20]}...")
+    time.sleep(0.3)
+    
+    on_target_editing_eff = random.uniform(0.2, 0.8)
+    nhej_percent = 0
+    hdr_percent = 0
+    if "NHEJ" in experiment_type.upper() or "KNOCKOUT" in experiment_type.upper():
+        nhej_percent = on_target_editing_eff * random.uniform(0.8, 0.98)
+    elif "HDR" in experiment_type.upper() or "CORRECTION" in experiment_type.upper():
+        hdr_percent = on_target_editing_eff * random.uniform(0.05, 0.3) 
+        nhej_percent = on_target_editing_eff * (1- (hdr_percent/on_target_editing_eff if on_target_editing_eff > 0 else 0)) * random.uniform(0.6,0.9)
+
+    phenotypic_outcome_observed = random.choice([True, False]) if "KNOCKOUT" in experiment_type.upper() else None
+    
+    explanation = (
+        f"Simulated cell-based assay in {cell_line} using guide {guide_sequence[:20]} for {experiment_type}. "
+        f"Achieved an on-target editing efficiency of {on_target_editing_eff*100:.1f}%. "
+        f"Outcome breakdown: {nhej_percent*100:.1f}% NHEJ"
+    )
+    if "HDR" in experiment_type.upper():
+         explanation += f", {hdr_percent*100:.1f}% HDR"
+    explanation += "."
+    if phenotypic_outcome_observed is not None:
+        explanation += f" The expected phenotypic outcome (e.g., protein knockout) was {'observed' if phenotypic_outcome_observed else 'not conclusively observed'}."
+    explanation += " These results provide an initial assessment of cellular editing. Further analysis of specific alleles and off-target effects is warranted."
+
+    display_callback("AI Research Assistant (Sim): Cell-based assay simulation complete.")
+    return {
+        "cell_line": cell_line,
+        "guide_sequence": guide_sequence,
+        "experiment_type": experiment_type,
+        "on_target_editing_efficiency_percent": round(on_target_editing_eff * 100, 1),
+        "nhej_percent": round(nhej_percent*100,1),
+        "hdr_percent": round(hdr_percent*100,1) if "HDR" in experiment_type.upper() else 0,
+        "phenotypic_outcome_observed": phenotypic_outcome_observed,
+        "explanation": explanation
+    }
+
+def simulate_off_target_validation(guide_sequence, method="GUIDE-seq", cell_line="K562", display_callback=print):
+    """
+    Simulates experimental off-target validation (e.g., GUIDE-seq, CIRCLE-seq).
+    """
+    display_callback(f"AI Research Assistant (Sim): Performing experimental off-target validation ({method}) for guide {guide_sequence[:20]} in {cell_line} cells...")
+    time.sleep(0.4)
+    
+    confirmed_off_targets = random.randint(0, 5)
+    off_target_details = []
+    for i in range(confirmed_off_targets):
+        off_target_details.append({
+            "site": f"OT_{i+1}",
+            "chromosome": f"chr{random.randint(1,22)}",
+            "edit_frequency_percent": round(random.uniform(0.01, 5.0), 2),
+            "annotation": random.choice(["intergenic", "intronic", "exonic (other gene)"])
+        })
+        
+    explanation = (
+        f"Simulated {method} analysis for guide {guide_sequence[:20]} in {cell_line} cells identified {confirmed_off_targets} experimentally confirmed off-target sites. "
+        f"The sites and their estimated editing frequencies are listed. "
+        f"It is critical to assess the potential functional consequences of these off-target edits. "
+        f"Consider using high-fidelity Cas enzymes or alternative guide RNAs if problematic off-targets are detected."
+    )
+    display_callback("AI Research Assistant (Sim): Off-target validation simulation complete.")
+    return {
+        "guide_sequence": guide_sequence,
+        "validation_method": method,
+        "cell_line": cell_line,
+        "confirmed_off_target_count": confirmed_off_targets,
+        "off_target_site_details": off_target_details,
+        "explanation": explanation
+    }
+
+def simulate_delivery_system_optimization(target_cell_type="Hepatocytes", vector_type="AAV", cargo_size_kb=4.5, display_callback=print):
+    """
+    Simulates the optimization of a delivery system for CRISPR components.
+    """
+    display_callback(f"AI Research Assistant (Sim): Optimizing {vector_type} delivery system for {target_cell_type} (cargo: {cargo_size_kb}kb)...")
+    time.sleep(0.2)
+
+    initial_efficiency = random.uniform(0.1, 0.4)
+    optimized_efficiency = min(0.9, initial_efficiency + random.uniform(0.2, 0.5))
+    toxicity_reduction_factor = random.uniform(1.1, 3.0) 
+    
+    optimization_strategies_simulated = ["Capsid engineering for tropism", "Promoter optimization", "Dose refinement"]
+    
+    explanation = (
+        f"Simulated optimization of a {vector_type} delivery system for {target_cell_type}. "
+        f"Strategies like {', '.join(random.sample(optimization_strategies_simulated, 2))} were applied. "
+        f"This resulted in an improved delivery efficiency from {initial_efficiency*100:.0f}% to {optimized_efficiency*100:.0f}%. "
+        f"Additionally, a mock toxicity reduction factor of {toxicity_reduction_factor:.1f}x was achieved. "
+        f"Further in vivo testing is required to confirm these improvements."
+    )
+    display_callback("AI Research Assistant (Sim): Delivery system optimization simulation complete.")
+    return {
+        "target_cell_type": target_cell_type,
+        "vector_type": vector_type,
+        "cargo_size_kb": cargo_size_kb,
+        "initial_delivery_efficiency_percent": round(initial_efficiency * 100, 0),
+        "optimized_delivery_efficiency_percent": round(optimized_efficiency * 100, 0),
+        "toxicity_reduction_factor": round(toxicity_reduction_factor, 1),
+        "simulated_optimization_strategies": optimization_strategies_simulated,
+        "explanation": explanation
+    }
+
+def simulate_therapeutic_development_planning(target_gene=None, editing_strategy=None, display_callback=print):
+    """
+    Simulates planning the therapeutic development pathway for a CRISPR therapy.
+    Args:
+        target_gene: Target gene for therapeutic intervention (if None, a random gene is chosen)
+        editing_strategy: Strategy for gene editing (if None, a strategy is chosen based on target)
+        display_callback: Function to display output
+    Returns:
+        Dictionary with development plan and milestones
+    """
+    # Define possible therapeutic targets and associated diseases
+    target_diseases = {
+        "PCSK9": {"disease": "Familial Hypercholesterolemia", "mechanism": "knockout", "cell_type": "hepatocytes", "delivery_challenge": "moderate", "regulatory_precedent": "high"},
+        "DMD": {"disease": "Duchenne Muscular Dystrophy", "mechanism": "exon skipping or gene replacement", "cell_type": "skeletal muscle", "delivery_challenge": "high", "regulatory_precedent": "moderate"},
+        "HBB": {"disease": "Sickle Cell Disease", "mechanism": "gene correction", "cell_type": "hematopoietic stem cells", "delivery_challenge": "moderate", "regulatory_precedent": "high"},
+        "F9": {"disease": "Hemophilia B", "mechanism": "gene addition", "cell_type": "hepatocytes", "delivery_challenge": "moderate", "regulatory_precedent": "high"},
+        "CFTR": {"disease": "Cystic Fibrosis", "mechanism": "gene correction", "cell_type": "airway epithelial cells", "delivery_challenge": "very high", "regulatory_precedent": "moderate"},
+        "HTT": {"disease": "Huntington's Disease", "mechanism": "allele-specific knockout", "cell_type": "neurons", "delivery_challenge": "very high", "regulatory_precedent": "low"}
+    }
+    editing_strategies = {
+        "knockout": {"technical_complexity": "low", "off_target_risk": "moderate", "regulatory_complexity": "moderate", "suitable_mechanisms": ["knockout", "allele-specific knockout"]},
+        "HDR-mediated correction": {"technical_complexity": "high", "off_target_risk": "moderate", "regulatory_complexity": "high", "suitable_mechanisms": ["gene correction"]},
+        "base editing": {"technical_complexity": "moderate", "off_target_risk": "low to moderate", "regulatory_complexity": "high", "suitable_mechanisms": ["gene correction"]},
+        "prime editing": {"technical_complexity": "high", "off_target_risk": "low", "regulatory_complexity": "high", "suitable_mechanisms": ["gene correction"]},
+        "AAV-mediated gene addition": {"technical_complexity": "moderate", "off_target_risk": "low", "regulatory_complexity": "moderate", "suitable_mechanisms": ["gene addition", "gene replacement"]}
+    }
+
+    if target_gene is None: target_gene = random.choice(list(target_diseases.keys()))
+    target_info = target_diseases.get(target_gene, {"disease": "Generic disease", "mechanism": "knockout", "cell_type": "somatic cells", "delivery_challenge": "moderate", "regulatory_precedent": "moderate"})
+    if editing_strategy is None:
+        suitable_strategies = [strat for strat, info in editing_strategies.items() if target_info["mechanism"] in info["suitable_mechanisms"]]
+        editing_strategy = random.choice(suitable_strategies if suitable_strategies else list(editing_strategies.keys()))
+    strategy_info = editing_strategies.get(editing_strategy, {"technical_complexity": "moderate", "off_target_risk": "moderate", "regulatory_complexity": "moderate"})
+    
+    result = {"target_gene": target_gene, "disease": target_info["disease"], "editing_strategy": editing_strategy, "cell_type": target_info["cell_type"], "simulation_steps": [], "development_plan": {}, "key_milestones": [], "critical_path_items": [], "risk_assessment": {}, "summary": {}, "explanation": ""}
+    
+    display_callback(f"📝 Planning therapeutic development for {editing_strategy}-based therapy targeting {target_gene} in {target_info['disease']}...")
+    time.sleep(0.3)
+    
+    preclinical_activities = [
+        {"activity": "Lead candidate optimization", "duration_months": random.randint(4,8), "key_deliverables": ["Optimized guide RNA", f"Validated delivery for {target_info['cell_type']}"], "estimated_cost": f"${random.randint(5,10)}M"},
+        {"activity": "In vitro efficacy", "duration_months": random.randint(3,6), "key_deliverables": ["Editing efficiency in cell lines", "On/Off-target activity"], "estimated_cost": f"${random.randint(1,3)}M"},
+        {"activity": "Animal model PoC", "duration_months": random.randint(6,12), "key_deliverables": [f"Efficacy in {target_info['disease']} model", "Dose-response"], "estimated_cost": f"${random.randint(3,8)}M"},
+        {"activity": "Toxicology/Safety", "duration_months": random.randint(6,12), "key_deliverables": ["GLP tox studies", "Biodistribution", "Off-target in tissues"], "estimated_cost": f"${random.randint(4,10)}M"},
+        {"activity": "CMC development", "duration_months": random.randint(12,24), "key_deliverables": ["GMP process", "Release assays", "Stability testing"], "estimated_cost": f"${random.randint(8,15)}M"}
+    ]
+    if target_info["cell_type"] in ["neurons", "skeletal muscle", "airway epithelial cells"]: preclinical_activities.append({"activity": "Advanced delivery dev.", "duration_months": random.randint(8,18), "key_deliverables": [f"Optimized vector for {target_info['cell_type']}", "In vivo biodistribution"], "estimated_cost": f"${random.randint(5,12)}M"})
+    if target_info["cell_type"] == "hematopoietic stem cells": preclinical_activities.append({"activity": "Ex vivo protocol opt.", "duration_months": random.randint(6,12), "key_deliverables": ["Optimized ex vivo editing", "Cell viability/engraftment"], "estimated_cost": f"${random.randint(4,9)}M"})
+    
+    step1 = {"step": "Preclinical development", "activities": preclinical_activities, "key_challenges": [f"Delivery to {target_info['cell_type']} ({target_info['delivery_challenge']})", f"{strategy_info['technical_complexity']} tech complexity", f"{strategy_info['off_target_risk']} off-target risk"], "description": "Preclinical activities outlined."}
+    result["simulation_steps"].append(step1); display_callback(f"🧪 Defined {len(preclinical_activities)} preclinical activities."); time.sleep(0.1)
+    
+    clinical_phases_base = [
+        {"phase": "Phase 1", "design": f"Dose-escalation in {random.randint(10,30)} patients", "primary_endpoint": "Safety", "duration_months": random.randint(12,24), "estimated_cost": f"${random.randint(10,25)}M"},
+        {"phase": "Phase 2", "design": f"RCT in {random.randint(30,100)} patients", "primary_endpoint": "Efficacy (biomarkers)", "duration_months": random.randint(18,36), "estimated_cost": f"${random.randint(25,60)}M"},
+        {"phase": "Phase 3", "design": f"Pivotal trial in {random.randint(100,300)} patients", "primary_endpoint": "Clinical efficacy", "duration_months": random.randint(24,48), "estimated_cost": f"${random.randint(60,150)}M"}
+    ]
+    reg_advantages = ["Orphan Drug possible"]
+    if target_info["regulatory_precedent"] == "high": clinical_phases_base[1]["duration_months"] = int(clinical_phases_base[1]["duration_months"] * 0.8); reg_advantages.extend(["Accelerated Approval possible", "Breakthrough Therapy candidate"])
+    elif target_info["regulatory_precedent"] == "low": clinical_phases_base[0]["duration_months"] = int(clinical_phases_base[0]["duration_months"] * 1.2); reg_advantages = ["Standard pathway, extended monitoring likely"]
+    
+    step2 = {"step": "Clinical development", "clinical_phases": clinical_phases_base, "regulatory_advantages": random.sample(reg_advantages, min(len(reg_advantages), 2)), "description": f"Clinical strategy to {clinical_phases_base[-1]['phase']}."}
+    result["simulation_steps"].append(step2); display_callback(f"👥 Defined {len(clinical_phases_base)} clinical phases."); time.sleep(0.1)
+    
+    preclinical_duration = max(a["duration_months"] for a in preclinical_activities)
+    clinical_duration_sum = sum(p["duration_months"] for p in clinical_phases_base)
+    milestones = [
+        {"milestone": "Preclinical PoC", "timing": f"M{random.randint(6,12)}"}, {"milestone": "IND/CTA submission", "timing": f"M{random.randint(preclinical_duration-3, preclinical_duration+3)}"},
+        {"milestone": "First patient dosed", "timing": f"M{random.randint(preclinical_duration+3, preclinical_duration+9)}"}, {"milestone": "Phase 1 data", "timing": f"M{random.randint(preclinical_duration+clinical_phases_base[0]['duration_months'], preclinical_duration+clinical_phases_base[0]['duration_months']+6)}"}
+    ]
+    critical_path = [f"Dev of {editing_strategy} for {target_gene}", f"Delivery to {target_info['cell_type']}", "GLP tox", "GMP manufacturing"]
+    
+    step3 = {"step": "Timeline & critical path", "milestones": milestones, "critical_path": critical_path, "estimated_time_to_market": f"{int(preclinical_duration + clinical_duration_sum*0.9 + random.randint(12,24))} months"}
+    result["simulation_steps"].append(step3); result["key_milestones"] = milestones; result["critical_path_items"] = critical_path
+    display_callback(f"📅 Identified {len(critical_path)} critical items, {len(milestones)} milestones."); time.sleep(0.1)
+
+    risks = []
+    if strategy_info["technical_complexity"] == "high": risks.append({"risk": "Tech feasibility", "likelihood": "high", "impact": "high", "mitigation": "Backup approaches"})
+    if target_info["delivery_challenge"] == "very high": risks.append({"risk": f"Delivery to {target_info['cell_type']}", "likelihood": "high", "impact": "critical", "mitigation": "Multiple platforms"})
+    if strategy_info["off_target_risk"] == "high": risks.append({"risk": "Off-target effects", "likelihood": "moderate", "impact": "high", "mitigation": "HiFi enzymes, comprehensive analysis"})
+    if target_info["regulatory_precedent"] == "low": risks.append({"risk": "Regulatory uncertainty", "likelihood": "high", "impact": "high", "mitigation": "Early agency engagement"})
+    risks.append({"risk": "Market access", "likelihood": "high", "impact": "high", "mitigation": "HEOR modeling"})
+    
+    step4 = {"step": "Risk assessment", "risks": risks, "summary": f"Identified {len(risks)} risks."}
+    result["simulation_steps"].append(step4); result["risk_assessment"] = {"risks": risks, "high_priority_count": len([r for r in risks if r.get('likelihood') == 'high' and r.get('impact') in ['high', 'critical']])}
+    display_callback(f"⚠️ Completed risk assessment with {len(risks)} risks."); time.sleep(0.1)
+    
+    total_cost_preclinical = sum(int(a['estimated_cost'].replace('$', '').replace('M', '')) for a in preclinical_activities)
+    total_cost_clinical = sum(int(p['estimated_cost'].replace('$', '').replace('M', '')) for p in clinical_phases_base)
+    result["development_plan"] = {"preclinical": step1, "clinical": step2, "estimated_timeline": step3["estimated_time_to_market"], "estimated_cost": f"${total_cost_preclinical + total_cost_clinical}M"}
+    
+    market_potential = "high"; development_complexity = "moderate"; regulatory_path = "evolving" # Simplified
+    result["summary"] = {"target_indication": f"{target_info['disease']} ({target_gene})", "therapeutic_approach": f"{editing_strategy} targeting {target_gene}", "development_complexity": development_complexity, "regulatory_path": regulatory_path, "market_potential": market_potential, "estimated_timeline": step3["estimated_time_to_market"], "estimated_cost": result["development_plan"]["estimated_cost"]}
+    
+    result["explanation"] = (f"Simulated plan for {editing_strategy} targeting {target_gene} for {target_info['disease']}. "
+                             f"Complexity: {development_complexity}. Market: {market_potential}. Timeline: {step3['estimated_time_to_market']}. Cost: {result['development_plan']['estimated_cost']}. "
+                             f"Key challenges: {target_info['delivery_challenge']} delivery, {strategy_info['technical_complexity']} tech complexity. Critical path: {len(critical_path)} items. Risks: {len(risks)} identified.")
+    display_callback(f"📊 Dev plan: {result['summary']['estimated_timeline']}, {result['summary']['estimated_cost']}"); return result
+
+def run_interactive_agent(agent_type, recommendation, editing_type=None, component_name=None, display_callback=print):
+    """
+    Router for interactive agent simulations.
+    """
+    display_callback(f"AI Research Assistant (AgentRunner): Request for agent_type: {agent_type}")
+    time.sleep(0.1)
+
+    results = None
+    if agent_type == "guide_optimization":
+        guide_data = recommendation.get('mock_chopchop_metrics', {}).get('guide_rna_sequence', {})
+        initial_on_target = guide_data.get('chopchop_on_target_score', random.uniform(0.4, 0.7))
+        initial_off_targets = guide_data.get('chopchop_off_target_count', random.randint(5, 15))
+        initial_mfe = guide_data.get('chopchop_mfe', random.uniform(-20, -5))
+        display_callback(f"AI Research Assistant (AgentRunner): Using initial guide data for optimization: On-target {initial_on_target:.2f}, Off-targets {initial_off_targets}, MFE {initial_mfe:.2f}")
+        results = simulate_guide_rna_optimization(initial_on_target, initial_off_targets, initial_mfe, display_callback)
+    
+    elif agent_type == "component_optimization":
+        comp_name_to_opt = component_name or 'cas_protein_sequence' # Default to cas_protein if not specified
+        comp_seq = recommendation.get('designed_system_components', {}).get(comp_name_to_opt, "MOCK_DEFAULT_SEQUENCE_FOR_AGENT_OPT")
+        comp_type = "protein" # Default
+        if "rna" in comp_name_to_opt.lower(): comp_type = "rna"
+        elif "dna" in comp_name_to_opt.lower(): comp_type = "dna"
+        display_callback(f"AI Research Assistant (AgentRunner): Optimizing component '{comp_name_to_opt}' ({comp_type}).")
+        results = simulate_component_sequence_refinement(component_type=comp_type, sequence=comp_seq, component_name=comp_name_to_opt, recommendation=recommendation, display_callback=display_callback)
+
+    elif agent_type == "in_vitro_validation":
+        guide_seq = recommendation.get('designed_system_components', {}).get('guide_rna_sequence', "MOCK_GUIDE_FOR_INVITRO_AGENT")
+        cas_protein = recommendation.get('designed_system_components', {}).get('cas_protein_sequence', "MOCK_CAS_PROTEIN_FOR_AGENT")
+        component_to_validate = f"RNP complex (Cas: {cas_protein[:10]}..., Guide: {guide_seq[:10]}...)"
+        display_callback(f"AI Research Assistant (AgentRunner): Validating {component_to_validate}.")
+        results = simulate_in_vitro_characterization(component=component_to_validate, guide_sequence=guide_seq, display_callback=display_callback)
+
+    elif agent_type == "off_target_prediction":
+        guide_seq = recommendation.get('designed_system_components', {}).get('guide_rna_sequence', "MOCK_GUIDE_FOR_OFFTARGET_AGENT")
+        results = simulate_off_target_analysis(guide_sequence=guide_seq, display_callback=display_callback)
+    
+    elif agent_type == "hdr_template_optimization":
+        target_context = recommendation.get('target_sequence_context', "MOCK_GENOMIC_TARGET_FOR_HDR_AGENT") # Need target context from somewhere
+        edit_detail = recommendation.get('editing_goal_details', 'SNV_CORRECTION_AGENT_MOCK') # Need edit details
+        results = simulate_repair_template_optimization(target_sequence=target_context, desired_edit=edit_detail, display_callback=display_callback)
+
+    elif agent_type == "cell_based_assay_simulation":
+        guide_seq = recommendation.get('designed_system_components', {}).get('guide_rna_sequence', "MOCK_GUIDE_FOR_CELL_ASSAY_AGENT")
+        exp_type = editing_type or recommendation.get('editing_type', "NHEJ_KNOCKOUT_AGENT_MOCK") # Infer from recommendation or default
+        results = simulate_cell_based_assay(guide_sequence=guide_seq, experiment_type=exp_type, display_callback=display_callback)
+
+    elif agent_type == "experimental_off_target_validation":
+        guide_seq = recommendation.get('designed_system_components', {}).get('guide_rna_sequence', "MOCK_GUIDE_FOR_EXP_OFFTARGET_AGENT")
+        results = simulate_off_target_validation(guide_sequence=guide_seq, display_callback=display_callback)
+
+    elif agent_type == "delivery_optimization_simulation":
+        target_cell = recommendation.get('target_cell_type_for_therapy', 'Generic Cells AGENT') # Need target cell type
+        vector = recommendation.get('delivery_vector_choice', 'AAV_AGENT_MOCK') # Need vector choice
+        results = simulate_delivery_system_optimization(target_cell_type=target_cell, vector_type=vector, display_callback=display_callback)
+
+    elif agent_type == "full_development_planning":
+        target_gene_plan = recommendation.get('target_gene_for_therapy', 'BRAF_AGENT_MOCK') # Need target gene
+        editing_strategy_plan = recommendation.get('overall_editing_strategy', 'knockout_AGENT_MOCK') # Need strategy
+        results = simulate_therapeutic_development_planning(target_gene=target_gene_plan, editing_strategy=editing_strategy_plan, display_callback=display_callback)
+        
+    else:
+        display_callback(f"AI Research Assistant (AgentRunner): Unknown agent_type '{agent_type}'. No action.")
+        return {"error": f"Unknown agent_type: {agent_type}", "explanation": "The requested agent simulation is not implemented."}
+
+    if results:
+        display_callback(f"AI Research Assistant (AgentRunner): Agent '{agent_type}' simulation complete.")
+        return results
+    else:
+        display_callback(f"AI Research Assistant (AgentRunner): Agent '{agent_type}' did not produce results.")
+        return {"error": f"Agent '{agent_type}' produced no results.", "explanation": "Simulation ran but returned None."}

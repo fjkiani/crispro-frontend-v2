@@ -1,0 +1,97 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# AI API Endpoint Roadmap: From Analysis to Creation
+
+This document outlines the complete API surface for the CrisPRO Intelligence Platform, powered by the Evo2 biological foundation model. It covers our current capabilities, planned enhancements, and the future product vision these endpoints will enable.
+
+## Phase 1: Core Discriminative Endpoints (Analysis & Prediction)
+
+These endpoints analyze existing or simulated genetic sequences to predict their biological impact. They form the foundation of our multi-modal scoring system.
+
+### **Current Endpoints**
+
+*   **`/predict_variant_impact`**
+    *   **What it does:** The core of our analytical engine. Takes a genetic variant (SNV, indel) and predicts its functional consequence.
+    *   **Outputs:** A `delta_likelihood_score` (quantitative damage metric), a classification (e.g., "Likely Pathogenic"), confidence score, and predicted functional consequence (e.g., "frameshift," "splice-site disruption").
+    *   **Use Case:** Scoring the on-target effectiveness of simulated CRISPR edits and the potential danger of off-target hits.
+
+*   **`/predict_gene_essentiality`**
+    *   **What it does:** Predicts how critical a gene is for cell survival, often in a specific context (e.g., a particular cancer cell line).
+    *   **Outputs:** An essentiality score and category (e.g., "Essential," "Non-essential").
+    *   **Use Case:** Prioritizing therapeutic targets. A guide RNA targeting a highly essential cancer gene is a more promising therapeutic candidate.
+
+*   **`/predict_crispr_spacer_efficacy`**
+    *   **What it does:** Directly predicts the cutting efficiency of a specific guide RNA sequence.
+    *   **Outputs:** A numerical score (0.0 to 1.0) representing predicted on-target activity.
+    *   **Use Case:** Provides a direct, functional score for guide candidates, complementing the indirect "Generate & Compare" method.
+
+### **New Endpoints to Build (Enhancing Analysis)**
+
+*   **`/predict_chromatin_accessibility`**
+    *   **What it will do:** Predict the accessibility of a specific genomic region in a given cell type.
+    *   **Why we need it:** A guide RNA can be perfectly designed, but it's useless if it can't physically reach its target DNA. This endpoint provides a critical "reality check," ensuring our designs are viable in a real cellular environment. It's a key step for context-aware design.
+
+*   **`/predict_protein_functionality_change`**
+    *   **What it will do:** Go beyond simple variant impact to predict the specific consequence on the final protein's function (e.g., loss of stability, altered binding affinity).
+    *   **Why we need it:** For missense mutations, it's not enough to know the variant is "pathogenic." We need to know *how*. This allows for more nuanced scoring and provides deeper biological rationale for our predictions.
+
+*   **`/predict_immunogenicity`**
+    *   **What it will do:** Predict the likelihood that a protein sequence (e.g., from a viral vector like AAV or a novel therapeutic protein) will trigger an immune response.
+    *   **Why we need it:** This is a massive value-add for creating real-world therapeutics. Patient safety and therapeutic efficacy are critically dependent on avoiding immune rejection. This endpoint adds a crucial layer of safety analysis to our designs.
+
+---
+
+## Phase 2: Core Generative Endpoints (Creation & Optimization)
+
+These endpoints leverage AI to design novel, optimized biological sequences from scratch, based on user-defined goals.
+
+### **Current Endpoints**
+
+*   **`/generate_optimized_guide_rna`**
+    *   **What it does:** Designs optimal guide RNA sequences for a given target and set of goals (e.g., "maximize knockout efficiency," "minimize off-targets").
+    *   **Use Case:** The foundation of our "Intelligent Guide Creation" workflow.
+
+*   **`/generate_repair_template`**
+    *   **What it does:** Designs optimized DNA repair templates for Homology-Directed Repair (HDR).
+    *   **Use Case:** Enables precise gene correction and insertion therapies.
+
+*   **`/generate_epigenome_optimized_sequence`**
+    *   **What it does:** Generates a DNA sequence that is optimized to be accessible within a specific epigenomic context.
+    *   **Use Case:** Ensures that our generated repair templates or inserted genes are expressed correctly in the target cell type.
+
+### **New Endpoints to Build (Enhancing Creation)**
+
+*   **`/optimize_codon_usage`**
+    *   **What it will do:** Takes a protein-coding sequence and optimizes its codons for maximum expression in a specific host (e.g., human cells).
+    *   **Why we need it:** To ensure that a therapeutic protein, delivered via an HDR template, is produced at high levels. This directly enhances the therapeutic efficacy of our generated designs.
+
+*   **`/generate_optimized_regulatory_element`**
+    *   **What it will do:** Design novel regulatory elements like promoters and enhancers to achieve precise control over gene expression.
+    *   **Why we need it:** This moves us beyond simple on/off edits into the realm of sophisticated gene regulation. It will allow users to design systems that, for example, only activate a therapeutic gene in the presence of a specific cellular signal.
+
+---
+
+## What We Will Build After: The AI CRISPR Design Studio
+
+Having this full suite of discriminative and generative endpoints allows us to build the ultimate user-facing product: the **AI CRISPR Design Studio**. This will be a multi-step wizard that abstracts away the complexity of individual API calls and guides the researcher from a high-level goal to a complete, validated therapeutic system.
+
+### **The Workflow:**
+
+1.  **Define Therapeutic Goal:** The user specifies their objective (e.g., "Correct the pathogenic *TP53* mutation in a patient's liver cells").
+
+2.  **AI Target Analysis:** The Studio automatically calls `/predict_chromatin_accessibility` and other endpoints to analyze the target site and provide critical feasibility data *before* any design work begins.
+
+3.  **AI System Generation:** The Studio uses our generative endpoints (`/generate_optimized_guide_rna`, `/generate_repair_template`, `/optimize_codon_usage`) to design a complete, optimized CRISPR system (guide RNA + repair template) tailored to the user's goal.
+
+4.  **Multi-Modal Validation & Scoring:** The generated system is then passed to our full suite of discriminative endpoints. It is scored on:
+    *   **Efficacy:** (`/predict_crispr_spacer_efficacy`, `/predict_variant_impact`)
+    *   **Safety:** (Off-target analysis powered by `/predict_variant_impact`)
+    *   **Viability:** (`/predict_chromatin_accessibility`)
+    *   **Immunogenicity:** (`/predict_immunogenicity`)
+
+5.  **Iterative Optimization:** If the initial design has weaknesses (e.g., moderate immunogenicity risk), the Studio initiates an automated **generate-score-optimize loop**. It uses the scoring results to guide the next round of generation, iteratively improving the design until all key metrics are met.
+
+6.  **Deliver Final Protocol:** The user receives a complete, validated, and ranked list of CRISPR systems, ready for experimental validation, along with the rich AI-generated rationale behind each design choice.

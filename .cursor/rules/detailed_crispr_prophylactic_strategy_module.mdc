@@ -1,0 +1,108 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Deep Dive: CRISPR Prophylactic Strategy Simulator & Designer Module
+
+This document provides a detailed operational breakdown of the "CRISPR Prophylactic Strategy Simulator & Designer" module within the CrisPRO platform. This module is crucial for translating identified germline genetic risks (e.g., from the "Personalized Genetic Risk & CRISPR Target Identifier" module) into actionable, simulated, and pre-validated CRISPR-based prophylactic or therapeutic strategies. Core AI and simulation logic may draw upon concepts prototyped or implemented in [`ai_research_assistant.py`](mdc:ai_research_assistant.py), with LLM interactions potentially using [`tools/llm_api.py`](mdc:tools/llm_api.py).
+
+## 1. Module Objective
+
+To design optimal CRISPR-based corrective strategies for pathogenic germline mutations, simulate their cellular impact using a "Digital Twin" model, and provide a plan for experimental validation, primarily for pre-clinical research and development.
+
+## 2. Core Workflow & Sub-Components
+
+The module operates through several interconnected stages:
+
+### 2.1. Optimal Corrective Edit Design Engine
+
+This engine generates candidate CRISPR strategies tailored to the specific mutation and patient genomic context.
+
+*   **Inputs:**
+    *   Target pathogenic variant (HGVS, gene).
+    *   Patient's local genomic sequence (WGS preferred).
+    *   Desired editing outcome (correction, knockout, etc.).
+*   **Key Processes:**
+    *   **A. gRNA Design & Scoring:**
+        *   **PAM Site Identification:** Scans for PAMs compatible with a library of Cas enzymes (including high-fidelity and evolved variants from "Evo2-like" processes).
+        *   **On-Target Efficiency Prediction:** Uses ML models (e.g., CNN/RNN trained on public/proprietary datasets) considering sequence context, secondary structure, and chromatin accessibility (if available).
+        *   **Off-Target Nomination & Scoring:** Genome-wide search (Cas-OFFinder, etc.) and scoring (CFD, DeepCRISPR) of potential off-target sites, weighted by genomic location and potential functional impact.
+        *   **Overall gRNA Ranking:** Composite score balancing on-target efficiency and specificity.
+    *   **B. HDR Template Design (for repair/insertion):**
+        *   Designs homology arms (optimized length, SNP-aware if WGS available).
+        *   Incorporates silent mutations to prevent re-cutting by Cas after successful editing.
+    *   **C. Base Editor (BE) Strategy Design:**
+        *   Selects appropriate BEs (ABE, CBE, etc., from the enzyme library) based on target mutation and desired outcome.
+        *   Designs gRNAs to position the target base in the optimal editing window of the selected BE.
+        *   Flags potential bystander edits, with structural modeling (AlphaFold-inspired) to predict tolerance.
+    *   **D. Prime Editor (PE) Strategy Design:**
+        *   Designs pegRNAs (spacer, Primer Binding Site, Reverse Transcriptase template) and optional nicking-gRNAs (ngRNAs).
+        *   Optimizes components for efficiency based on PE datasets and published design rules.
+        *   Predicts potential PE byproducts.
+*   **Outputs:** Ranked list of complete CRISPR strategies (e.g., "SpCas9-HF1 gRNA_X + HDR_Template_Y", "ABE8e gRNA_Z", "PEmax pegRNA_A").
+
+### 2.2. "Digital Twin - Cellular Risk Model" Simulation
+
+This sub-module uses the designed CRISPR strategies to predict their impact on cellular phenotypes *in silico*.
+
+*   **Model Setup:**
+    *   **Cell Type Selection:** Pre-configured (e.g., Human Mammary Epithelial Cell - HMEC) or user-defined models.
+    *   **Baseline Pathway Activity:** Models key cancer-related pathways (DNA repair - HR, NHEJ; cell cycle control; apoptosis) using mathematical/computational approaches (e.g., Ordinary Differential Equations, Boolean networks, agent-based models).
+    *   **Mutation Impact Modeling:** The specific patient germline mutation's effect is simulated within the pathway models (e.g., reduced HR efficiency for BRCA1 LoF, leading to increased simulated genomic instability events).
+*   **CRISPR Intervention Simulation:**
+    *   **Editing Efficiency Application:** Uses predicted on-target efficiency from the design engine as a probability in ensemble simulations or for parameterizing the extent of correction.
+    *   **Functional Restoration/Change Modeling:** Reverts gene/pathway parameters towards wild-type levels upon successful simulated correction.
+    *   **Tracking Downstream Cellular Consequences:** Simulates cell processes over a defined "time" (e.g., number of cell cycles), tracking metrics like:
+        *   Simulated rate of new "genomic instability events."
+        *   Activity levels of key cancer-related pathways.
+        *   Simulated response to a virtual DNA damaging agent.
+*   **Outputs:**
+    *   Comparative analyses (graphs, heatmaps) of Wild-Type vs. Mutant vs. CRISPR-Corrected simulated cellular states.
+    *   A "Predicted Therapeutic Benefit Score" or similar metric indicating the potential positive cellular impact of the intervention.
+
+### 2.3. Off-Target Validation Strategy Design
+
+This sub-module assists in planning wet-lab experiments to confirm *in silico* predictions.
+
+*   **Inputs:** Prioritized off-target list from the gRNA design stage.
+*   **Key Processes:**
+    *   **Experimental Method Suggestion:** Recommends appropriate unbiased methods (e.g., GUIDE-seq, CIRCLE-seq, Digenome-seq) for initial off-target discovery or biased methods (amplicon sequencing) for validating specific predicted sites.
+    *   **Primer Design:** For high-priority predicted off-target sites, designs PCR primers flanking the site, checked for specificity and suitability for Sanger or NGS-based quantification.
+*   **Outputs:**
+    *   A table of prioritized potential off-target sites with sequences.
+    *   Recommended experimental validation workflow.
+    *   Ready-to-order primer sequences for key off-target validation.
+
+## 3. The Role of "Evo2" (Simulated Directed Evolution) in CrisPRO
+
+It's crucial to understand that "Evo2" represents advanced enzyme engineering capabilities, and its direct integration differs from its conceptual influence on this module.
+
+*   **Evo2 as an Upstream R&D Engine:**
+    *   "Evo2" symbolizes the computational and experimental processes used to engineer and optimize CRISPR enzymes (Cas proteins, base editors, prime editors, etc.) for improved characteristics (e.g., higher fidelity, altered PAM specificity, improved efficiency, smaller size for delivery). This is a specialized, resource-intensive R&D activity that results in new or improved enzyme variants.
+*   **CrisPRO Leverages Evo2 *Outputs*:**
+    *   The "Optimal Corrective Edit Design Engine" within CrisPRO maintains a **Cas Enzyme Library**. This library is curated and populated with state-of-the-art enzymes, many of which are the direct products of "Evo2-like" directed evolution efforts from the scientific community or proprietary research.
+    *   CrisPRO's predictive models for on-target efficiency, off-target propensity, and editor-specific outcomes are trained on or incorporate the known performance characteristics of these evolved enzymes.
+    *   When CrisPRO selects an enzyme (e.g., "SpCas9-HighFidelity-VariantX", "ABE8.20max"), it's choosing an optimized tool from its library, not re-evolving it for the specific application.
+*   **Why CrisPRO Does Not Run Full "Evo2" Simulations Directly in This Module:**
+    *   **Computational Cost & Time:** Full *de novo* directed evolution simulations for enzyme engineering are computationally intensive and not practical for real-time, patient-specific therapeutic design.
+    *   **Focus of Application Module:** This module is designed for *applying* the best available, pre-existing, and characterized tools to a specific genetic correction problem.
+    *   **Separation of Concerns:** Enzyme discovery/engineering (Evo2) is distinct from therapeutic strategy design and simulation (this module).
+*   **"Evo2-Inspired" Principles within CrisPRO:**
+    *   CrisPRO's internal models and algorithms are built with an understanding derived from enzyme engineering principles (which "Evo2" embodies). For example, understanding how certain amino acid changes in a Cas protein affect its specificity, or how different RT template designs impact prime editing, informs the design rules and predictive models within CrisPRO.
+
+## 4. Overall Module Inputs & Outputs
+
+*   **Primary Inputs:**
+    *   Specific pathogenic germline variant information (gene, HGVS nomenclature).
+    *   Patient-specific genomic context (ideally WGS data for local sequence accuracy).
+    *   User-defined therapeutic goals (e.g., correction to wild-type) and cellular context (e.g., target cell type for simulation).
+*   **Primary Outputs:**
+    *   A comprehensive design and simulation report that includes:
+        *   A ranked list of CRISPR-based therapeutic strategies (gRNAs, editors, DNA templates) with *in silico* predicted on-target efficiencies and specificity scores.
+        *   Results from the "Digital Twin" simulation, detailing the predicted cellular impact and potential benefits of the top strategies.
+        *   An actionable plan for experimental off-target validation, including suggested methods and primer designs.
+
+## 5. Conclusion
+
+The "CRISPR Prophylactic Strategy Simulator & Designer" module is a cornerstone of the CrisPRO platform, aiming to bridge the gap between genetic risk identification and the development of precise, pre-clinically evaluated therapeutic interventions. By integrating AI-driven design algorithms, sophisticated cellular simulations, and leveraging the outputs of advanced enzyme engineering ("Evo2-like" research), this module provides researchers and therapeutic developers with powerful tools to accelerate the path towards novel CRISPR-based medicines.

@@ -14,9 +14,26 @@ import shlex
 import shutil
 import pandas as pd
 import importlib.util
+from tools.intelligent_guide_finder import find_intelligent_guides
+from tools.next_steps import get_next_steps_recommendation
 
 # Load environment variables from .env file
 load_dotenv()
+
+# --- TOP LEVEL EXECUTION FOR ALL PAGES ---
+
+# 1. Set page config first (MUST be the first Streamlit command)
+st.set_page_config(
+    page_title="CasPro 🧬 - AI CRISPR Assistant",
+    page_icon="🧬",
+    layout="wide",
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': 'https://www.example.com/help',
+        'Report a bug': "https://www.example.com/bug",
+        'About': "# CasPro: AI-Enhanced CRISPR Assistant. *Simulations and mock data for educational purposes.*"
+    }
+)
 
 # Import LLM API dynamically
 def import_llm_api():
@@ -275,6 +292,21 @@ def init_session_state():
             "data": None
         }
 
+    # Initialize active_mutation globally
+    if 'active_mutation' not in st.session_state:
+        st.session_state.active_mutation = {
+            "hugo_gene_symbol": "BRAF",  # Default gene
+            "protein_change": "V600E",   # Default protein change
+            "variant_type": "Missense_Mutation", # Default type
+            "genomic_coordinate_hg38": "chr7:140753336A>T", # Default coordinate
+            "allele_frequency": 0.45, # Default frequency
+            "mutation_id": "DEFAULT_MUT_GLOBAL" # Default ID
+        }
+
+    # Add new session state keys if needed for the home page or other global features
+    if 'current_view' not in st.session_state:
+        st.session_state.current_view = 'home' # Default view
+
 # Function to update session state for CHOPCHOP results
 def update_chopchop_results(path, guides=None):
     """Update the CHOPCHOP results in the session state"""
@@ -360,9 +392,288 @@ def explain_results_with_llm(result_type, data):
     explanation = ask_llm(prompt)
     return explanation
 
+def create_educational_sidebar():
+    """
+    Create an educational sidebar with CRISPR terminology and concepts
+    and an AI Chat Assistant that guides users through the workflow
+    """
+    # Import educational context
+    edu_context = import_educational_context()
+    if not edu_context:
+        st.sidebar.warning("Educational content not available.")
+        return None
+    
+    with st.sidebar:
+        # --- Display Current Target Mutation ---
+        if 'active_mutation' in st.session_state and \
+           st.session_state.active_mutation.get("hugo_gene_symbol") and \
+           st.session_state.active_mutation.get("protein_change"):
+            
+            hugo_symbol = st.session_state.active_mutation["hugo_gene_symbol"]
+            protein_change_val = st.session_state.active_mutation["protein_change"]
+            st.info(f"🎯 Actively Designing for: **{hugo_symbol} {protein_change_val}**")
+        else:
+            st.info("🎯 No active mutation target set.")
+
+        # --- Global Settings ---
+        st.subheader("Global Analysis Settings")
+        if 'show_therapeutic_context' not in st.session_state:
+            st.session_state.show_therapeutic_context = False # Default to False
+        
+        st.session_state.show_therapeutic_context = st.checkbox(
+            "Enable Therapeutic Development Context", 
+            value=st.session_state.show_therapeutic_context,
+            help="Show additional LLM-generated context related to therapeutic development challenges (efficacy, safety, delivery, etc.) in analysis sections.",
+            key="therapeutic_context_toggle_sidebar" # Ensure key is unique if used elsewhere
+        )
+        st.markdown("---") # Separator
+
+        # --- Original Educational Center Content ---
+        st.header("CRISPR Education Center")
+        
+        # Create tabs for different educational content
+        ed_tabs = st.tabs(["Terminology", "Concepts", "Ask", "AI Chat Assistant"])
+        
+        # Tab 1: Terminology
+        with ed_tabs[0]:
+            st.subheader("CRISPR Terminology")
+            
+            # Search box for terms
+            term_query = st.text_input("Search for a term:", key="term_search")
+            
+            if term_query:
+                # Get term definition
+                term_info = edu_context.get_term_definition(term_query, detailed=True)
+                
+                if "definition" in term_info:
+                    st.markdown(f"### {term_info.get('term', term_query)}")
+                    if "full_name" in term_info:
+                        st.markdown(f"*{term_info['full_name']}*")
+                    
+                    st.markdown(f"**Definition:** {term_info['definition']}")
+                    
+                    if "context" in term_info:
+                        st.markdown(f"**Context:** {term_info['context']}")
+                    
+                    if "related_terms" in term_info:
+                        st.markdown("**Related Terms:**")
+                        for related in term_info["related_terms"]:
+                            st.markdown(f"- {related}")
+            else:
+                # Show a few common terms
+                common_terms = ["CRISPR", "Cas9", "gRNA", "PAM", "Indel"]
+                for term in common_terms:
+                    with st.expander(term):
+                        term_info = edu_context.get_term_definition(term)
+                        st.write(term_info["definition"])
+        
+        # Tab 2: Concepts
+        with ed_tabs[1]:
+            st.subheader("Advanced Concepts")
+            
+            # Dropdown for concepts
+            concept_options = list(edu_context.ADVANCED_CONCEPTS.keys())
+            selected_concept = st.selectbox("Select a concept:", concept_options)
+            
+            if selected_concept:
+                concept_info = edu_context.get_advanced_concept(selected_concept)
+                
+                st.markdown(f"### {selected_concept}")
+                st.markdown(f"**{concept_info['definition']}**")
+                
+                # Display concept details based on structure
+                if "applications" in concept_info:
+                    st.markdown("**Applications:**")
+                    for app in concept_info["applications"]:
+                        st.markdown(f"- {app}")
+                
+                if "types" in concept_info:
+                    st.markdown("**Types:**")
+                    for t in concept_info["types"]:
+                        if isinstance(t, dict):
+                            st.markdown(f"- **{t['name']}**: {t.get('approach', t.get('action', ''))}")
+                        else:
+                            st.markdown(f"- {t}")
+                
+                if "considerations" in concept_info:
+                    st.markdown("**Considerations:**")
+                    for c in concept_info["considerations"]:
+                        st.markdown(f"- {c}")
+        
+        # Tab 3: Ask a question
+        with ed_tabs[2]:
+            st.subheader("Ask About CRISPR")
+            
+            query_text = st.text_input("Ask a question:", key="edu_question")
+            
+            if query_text and st.button("Get Answer", key="edu_answer_btn"):
+                with st.spinner("Getting educational information..."):
+                    answer = edu_context.get_educational_context(query_text)
+                    st.markdown(answer)
+                    
+                    # Add references if available
+                    references = edu_context.get_scientific_references(query_text)
+                    if references and isinstance(references, list) and len(references) > 0 and isinstance(references[0], dict) and "title" in references[0]:
+                        st.markdown("**References:**")
+                        for ref in references[:2]:  # Limit to 2 references
+                            st.markdown(f"- {ref['title']} ({ref['authors'].split(',')[0]} et al., {ref['year']})")
+            
+            return query_text
+        
+        # Tab 4: AI Chat Assistant
+        with ed_tabs[3]:
+            st.subheader("AI Chat Assistant")
+            st.caption("Ask me anything about CRISPR or how to use this app!")
+
+            # Initialize chat history and context in session state if they don't exist
+            if "chat_history" not in st.session_state:
+                st.session_state.chat_history = []
+            
+            # Initialize workflow context tracking
+            if "chat_workflow_context" not in st.session_state:
+                st.session_state.chat_workflow_context = {
+                    "current_page": "home",  # home, chopchop, crispresso
+                    "chopchop_state": "not_started",  # not_started, configuring, running, results_available
+                    "crispresso_state": "not_started",  # not_started, configuring, running, results_available
+                    "selected_guides": [],  # List of selected guides from CHOPCHOP
+                    "gene_of_interest": "",  # Current gene being analyzed
+                    "experiment_type": "",  # knockout, knock-in, base_editing
+                }
+            
+            # Track the current page to provide context-aware assistance
+            current_url = st.experimental_get_query_params()
+            if "page" in current_url:
+                page_name = current_url["page"][0]
+                if page_name == "CHOPCHOP_Guide_Design":
+                    st.session_state.chat_workflow_context["current_page"] = "chopchop"
+                elif page_name == "CRISPResso2_Analysis":
+                    st.session_state.chat_workflow_context["current_page"] = "crispresso"
+            else:
+                st.session_state.chat_workflow_context["current_page"] = "home"
+                
+            # If on the CHOPCHOP page, check if results are available
+            if st.session_state.chat_workflow_context["current_page"] == "chopchop":
+                if "chopchop_results" in st.session_state and st.session_state.chopchop_results.get("guides"):
+                    st.session_state.chat_workflow_context["chopchop_state"] = "results_available"
+                    # If gene target is available, update context
+                    if "chopchop_run" in st.session_state and st.session_state.chopchop_run.get("target"):
+                        st.session_state.chat_workflow_context["gene_of_interest"] = st.session_state.chopchop_run.get("target")
+            
+            # Update context based on workflow state
+            context_info = ""
+            if st.session_state.chat_workflow_context["current_page"] == "chopchop":
+                if st.session_state.chat_workflow_context["chopchop_state"] == "results_available":
+                    context_info = f"""📋 Current Context: 
+                    - Viewing CHOPCHOP guide design results
+                    - Target gene: {st.session_state.chat_workflow_context["gene_of_interest"]}
+                    - Guides available: {len(st.session_state.chopchop_results.get("guides", []))} guides found
+                    """
+                    # Show a help button for explaining CHOPCHOP results
+                    if st.button("❓ Explain CHOPCHOP Results", key="explain_chopchop_btn"):
+                        # Add a user question to the chat history
+                        explain_query = "Can you explain what the CHOPCHOP results mean and how to interpret the guide scores?"
+                        st.session_state.chat_history.append({"role": "user", "content": explain_query})
+                        # The assistant will respond in the chat display below
+            
+            elif st.session_state.chat_workflow_context["current_page"] == "crispresso":
+                context_info = "📋 Current Context: CRISPResso2 Analysis workflow"
+                
+            if context_info:
+                st.info(context_info)
+
+            # Display chat messages from history
+            for i, message in enumerate(st.session_state.chat_history):
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
+
+            # Accept user input
+            if prompt := st.chat_input("What can I help you with?"):
+                # Add user message to chat history
+                st.session_state.chat_history.append({"role": "user", "content": prompt})
+                # Display user message in chat message container
+                with st.chat_message("user"):
+                    st.markdown(prompt)
+
+                # Generate AI response
+                with st.chat_message("assistant"):
+                    message_placeholder = st.empty()
+                    full_response = ""
+                    
+                    # Prepare context for LLM based on current workflow state
+                    system_prompt = """You are a helpful AI assistant for a CRISPR genomics application. 
+                    Your main goal is to guide users through the complete workflow:
+                    1. CHOPCHOP for guide RNA design
+                    2. Experiment design for their selected guides
+                    3. CRISPResso2 for analyzing experimental results
+                    
+                    Provide specific, actionable guidance rather than general information, and help users understand the 
+                    scientific meaning of results. Your expertise covers CRISPR biology, experimental design, and data analysis."""
+                    
+                    # Add workflow context to the system prompt
+                    if st.session_state.chat_workflow_context["current_page"] == "chopchop":
+                        if st.session_state.chat_workflow_context["chopchop_state"] == "results_available":
+                            system_prompt += f"""
+                            
+                            CURRENT CONTEXT:
+                            - User is viewing CHOPCHOP guide design results
+                            - Target gene: {st.session_state.chat_workflow_context["gene_of_interest"]}
+                            - Number of guides found: {len(st.session_state.chopchop_results.get("guides", []))}
+                            
+                            GUIDE SCORING INFORMATION:
+                            - Efficiency score: Predicted cutting efficiency (higher is better)
+                            - Specificity score: Inverse likelihood of off-target effects (higher is better) 
+                            - Self-complementarity: Potential for guide RNA to fold back on itself (lower is better)
+                            - Position: Location within the target gene (exons are typically preferred for knockouts)
+                            
+                            Be prepared to explain the guide selection process and help interpret the scores and columns.
+                            For the Experiment Design section, explain the differences between knockout, knock-in, and base editing experiments.
+                            """
+                    
+                    # Format chat history for the LLM
+                    chat_history_text = "\n\n".join([f"{msg['role'].capitalize()}: {msg['content']}" for msg in st.session_state.chat_history])
+                    
+                    final_prompt = f"""
+{system_prompt}
+
+CONVERSATION HISTORY:
+{chat_history_text}
+
+User's latest question: {prompt}
+Assistant:
+"""                 
+                    # Use the ask_llm function to get a response
+                    try:
+                        ai_response = ask_llm(final_prompt) # Use the ask_llm function we defined earlier
+                        
+                        # Display the response
+                        message_placeholder.markdown(ai_response)
+                        full_response = ai_response
+                    except Exception as e:
+                        full_response = f"Sorry, I encountered an error: {str(e)}"
+                        message_placeholder.error(full_response)
+                    
+                # Add AI response to chat history
+                st.session_state.chat_history.append({"role": "assistant", "content": full_response})
+    
+    return None # query_text from "Ask" tab is no longer the sole return
+
+# CHOPCHOP Page definition
 def chopchop_page():
     # Use styled header
     st.markdown('<div class="main-header">CHOPCHOP Guide Design</div>', unsafe_allow_html=True)
+    
+    # --- Handoff from other tools ---
+    locus_from_handoff = ""
+    gene_from_handoff = ""
+    target_type_index = 0 # Default to Gene Symbol
+    if 'active_mutation' in st.session_state and st.session_state.active_mutation.get("genomic_coordinate_hg38"):
+        coord_full = st.session_state.active_mutation["genomic_coordinate_hg38"]
+        match = re.match(r'^(chr[A-Za-z0-9]+:[\d,]+)', coord_full.replace(',', ''))
+        if match:
+            locus_from_handoff = match.group(1)
+            gene_from_handoff = st.session_state.active_mutation.get("hugo_gene_symbol", "")
+            target_type_index = 2 # Default to Coordinates when handoff is active
+            st.info(f"🧬 Received target from Digital Twin: Pre-filling target for {gene_from_handoff} at locus {locus_from_handoff}.")
     
     # Create tabs for configuration and execution
     tab1, tab2, tab3 = st.tabs(["Configuration", "Run CHOPCHOP", "Results"])
@@ -489,13 +800,20 @@ def chopchop_page():
             
             # CHOPCHOP parameters
             st.markdown("**Target Information:**")
-            target_type = st.radio("Target Type", ["Gene Symbol", "Sequence", "Coordinates"], 
-                                horizontal=True, 
-                                help=get_llm_tooltip("Target Type"))
+            target_type = st.radio(
+                "Target Type", ["Gene Symbol", "Sequence", "Coordinates"],
+                index=target_type_index,
+                horizontal=True, 
+                help=get_llm_tooltip("Target Type")
+            )
             
+            # Use handoff values if available, otherwise use CHOPCHOP's own state
+            gene_symbol_value = gene_from_handoff or st.session_state.chopchop_run.get("target", "")
+            coordinates_value = locus_from_handoff or st.session_state.chopchop_run.get("target", "")
+
             if target_type == "Gene Symbol":
                 target = st.text_input("Gene Symbol", 
-                                    value=st.session_state.chopchop_run.get("target", ""),
+                                    value=gene_symbol_value,
                                     help=get_llm_tooltip("Gene Symbol"))
             elif target_type == "Sequence":
                 target = st.text_area("DNA Sequence", 
@@ -503,7 +821,7 @@ def chopchop_page():
                                     help=get_llm_tooltip("DNA Sequence"))
             else:  # Coordinates
                 target = st.text_input("Genomic Coordinates", 
-                                    value=st.session_state.chopchop_run.get("target", ""),
+                                    value=coordinates_value,
                                     help=get_llm_tooltip("Genomic Coordinates"))
             
             st.markdown("**CRISPR Parameters:**")
@@ -695,6 +1013,7 @@ def chopchop_page():
         else:
             st.info("No CHOPCHOP results available. Please run CHOPCHOP first.")
 
+# CRISPResso Page definition
 def crispresso_page():
     # Use styled header
     st.markdown('<div class="main-header">CRISPResso2 Analysis</div>', unsafe_allow_html=True)
@@ -1388,324 +1707,231 @@ def crispresso_page():
                                 st.markdown(f"A{i+1}: {a}")
                                 st.markdown("---")
 
-def create_educational_sidebar():
-    """
-    Create an educational sidebar with CRISPR terminology and concepts
-    and an AI Chat Assistant that guides users through the workflow
-    
-    Returns:
-        query_text: Any search query entered by the user
-    """
-    # Import educational context
+# --- Educational Content Helper (Moved earlier for potential use in home page) ---
+@st.cache_data(ttl=3600) # Cache for 1 hour
+def get_educational_content(topic):
     edu_context = import_educational_context()
-    if not edu_context:
-        st.sidebar.warning("Educational content not available.")
+    if edu_context and hasattr(edu_context, 'get_context'):
+        return edu_context.get_context(topic)
         return None
     
-    with st.sidebar:
-        st.header("CRISPR Education Center")
-        
-        # Create tabs for different educational content
-        ed_tabs = st.tabs(["Terminology", "Concepts", "Ask", "AI Chat Assistant"])
-        
-        # Tab 1: Terminology
-        with ed_tabs[0]:
-            st.subheader("CRISPR Terminology")
-            
-            # Search box for terms
-            term_query = st.text_input("Search for a term:", key="term_search")
-            
-            if term_query:
-                # Get term definition
-                term_info = edu_context.get_term_definition(term_query, detailed=True)
-                
-                if "definition" in term_info:
-                    st.markdown(f"### {term_info.get('term', term_query)}")
-                    if "full_name" in term_info:
-                        st.markdown(f"*{term_info['full_name']}*")
-                    
-                    st.markdown(f"**Definition:** {term_info['definition']}")
-                    
-                    if "context" in term_info:
-                        st.markdown(f"**Context:** {term_info['context']}")
-                    
-                    if "related_terms" in term_info:
-                        st.markdown("**Related Terms:**")
-                        for related in term_info["related_terms"]:
-                            st.markdown(f"- {related}")
-            else:
-                # Show a few common terms
-                common_terms = ["CRISPR", "Cas9", "gRNA", "PAM", "Indel"]
-                for term in common_terms:
-                    with st.expander(term):
-                        term_info = edu_context.get_term_definition(term)
-                        st.write(term_info["definition"])
-        
-        # Tab 2: Concepts
-        with ed_tabs[1]:
-            st.subheader("Advanced Concepts")
-            
-            # Dropdown for concepts
-            concept_options = list(edu_context.ADVANCED_CONCEPTS.keys())
-            selected_concept = st.selectbox("Select a concept:", concept_options)
-            
-            if selected_concept:
-                concept_info = edu_context.get_advanced_concept(selected_concept)
-                
-                st.markdown(f"### {selected_concept}")
-                st.markdown(f"**{concept_info['definition']}**")
-                
-                # Display concept details based on structure
-                if "applications" in concept_info:
-                    st.markdown("**Applications:**")
-                    for app in concept_info["applications"]:
-                        st.markdown(f"- {app}")
-                
-                if "types" in concept_info:
-                    st.markdown("**Types:**")
-                    for t in concept_info["types"]:
-                        if isinstance(t, dict):
-                            st.markdown(f"- **{t['name']}**: {t.get('approach', t.get('action', ''))}")
-                        else:
-                            st.markdown(f"- {t}")
-                
-                if "considerations" in concept_info:
-                    st.markdown("**Considerations:**")
-                    for c in concept_info["considerations"]:
-                        st.markdown(f"- {c}")
-        
-        # Tab 3: Ask a question
-        with ed_tabs[2]:
-            st.subheader("Ask About CRISPR")
-            
-            query_text = st.text_input("Ask a question:", key="edu_question")
-            
-            if query_text and st.button("Get Answer", key="edu_answer_btn"):
-                with st.spinner("Getting educational information..."):
-                    answer = edu_context.get_educational_context(query_text)
-                    st.markdown(answer)
-                    
-                    # Add references if available
-                    references = edu_context.get_scientific_references(query_text)
-                    if references and isinstance(references, list) and len(references) > 0 and isinstance(references[0], dict) and "title" in references[0]:
-                        st.markdown("**References:**")
-                        for ref in references[:2]:  # Limit to 2 references
-                            st.markdown(f"- {ref['title']} ({ref['authors'].split(',')[0]} et al., {ref['year']})")
-            
-            return query_text
-        
-        # Tab 4: AI Chat Assistant
-        with ed_tabs[3]:
-            st.subheader("AI Chat Assistant")
-            st.caption("Ask me anything about CRISPR or how to use this app!")
+# --- NEW HOME PAGE FUNCTION ---
+def display_home_page():
+    st.markdown("<h1 style='text-align: center; color: #4A90E2;'>🧬 Welcome to CasPro: Your AI-Enhanced CRISPR Co-Pilot 🧬</h1>", unsafe_allow_html=True)
+    st.markdown("---")
+    st.markdown(
+        """
+        <p style='text-align: center; font-size: 1.1em;'>
+        CasPro is a cutting-edge platform designed to streamline and enhance your CRISPR-Cas9 research from start to finish.
+        Leveraging the power of artificial intelligence, CasPro provides intuitive tools for guide RNA design,
+        comprehensive analysis of editing outcomes, and insightful exploration of therapeutic applications.
+        </p>
+        """, unsafe_allow_html=True
+    )
+    st.markdown("---")
 
-            # Initialize chat history and context in session state if they don't exist
-            if "chat_history" not in st.session_state:
-                st.session_state.chat_history = []
-            
-            # Initialize workflow context tracking
-            if "chat_workflow_context" not in st.session_state:
-                st.session_state.chat_workflow_context = {
-                    "current_page": "home",  # home, chopchop, crispresso
-                    "chopchop_state": "not_started",  # not_started, configuring, running, results_available
-                    "crispresso_state": "not_started",  # not_started, configuring, running, results_available
-                    "selected_guides": [],  # List of selected guides from CHOPCHOP
-                    "gene_of_interest": "",  # Current gene being analyzed
-                    "experiment_type": "",  # knockout, knock-in, base_editing
-                }
-            
-            # Track the current page to provide context-aware assistance
-            current_url = st.experimental_get_query_params()
-            if "page" in current_url:
-                page_name = current_url["page"][0]
-                if page_name == "CHOPCHOP_Guide_Design":
-                    st.session_state.chat_workflow_context["current_page"] = "chopchop"
-                elif page_name == "CRISPResso2_Analysis":
-                    st.session_state.chat_workflow_context["current_page"] = "crispresso"
-            else:
-                st.session_state.chat_workflow_context["current_page"] = "home"
-                
-            # If on the CHOPCHOP page, check if results are available
-            if st.session_state.chat_workflow_context["current_page"] == "chopchop":
-                if "chopchop_results" in st.session_state and st.session_state.chopchop_results.get("guides"):
-                    st.session_state.chat_workflow_context["chopchop_state"] = "results_available"
-                    # If gene target is available, update context
-                    if "chopchop_run" in st.session_state and st.session_state.chopchop_run.get("target"):
-                        st.session_state.chat_workflow_context["gene_of_interest"] = st.session_state.chopchop_run.get("target")
-            
-            # Update context based on workflow state
-            context_info = ""
-            if st.session_state.chat_workflow_context["current_page"] == "chopchop":
-                if st.session_state.chat_workflow_context["chopchop_state"] == "results_available":
-                    context_info = f"""📋 Current Context: 
-                    - Viewing CHOPCHOP guide design results
-                    - Target gene: {st.session_state.chat_workflow_context["gene_of_interest"]}
-                    - Guides available: {len(st.session_state.chopchop_results.get("guides", []))} guides found
-                    """
-                    # Show a help button for explaining CHOPCHOP results
-                    if st.button("❓ Explain CHOPCHOP Results", key="explain_chopchop_btn"):
-                        # Add a user question to the chat history
-                        explain_query = "Can you explain what the CHOPCHOP results mean and how to interpret the guide scores?"
-                        st.session_state.chat_history.append({"role": "user", "content": explain_query})
-                        # The assistant will respond in the chat display below
-            
-            elif st.session_state.chat_workflow_context["current_page"] == "crispresso":
-                context_info = "📋 Current Context: CRISPResso2 Analysis workflow"
-                
-            if context_info:
-                st.info(context_info)
+    st.header("🚀 Our Core Capabilities")
+    st.markdown("Navigate your CRISPR journey with our specialized modules:")
 
-            # Display chat messages from history
-            for i, message in enumerate(st.session_state.chat_history):
-                with st.chat_message(message["role"]):
-                    st.markdown(message["content"])
+    col1, col2 = st.columns(2)
 
-            # Accept user input
-            if prompt := st.chat_input("What can I help you with?"):
-                # Add user message to chat history
-                st.session_state.chat_history.append({"role": "user", "content": prompt})
-                # Display user message in chat message container
-                with st.chat_message("user"):
-                    st.markdown(prompt)
+    with col1:
+        st.subheader("✂️ Guide RNA Design & Optimization")
+        st.markdown(
+            """
+            - **CHOPCHOP Powered**: Efficiently design and rank guide RNAs for your target.
+            - **AI-Enhanced Suggestions**: Get intelligent tips and considerations for optimal guide selection.
+            - **Therapeutic Context**: Design with downstream therapeutic challenges in mind.
+            """
+        )
+        # Using Streamlit's built-in emoji support for icons
+        st.markdown("##### 🧬 CHOPCHOP Integration") 
 
-                # Generate AI response
-                with st.chat_message("assistant"):
-                    message_placeholder = st.empty()
-                    full_response = ""
-                    
-                    # Prepare context for LLM based on current workflow state
-                    system_prompt = """You are a helpful AI assistant for a CRISPR genomics application. 
-                    Your main goal is to guide users through the complete workflow:
-                    1. CHOPCHOP for guide RNA design
-                    2. Experiment design for their selected guides
-                    3. CRISPResso2 for analyzing experimental results
-                    
-                    Provide specific, actionable guidance rather than general information, and help users understand the 
-                    scientific meaning of results. Your expertise covers CRISPR biology, experimental design, and data analysis."""
-                    
-                    # Add workflow context to the system prompt
-                    if st.session_state.chat_workflow_context["current_page"] == "chopchop":
-                        if st.session_state.chat_workflow_context["chopchop_state"] == "results_available":
-                            system_prompt += f"""
-                            
-                            CURRENT CONTEXT:
-                            - User is viewing CHOPCHOP guide design results
-                            - Target gene: {st.session_state.chat_workflow_context["gene_of_interest"]}
-                            - Number of guides found: {len(st.session_state.chopchop_results.get("guides", []))}
-                            
-                            GUIDE SCORING INFORMATION:
-                            - Efficiency score: Predicted cutting efficiency (higher is better)
-                            - Specificity score: Inverse likelihood of off-target effects (higher is better) 
-                            - Self-complementarity: Potential for guide RNA to fold back on itself (lower is better)
-                            - Position: Location within the target gene (exons are typically preferred for knockouts)
-                            
-                            Be prepared to explain the guide selection process and help interpret the scores and columns.
-                            For the Experiment Design section, explain the differences between knockout, knock-in, and base editing experiments.
-                            """
-                    
-                    # Format chat history for the LLM
-                    chat_history_text = "\n\n".join([f"{msg['role'].capitalize()}: {msg['content']}" for msg in st.session_state.chat_history])
-                    
-                    final_prompt = f"""
-{system_prompt}
+        st.subheader("🔬 Editing Outcome Analysis")
+        st.markdown(
+            """
+            - **CRISPResso2 Integration**: Analyze your NGS data to quantify editing efficiency and identify alleles.
+            - **AI-Driven Interpretation**: Understand complex results with LLM-generated summaries and explanations.
+            - **Visualize Your Data**: Intuitive charts and graphs to make sense of your editing outcomes.
+            """
+        )
+        st.markdown("##### 📊 CRISPResso2 Analysis")
 
-CONVERSATION HISTORY:
-{chat_history_text}
+    with col2:
+        st.subheader("💡 Mock Therapeutic System Design")
+        st.markdown(
+            """
+            - **End-to-End Simulation**: Explore the design of multi-gene therapeutic systems.
+            - **Multi-Tool Integration (Mock)**: Conceptualize workflows involving Evo2 (generation), AlphaFold3 (structure), and CHOPCHOP (validation).
+            - **Confidence Scoring**: Evaluate mock system candidates based on integrated simulated metrics.
+            """
+        )
+        st.markdown("##### 🧪 Therapeutic Simulations") 
 
-User's latest question: {prompt}
-Assistant:
-"""                 
-                    # Use the ask_llm function to get a response
-                    try:
-                        ai_response = ask_llm(final_prompt) # Use the ask_llm function we defined earlier
+        st.subheader("🧠 AI & Educational Co-Pilot")
+        st.markdown(
+            """
+            - **Contextual Chatbots**: Get instant help and explanations tailored to your current task.
+            - **LLM-Powered Tooltips**: Understand parameters and results with AI-generated insights.
+            - **Educational Resources**: Learn about CRISPR terminology, concepts, and best practices via the sidebar.
+            """
+        )
+        st.markdown("##### 🤖 AI Assistance") 
+
+    st.markdown("---")
+    st.info("🌟 **Navigate using the sidebar on the left** to explore these tools and begin your AI-assisted CRISPR journey! Please remember that all simulations and AI-generated therapeutic advice are for educational and conceptual exploration purposes.")
+
+    # Example of how to include dynamic educational content on home page
+    # with st.expander("Learn about CRISPR Basics"):
+    #     basics_content = get_educational_content("CRISPR_BASICS")
+    #     if basics_content:
+    #         st.markdown(basics_content.get("summary", "Content not found."))
+    #         st.markdown(f"[Learn more about {basics_content.get('title', 'CRISPR Basics')}]({basics_content.get('url', '#')})")
+    #     else:
+    #         st.write("Basic CRISPR educational content is currently unavailable.")
+
+def intelligent_guide_designer_page():
+    """
+    UI for the Intelligent Guide Designer page.
+    This function orchestrates the user interaction for designing guides with the AI backend.
+    """
+    st.title("🧬 Intelligent Guide Designer")
+    st.write("This tool leverages AI to design and rank CRISPR guide RNAs based on predicted on-target efficacy and potential off-target effects.")
+
+    # --- Session State Initialization ---
+    if 'intelligent_guides_results' not in st.session_state:
+        st.session_state.intelligent_guides_results = None
+    if 'intelligent_guides_running' not in st.session_state:
+        st.session_state.intelligent_guides_running = False
+
+    # --- Handoff from other tools ---
+    locus_from_handoff = ""
+    if 'active_mutation' in st.session_state and st.session_state.active_mutation.get("genomic_coordinate_hg38"):
+        coord_full = st.session_state.active_mutation["genomic_coordinate_hg38"]
+        # Extract the coordinate part (e.g., "chr7:140753336") from the full string ("chr7:140753336A>T")
+        match = re.match(r'^(chr[A-Za-z0-9]+:\d+)', coord_full)
+        if match:
+            locus_from_handoff = match.group(1)
+            hugo = st.session_state.active_mutation.get("hugo_gene_symbol", "N/A")
+            prot_change = st.session_state.active_mutation.get("protein_change", "N/A")
+            st.info(f"🧬 Received target from Digital Twin: Designing guides for {hugo} {prot_change} at locus {locus_from_handoff}.")
+
+    # --- Input Form ---
+    with st.form("guide_design_form"):
+        st.subheader("Design Inputs")
+        locus_input = st.text_input(
+            "Genomic Locus",
+            value=locus_from_handoff,
+            help="Enter a genomic coordinate (e.g., `chr7:140753336`) or a region (e.g., `chr7:140,753,000-140,754,000`)."
+        )
+        genome_input = st.selectbox("Reference Genome", ["hg38", "hg19"], index=0)
+
+        submitted = st.form_submit_button("Design Guides")
+
+    if submitted:
+        if not locus_input:
+            st.error("Please provide a genomic locus.")
+        else:
+            st.session_state.intelligent_guides_running = True
+            st.session_state.intelligent_guides_results = None
+
+            with st.spinner("Designing intelligent guides... This may take several minutes as it involves multiple API calls (UCSC, BLAST, and AI models)."):
+                results = find_intelligent_guides(locus=locus_input, genome=genome_input)
+                st.session_state.intelligent_guides_results = results
+                st.session_state.intelligent_guides_running = False
+                st.rerun() # Rerun to update the display immediately
+
+    # --- Results Display ---
+    if st.session_state.get('intelligent_guides_results') is not None:
+        st.subheader("Ranked Guide RNA Candidates")
+        results = st.session_state.intelligent_guides_results
+
+        if results:
+            df = pd.DataFrame(results)
+            df_display = df.rename(columns={
+                "guide_sequence": "Guide Sequence",
+                "on_target_score": "On-Target Score (AI)",
+                "off_target_hits": "Off-Target Hits"
+            })
+
+            st.dataframe(df_display, use_container_width=True)
+            st.info("Higher 'On-Target Score' suggests better efficacy. Lower 'Off-Target Hits' suggests better safety.")
+
+            # --- Next Steps Advisor ---
+            with st.expander("🔬 Experimental Plan Advisor"):
+                if st.button("Generate Next Steps"):
+                    with st.spinner("Asking the AI advisor for next steps..."):
+                        recommendation_str = get_next_steps_recommendation(
+                            editing_type="Gene Knockout",
+                            result_data={"status": "Guide Design Complete"},
+                            issue_list=[],
+                            therapeutic_context={"goal": f"Targeting locus {locus_input}"},
+                            ranked_guides=results
+                        )
                         
-                        # Display the response
-                        message_placeholder.markdown(ai_response)
-                        full_response = ai_response
-                    except Exception as e:
-                        full_response = f"Sorry, I encountered an error: {str(e)}"
-                        message_placeholder.error(full_response)
-                    
-                # Add AI response to chat history
-                st.session_state.chat_history.append({"role": "assistant", "content": full_response})
-    
-    return None # query_text from "Ask" tab is no longer the sole return
+                        try:
+                            recommendation = json.loads(recommendation_str)
+                            st.success(f"**{recommendation.get('recommendation_title', 'Recommendation')}**")
+                            st.markdown(f"**Summary:** {recommendation.get('summary', '')}")
+                            
+                            st.markdown("**Next Steps:**")
+                            for step in recommendation.get('next_steps', []):
+                                st.markdown(f"- {step}")
+                        except (json.JSONDecodeError, TypeError):
+                            st.markdown(recommendation_str)
+
+        else:
+            st.warning("No guide candidates could be generated for the given input. Please check the locus, genome, and try again.")
+    elif st.session_state.get('intelligent_guides_running'):
+        # This part might not be shown due to rerun, but good practice to have
+        st.info("The guide design process is running in the background.")
+
+# --- Top level execution for ALL pages ---
+# 2. Initialize session state (must be done after page_config and before sidebar)
+# init_session_state() # Ensure this is called, but only once. Typically in main or before any page rendering.
+
+# 3. Apply custom CSS (can also be done early)
+# apply_custom_css() # Ensure this is called, but only once.
+
+# 4. Create the educational sidebar (this will now run for all pages)
+# create_educational_sidebar() # REMOVE THIS TOP-LEVEL CALL
 
 def main():
-    """Main entry point for the Streamlit app"""
+    # Ensure these are called once at the beginning of the app session if not handled elsewhere
+    # For a multipage app, these might be better placed right after st.set_page_config if they are truly global one-time setups.
+    # However, for content rendering like sidebars, it depends on how pages are structured.
+    if 'app_initialized' not in st.session_state:
+        init_session_state() # Initialize session state once
+        apply_custom_css()   # Apply CSS once
+        st.session_state.app_initialized = True
     
-    # Initialize session state for all pages
-    init_session_state()
+    create_educational_sidebar() # Call it here, once per page render effectively for streamlit_app.py
+
+    st.sidebar.title("Navigation")
+    page_options = {
+        "🏠 Home": display_home_page,
+        "✂️ CHOPCHOP Guide Design": chopchop_page,
+        "📊 CRISPResso2 Analysis": crispresso_page,
+        "🧬 Intelligent Guide Designer": intelligent_guide_designer_page
+    }
     
-    # Apply custom CSS
-    apply_custom_css()
-
-    # --- Global Settings in Sidebar ---
-    st.sidebar.subheader("Global Analysis Settings")
-    if 'show_therapeutic_context' not in st.session_state:
-        st.session_state.show_therapeutic_context = False # Default to False
+    page_names = list(page_options.keys())
     
-    st.session_state.show_therapeutic_context = st.sidebar.checkbox(
-        "Enable Therapeutic Development Context", 
-        value=st.session_state.show_therapeutic_context,
-        help="Show additional LLM-generated context related to therapeutic development challenges (efficacy, safety, delivery, etc.) in analysis sections.",
-        key="therapeutic_context_toggle"
-    )
-    st.sidebar.markdown("---") # Separator
-    # --- End Global Settings ---
+    # Check for programmatic navigation state. A button can set this to change the page.
+    default_page_index = 0
+    if 'navigate_to' in st.session_state:
+        try:
+            default_page_index = page_names.index(st.session_state.navigate_to)
+            # Clear the navigation state so it doesn't persist on reloads
+            del st.session_state.navigate_to
+        except ValueError:
+            pass # Stay on home page if navigate_to is invalid
 
-    # Page Navigation
-    # st.sidebar.title("Navigation") # Keep title for native nav
-    # # Ensure PAGES is defined correctly before this point, e.g., at the top of the file or imported
-    # page_options = list(PAGES.keys())
-    # # Get current page from query params or default to first page
-    # query_params = st.experimental_get_query_params()
-    # current_page_key = query_params.get("page", [page_options[0]])[0] if page_options else None
-    
-    # # Set default index for radio button
-    # default_index = page_options.index(current_page_key) if current_page_key in page_options else 0
-    
-    # selected_page_key = st.sidebar.radio(
-    #     "Go to", 
-    #     page_options, 
-    #     index=default_index, 
-    #     format_func=lambda page_name: PAGES[page_name]["title"],
-    #     key="page_nav_radio"
-    # )
+    selection = st.sidebar.radio("Go to", page_names, index=default_page_index)
 
-    create_educational_sidebar() 
-
-    # Display the selected page content
-    # if selected_page_key and selected_page_key in PAGES:
-    #     PAGES[selected_page_key]["function"]()
-    #     # Update chat context with current page
-    #     if "chat_workflow_context" in st.session_state:
-    #         st.session_state.chat_workflow_context["current_page"] = selected_page_key
-    # elif page_options: # Fallback to the first page if selection is somehow lost
-    #     PAGES[page_options[0]]["function"]()
-    #     if "chat_workflow_context" in st.session_state:
-    #         st.session_state.chat_workflow_context["current_page"] = page_options[0]
-    # else:
-    #     st.error("No pages defined.")
-
-    # Add content for the main "Home" page (streamlit_app.py)
-    st.markdown('<div class="main-header">Welcome to the AI-Enhanced CRISPR Assistant!</div>', unsafe_allow_html=True)
-    st.markdown("Use the navigation panel on the left to access different tools like CHOPCHOP for guide RNA design or CRISPResso2 for analysis.")
-    st.markdown("The AI Chat Assistant in the sidebar is here to help you at any step.")
-    
-    # The create_educational_sidebar function already updates the chat context based on query_params,
-    # which will reflect Streamlit's native page navigation.
-    # So, explicit calls to PAGES[...]["function"]() are no longer needed here
-    # as Streamlit handles the rendering of the content from files in the 'pages/' directory.
-
-
-# Define pages (ensure this is defined before main() or imported)
-# Example structure:
-# PAGES = {
-# "home": {"title": "🏠 Home", "function": display_home_page},
-# "chopchop": {"title": "🧬 CHOPCHOP Guide Design", "function": chopchop_page_function_from_its_file},
-# ... etc.
-# }
+    # Call the selected page function
+    page_function = page_options[selection]
+    page_function()
 
 if __name__ == "__main__":
     main() 

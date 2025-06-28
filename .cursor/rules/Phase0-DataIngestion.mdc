@@ -1,0 +1,46 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Technical Approach: Phase 0 Data Ingestion Pipeline
+
+This document outlines the technical strategy for **Task 0.2: Develop Data Ingestion Pipeline**. The goal is to create a robust Python-based toolset for parsing patient VCF and BAM files and preparing the data for the `CommandCenter` API.
+
+## 1. Core Libraries
+
+We will leverage established, high-performance bioinformatics libraries to ensure accuracy and speed:
+
+*   **PyVCF (`PyVCF`)**: For parsing VCF files. It provides a clean and simple API to iterate through variant records and access sample-specific information (genotypes, etc.). We will specifically use it to distinguish between germline and somatic samples based on common naming conventions (e.g., "NORMAL" vs. "TUMOR", TCGA suffixes like "-10" vs "-01"). The parser will also be designed to be extensible to handle non-standard `INFO` and `FORMAT` fields.
+*   **Pysam (`pysam`)**: A Python wrapper for `htslib` and `samtools`. This is the gold standard for reading and manipulating SAM/BAM files. We will use it to extract reference sequences from our designated `hg19.fa` file and apply variants to generate patient-specific sequences.
+
+## 2. Pipeline Architecture
+
+The pipeline will be structured as a modular Python script (`tools/ingestion/main.py`) containing several key components:
+
+### Class: `VCFProcessor`
+*   **Purpose:** To handle all VCF file parsing and variant extraction.
+*   **Initialization:** Takes a path to a VCF file.
+*   **Methods:**
+    *   `get_variants_for_gene(gene_symbol, sample_name)`: Identifies all variants within the genomic coordinates of a given gene for a specific patient sample.
+    *   `get_germline_runx1_variant(sample_name)`: A specialized method to find the primary germline `RUNX1` mutation for a given patient.
+
+### Class: `SequenceExtractor`
+*   **Purpose:** To fetch reference DNA sequences and construct mutated sequences.
+*   **Initialization:** Takes a path to the `hg19` reference FASTA file (`.fa`).
+*   **Methods:**
+    *   `get_reference_sequence(chrom, start, end)`: Uses `pysam.FastaFile` to extract a specific genomic sequence from the reference genome.
+    *   `apply_variant(sequence, variant_info)`: A helper method to take a reference sequence and apply an SNV, insertion, or deletion to generate the mutated version.
+
+### Main Orchestration Logic
+*   The main script will instantiate these classes.
+*   It will iterate through a predefined list of high-priority target genes: `RUNX1`, `ASXL1`, `FLT3`, `NPM1`, `DNMT3A`, `TET2`, `IDH1`, `IDH2`, `BCOR`, `BCORL1`, `SRSF2`, and `GATA2`.
+*   For each patient and each gene, it will:
+    1.  Call `VCFProcessor` to get the relevant variants.
+    2.  Call `SequenceExtractor` to get the reference gene sequence.
+    3.  Use `SequenceExtractor.apply_variant` to construct the patient-specific mutated sequence.
+*   **Output:** The script will generate JSON objects formatted precisely for each `CommandCenter` API endpoint (e.g., `/workflow/digital_twin`, `/workflow/second_hit_simulation`).
+*   **Data Access:** For the initial implementation, the pipeline will operate on VCF/BAM/FASTA files stored in a local directory structure. The architecture will be modular to allow for future integration of remote API clients.
+*   **Gene Coordinates:** We will need a file or method to map gene symbols (e.g., `RUNX1`) to their genomic coordinates on `hg19`. A simple BED or GTF file could serve this purpose.
+
+This approach creates a clear separation of concerns, making the pipeline easy to test, debug, and extend as we onboard more complex data or analyses.

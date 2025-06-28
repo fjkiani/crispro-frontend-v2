@@ -659,19 +659,16 @@ def analyze_results_decision_support(editing_type: str, results_data: Dict[str, 
     
     return support
 
-def get_next_steps_recommendation(editing_type: str, 
-                                 result_data: Dict[str, Any],
-                                 issue_list: Optional[List[str]] = None) -> str:
+def get_next_steps_recommendation(
+    editing_type: str, 
+    result_data: Dict[str, Any],
+    issue_list: Optional[List[str]] = None,
+    therapeutic_context: Optional[Dict[str, Any]] = None,
+    ranked_guides: Optional[List[Dict[str, Any]]] = None
+) -> str:
     """
-    Generate a comprehensive next steps recommendation using the LLM.
-    
-    Args:
-        editing_type: Type of editing experiment (knockout, knockin, base_editing)
-        result_data: Dictionary with experimental results
-        issue_list: Optional list of observed issues
-        
-    Returns:
-        LLM-generated recommendation as a string
+    Generate a comprehensive recommendation for the next steps in a CRISPR experiment,
+    based on the analysis results and user selections.
     """
     # Get troubleshooting suggestions
     troubleshooting = suggest_troubleshooting(editing_type, issue_list or [])
@@ -684,35 +681,53 @@ def get_next_steps_recommendation(editing_type: str,
     
     # Create a prompt for the LLM
     prompt = f"""
-    As a scientific advisor, provide a clear and actionable plan for the next steps in this CRISPR genome editing experiment.
-    
-    EXPERIMENT TYPE: {editing_type}
-    
-    CURRENT RESULTS:
-    {json.dumps(result_data, indent=2)}
-    
-    TROUBLESHOOTING SUGGESTIONS:
-    {json.dumps(troubleshooting, indent=2)}
-    
-    RECOMMENDED NEXT EXPERIMENTS:
-    {json.dumps(next_experiment, indent=2)}
-    
-    DECISION SUPPORT:
-    {json.dumps(decision_support, indent=2)}
-    
-    Please provide:
-    1. A brief interpretation of the current results (1-2 sentences)
-    2. The 3-4 most important next steps, prioritized by importance
-    3. Specific suggestions for optimization if needed
-    4. A timeline for these next steps
-    
-    Your recommendation should be practical, concise, and backed by the technical data provided.
+    Act as an expert CRISPR scientist and experimental strategist. Based on the following experimental details, provide a concise, actionable, and prioritized list of next steps.
+
+    **Experimental Details:**
+    - **Editing Type:** {editing_type}
+    - **Current Results/Inputs:** {json.dumps(result_data, indent=2)}
+    - **Observed Issues:** {', '.join(issue_list) if issue_list else 'None'}
+
+    **Your Task:**
+    1.  **Prioritize:** Determine the most critical next step.
+    2.  **Recommend:** Suggest 2-3 specific follow-up experiments or validation steps.
+    3.  **Troubleshoot:** If issues are reported, suggest concrete solutions.
+    4.  **Explain:** Briefly justify your recommendations in a scientifically rigorous manner.
     """
-    
-    # Call the LLM
-    recommendation = query_llm(prompt)
-    
-    return recommendation
+
+    # --- Task 3.3: Enhance prompt with therapeutic context ---
+    if therapeutic_context:
+        prompt += f"""
+    **IMPORTANT THERAPEUTIC CONTEXT:**
+    This experiment is being conducted in the context of therapeutic development.
+    - **Disease:** {therapeutic_context.get('disease', 'Not specified')}
+    - **Target Gene:** {therapeutic_context.get('gene', 'Not specified')}
+    - **Therapeutic Goal:** {therapeutic_context.get('goal', 'Not specified')}
+
+    **Context-Specific Instructions:**
+    - Tailor your recommendations to this therapeutic goal. For example, if the goal is to correct a pathogenic variant, prioritize HDR-based strategies and suggest specific validation assays to confirm correction at the protein level.
+    - Emphasize safety and efficacy considerations, such as off-target analysis and functional rescue.
+    """
+
+    if ranked_guides:
+        prompt += f"""
+    **Intelligently Designed Guides (Top Candidates)**
+    A set of guide RNAs have been designed and ranked based on AI-predicted efficacy and safety.
+    """
+        for guide in ranked_guides[:3]: # Show top 3 for brevity
+            prompt += f"- Guide: `{guide.get('guide_sequence')}`, Efficacy Score: `{guide.get('on_target_score')}`, Safety (Off-Target Hits): `{guide.get('off_target_hits')}`\\n"
+        prompt += "Recommendation should be to select the best one or two guides (high efficacy, low off-target) for experimental validation.\\n"
+
+    prompt += """
+Please provide a recommendation for the next steps in this CRISPR experiment.
+The recommendation should be a clear, actionable, and concise experimental plan.
+Focus on the most critical next step. For example, if guides have been designed, the next step is likely to order and test the top candidates.
+Format the output as a JSON object with the following keys:
+- "recommendation_title": A short, descriptive title for the experimental plan.
+- "summary": A one-sentence summary of the recommendation.
+- "next_steps": A list of specific, actionable experimental steps.
+"""
+    return query_llm(prompt)
 
 def generate_validation_protocol(editing_type: str, 
                                gene_info: Dict[str, Any], 
@@ -784,6 +799,10 @@ if __name__ == "__main__":
     parser.add_argument('--validation', '-v', action='store_true',
                         help='Generate a detailed validation protocol')
     
+    # Add an argument for therapeutic context for testing
+    parser.add_argument("--context_gene", type=str, help="Gene context for therapeutic goal")
+    parser.add_argument("--context_disease", type=str, help="Disease context for therapeutic goal")
+    
     args = parser.parse_args()
     
     # Load results data
@@ -803,12 +822,27 @@ if __name__ == "__main__":
         except (FileNotFoundError, json.JSONDecodeError) as e:
             print(f"Error loading gene info file: {e}")
     
+    # Build therapeutic context for testing
+    test_context = None
+    if args.context_gene and args.context_disease:
+        test_context = {
+            "gene": args.context_gene,
+            "disease": args.context_disease,
+            "goal": f"Develop a therapy for {args.context_disease} by targeting {args.context_gene}"
+        }
+        print(f"Therapeutic Context: {test_context}")
+
     # Generate recommendation
     if args.validation:
         result = generate_validation_protocol(args.type, gene_info, results_data)
         print("\n=== VALIDATION PROTOCOL ===\n")
     else:
-        result = get_next_steps_recommendation(args.type, results_data, args.issues)
+        result = get_next_steps_recommendation(
+            args.type, 
+            results_data, 
+            args.issues,
+            therapeutic_context=test_context
+        )
         print("\n=== NEXT STEPS RECOMMENDATION ===\n")
     
     print(result)

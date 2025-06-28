@@ -1,0 +1,106 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Realism Assessment & Strategic Development Plan
+
+## 1. Introduction
+
+This document provides a realistic evaluation of the key capabilities outlined for the **CrisPRO Intelligence Platform** and the **PrecisionRad Co-Pilot**. It assesses the feasibility of each capability based on our current stack (`crispr-assistant-main`) and proposes a phased strategic plan to achieve our vision. The core philosophy is to build foundational components first, deliver value incrementally, and use mature modules from one platform as prerequisites for the next.
+
+---
+
+## 2. CrisPRO Intelligence Platform: Assessment & Plan
+
+**Overall Realism:** High. The vision for the CrisPRO platform is a direct and logical extension of our current project. We have foundational elements for nearly every key capability. The main challenge is evolving these from simple wrappers and basic prompts into sophisticated, integrated AI modules.
+
+### Capability-by-Capability Breakdown:
+
+#### 2.1. Intelligent Guide RNA Design & Optimization (CHOPCHOP Enhanced)
+*   **Realism:** **High**
+*   **Current State:** We have a functional CHOPCHOP wrapper for basic gRNA design. We have an LLM API capable of providing explanations.
+*   **Development Gap:** The current integration is basic. It needs to incorporate more advanced on-target scoring models (like DeepHF) and expand its library of supported nucleases (base/prime editors, newer Cas variants). The LLM explanations need to be more comparatively analytical, not just descriptive.
+*   **Path Forward:**
+    1.  Refactor the CHOPCHOP tool to allow plug-in scoring models.
+    2.  Integrate at least one additional state-of-the-art on-target scoring algorithm.
+    3.  Develop advanced LLM prompts that take the output of multiple gRNAs and generate a comparative analysis, recommending the best option based on user-defined goals (e.g., highest efficiency vs. lowest off-targets).
+
+#### 2.2. Advanced Variant Effect Prediction & Target Contextualization (Evo 2 Integration)
+*   **Realism:** **Medium**
+*   **Current State:** We have a detailed *plan* (Phase 8 in `.cursorrules`), a conceptual understanding of the required inputs/outputs from an Evo2-style model, and the LLM API for interpreting final results.
+*   **Development Gap:** This is the largest technical lift for CrisPRO. The entire backend for this capability is missing. We need to:
+    1.  Acquire and host the Evo 2 model files (which can be very large).
+    2.  Build a robust Python wrapper (`evo_variant_predictor.py`) to run the model.
+    3.  Solve the reference genome dependency (these are multi-gigabyte files).
+    4.  Build a performant API and UI to handle user requests.
+    5.  This is computationally expensive and requires significant backend engineering.
+*   **Path Forward:**
+    1.  **Execute Phase 8 (from `.cursorrules`) as the highest priority new feature.**
+    2.  Begin by creating the `tools/evo_variant_predictor.py` module.
+    3.  Develop a clear strategy for managing model and genome file dependencies (e.g., require user to provide paths in a config, or build a downloader). This is a critical first step.
+    4.  Integrate the backend into the Streamlit app with a simple UI for single variant analysis.
+
+#### 2.3. Comprehensive Editing Outcome Analysis (CRISPResso2 Enhanced)
+*   **Realism:** **High**
+*   **Current State:** We have a functional CRISPResso2 wrapper and can generate summary reports. We have the LLM API.
+*   **Development Gap:** The interpretation is likely basic. The vision requires the LLM to provide deep, context-aware analysis that connects the quantitative results (% NHEJ, allele frequencies) to the *goals* of the experiment (e.g., "This 80% NHEJ with predominantly 1-2bp indels is excellent for your goal of gene knockout.").
+*   **Path Forward:**
+    1.  Refine the CRISPResso2 parser to output a structured JSON/dictionary of key results.
+    2.  Develop a dedicated LLM prompt chain that accepts this structured data *and* user-provided experimental goals.
+    3.  The LLM's task is to generate the "Therapeutic Interpretation" section of the report.
+
+#### 2.4. LLM-Powered Experiment Design & Protocol Generation (Experiment Advisor)
+*   **Realism:** **Medium-High**
+*   **Current State:** We have an `experiment_advisor.py` module and the LLM API. The concept exists.
+*   **Development Gap:** The current advisor is likely based on simple, general-purpose LLM prompts. To be truly powerful, it needs to be grounded in a specific knowledge base of CRISPR protocols and best practices to avoid hallucination and provide reliable, state-of-the-art advice.
+*   **Path Forward:**
+    1.  Build a vector database from a curated set of CRISPR protocols, review articles, and methods papers.
+    2.  Implement a Retrieval-Augmented Generation (RAG) system for the Experiment Advisor. When a user asks for a protocol, the LLM will use the vector database to find relevant information and synthesize a response based on trusted sources.
+
+---
+
+## 3. PrecisionRad Co-Pilot: Assessment & Plan
+
+**Overall Realism:** **Low (based on our current stack).** This is a different and highly specialized domain. While the *philosophy* of AI-driven assistance is the same, the core technical requirements (medical imaging, DICOM, radiation physics) are entirely new to our project. Building this from scratch is a massive undertaking, far greater than enhancing CrisPRO.
+
+### Capability-by-Capability Breakdown:
+
+#### 3.1. AI-Enhanced Treatment Planning & QA / Intelligent ART Support
+*   **Realism:** **Very Low**
+*   **Current State:** Zero. We have no tools for parsing DICOM-RT (plans, structures, dose), no libraries for 3D medical image analysis (like MONAI, ITK), and no experience with Treatment Planning System (TPS) APIs or radiation physics modeling.
+*   **Development Gap:** The entire foundational stack is missing. This is a multi-year, specialized project requiring dedicated expertise in medical physics and medical imaging AI.
+*   **Path Forward:** This should not be an immediate goal. It would represent a completely new business and development vertical.
+
+#### 3.2. Radio-Genomics & Biomarker Integration for Personalization
+*   **Realism:** **Medium (for the *genomics component only*)**
+*   **Current State:** The **`analyze_single_variant` (Evo 2) engine** planned for CrisPRO is the *exact same engine* needed for this capability. The LLM interpretation framework is also directly reusable.
+*   **Development Gap:** The "Radiomics" part is missing entirely. More importantly, the **correlative models** that link genomic/radiomic features to radiation response are non-existent and require large, curated clinical datasets (imaging + genomics + outcomes) for training, which we do not have.
+*   **Path Forward:** This is the most realistic entry point into the PrecisionRad space, but only *after* the `analyze_single_variant` module is mature.
+    1.  **Leverage CrisPRO's `evo_variant_predictor.py`.**
+    2.  Develop a "Radiogenomics Predictor" UI that takes a list of variants (e.g., from a tumor panel) and uses the AI to predict radiosensitivity/toxicity based on our defined use cases.
+    3.  This creates a valuable (though partial) version of PrecisionRad without needing to build the entire imaging stack.
+
+---
+
+## 4. Proposed Strategic Plan
+
+Our development should be phased to build on strengths and manage risk.
+
+**Phase I: Deliver a World-Class CrisPRO Intelligence Platform (Next 6-12 Months)**
+1.  **Top Priority:** Build and fully integrate the **"Advanced Variant Effect Prediction (Evo 2 Integration)"** module. This is the most significant new feature and a prerequisite for advanced capabilities on both platforms.
+2.  **Enhance Existing Modules:** Concurrently, upgrade the CRISPResso2 and Experiment Advisor modules with the advanced LLM/RAG systems described above.
+3.  **Refine UI/UX:** Create a polished, end-to-end user journey within the CrisPRO application.
+4.  **Outcome:** A complete, highly valuable, and marketable AI platform for CRISPR R&D.
+
+**Phase II: Launch a "PrecisionRad Genomics" Module (After Phase I)**
+1.  **Leverage Phase I Tech:** Take the mature `evo_variant_predictor.py` and LLM interpretation frameworks from CrisPRO.
+2.  **Build a Focused Application:** Create a new, streamlined "PrecisionRad Genomics" Co-Pilot. Its sole function will be to accept patient variant data (VCF files or manual entry) and produce a "Radio-Genomic Insight Report" covering predicted radiosensitivity, toxicity risk, and VUS interpretation.
+3.  **Outcome:** A realistic, high-value entry into the clinical oncology space that solves a real problem for radiation oncologists, *without* the immense cost and complexity of building the medical imaging stack. This serves as a powerful POC for the broader PrecisionRad vision.
+
+**Phase III: Full PrecisionRad Co-Pilot Development (Long-Term Vision)**
+1.  **Evaluate Phase II Success:** Based on the adoption and feedback from the "PrecisionRad Genomics" module, make a strategic decision about investing in the full vision.
+2.  **Build the Imaging Stack:** If the decision is to proceed, this phase would involve hiring a dedicated medical imaging AI team and beginning the long-term project of building the treatment planning, ART, and radiomics capabilities.
+3.  **Outcome:** The complete PrecisionRad Co-Pilot as envisioned in our concept documents.
+
+This phased approach ensures we deliver value continuously, use our resources effectively, and de-risk our expansion into new and complex domains like radiation oncology.

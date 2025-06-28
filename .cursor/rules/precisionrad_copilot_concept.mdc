@@ -1,0 +1,99 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# PrecisionRad Co-Pilot: AI-Enhanced Targeted Radiation Therapy
+
+## 1. Vision
+
+The PrecisionRad Co-Pilot aims to revolutionize targeted radiation therapy by empowering clinicians and researchers with an AI-driven platform that integrates multi-modal data, advanced analytics, and intelligent decision support. Our vision is to enhance treatment precision, personalize care based on individual tumor biology and patient genetics, optimize workflows, and ultimately improve patient outcomes while minimizing toxicities.
+
+## 2. Core Problem Addressed in Radiation Oncology
+
+Targeted radiation therapy, while highly advanced, grapples with inherent complexities that PrecisionRad Co-Pilot seeks to address:
+
+*   **Complex Treatment Planning:** Accurately defining tumor volumes and organs at risk (OARs), and optimizing radiation delivery, is intricate and resource-intensive.
+*   **Biological Variability & Radio-Resistance/Sensitivity:** Tumors and patients exhibit diverse responses to radiation due to genetic makeup, tumor microenvironment factors (e.g., hypoxia), and intrinsic DNA repair capabilities. Tailoring treatment to this variability is a major hurdle.
+*   **Dynamic Changes During Treatment (Adaptive Radiotherapy - ART):** Patient anatomy and tumor geometry can change significantly over a multi-week treatment course, potentially compromising the original plan's accuracy and efficacy.
+*   **Risk of Normal Tissue Toxicity:** Predicting, mitigating, and managing radiation-induced side effects in healthy tissues is critical for patient quality of life.
+*   **Data Silos & Integration Challenges:** Radiation oncology relies on a wealth of data—imaging (CT, MRI, PET), dosimetry, patient-reported outcomes, and increasingly, molecular/genomic information. Integrating these disparate sources for holistic decision-making remains challenging.
+
+## 3. How PrecisionRad Co-Pilot Builds on Our Existing Stack's Philosophy
+
+PrecisionRad Co-Pilot directly extends the core philosophy of our existing platforms (CasPro Assistant, CrisPRO Oncology Co-Pilot):
+
+*   **AI-Driven Insight:** Leveraging machine learning, deep learning (especially computer vision for imaging), NLP/LLMs, and predictive modeling as central pillars.
+*   **Multi-Modal Data Integration:** A commitment to breaking down data silos and creating a unified view of the patient and their disease by integrating imaging, clinical, genomic, and dosimetric data.
+*   **LLM for Interaction & Summarization:** Employing Large Language Models to provide intuitive user interfaces, natural language querying, and clear, concise summaries of complex AI-generated insights.
+*   **Modular & Extensible Architecture:** Designing the platform with modular components (e.g., variant analysis, image segmentation, outcome prediction) that can be individually improved and collectively leveraged.
+*   **Actionable Intelligence:** Focusing not just on data processing, but on translating data into actionable insights that support clinical decision-making and research.
+*   **Personalization:** Enabling a shift towards more personalized treatment strategies based on individual patient and tumor characteristics.
+
+While sharing these philosophical underpinnings, PrecisionRad will have a distinct focus on the specific data types (DICOM-RT, advanced imaging), physics (dosimetry, radiation transport), and clinical workflows unique to radiation oncology.
+
+## 4. Key Capabilities: Technical, Scientific, and Business Aspects
+
+PrecisionRad Co-Pilot will offer a suite of interconnected capabilities:
+
+### 4.1. AI-Enhanced Treatment Planning & Quality Assurance
+*   **Technical:** Deep learning models for automated/assisted contouring of tumors and OARs on planning CT/MRI. AI algorithms for proposing optimal beam arrangements and fluence maps. Predictive dosimetry models. Automated plan quality flagging systems.
+*   **Scientific:** More consistent and accurate target delineation. Exploration of novel planning strategies. Potential for reducing inter-observer variability in contouring.
+*   **Business:** Increased efficiency in the planning process, potentially reducing planning time. Improved plan quality leading to better potential outcomes. Standardization of best practices.
+
+### 4.2. Radio-Genomics & Biomarker Integration for Personalization
+*   **Technical:** Integration of genomic (germline/somatic variants), transcriptomic, and proteomic data. Radiomics feature extraction pipelines from CT, PET, MRI. AI models to correlate molecular and imaging biomarkers with radiation response. **This directly leverages a foundational `analyze_single_variant` (Evo2-style) capability for interpreting the functional impact of genetic variants in relevant pathways.**
+*   **Scientific:** Deeper understanding of the biological basis of radiosensitivity and resistance. Non-invasive tumor characterization through radiomics. Identification of patients likely to benefit from dose escalation, specific sensitizers, or alternative therapies. Prediction and understanding of normal tissue toxicity predispositions.
+*   **Business:** Enables patient stratification for clinical trials. Development of novel predictive biomarkers (potential IP). Attracts patients seeking cutting-edge personalized treatments.
+
+    *   **Paragraph on Integrating the Six Core Genomic Use Cases:** The six detailed use cases (VUS interpretation, predicting tumor radiosensitivity/resistance, forecasting normal tissue radiotoxicity, biologically guided dose painting, guiding systemic therapy selection, and smarter patient stratification/biomarker discovery) are integral to this pillar. The `analyze_single_variant` function, providing functional impact scores (e.g., delta_score) and predictions for individual mutations, serves as the engine. This allows PrecisionRad to:
+        1.  **Interpret VUS in hereditary cancer predisposition genes,** providing context for overall treatment strategy and genetic counseling (relevant if a patient in radiation oncology also has a hereditary syndrome).
+        2.  **Predict tumor radiosensitivity/resistance** by aggregating functional impacts of somatic mutations in key DNA repair and cell cycle genes within the tumor.
+        3.  **Forecast normal tissue radiotoxicity** by analyzing germline variants in genes influencing individual radiation sensitivity (e.g., oxidative stress, inflammation pathways).
+        4.  Enable **biologically guided dose painting** by assessing intra-tumoral heterogeneity in radiosensitivity based on spatially resolved genomic data, guiding higher doses to resistant sub-regions.
+        5.  Inform **decisions around concurrent or adjuvant systemic therapies** by understanding the functional impact of mutations that might confer sensitivity/resistance to those agents alongside radiation.
+        6.  Contribute to **smarter patient stratification for clinical trials** and the **discovery of novel radio-genomic biomarkers** by using Evo2-derived features from large patient cohorts.
+
+### 4.3. Intelligent Adaptive Radiotherapy (ART) Support
+*   **Technical:** AI for automated change detection on daily/weekly on-board images (CBCT). Rapid dosimetric impact simulation. AI-driven recommendations for replanning triggers.
+*   **Scientific:** More accurate dose delivery throughout the treatment course. Ability to adapt to tumor response or anatomical changes, potentially improving TCP and reducing toxicity. Enables research into optimal ART strategies.
+*   **Business:** Positions the clinic as a leader in advanced ART. Potentially improves outcomes and reduces complications associated with geometric uncertainties.
+
+### 4.4. Treatment Outcome & Toxicity Prediction
+*   **Technical:** Development of Tumor Control Probability (TCP) and Normal Tissue Complication Probability (NTCP) models incorporating clinical, dosimetric, imaging, and genomic data. LLM-driven presentation of risk/benefit profiles.
+*   **Scientific:** More accurate prognostication. Better informed shared decision-making with patients. Identification of factors driving treatment success or failure.
+*   **Business:** Enhanced patient counseling. Data for quality improvement initiatives and benchmarking.
+
+### 4.5. Knowledge Integration & Research Support
+*   **Technical:** LLM for natural language querying of radiation oncology guidelines and literature. Tools for structured data capture for research. Clinical trial matching algorithms based on comprehensive patient profiles.
+*   **Scientific:** Facilitates evidence-based practice. Streamlines data collection for clinical research. Improves accrual to relevant clinical trials.
+*   **Business:** Enhances the clinic's research profile. Supports continuous learning and quality improvement.
+
+## 5. Value Proposition
+
+*   **Radiation Oncologists & Clinical Teams:**
+    *   Increased precision and confidence in treatment planning and delivery.
+    *   Personalized treatment strategies tailored to individual tumor biology.
+    *   More efficient clinical workflows (e.g., faster contouring, ART decision support).
+    *   Improved ability to predict and manage treatment-related toxicities.
+    *   Enhanced tools for research and guideline adherence.
+*   **Medical Physicists & Dosimetrists:**
+    *   AI-assisted tools for planning, QA, and ART, reducing manual effort.
+    *   Support for implementing advanced and complex treatment techniques.
+*   **Patients:**
+    *   Potential for more effective tumor control with personalized radiation doses.
+    *   Reduced risk of side effects due to better OAR sparing and predictive toxicology.
+    *   Access to cutting-edge adaptive therapies tailored to their changing needs during treatment.
+    *   Clearer understanding of risks and benefits through AI-summarized information.
+*   **Researchers & Academia:**
+    *   A robust platform for collecting high-quality, structured multi-modal data.
+    *   Advanced tools for investigating radiobiology, developing novel treatment strategies, and validating predictive biomarkers.
+    *   Facilitation of clinical trials for new radiation techniques and combined modality treatments.
+*   **Healthcare Institutions & Payers:**
+    *   Potential for improved patient outcomes and reduced costs associated with managing severe toxicities or treatment failures.
+    *   Enhanced reputation as a center for excellence and innovation in radiation oncology.
+    *   Data-driven insights for optimizing resource allocation and service delivery.
+
+## 6. Conclusion
+
+The PrecisionRad Co-Pilot, built upon the foundational AI and data integration philosophies of our existing stack and deeply informed by the specific needs of radiation oncology and the power of detailed genomic analysis (as exemplified by the six core use cases for variant interpretation), has the potential to be a transformative platform. It aims to bring a new level of intelligence, personalization, and efficiency to the fight against cancer through targeted radiation therapy.

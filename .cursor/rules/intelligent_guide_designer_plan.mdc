@@ -1,0 +1,118 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Intelligent Guide Designer: Architecture & Implementation Plan
+
+This document outlines the plan to replace the legacy, binary-dependent CHOPCHOP tool with a modern, API-driven, and therapeutically-aware "Intelligent Guide Designer".
+
+## Strategic Context & Business Value
+
+This plan directly addresses a core business need: **to de-risk and accelerate the pre-clinical phase of therapeutic CRISPR development.**
+
+### How "Generate & Compare" Solves a Key Business Problem
+
+The traditional method of designing guide RNAs optimizes for simple "cutting efficiency." For therapeutic purposes, this is insufficient. The critical business challenge is to identify guide candidates that are not only **effective** but also **safe**, as early as possible.
+
+The "Generate & Compare" methodology provides a powerful solution by using AI to assess the **functional importance** of any DNA sequence:
+
+1.  **Maximizing Efficacy (The "On-Target" Score):** By scoring how conserved a guide's target site is, we ensure we are hitting a functionally critical part of the gene. A knockout of a non-essential part of a gene may have no therapeutic effect. This model helps us prioritize guides that are most likely to achieve a potent, disease-modifying outcome.
+
+2.  **Minimizing Risk (The "Off-Target" Score):** Our model allows us to predict the potential clinical harm of edits at off-target sites. A guide whose potential off-targets are in non-functional "junk DNA" is vastly preferable to one whose off-targets could disrupt other essential genes. This allows us to filter out unsafe guides *in silico*, before committing to expensive and time-consuming lab experiments.
+
+**The business value is a significant reduction in time and cost, achieved by improving the quality of candidates that move forward to experimental validation.**
+
+### Connecting the Workflow: From "Why" to "How"
+
+This new tool creates a seamless and logical narrative that begins with the Digital Twin:
+
+1.  **The "Why" (Diagnosis):** The Myeloma Digital Twin identifies the root cause of the problem—a specific, pathogenic variant like `BRAF V600E` that is driving drug resistance.
+
+2.  **The "How" (Therapeutic Design):** The Intelligent Guide Designer takes this specific target and designs the optimal tool to fix it. The "Generate & Compare" method ensures this tool is not just a blunt instrument, but a precision-guided one, designed to maximize therapeutic impact while minimizing the risk of collateral damage.
+
+### The Role of "Next Steps" (Experiment Advisor)
+
+The final "Next Steps" recommendation is the critical bridge from *in silico* design to a real-world, actionable **experimental plan**. A brilliant guide design is useless if a scientist doesn't know how to proceed with it.
+
+By feeding a high-quality, AI-vetted guide candidate into the Experiment Advisor, we elevate its recommendations from generic advice to a specific, tailored protocol. For example:
+
+*   **Before:** "Validate your guide in a cell line."
+*   **After:** "You have selected Guide `XYZ-123`, which has a high predicted on-target efficacy score (0.92) and a low off-target safety risk. We recommend the following validation plan: 1. Synthesize this guide. 2. Perform an *in vitro* cleavage assay to confirm cutting efficiency. 3. Validate functional knockout of the BRAF protein via Western Blot in a Myeloma cell line. 4. Perform GUIDE-seq to experimentally confirm the low off-target profile predicted by our AI model."
+
+This accelerates the R&D cycle by removing the ambiguity of experimental design and providing a clear, lab-ready path forward.
+
+## Vision
+
+Our goal is to create a pure Python guide design tool that leverages our existing Evo2 AI infrastructure to provide superior, context-aware guide RNA recommendations. This new tool will be robust, maintainable, and free of the platform-specific compatibility issues that plague the current CHOPCHOP script.
+
+## Core Methodology: "Generate & Compare"
+
+Inspired by the workflow in the `generation_notebook.ipynb` notebook, our scoring methodology will be based on a "Generate & Compare" approach. Instead of classifying single point mutations, we will use Evo2's generative capabilities to assess the functional importance of any DNA sequence.
+
+The core idea is:
+1.  **Generate**: Use a target DNA sequence (the guide's binding site) as a "prompt" for a generative DNA model like Evo2.
+2.  **Compare**: Align the model's *generated* sequence with the *original* reference sequence.
+3.  **Score**: The alignment score (sequence similarity) serves as a proxy for the functional importance and evolutionary conservation of that DNA region.
+
+---
+
+## How We Will Build It: Implementation Plan
+
+The implementation will be broken down into the following modules and functions, primarily housed within a new file: `tools/intelligent_guide_finder.py`.
+
+### Task 1: Sequence Retrieval
+
+*   **Function**: `get_sequence_for_locus(locus: str, genome: str) -> str`
+*   **Description**: This function will take a genomic locus (e.g., a gene symbol like 'BRAF' or coordinates like 'chr7:140,750,000-140,760,000') and a genome build (e.g., 'hg38').
+*   **Implementation**: It will call a public bioinformatics API (e.g., Ensembl, UCSC) to fetch the corresponding DNA sequence. This removes any dependency on local FASTA files.
+
+### Task 2: Guide Candidate Generation
+
+*   **Function**: `find_guide_candidates(sequence: str, pam: str = "NGG") -> List[str]`
+*   **Description**: A straightforward function that scans the input DNA sequence for all occurrences of the specified PAM sequence and returns a list of all valid 20-nucleotide guide RNA candidates preceding the PAM.
+
+### Task 3: The "Generate & Compare" Scorer
+
+*   **Function**: `score_sequence_importance(sequence: str) -> float`
+*   **Description**: This is the core of our AI-powered scoring. It will take any DNA sequence (on-target or off-target) and return a score representing its functional importance.
+*   **Implementation**:
+    1.  Call the Evo2 generative model (either via our Modal API or a local instance) with the input `sequence` as the prompt.
+    2.  Receive the generated sequence from the model.
+    3.  Use `Bio.pairwise2.align.globalxx` to align the original `sequence` and the generated sequence.
+    4.  Return the alignment score.
+
+### Task 4: On-Target Efficacy Scoring
+
+*   **Logic**: A wrapper around `score_sequence_importance`. A higher score for a guide's target site implies it's a functionally critical region, making it a better target for a knockout.
+*   **Result**: An **On-Target Efficacy Score** for each guide candidate.
+
+### Task 5: Off-Target Analysis
+
+*   **Function**: `find_potential_off_targets(guide_sequence: str, genome: str) -> List[Dict]`
+*   **Description**: This function will take a guide RNA sequence and find potential off-target sites in the specified genome.
+*   **Implementation**: It will use a BLAST-like API to search the genome for sequences with up to a certain number of mismatches (e.g., 3-4 mismatches). It will return a list of dictionaries, each containing the off-target sequence and its genomic location.
+
+### Task 6: Off-Target Safety Scoring
+
+*   **Logic**: For each guide candidate, we will iterate through its list of potential off-targets found in Task 5.
+*   **Implementation**:
+    1.  For each potential off-target sequence, call `score_sequence_importance()`.
+    2.  A low score indicates the off-target is in a non-critical region, making it "safer".
+    3.  We will aggregate these scores (e.g., by taking the maximum score, or a weighted average) to produce a single **Off-Target Safety Score** for the guide. A lower final score is better.
+
+### Task 7: Main Controller & UI Integration
+
+*   **Main Function**: `find_intelligent_guides(locus: str, genome: str)` will orchestrate the entire process, calling the functions above to return a final, ranked list of guides with their on-target and off-target scores.
+*   **UI Page**: A new Streamlit page, `pages/2_Intelligent_Guide_Designer.py`, will be created to provide an interface for this new tool. It will replace the old CHOPCHOP page in the workflow.
+
+---
+
+## Tying into the Sequential Workflow
+
+This new Intelligent Guide Designer will slot perfectly into our existing end-to-end workflow, making it more powerful and robust.
+
+1.  **Myeloma Digital Twin**: This module remains unchanged. When a user clicks "🎯 Design CRISPR Therapy" for a high-impact variant, it will save the variant's coordinates to the session state.
+2.  **Navigate & Pre-populate**: The app will navigate to our new `pages/2_Intelligent_Guide_Designer.py` page.
+3.  **Intelligent Guide Design**: This new page will read the coordinates from the session state, use them to call `find_intelligent_guides()`, and display the ranked list of AI-scored guides.
+4.  **Experiment Advisor**: After the user selects one of the new, intelligently-designed guides, the selection will be passed to the `get_next_steps_recommendation` function, which can now provide even more tailored advice based on the high-quality guide that was selected.

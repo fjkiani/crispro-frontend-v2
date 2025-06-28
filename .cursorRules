@@ -62,149 +62,99 @@ Snippet: This is a snippet of the search result
 If needed, you can further use the web_scraper.py file to scrape the web page content.
 
 Cursor learned
-* VENV_PYTHON in llm_api.py should use sys.executable for robustness.
-* Ensure .env file is populated with actual API keys, not placeholders.
-* CHOPCHOP and CRISPResso2 often run in specific Conda environments. The agent needs to handle this.
-* Gemini model name updated to `gemini-1.0-pro` or potentially `gemini-1.5-pro-latest`.
 * Function definitions must precede their calls in Python scripts. Moving definitions or using imports correctly resolves NameErrors.
+* Modal web endpoints expecting synchronous, blocking calls (like a long-running AI model) should use a synchronous `def` and invoke methods with `.call()`. Using `async def` with `await .remote()` can cause `Task was destroyed but it is pending!` errors if the underlying code is not fully asynchronous.
+* When a Modal method is called from within the same class (e.g., a web endpoint calling a helper method), it must be invoked with `.call()` for synchronous execution, not as a direct function call, to avoid a `TypeError: 'Function' object is not callable`.
+* Separate backend services (e.g., a discriminative AI vs. a generative AI) should have their endpoints managed by distinct, clearly named environment variables (e.g., `EVO2_DISCRIMINATIVE_ENDPOINT`, `EVO2_GENERATIVE_ENDPOINT`) rather than hardcoded URLs to prevent incorrect deployments and rogue costs.
+* **Evo2 40B Model requires Multi-GPU:** The `evo2_40b` model is too large for a single H100 GPU and requires a multi-GPU configuration (e.g., `gpu="H100:2"`). The `evo2` library's Vortex engine handles model distribution automatically.
+* **Evo2 requires a specific build environment:** Successful compilation of `evo2` and its dependencies needs Python `3.11`, `numpy==1.22.0`, and `transformer-engine==1.13`.
+* **Numpy `ar` archiver fix:** The `numpy==1.22.0` build fails without a symlink for the `ar` archiver. This can be fixed by running `ln -s /usr/bin/ar /tools/llvm/bin/llvm-ar` in the container image build.
+* **Consolidate Modal Endpoints:** Mixing `@app.cls` and `@app.function` in a single Modal app can lead to `gRPC` initialization errors. All endpoints should be consolidated within the main service class for stability.
+* **Large model download timeout:** Large models like `evo2_40b` can take a long time to download, requiring an increased function timeout (e.g., `timeout=1200`) in the `@app.cls` decorator to prevent the runner from timing out.
+* **Correct Evo2 API usage:** The method for scoring sequences is `score_sequences`, not `score`. Calling the wrong method results in an `AttributeError`.
+* **Modal Invocation Nuance:** When a Modal `@modal.method` is called from an `async def` `@modal.asgi_app` endpoint within the same class, the call to `.remote()` is blocking and returns the result directly. It should **not** be `await`ed, as this will cause a `TypeError: object ... can't be used in 'await' expression`.
+* **Modal Endpoint Consolidation:** To overcome strict endpoint limits, multiple logical endpoints (e.g., `/score`, `/generate`) should be implemented within a single `@modal.asgi_app` using an internal web framework like FastAPI for routing. Attempting to use multiple `@modal.fastapi_endpoint` decorators on a single class can easily exceed plan limits.
+* **PyVCF vs. PyVCF3:** The original `PyVCF` package fails to install on modern Python environments due to a `use_2to3` build error. The `PyVCF3` fork is a compatible drop-in replacement that should be used for Python 3 projects.
 
 Scratchpad
-*
-TASK: LLM-Enhanced CRISPR Assistant Integration (with Therapeutic Context)
+==========
 
-Goal: Transform the CRISPR tool into a fully guided experience with contextual LLM assistance, focusing on CHOPCHOP workflow, experiment design, and CRISPResso2 analysis, **specifically adding context relevant to therapeutic development challenges (efficacy, delivery, off-target, durability, side effects).**
+**🔥 OPERATIONAL DIRECTIVE: Project Ascension 🔥**
 
-Current Issues:
-- Application provides design/analysis but lacks context regarding downstream therapeutic hurdles.
-- Users may not be prompted to consider safety/efficacy implications early in the design process.
+**1.0 Mission Briefing**
+**Objective:** Translate our validated *in silico* platform into real-world, life-saving therapeutics.
+**Scope:** This operation covers acquiring patient data, generating specific therapeutic candidates, validating them in the lab, and building a commercial-grade platform.
+**End State:** A fully validated, patented, and commercially accessible platform that dominates the field of AI-driven therapeutic design.
 
-Phase 1: Fix Core LLM Integration ✅
-  [X] Task 1.1: Fix LLM API Connection
-    [X] 1.1.1: Debug "LLM explanation not available" error - Fixed by enhancing the query_llm function in tools/llm_api.py
-    [X] 1.1.2: Ensure tools/llm_api.py is properly accessible - Added better error messages and handling of missing API keys
-    [X] 1.1.3: Verify API keys and environment variables - Enhanced error messages with instructions on obtaining API keys
-    [X] 1.1.4: Test basic LLM functionality across all modules - Fixed import issues in page files
-  [X] Task 1.2: Implement Context-Aware Chat Assistant
-    [X] 1.2.1: Create persistent session state for chat history - Added chat_history and workflow_context state variables
-    [X] 1.2.2: Enhance chat UI with user-friendly elements - Added context display and help buttons
-    [X] 1.2.3: Implement context tracking for user\'s current workflow stage - Added current_page, gene_of_interest, etc.
-    [X] 1.2.4: Develop specialized prompts for different CRISPR tasks - Added task-specific system prompts
+**2.0 Current Plan of Attack**
 
-Phase 2: CHOPCHOP Results Interpretation Enhancement ✅
-  [X] Task 2.1: LLM-Powered Results Explanation
-    [X] 2.1.1: Create dynamic explanations for all result metrics (efficiency, specificity, etc.) - Added interpret_guide_properties function
-    [X] 2.1.2: Develop visual tooltips with explanations for result columns - Integrated with existing get_llm_tooltip
-    [X] 2.1.3: Generate overall summary of results quality - Added Results Summary expander with LLM analysis
-    [X] 2.1.4: Explain implications of target positions (exons vs. introns) - Included in guide interpretation
-  [ ] Task 2.2: Results Visualization Enhancement
-    [X] 2.2.1: Generate visual representation of guide positions in gene context - Using existing coordinate_handler
-    [ ] 2.2.2: Create comparative visualizations between guides
-    [ ] 2.2.3: Add gene structure visualization with domain annotations
-    [ ] 2.2.4: Visualize off-target potential across genome
+**Phase 0: Data Acquisition & Candidate Generation (The Immediate Priority)**
+**Objective:** Process real-world patient genomic data to generate a prioritized list of therapeutic candidates for synthesis.
 
-Phase 3: LLM-Guided Experiment Design ✅
-  [X] Task 3.1: Dynamic Experiment Recommendations
-    [X] 3.1.1: Replace hardcoded experiment values with LLM-generated suggestions - Added dynamic experiment design
-    [X] 3.1.2: Create context-aware experiment recommendations based on guide properties - Using guide data to inform LLM
-    [X] 3.1.3: Generate custom experiment protocols based on user\'s lab capabilities - Added protocol generation
-    [X] 3.1.4: Develop decision tree for experiment type selection with pros/cons - Added experiment type selection with LLM advice
-  [ ] Task 3.2: Disease-Specific Guidance
-    [ ] 3.2.1: Build disease-gene database for RAF, BRCA1, and other therapeutic targets
-    [ ] 3.2.2: Create specialized workflows for oncogene knockout vs. tumor suppressor restoration
-    [ ] 3.2.3: Implement mutation-specific guide design for known disease variants
-    [ ] 3.2.4: Develop therapeutic outcome predictions based on edit efficiency
+[ ] **Task 0.1: Secure Core Genomic Data.**
+    *   **Status:** ⏳ AWAITING USER PROVISION
+    *   **Action:** Obtain germline (WGS) and somatic (WGS/WES) data for the RUNX1-FPD patient cohort in VCF/BAM format. This is the current bottleneck.
 
-Phase 4: End-to-End Workflow Assistant ✅
-  [X] Task 4.1: Novice-Friendly Guidance System
-    [X] 4.1.1: Create step-by-step tutorial mode with LLM explanations - Added in chat assistant
-    [X] 4.1.2: Implement progress tracking across entire workflow - Using workflow_context
-    [X] 4.1.3: Develop contextual help for each interface element - Enhanced tooltips and explanations
-    [X] 4.1.4: Add decision support at key workflow junctions - Added in the AI assistant
-  [ ] Task 4.2: Integration with External Resources
-    [ ] 4.2.1: Connect to literature database for experiment references
-    [ ] 4.2.2: Link to resources for primers, vectors, and reagents
-    [ ] 4.2.3: Create troubleshooting guidance with real-world examples
-    [ ] 4.2.4: Develop outcome prediction based on similar published experiments
+[ ] **Task 0.2: Develop Data Ingestion Pipeline.**
+    *   **Status:** ⏳ IMPLEMENTATION IN PROGRESS
+    *   **Action:** Implement the Python script (`tools/ingestion/main.py`) to parse VCF/BAM files.
+    *   **Sub-Tasks:**
+        *   [X] Establish project structure (`tools/ingestion`).
+        *   [X] Resolve and install dependencies (`PyVCF3`, `pysam`).
+        *   [X] Create skeleton script with class structure (`VCFProcessor`, `SequenceExtractor`).
+        *   [X] Acquire reference genome (`hg19.fa`) and create index.
+        *   [X] Create a manual, representative VCF file (`data/vcf/manual_runx1.vcf`) to bypass environmental issues with synthetic data generators.
+        *   [X] **Implement `VCFProcessor`:** Parse the manual VCF to extract germline and somatic variants for target genes.
+        *   [X] **Implement `SequenceExtractor`:** Fetch reference sequences and apply variants.
+        *   [X] **Implement Main Orchestration:** Generate API payloads for `CommandCenter`.
+    *   **Current Blocker:** None. Ready to implement parsing logic.
+    *   **Technical Approach:** See [.cursor/rules/Phase0-DataIngestion.mdc](mdc:.cursor/rules/Phase0-DataIngestion.mdc)
+    *   **Decision:** All sequence data will be aligned to the `hg19/GRCh37` reference genome build. See full rationale in [.cursor/rules/ReferenceGenomeDecision.mdc](mdc:.cursor/rules/ReferenceGenomeDecision.mdc).
 
-Phase 5: End-to-End Workflow Enhancement Modules ✅
-  [X] Task 5.1: Comprehensive Guide RNA Result Interpretation (`guide_interpreter.py`)
-  [X] Task 5.2: Experiment Design & Planning Assistant (`experiment_advisor.py`)
-  [X] Task 5.3: Enhanced Results Interpretation (`result_interpreter.py`)
-    [X] 5.3.1: Improve the CRISPResso2 result parser to extract more detailed metrics *(Existing parser deemed sufficient for current scope)*
-    [X] 5.3.2: Add context-aware interpretation that relates results to experimental goals *(Implemented in `generate_enhanced_summary` prompt)*
-    [P] 5.3.3: Design visualizations that make complex results more intuitive *(Base visualizations exist, further enhancements can be future work)*
-    [X] 5.3.4: Implement comparison with expected outcomes based on experiment type *(Implemented in `compare_with_expected` and `EXPECTED_OUTCOMES`)*
-    [X] 5.3.5: Create specialized interpretation for different editing approaches (NHEJ, HDR, base editing) *(Implemented in `generate_enhanced_summary` prompt and `evaluate_experiment_success`)*
-  [X] Task 5.4: Coordinate Handling & Sequence Management (`coordinate_handler.py`)
-  [X] Task 5.5: Educational Component Development (`educational_context.py`)
-  [X] Task 5.6: Next Steps Generator & Decision Support (`next_steps.py`)
+[X] **Task 0.3: Execute Full *In Silico* Campaign on Patient Data.**
+    *   **Status:** ✅ COMPLETE
+    *   **Action:** Run the complete suite of `CommandCenter` workflows on the processed patient data.
+    *   **Sub-Tasks:**
+        *   [X] Renamed and adapted ingestion script to `run_patient_assessment.py`.
+        *   [X] Created a new `full_patient_assessment` workflow in `CommandCenter`.
+        *   [X] Deployed and debugged the new end-to-end workflow.
+        *   [X] Successfully executed the full campaign, generating a therapeutic blueprint.
 
-Phase 6: Streamlit Integration & Advanced Features ✅ (In Progress)
-  [X] Task 6.1: Integrate Enhanced Result Interpretation
-  [X] Task 6.2: Integrate Guide Interpreter
-  [X] Task 6.3: Integrate Experiment Advisor
-  [X] Task 6.4: Integrate Coordinate Handler & Educational Components
-  [X] Task 6.5: Integrate Next Steps Generator
-  [ ] Task 6.6: UI/UX Enhancement & Final Integration (In Progress)
-    [ ] 6.6.1: Create a unified navigation system for the end-to-end workflow
-    [ ] 6.6.2: Implement state persistence and session management
-    [ ] 6.6.3: Add progress tracking across the entire workflow
-    [ ] 6.6.4: Create consistent styling and branding
-    [ ] 6.6.5: Optimize performance for large datasets
-    [ ] 6.6.6: Add user preference settings
+[ ] **Task 0.4: Prioritize Therapeutic Candidates.**
+    *   **Status:** Blocked by user review of the generated blueprint.
+    *   **Action:** Analyze the campaign results to identify and rank the top candidates for each therapeutic modality.
+    *   **Deliverable:** A finalized list for wet-lab synthesis.
 
-**NEW: Phase 7: Therapeutic Context Integration** ⬜
-  [X] Task 7.1: Enhance Guide Interpretation (CHOPCHOP) with Therapeutic Context
-    [X] 7.1.1: Update LLM prompts (`interpret_guide_properties`/`generate_llm_explanation`) to link efficiency/specificity scores to therapeutic goals (e.g., high efficiency for cell product potency).
-    [X] 7.1.2: Emphasize off-target risks in LLM explanations, recommend validation methods (e.g., GUIDE-seq), and potentially suggest high-fidelity enzyme options if scores are low.
-    [X] 7.1.3: Add context on implications of targeting location (exon vs. intron) for functional knockout efficacy in therapeutic scenarios.
-    [P] 7.1.4: Integrate these enhanced explanations into the CHOPCHOP Results/Analysis tabs UI. *(Partially addressed by prompt changes, full UI toggle in 7.5)*
-  [X] Task 7.2: Enhance Results Interpretation (CRISPResso2) with Therapeutic Context
-    [X] 7.2.1: *(Dependency: Requires completion of Task 5.3 - Enhanced CRISPResso2 Interpretation)* *(Task 5.3 now sufficiently addressed for this)*
-    [X] 7.2.2: Update LLM prompts for CRISPResso2 summary to contextualize editing outcomes (e.g., % NHEJ relates to functional knockout for therapy, allele complexity relates to durability). *(Implemented in `generate_enhanced_summary` prompt)*
-    [X] 7.2.3: Add context about potential impact of high *ex vivo* editing on downstream requirements (e.g., cell dose, conditioning) - Phrase carefully. *(Implemented in `generate_enhanced_summary` prompt)*
-    [X] 7.2.4: Integrate enhanced interpretations into the CRISPResso2 analysis UI. *(Call to `generate_enhanced_summary` updated with context flag)*
-  [P] Task 7.3: Integrate Literature Search & Summarization for Therapeutic Context
-    [P] 7.3.1: Develop function(s) to perform targeted web/literature searches (using `tools/search_engine.py`, `web_scraper.py`, or external APIs) based on gene, disease context, or specific challenges (efficacy, delivery, off-target). *(PubMed API integration implemented in `tools/literature_analyzer.py`)*
-    [P] 7.3.2: Create LLM prompts to summarize search results focusing on the therapeutic angle requested. *(PubMed abstract summarization prompts updated in `tools/literature_analyzer.py`)*
-    [P] 7.3.3: Integrate search/summary functionality into the UI (e.g., button in relevant sections, proactive suggestions in AI chat). *(Integrated into CHOPCHOP Basic Results tab, now uses PubMed backend)*
-  [X] Task 7.4: Enhance Experiment Advisor with Therapeutic Considerations
-    [X] 7.4.1: Add LLM-generated advice in experiment planning regarding delivery vector choices (based on NHEJ/HDR) and their implications. *(Implemented in `tools/experiment_advisor.py`)*
-    [X] 7.4.2: Include suggestions for relevant controls for therapeutic validation (e.g., off-target analysis, functional assays). *(Implemented in `tools/experiment_advisor.py`)*
-  [P] Task 7.5: Refine UI/UX for Therapeutic Context
-    [X] 7.5.1: Implement UI elements (e.g., toggle, checkbox) to allow users to enable/disable detailed therapeutic context. *(Checkbox added to main app sidebar)*
-    [P] 7.5.2: Ensure clear visual cues for therapeutic-specific advice or warnings. *(Ongoing as UI for new contexts is developed)*
+**Phase I: Experimental Validation (The Proving Ground)**
+**Objective:** To establish an undeniable, quantitative correlation between our platform's predictions and experimental outcomes.
 
-Progress Summary:
-1. Fixed LLM API with better error handling and guidance for users without API keys
-2. Enhanced the chat assistant with persistent chat history and workflow context tracking
-3. Added LLM-powered guide interpretation and experiment design
-4. Integrated the guide interpreter correctly into the CHOPCHOP workflow
-5. Improved tooltips and explanations throughout the interface
-6. Streamlit integration largely complete for core modules (`guide_interpreter`, `experiment_advisor`, `coordinate_handler`, `educational_context`, `next_steps`, basic `result_interpreter`)
+[ ] **Task 1.1: Synthesize & Test Therapeutic Candidates.**
+    *   **Status:** Blocked by Phase 0.
+    *   **Action:** Synthesize the prioritized therapeutic candidates and test efficacy/safety in RUNX1-mutated cell lines.
 
-Next Steps:
-1. Finalize UI/UX Enhancements (Task 6.6).
-2. **Implement Therapeutic Context Integration (Phase 7), starting with Guide Interpretation enhancements (Task 7.1).**
-3. Complete Enhanced CRISPResso2 Interpretation (Task 5.3) to enable Task 7.2.
-4. Focus on enhancing results visualization (Task 2.2 - lower priority now?).
-5. Implement disease-specific guidance (Task 3.2 - potentially overlaps/synergizes with Phase 7).
-6. Add integration with external resources (Task 4.2 - overlaps with Task 7.3).
+[ ] **Task 1.2: In Vivo Efficacy Study.**
+    *   **Status:** Blocked by Task 1.1.
+    *   **Action:** Test the most promising candidates in a RUNX1-FPD mouse model.
 
-Implementation Strategy:
-- Finalize basic Streamlit UI/UX (Task 6.6).
-- Implement Phase 7 enhancements incrementally, starting with the most impactful/feasible:
-    - Enhance CHOPCHOP guide interpretation prompts (Task 7.1).
-    - Develop literature search/summary backend (Task 7.3.1, 7.3.2).
-    - Integrate literature search into UI (Task 7.3.3).
-    - Enhance Experiment Advisor prompts (Task 7.4).
-    - Complete CRISPResso2 interpretation prerequisites (Task 5.3).
-    - Enhance CRISPResso2 interpretation prompts (Task 7.2).
-    - Add UI toggles for therapeutic context (Task 7.5).
-- Prioritize modifications to existing LLM prompt functions first.
+**Phase II: Commercialization & Platform Supremacy**
+**Objective:** To transform our powerful backend into an accessible, market-leading product.
 
-PRIORITY STEPS:
-1. Finalize Streamlit UI/UX (Task 6.6).
-2. **Enhance CHOPCHOP guide interpretation LLM prompts with therapeutic context (Task 7.1).**
-3. **Develop backend for literature search/summarization (Task 7.3.1 & 7.3.2).**
-4. Complete CRISPResso2 interpretation module (Task 5.3).
+[ ] **Task 2.1: Formalize Intellectual Property.**
+    *   **Status:** Blocked by Phase I.
+    *   **Action:** Engage with patent attorneys to file patents on the novel therapeutic designs.
+
+[ ] **Task 2.2: Construct the "CrisPRO Studio" UI.**
+    *   **Status:** Can begin in parallel.
+    *   **Action:** Develop a secure, intuitive web interface (e.g., using Streamlit or React) as the front-end for the `CommandCenter` API.
+
+[ ] **Task 2.3: Close the Data Flywheel.**
+    *   **Status:** Blocked by Phase I.
+    *   **Action:** Build the data ingestion pipeline to feed validation results back into our model repositories for continuous improvement.
+
+Lessons
+=======
+
+* This metastasis modeling use-case maps our Evo2 endpoints to the 8 steps of metastasis, showing how our platform can predict and prevent cancer spread through targeted CRISPR interventions.
+* This use-case aligns with our platform's evolution toward comprehensive therapeutic CRISPR design, adding evolutionary biology and cancer ecology as foundational elements for next-generation precision medicine.
+
+**🔍 FALLBACK MODE EXPLANATION COMPLETE! 🔍**

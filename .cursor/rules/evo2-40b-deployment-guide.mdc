@@ -1,0 +1,53 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Guide: Deploying the Evo2 40B Model on Modal
+
+Deploying the large `evo2_40b` model required overcoming a series of complex dependency and resource challenges. This guide documents the final, successful configuration for reference. The implementation can be seen in [deploy_zeta_oracle.py](mdc:deploy_zeta_oracle.py).
+
+## 1. The Core Problem: Out-of-Memory
+
+The primary obstacle was a `torch.OutOfMemoryError`. The 40B parameter model is too large to fit into the memory of a single H100 GPU (~80GB).
+
+## 2. The Solution: Multi-GPU Deployment
+
+The `evo2` library's underlying `Vortex` engine automatically distributes the model across multiple GPUs if they are available.
+
+**Action:** Request two H100 GPUs in the Modal class decorator.
+```python
+@app.cls(gpu="H100:2", ...)
+```
+
+## 3. The Critical Build Environment
+
+Getting the Docker image environment right was the most difficult step. A very specific combination of Python and library versions is required to avoid build failures, particularly with `numpy`.
+
+The final, working image definition uses:
+*   **Base Image**: `nvidia/cuda:12.4.0-devel-ubuntu22.04`
+*   **Python**: `3.11`
+*   **Numpy**: `1.22.0`
+*   **Transformer Engine**: `1.13`
+
+### The `numpy` Build Fix
+
+`numpy==1.22.0` fails to build on this environment because its build script has a hardcoded path for the `ar` archiver. The fix is to create a symbolic link in the image before installing packages:
+```python
+.run_commands(
+    "mkdir -p /tools/llvm/bin",
+    "ln -s /usr/bin/ar /tools/llvm/bin/llvm-ar",
+)
+```
+
+## 4. Application Logic Fixes
+
+After the build and model loading were successful, two final runtime errors occurred:
+
+1.  **`GRPCError: 'failed to get new inputs'`**: This Modal error was caused by mixing `@app.cls` and `@app.function` definitions.
+    *   **Fix**: Consolidate all endpoints into the main class. The `health_check` endpoint was moved inside the `ZetaOracleService` class as a `@staticmethod`.
+
+2.  **`AttributeError: 'Evo2' object has no attribute 'score'`**: The script was calling the wrong method.
+    *   **Fix**: Changed the scoring call from `self.model.score(...)` to `self.model.score_sequences(...)` to match the `evo2` library's API.
+
+By combining these resource, build, and logic fixes, the `evo2_40b` model was successfully deployed and served.

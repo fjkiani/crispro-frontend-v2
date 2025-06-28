@@ -1,0 +1,426 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Phase 5 Implementation Guide: Multi-Modal AI Guide Scoring
+
+## Overview
+This guide provides the exact technical implementation steps for integrating advanced discriminative AI endpoints into our existing Intelligent Guide Designer platform.
+
+## Current Architecture Analysis
+
+### Existing Components
+- **Main Controller**: [tools/intelligent_guide_finder.py](mdc:tools/intelligent_guide_finder.py) - Core logic for guide finding and scoring
+- **API Client**: [tools/llm_api.py](mdc:tools/llm_api.py) - HTTP client for AI model communication
+- **UI Interface**: [streamlit_app.py](mdc:streamlit_app.py) - Main Streamlit application
+- **Test Suite**: [test_intelligent_guide_finder.py](mdc:test_intelligent_guide_finder.py) - End-to-end testing
+
+### Current Data Flow
+1. User inputs gene target → 2. Retrieve genomic sequence → 3. Generate guide candidates → 4. Score with "Generate & Compare" → 5. Analyze off-targets → 6. Rank and display results
+
+## Task 5.1: Variant Impact Scoring Integration
+
+### 5.1.1: Add `/predict_variant_impact` for On-Target Effectiveness
+
+#### Step 1: Extend API Client
+**File**: [tools/llm_api.py](mdc:tools/llm_api.py)
+
+Add new function:
+```python
+def predict_variant_impact(reference_sequence, alternative_sequence, genomic_coordinates=None, context_window_size=8192):
+    """
+    Predict functional impact of a genetic variant using Evo2 discriminative model.
+    
+    Args:
+        reference_sequence (str): Original genomic sequence
+        alternative_sequence (str): Sequence with variant introduced
+        genomic_coordinates (dict): {chromosome, position, reference_base, alternative_base}
+        context_window_size (int): Surrounding sequence context size
+    
+    Returns:
+        dict: {
+            'delta_likelihood_score': float,
+            'evo2_prediction': str,
+            'evo2_confidence': float,
+            'predicted_consequence': str,
+            'feature_disruption_scores': dict
+        }
+    """
+```
+
+#### Step 2: Create CRISPR Indel Simulator
+**File**: [tools/crispr_indel_simulator.py](mdc:tools/crispr_indel_simulator.py) (New file)
+
+```python
+def simulate_crispr_indels(guide_sequence, target_sequence, cut_position):
+    """
+    Simulate common CRISPR-induced indels for variant impact prediction.
+    
+    Args:
+        guide_sequence (str): 20bp guide RNA sequence
+        target_sequence (str): Genomic target sequence
+        cut_position (int): Expected cut site position
+    
+    Returns:
+        list: [
+            {
+                'indel_type': 'deletion_3bp',
+                'reference_sequence': str,
+                'alternative_sequence': str,
+                'description': str
+            },
+            # ... more indel variants
+        ]
+    """
+```
+
+Common indels to simulate:
+- 1-10bp deletions at cut site
+- 1-3bp insertions at cut site
+- Complex indels (deletion + insertion)
+- Frameshift vs. in-frame variants
+
+#### Step 3: Integrate into Main Controller
+**File**: [tools/intelligent_guide_finder.py](mdc:tools/intelligent_guide_finder.py)
+
+Add new scoring function:
+```python
+def score_on_target_effectiveness(guide_data, target_sequence):
+    """
+    Score on-target effectiveness using variant impact prediction.
+    
+    Args:
+        guide_data (dict): Guide information including sequence and position
+        target_sequence (str): Full genomic target sequence
+    
+    Returns:
+        dict: {
+            'effectiveness_score': float,
+            'predicted_indels': list,
+            'functional_impact': str,
+            'confidence': float
+        }
+    """
+```
+
+### 5.1.2: Add Off-Target Safety Scoring
+
+#### Step 1: Enhance Off-Target Analysis
+**File**: [tools/intelligent_guide_finder.py](mdc:tools/intelligent_guide_finder.py)
+
+Modify `find_potential_off_targets` function:
+```python
+def analyze_off_target_safety(off_target_sites, guide_sequence):
+    """
+    Analyze safety of potential off-target sites using variant impact prediction.
+    
+    Args:
+        off_target_sites (list): List of potential off-target locations
+        guide_sequence (str): Guide RNA sequence
+    
+    Returns:
+        list: [
+            {
+                'site': dict,
+                'safety_score': float,
+                'predicted_impact': str,
+                'confidence': float,
+                'genomic_context': str
+            }
+        ]
+    """
+```
+
+#### Step 2: Create Safety Scoring Logic
+For each off-target site:
+1. Simulate likely CRISPR indels
+2. Call `/predict_variant_impact` for each simulated indel
+3. Aggregate safety scores based on:
+   - Predicted pathogenicity
+   - Genomic context (coding vs. non-coding)
+   - Feature disruption scores
+   - Distance from essential genes
+
+## Task 5.2: Gene Essentiality Scoring Integration
+
+### 5.2.1: Add `/predict_gene_essentiality` for Target Prioritization
+
+#### Step 1: Extend API Client
+**File**: [tools/llm_api.py](mdc:tools/llm_api.py)
+
+```python
+def predict_gene_essentiality(gene_symbol, organism="Homo sapiens", cell_line_type=None):
+    """
+    Predict gene essentiality for therapeutic target prioritization.
+    
+    Args:
+        gene_symbol (str): HUGO gene symbol
+        organism (str): Target organism
+        cell_line_type (str): Specific cell line or cancer type
+    
+    Returns:
+        dict: {
+            'essentiality_score': float,
+            'essentiality_category': str,
+            'supporting_evidence': dict,
+            'cell_line_specificity': dict
+        }
+    """
+```
+
+#### Step 2: Integrate into Guide Ranking
+**File**: [tools/intelligent_guide_finder.py](mdc:tools/intelligent_guide_finder.py)
+
+```python
+def calculate_therapeutic_priority(gene_symbol, cell_line_context=None):
+    """
+    Calculate therapeutic priority score for target gene.
+    
+    Returns:
+        dict: {
+            'priority_score': float,
+            'essentiality_category': str,
+            'therapeutic_rationale': str
+        }
+    """
+```
+
+## Task 5.3: Direct Spacer Efficacy Scoring
+
+### 5.3.1: Add `/predict_crispr_spacer_efficacy` Integration
+
+#### Step 1: Extend API Client
+**File**: [tools/llm_api.py](mdc:tools/llm_api.py)
+
+```python
+def predict_crispr_spacer_efficacy(guide_rna_spacer_sequence, target_dna_sequence, pam_sequence="NGG", cas_protein_type="Cas9"):
+    """
+    Predict direct CRISPR guide RNA cutting efficiency.
+    
+    Returns:
+        dict: {
+            'efficacy_score': float,
+            'efficacy_prediction': str,
+            'likelihood_of_interaction_change': float,
+            'cas_specificity': dict
+        }
+    """
+```
+
+### 5.3.2: Combine with "Generate & Compare" Method
+
+#### Step 1: Create Multi-Modal Scoring Framework
+**File**: [tools/intelligent_guide_finder.py](mdc:tools/intelligent_guide_finder.py)
+
+```python
+def calculate_comprehensive_score(guide_data, target_sequence, gene_symbol):
+    """
+    Calculate comprehensive guide score using multiple AI methods.
+    
+    Scoring Components:
+    1. Generate & Compare Score (existing)
+    2. Direct Spacer Efficacy Score (new)
+    3. Variant Impact Score (new)
+    4. Gene Essentiality Score (new)
+    5. Off-Target Safety Score (enhanced)
+    
+    Returns:
+        dict: {
+            'overall_score': float,
+            'component_scores': {
+                'generate_compare': float,
+                'spacer_efficacy': float,
+                'variant_impact': float,
+                'gene_essentiality': float,
+                'off_target_safety': float
+            },
+            'confidence_intervals': dict,
+            'scoring_rationale': str
+        }
+    """
+```
+
+## Task 5.4: Multi-Modal Scoring Framework
+
+### 5.4.1: Design Weighted Scoring System
+
+#### Step 1: Create Scoring Configuration
+**File**: [tools/scoring_config.py](mdc:tools/scoring_config.py) (New file)
+
+```python
+DEFAULT_SCORING_WEIGHTS = {
+    'generate_compare': 0.25,      # Original AI method
+    'spacer_efficacy': 0.25,       # Direct cutting efficiency
+    'variant_impact': 0.25,        # Functional impact prediction
+    'gene_essentiality': 0.15,     # Therapeutic priority
+    'off_target_safety': 0.10      # Safety assessment
+}
+
+SCORING_METHODS = {
+    'conservative': {  # Emphasize safety
+        'off_target_safety': 0.30,
+        'variant_impact': 0.25,
+        'spacer_efficacy': 0.20,
+        'generate_compare': 0.15,
+        'gene_essentiality': 0.10
+    },
+    'aggressive': {   # Emphasize efficacy
+        'spacer_efficacy': 0.35,
+        'variant_impact': 0.25,
+        'generate_compare': 0.20,
+        'gene_essentiality': 0.15,
+        'off_target_safety': 0.05
+    },
+    'therapeutic': {  # Emphasize therapeutic value
+        'gene_essentiality': 0.30,
+        'variant_impact': 0.25,
+        'spacer_efficacy': 0.20,
+        'off_target_safety': 0.15,
+        'generate_compare': 0.10
+    }
+}
+```
+
+### 5.4.2: Add User Controls for Scoring Preferences
+
+#### Step 1: Enhance UI Interface
+**File**: [streamlit_app.py](mdc:streamlit_app.py)
+
+Add to Intelligent Guide Designer page:
+```python
+# Scoring Method Selection
+scoring_method = st.selectbox(
+    "Scoring Strategy",
+    options=['balanced', 'conservative', 'aggressive', 'therapeutic'],
+    help="Choose scoring strategy based on your priorities"
+)
+
+# Advanced Scoring Controls (Expandable)
+with st.expander("Advanced Scoring Controls"):
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        generate_compare_weight = st.slider("Generate & Compare Weight", 0.0, 1.0, 0.25)
+        spacer_efficacy_weight = st.slider("Spacer Efficacy Weight", 0.0, 1.0, 0.25)
+        variant_impact_weight = st.slider("Variant Impact Weight", 0.0, 1.0, 0.25)
+    
+    with col2:
+        gene_essentiality_weight = st.slider("Gene Essentiality Weight", 0.0, 1.0, 0.15)
+        off_target_safety_weight = st.slider("Off-Target Safety Weight", 0.0, 1.0, 0.10)
+```
+
+## Task 5.5: Enhanced UI for Advanced Scoring
+
+### 5.5.1: Display Breakdown of Scoring Components
+
+#### Step 1: Create Detailed Results Display
+**File**: [streamlit_app.py](mdc:streamlit_app.py)
+
+```python
+def display_comprehensive_results(results):
+    """
+    Display detailed breakdown of multi-modal AI scoring results.
+    """
+    for i, guide in enumerate(results):
+        with st.expander(f"Guide {i+1}: {guide['sequence']} (Score: {guide['overall_score']:.2f})"):
+            
+            # Score Breakdown Chart
+            score_data = guide['component_scores']
+            fig = create_radar_chart(score_data)
+            st.plotly_chart(fig)
+            
+            # Detailed Metrics Table
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("Efficacy Metrics")
+                st.metric("Spacer Efficacy", f"{score_data['spacer_efficacy']:.3f}")
+                st.metric("Generate & Compare", f"{score_data['generate_compare']:.3f}")
+                st.metric("Variant Impact", f"{score_data['variant_impact']:.3f}")
+            
+            with col2:
+                st.subheader("Strategic Metrics")
+                st.metric("Gene Essentiality", f"{score_data['gene_essentiality']:.3f}")
+                st.metric("Off-Target Safety", f"{score_data['off_target_safety']:.3f}")
+            
+            # AI Reasoning
+            st.subheader("AI Reasoning")
+            st.write(guide['scoring_rationale'])
+```
+
+### 5.5.2: Add Explanations for Each Scoring Method
+
+#### Step 1: Create Method Explanations
+**File**: [tools/scoring_explanations.py](mdc:tools/scoring_explanations.py) (New file)
+
+```python
+SCORING_METHOD_EXPLANATIONS = {
+    'generate_compare': {
+        'title': 'Generate & Compare AI',
+        'description': 'Uses a 1B parameter DNA model to predict biological plausibility',
+        'interpretation': 'Higher scores indicate the AI found the guide sequence to be naturally occurring in functional genomic contexts',
+        'range': 'Normalized alignment scores (higher is better)'
+    },
+    'spacer_efficacy': {
+        'title': 'Direct Spacer Efficacy',
+        'description': 'AI prediction of guide RNA cutting efficiency at target site',
+        'interpretation': 'Predicts how effectively the guide will cut DNA at the intended location',
+        'range': '0.0-1.0 (higher is better)'
+    },
+    # ... more explanations
+}
+```
+
+## Implementation Timeline
+
+### Week 1: Foundation
+- [ ] Extend API client with new endpoint functions
+- [ ] Create CRISPR indel simulator
+- [ ] Set up basic variant impact scoring
+
+### Week 2: Integration
+- [ ] Integrate variant impact scoring into main controller
+- [ ] Add gene essentiality scoring
+- [ ] Implement direct spacer efficacy scoring
+
+### Week 3: Framework
+- [ ] Create multi-modal scoring framework
+- [ ] Implement weighted scoring system
+- [ ] Add user controls for scoring preferences
+
+### Week 4: UI Enhancement
+- [ ] Create detailed results display
+- [ ] Add scoring method explanations
+- [ ] Implement comprehensive testing
+
+## Testing Strategy
+
+### Unit Tests
+- Test each new API endpoint integration
+- Validate scoring calculations
+- Test error handling and edge cases
+
+### Integration Tests
+- End-to-end workflow with new scoring methods
+- Performance testing with multiple guides
+- UI responsiveness with complex results
+
+### Validation Tests
+- Compare new scores with experimental data (if available)
+- Cross-validation between different AI methods
+- User acceptance testing for UI improvements
+
+## Success Metrics
+
+### Technical Metrics
+- **API Response Time**: < 2 seconds per endpoint call
+- **Scoring Accuracy**: Correlation with experimental outcomes
+- **System Reliability**: 99%+ uptime for scoring pipeline
+
+### User Experience Metrics
+- **Results Comprehension**: Users understand scoring breakdown
+- **Decision Confidence**: Increased confidence in guide selection
+- **Feature Adoption**: Usage of advanced scoring controls
+
+This implementation guide provides the exact technical roadmap for transforming our platform from single-method scoring to comprehensive multi-modal AI assessment.

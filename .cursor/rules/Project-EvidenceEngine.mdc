@@ -1,0 +1,36 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Project Plan: The Evidence Engine
+
+**Objective:** To create a new service that can be called by any workflow in the `CommandCenter` to retrieve and summarize supporting scientific literature for a given biological hypothesis (e.g., a gene co-mutation). This will transform our reports from data outputs into fully-vetted intelligence briefings.
+
+---
+
+### Technical Architecture
+
+1.  **New Modal Service:** Create a new, dedicated service: `[services/evidence_engine/main.py](mdc:services/evidence_engine/main.py)`. This service will be responsible for all interactions with external literature databases.
+2.  **Data Source:** The engine will use the **NCBI PubMed database** as its primary source, leveraging its robust API (Entrez Utilities) for programmatic access.
+3.  **AI-Powered Synthesis:** The core of the engine will be a Large Language Model (LLM). After retrieving relevant papers from PubMed, the engine will use an LLM to "read" the abstracts and summarize the key takeaways, statistical significance, and conclusions.
+4.  **API-Driven Integration:** The `EvidenceEngine` will expose a simple API endpoint (e.g., `POST /evidence/query`) that the `[services/command_center/main.py](mdc:services/command_center/main.py)` can call to receive a structured JSON response containing the evidence.
+
+---
+
+### Implementation Plan
+
+*   **Phase 1: Service Scaffolding.**
+    *   Create the new file `services/evidence_engine/main.py`.
+    *   Define the Modal app and the Pydantic models for the API request (`EvidenceQuery`) and response (`EvidenceReport`).
+
+*   **Phase 2: PubMed Connector.**
+    *   Implement the client to connect to the NCBI PubMed API (Entrez Utilities). This will involve constructing dynamic search queries and retrieving publication data.
+
+*   **Phase 3: AI-Powered Summarizer.**
+    *   For each publication, retrieve the abstract.
+    *   Pass the abstract to an LLM via our existing `[tools/llm_api.py](mdc:tools/llm_api.py)` tool with a specific prompt to extract and summarize the evidence.
+
+*   **Phase 4: Integration with `CommandCenter`.**
+    *   Modify the `CommandCenter` workflows (e.g., `run_second_hit_simulation`) to call the `EvidenceEngine` for top hits.
+    *   Integrate the `EvidenceReport` from the engine into the final therapeutic blueprint.

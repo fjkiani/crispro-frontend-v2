@@ -3,19 +3,17 @@ import sys
 import os
 import time # Import time for potential delays if needed for visual effect
 import random # Import random if needed for frontend mock data generation
+import re
+
+# Moved st.set_page_config to be the first Streamlit command
+st.set_page_config(page_title="CasPro 🧬 - Mock Therapeutic System Design", layout="wide")
 
 # Add the project root to the Python path to allow importing ai_research_assistant
-# Assuming streamlit_app.py is in the project root, and ai_research_assistant.py is in a subdirectory
-# Adjust the path based on your actual project structure if necessary
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
 try:
-    # Import the specific handler function from the ai_research_assistant module
-    # Note: The ai_research_assistant module needs to be importable,
-    # and handle_design_therapy_interaction needs to be defined within it.
-    # We also assume handle_design_therapy_interaction is modified to accept a display_callback.
     from ai_research_assistant import (
         handle_design_therapy_interaction, 
         simulate_component_sequence_refinement,
@@ -26,27 +24,99 @@ try:
         simulate_cell_based_assay,
         simulate_off_target_validation,
         simulate_delivery_system_optimization,
-        simulate_therapeutic_development_planning
+        simulate_therapeutic_development_planning,
+        run_interactive_agent
     )
-    # Placeholder for the actual get_llm_chat_response if it's not in ai_research_assistant and needs to be imported separately
-    # from tools.llm_api import get_llm_chat_response
+    # Ensure get_llm_chat_response is imported
+    from tools.llm_api import get_llm_chat_response
 except ImportError as e:
-    st.error(f"Failed to import `ai_research_assistant` module or `handle_design_therapy_interaction`. Make sure the path is correct and the function exists: {e}")
-    # Fallback for critical function if import fails, to prevent app crash
+    st.error(f"Failed to import modules. Ensure `ai_research_assistant.py` and `tools/llm_api.py` are accessible and correct: {e}")
+    # Fallback for critical functions if import fails
     def handle_design_therapy_interaction(*args, **kwargs):
         st.error("`handle_design_therapy_interaction` is not available due to import error.")
-        # Return an empty list of recommendations in case of failure
         return []
+    def run_interactive_agent(*args, **kwargs):
+        st.error("`run_interactive_agent` is not available due to import error.")
+        return {"error": "Agent not available"}
+    def get_llm_chat_response(*args, **kwargs):
+        st.error("`get_llm_chat_response` is not available due to import error.")
+        return "LLM service is currently unavailable."
+    # Add fallbacks for simulate_... functions as needed
 
 # --- Streamlit Page Function ---
 def display_mock_therapy_design_page():
-    st.set_page_config(page_title="Mock Therapeutic System Design", layout="wide")
-    st.title("🧬 Mock Multi-Gene Therapeutic System Design")
+    # st.set_page_config was here, MOVED TO TOP
+
+    # --- Set Page-Specific Context for LLM ---
+    page_name = "Mock Therapeutic System Design"
+    page_description = ("""
+    This page allows you to simulate the design of a multi-gene CRISPR-based therapeutic system
+    for a target cancer mutation. The process uses mock Evo 2, CHOPCHOP, and AlphaFold 3 data for demonstration.
+    Key activities include defining a target mutation, running a simulated design workflow, and reviewing detailed recommendations.
+    Recommendations include system components, supporting evidence (simulated Evo2, AlphaFold, CHOPCHOP metrics),
+    evaluation metrics, and suggested next steps with interactive AI agent simulations.
+    All outputs, scores, and rationales are SIMULATED.
+    """)
+    active_target_display = "Not set"
+    if 'active_mutation' in st.session_state and st.session_state.active_mutation:
+        active_target_display = f"{st.session_state.active_mutation.get('hugo_gene_symbol', '?')} {st.session_state.active_mutation.get('protein_change', '?')}"
+
+    st.session_state.current_page_info = {
+        "name": page_name,
+        "description": page_description,
+        "current_target": active_target_display
+    }
+    # --- End Set Page-Specific Context ---
+
+    st.title("CasPro 🧬 Mock Multi-Gene Therapeutic System Design")
     st.markdown("""
     This page allows you to simulate the design of a multi-gene CRISPR-based therapeutic system
     for a target cancer mutation. The process uses mock Evo 2, CHOPCHOP, and AlphaFold 3 data for demonstration.
     **All outputs, scores, and rationales are SIMULATED.**
     """)
+
+    # --- New Expander for Workflow Explanation ---
+    with st.expander("⚙️ What Happens When You Click 'Design Mock Therapy System'?", expanded=False):
+        st.markdown("""
+        When you click the **'Design Mock Therapy System'** button, the system initiates our mock multi-gene therapy system design workflow. This is a simulation of how our platform might leverage powerful AI models (conceptually similar to Evo2 and AlphaFold 3) to propose and evaluate complex genetic constructs for potential treatment.
+
+        Here's a breakdown of what's happening behind the scenes in this mock scenario:
+
+        1.  **Identifying the Target:**
+            *   The system first focuses on your selected target mutation (e.g., BRAF V600E).
+            *   It retrieves some *simulated Evo2 data* for this original variant, like a mock confidence score and delta likelihood. This mock data conceptually helps confirm if the selected mutation is a relevant and impactful therapeutic target.
+
+        2.  **Simulating AI-Guided Generation (Mock Evo2):**
+            *   Next, our `MockEvo2Generator` component (a placeholder for a more sophisticated AI) kicks in.
+            *   This simulates the capability of a real generative model like Evo2, which could be trained to design multi-gene systems.
+            *   Based on your target mutation and a mock *design goal* (e.g., 'disrupt oncogene', 'correct mutation'), this generator proposes several *candidate multi-gene systems*.
+            *   Each system isn't just a single sequence but a collection of *mock sequences* representing different components potentially needed for a therapy – such as a guide RNA sequence, a modified Cas protein sequence, a repair template, or even elements for a delivery vector.
+
+        3.  **Simulating Structural & Biological Evaluation (Mock AlphaFold 3 & Mock CHOPCHOP):**
+            *   For each of these generated system candidates, the platform then simulates running evaluations using tools conceptually similar to AlphaFold 3 (for structure) and CHOPCHOP (for guide RNA validation):
+                *   **Mock AlphaFold 3 Analysis (`MockAlphaFoldPredictor`):** This simulates AlphaFold 3 predicting the 3D structure and interactions of the components within the designed system. It generates mock metrics such as:
+                    *   `pLDDT` (simulating confidence in local protein/RNA structure).
+                    *   `Ranking Scores` (simulating overall confidence in the predicted structure or interactions).
+                    *   `Structural Similarity` (simulating how the designed components compare to known reference structures).
+                    This step is conceptually crucial because the 3D shape and how components fit together directly impacts whether a real therapeutic system would function correctly.
+                *   **Mock CHOPCHOP Analysis (for guide RNAs):** For components like guide RNAs, we also simulate validation using metrics similar to those from CHOPCHOP. This includes:
+                    *   Predicted *on-target efficacy scores*.
+                    *   Predicted *off-target counts*.
+                    *   *Minimum Free Energy (MFE)* for guide RNA stability.
+                    This is vital for ensuring the specificity (hitting only the intended target) and safety of a CRISPR-based therapy.
+
+        4.  **Simulating Integrated Scoring:**
+            *   All these varied simulated metrics – the mock Evo2 data for the original variant, the mock AlphaFold 3 structural scores for the designed system's components and overall structure, and the mock CHOPCHOP guide validation scores – are fed into our `calculate_mock_system_design_score` function.
+            *   This function simulates a comprehensive scoring logic, combining these different types of evidence into a single *mock confidence score* for each entire system candidate.
+            *   This score represents the simulated likelihood of that designed system achieving the therapeutic goal, based on all the available mock data.
+
+        5.  **Presenting Mock Recommendations:**
+            *   Finally, the system uses an LLM (Large Language Model) to present the top-scoring mock system designs to you.
+            *   It shows the recommended approach (the description of the mock system), the simulated confidence score, a mock rationale explaining why that score was given, and the detailed simulated supporting evidence from the mock Evo2, AlphaFold 3, and CHOPCHOP evaluations.
+
+        **Key Takeaway:** This entire process is a *simulation* designed to mimic how an advanced AI-driven platform might approach therapeutic design. The data is mock, but the concepts represent real-world considerations in genetic medicine development.
+        """)
+    # --- End New Expander ---
 
     # --- Explanation Expander ---
     with st.expander("ℹ️ Understanding These Mock Results", expanded=False):
@@ -103,35 +173,153 @@ def display_mock_therapy_design_page():
 
     # --- 2. Target Mutation Input/Display ---
     st.sidebar.subheader("🎯 Target Mutation")
-    # Allow user to modify or confirm the target mutation (simplified for now)
-    gene_symbol = st.sidebar.text_input("Gene Symbol", value=st.session_state.active_mutation.get("hugo_gene_symbol", "BRAF")) # Corrected key
+    gene_symbol = st.sidebar.text_input("Gene Symbol", value=st.session_state.active_mutation.get("hugo_gene_symbol", "BRAF"))
     protein_change = st.sidebar.text_input("Protein Change", value=st.session_state.active_mutation.get("protein_change", "V600E"))
-    # Ideally, more fields or a selection mechanism from a list of mutations
+
+    # --- CRISPR Education Center (placeholder, can be expanded or moved) ---
+    # st.sidebar.subheader("📚 CRISPR Education Center")
+    # with st.sidebar.expander("🧬 CRISPR Terminology"):
+    #     st.markdown("Explore key CRISPR terms and definitions.")
+    # with st.sidebar.expander("💡 Core Concepts"):
+    #     st.markdown("Understand the fundamental principles of CRISPR technology.")
+    # with st.sidebar.expander("🤖 Ask AI Chat Assistant (Edu Center)"):
+    #     st.markdown("Have questions? Ask our AI assistant for help.")
+    #     if st.sidebar.button("Open Chat (Edu)"):
+    #         st.info("Chat functionality to be implemented here.")
+    # --- End CRISPR Education Center ---
 
     # Update active_mutation if changed by user
-    # This is a basic way; a more robust app might have a dedicated mutation selection/management component
     current_target_mutation = {
         "hugo_gene_symbol": gene_symbol,
         "protein_change": protein_change,
-        "variant_type": st.session_state.active_mutation.get("variant_type", "Missense_Mutation"), # Keep others for now
+        "variant_type": st.session_state.active_mutation.get("variant_type", "Missense_Mutation"),
         "genomic_coordinate_hg38": st.session_state.active_mutation.get("genomic_coordinate_hg38", ""),
         "allele_frequency": st.session_state.active_mutation.get("allele_frequency", 0.0),
         "mutation_id": st.session_state.active_mutation.get("mutation_id", "DEFAULT_MUT")
     }
-    # Update session state if the user changed the input fields
     if (st.session_state.active_mutation.get("hugo_gene_symbol") != gene_symbol or
         st.session_state.active_mutation.get("protein_change") != protein_change):
         st.session_state.active_mutation = current_target_mutation
-        # Clear previous recommendations and log if the target changes
         st.session_state.therapy_recommendations = []
         st.session_state.workflow_log = []
-        st.rerun() # Rerun to clear the display based on the new target
+        st.rerun()
 
-    st.sidebar.info(f"Designing for: **{current_target_mutation['hugo_gene_symbol']} {current_target_mutation['protein_change']}**")
+    if current_target_mutation['hugo_gene_symbol'] == "BRAF" and current_target_mutation['protein_change'] == "V600E":
+        with st.sidebar.expander("Understanding BRAF V600E Context", expanded=False):
+            st.markdown("""
+            **Target: BRAF V600E**
+            *   **BRAF Gene:** A key gene involved in normal cell growth signaling pathways (MAPK pathway).
+            *   **V600E Mutation:** A specific alteration where Valine (V) at amino acid position 600 is replaced by Glutamic acid (E). This is an **activating mutation**, meaning it causes the BRAF protein to be constantly "on," leading to uncontrolled cell division and tumor growth. It's a well-known **oncogenic driver** found in various cancers, most notably melanoma (around 50% of cases), but also in colorectal cancer, thyroid cancer, and others.
+            *   **Therapeutic Goal (Simulated on this page):** The simulation aims to design a CRISPR-based system to counteract this cancer-causing mutation. Common strategies simulated could include:
+                *   **Disrupting/Knocking out** the mutated BRAF V600E allele.
+                *   **Correcting** the V600E mutation back to the wild-type sequence via Homology Directed Repair (HDR) using a repair template.
+                *   Developing a delivery system for these components.
 
+            **Why is this context important for the "Mock Therapeutic System Design" page?**
+            Understanding the specific target (BRAF V600E) helps interpret the simulated design choices and evaluation metrics. For example:
+            *   High `Mock Original Variant Evo2 Confidence` for BRAF V600E would reinforce its validity as a therapeutic target.
+            *   If the design goal is 'disrupt_oncogene', the system components (guide RNA, Cas) must effectively target and inactivate BRAF V600E.
+            *   If 'correct_mutation' is the goal, the system would also include a repair template, and its structural properties (e.g., from mock AlphaFold) become important.
+            *   Off-target scores for the guide RNA are critical, as editing the normal BRAF allele or other genes could have significant side effects.
+
+            This page simulates the *in silico* (computational) design and initial evaluation phase for such a complex therapeutic.
+            """)
+
+    # --- Ask About CRISPR section (MOVED TO SIDEBAR) ---
+    with st.sidebar:
+        st.subheader("💬 Ask About CRISPR")
+
+        if 'chat_question' not in st.session_state:
+            st.session_state.chat_question = ""
+        if 'chat_answer' not in st.session_state:
+            st.session_state.chat_answer = ""
+
+        user_question_sidebar = st.text_input("Ask a question:", key="crispr_chat_input_sidebar")
+
+        if st.button("Submit Question", key="crispr_chat_submit_sidebar"):
+            if user_question_sidebar:
+                st.session_state.chat_question = user_question_sidebar
+                try:
+                    # --- Construct detailed system prompt ---
+                    page_info = st.session_state.get('current_page_info', {})
+                    page_name = page_info.get('name', 'Mock Therapeutic System Design')
+
+                    active_mut = st.session_state.get('active_mutation', {})
+                    target_gene = active_mut.get('hugo_gene_symbol', 'N/A')
+                    protein_change = active_mut.get('protein_change', 'N/A')
+                    active_target_display = f"{target_gene} {protein_change}"
+
+                    workflow_status = "No therapy design has been run yet."
+                    if st.session_state.get('therapy_recommendations'):
+                        workflow_status = f"Mock therapy system recommendations are currently displayed for {active_target_display}."
+                    
+                    therapeutic_context_toggle_status = "Enabled" if st.session_state.get('provide_therapeutic_context', False) else "Disabled"
+
+                    # Corrected f-string definition for system_prompt
+                    system_prompt = f"""
+System: You are an AI assistant for CasPro, a CRISPR therapeutic design simulation tool.
+User is currently on the '{page_name}' page.
+
+**Current Page Context & Workflow Overview:**
+
+This page simulates the initial steps of designing a CRISPR-based therapy for a target cancer mutation, using a series of mock tools and analyses. The goal is to make the complex process of early-stage therapeutic design more tangible, even if all the underlying science is a simulation.
+
+**Current Active Target Mutation:**
+- Gene: {target_gene}
+- Protein Change: {protein_change}
+
+**Simulated Workflow Stages for Designing a Therapy for the Active Target:**
+
+1.  **Target Confirmation (Simulated Evo 2):**
+    -   Input: The active target mutation.
+    -   Process: The system (mock) analyzes this mutation to confirm its known oncogenic potential. Metrics like 'Mock Original Variant Evo2 Confidence' and 'Delta Likelihood' are simulated outputs.
+    -   Interpretation: High confidence reinforces that the target is a strong candidate for therapeutic intervention.
+
+2.  **Therapeutic Strategy & System Component Generation (Simulated Evo 2):**
+    -   Process: Based on the target and a chosen therapeutic strategy (e.g., 'disrupt oncogene'), the system (mock) generates candidate components for the CRISPR therapy (e.g., mock sequences for guide RNA, Cas protein, potentially repair templates).
+
+3.  **Guide RNA Validation (Simulated CHOPCHOP):**
+    -   Process: The generated mock guide RNA sequence is (mock) evaluated for potential effectiveness and safety.
+    -   Output Metrics: Mock CHOPCHOP On-target Score, Off-target Count, MFE (Minimum Free Energy).
+
+4.  **Structural Evaluation of Components (Simulated AlphaFold 3):**
+    -   Process: The 3D structures of protein/RNA components are (mock) predicted and evaluated.
+    -   Output Metrics: Mock Overall System AF Score, individual component scores (pLDDT, Rank, Similarity).
+
+5.  **Integrated Scoring & Recommendation:**
+    -   Process: All simulated metrics are combined to give an overall 'Confidence Score' for each complete therapeutic system candidate.
+    -   Output: The page presents these mock recommendations, ranked by simulated confidence, with explanations of what the mock numbers conceptually represent.
+
+**Current Workflow Status on Page:**
+- {workflow_status}
+
+**Therapeutic Context Mode for Explanations:**
+- {therapeutic_context_toggle_status}
+
+Based on this detailed context and your general CRISPR knowledge, please answer the user's question.
+"""
+                    # --- End detailed system prompt ---
+
+                    messages = [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_question_sidebar}
+                    ]
+                    llm_response = get_llm_chat_response(messages, provider="gemini") 
+                    st.session_state.chat_answer = llm_response
+                except Exception as e:
+                    st.session_state.chat_answer = f"Error getting response from LLM: {e}"
+                    st.error(f"LLM Error: {e}")
+            else:
+                st.session_state.chat_answer = "Please ask a question."
+
+        if st.session_state.chat_question:
+            st.markdown(f"**You asked:** {st.session_state.chat_question}")
+        if st.session_state.chat_answer:
+            with st.chat_message("assistant"):
+                st.markdown(st.session_state.chat_answer)
+    # --- END: Ask About CRISPR section in sidebar ---
 
     # --- 3. Trigger Button & Workflow Execution ---
-    # Use a form to prevent rerunning the script on every input change within the form
     with st.form("design_form"):
         st.subheader("⚙️ Run Design Workflow")
         # Add any other design parameters here if needed (e.g., design goal selection)
@@ -148,13 +336,33 @@ def display_mock_therapy_design_page():
 
         # Define the callback function to update the log in Streamlit
         def streamlit_display_callback(message):
-            # Append message to the log list in session state
             st.session_state.workflow_log.append(message)
-            # Update the display using the placeholder
-            with log_placeholder.container(): # Use a container within the placeholder
-                 st.subheader("⚙️ Workflow Log")
-                 for log_message in st.session_state.workflow_log:
-                     st.text(log_message) # Display each log message as text
+            with log_placeholder.container():
+                st.subheader("⚙️ Workflow Log (Live Updates)")
+                # Use a new container with a fixed height and make it scrollable
+                with st.container(height=350): # Adjust height as needed
+                    # Iterate in reverse to show newest messages at the top in the live view
+                    for log_message in reversed(st.session_state.workflow_log):
+                        if "ERROR:" in log_message:
+                            st.error(log_message)
+                        elif "WARNING:" in log_message or "Warning:" in log_message:
+                            st.warning(log_message)
+                        elif "SUCCESS:" in log_message or "completed!" in log_message.lower() or "finished generating" in log_message.lower() or "prediction complete" in log_message.lower() or "validation complete" in log_message.lower() or "scoring complete" in log_message.lower():
+                            st.success(log_message)
+                        elif "AI Research Assistant (Scoring)" in log_message:
+                            st.markdown(f"📊 _{log_message}_")
+                        elif "AI Research Assistant (ChopChopSim)" in log_message:
+                            st.markdown(f"✂️ _{log_message}_")
+                        elif "AI Research Assistant (AlphaFoldSim)" in log_message:
+                            st.markdown(f"🧬 _{log_message}_")
+                        elif "AI Research Assistant (Evo2Sim)" in log_message:
+                            st.markdown(f"🌱 _{log_message}_")
+                        elif "Simulating" in log_message or "Processing" in log_message or "Retrieving" in log_message or "Focusing" in log_message or "Initiating" in log_message:
+                            st.markdown(f"⏳ {log_message}")
+                        elif "Generated mock" in log_message or "details:" in log_message or "Inputs for scoring:" in log_message:
+                            st.markdown(f"📄 _{log_message}_")
+                        else:
+                            st.text(log_message) # Default for messages not caught by specific styling
 
         # Run the backend design function with the callback
         with st.spinner("Simulating Evo 2, CHOPCHOP, AlphaFold 3, and generating recommendations... This may take a moment."):
@@ -179,12 +387,32 @@ def display_mock_therapy_design_page():
         else:
             st.info("ℹ️ No mock recommendations were generated or the process encountered an issue.")
 
-    # --- Display the Workflow Log (will be updated by the callback during execution) ---
+    # --- Display the Full Workflow Log in an Expander ---
     # This section is primarily for showing the log after a rerun or if the user expands it later
-    if st.session_state.workflow_log and not submit_button: # Don't show this area if the button was just clicked, let the placeholder handle it
-         with st.expander("⚙️ Workflow Log", expanded=False):
+    if st.session_state.workflow_log: # Show if there's any log content
+         with st.expander("📜 View Full Workflow Log", expanded=False): # Default to collapsed
+              # Display messages in chronological order for the full log
               for log_message in st.session_state.workflow_log:
-                  st.text(log_message)
+                  if "ERROR:" in log_message:
+                      st.error(log_message)
+                  elif "WARNING:" in log_message or "Warning:" in log_message :
+                      st.warning(log_message)
+                  elif "SUCCESS:" in log_message or "completed!" in log_message.lower() or "finished generating" in log_message.lower() or "prediction complete" in log_message.lower() or "validation complete" in log_message.lower() or "scoring complete" in log_message.lower():
+                      st.success(log_message)
+                  elif "AI Research Assistant (Scoring)" in log_message:
+                      st.markdown(f"📊 _{log_message}_")
+                  elif "AI Research Assistant (ChopChopSim)" in log_message:
+                      st.markdown(f"✂️ _{log_message}_")
+                  elif "AI Research Assistant (AlphaFoldSim)" in log_message:
+                      st.markdown(f"🧬 _{log_message}_")
+                  elif "AI Research Assistant (Evo2Sim)" in log_message:
+                      st.markdown(f"🌱 _{log_message}_")
+                  elif "Simulating" in log_message or "Processing" in log_message or "Retrieving" in log_message or "Focusing" in log_message or "Initiating" in log_message:
+                      st.markdown(f"⏳ {log_message}")
+                  elif "Generated mock" in log_message or "details:" in log_message or "Inputs for scoring:" in log_message:
+                      st.markdown(f"📄 _{log_message}_")
+                  else:
+                      st.text(log_message) # Default
 
 
     # --- 4. Display Results ---
@@ -195,49 +423,387 @@ def display_mock_therapy_design_page():
             approach_text = rec.get('recommended_approach', f'Recommendation {i+1}')
             confidence_score = rec.get('confidence_score', 'N/A')
 
-            # Ensure expander_key is not used if it was causing issues, or define it if needed for other purposes
-            # For now, removing the key argument from st.expander as it was the source of a TypeError.
             with st.expander(f"Recommendation {i+1}: {approach_text} (Simulated Confidence: {confidence_score:.2f})", expanded=(i == 0)):
-                # Display Detailed Rationale
                 st.markdown(f"**Detailed Rationale (Simulated):** {rec.get('detailed_rationale', 'Detailed rationale not available.')}")
                 st.markdown("---") # Separator after rationale
 
                 tab_evidence, tab_components, tab_metrics, tab_next_steps = st.tabs(["Supporting Evidence", "🧬 System Components", "🔬 Evaluation Metrics", "➡️ Suggested Next Steps"])
 
                 with tab_evidence:
-                    st.markdown("**Supporting Evidence (Mock):**")
-                    st.caption("Metrics below are simulated. See 'Understanding These Mock Results' expander above for detailed explanations if needed.")
+                    st.markdown("### 📊 Supporting Evidence (Simulated Data)")
+                    st.caption("Below are key simulated metrics that contribute to this system candidate\'s evaluation. Higher scores are generally better, unless specified (e.g., off-target counts). Refer to the \'Understanding These Mock Results\' expander for general metric definitions.")
+                    st.divider()
+
+                    # --- Contextual Explanation for BRAF V600E ---
+                    # active_gene = st.session_state.active_mutation.get("hugo_gene_symbol", "BRAF")
+                    # active_protein_change = st.session_state.active_mutation.get("protein_change", "V600E")
+                    # if active_gene == "BRAF" and active_protein_change == "V600E":
+                    #     st.markdown(\"""
+                    #         #### Interpreting Evidence for BRAF V600E Therapeutic Design:
+                    #
+                    #         You are currently evaluating a mock therapeutic system designed to target the **BRAF V600E** mutation, a common driver in various cancers, including melanoma. The goal of such a therapy is often to **disrupt or correct the oncogenic activity** of this mutated protein.
+                    #
+                    #         As you review the metrics below:
+                    #         - **High `Mock Original Variant Evo2 Confidence` and significant `Mock Original Variant Delta Likelihood`** would confirm that BRAF V600E itself is a strong, impactful target, justifying intervention.
+                    #         - **`Mock Overall System AF Score` and individual component pLDDT/Rank scores** (e.g., for the Cas protein and guide RNA) are crucial. For a *disruption* strategy (like knockout), the guide RNA and Cas protein must form a functional complex to edit the gene. For a *correction* strategy, the repair template also needs to be structurally sound and interact correctly.
+                    #         - **`Mock CHOPCHOP On-target Score`** should be high, indicating the guide RNA is likely to cut efficiently at the BRAF V600E locus.
+                    #         - **`Mock CHOPCHOP Off-target Count`** should be ideally zero, or very low. Off-target edits are a major safety concern, especially for a gene like BRAF involved in normal cellular processes.
+                    #         - **`Mock CHOPCHOP MFE`** (Minimum Free Energy) for the guide RNA suggests structural stability, which is important for its function with the Cas protein.
+                    #
+                    #         The mock component similarities (e.g., for the Cas protein) are less critical for a knockout strategy but would be important if aiming to restore a wild-type function or if comparing to a known functional structure. For BRAF V600E, if a repair template is used for correction, its similarity to the wild-type sequence in the corrected region would be paramount.
+                    #     \"\"\")
+                    #     st.divider()
+                    # --- End Contextual Explanation ---
                     supporting_evidence = rec.get('supporting_evidence', [])
                     if supporting_evidence:
-                        for evidence_item in supporting_evidence:
-                            # Default explanation if no specific match
-                            explanation = ""
+                        # Create two columns for the grid layout
+                        col1, col2 = st.columns(2)
+                        
+                        # Distribute items between columns
+                        for index, evidence_item_full_string in enumerate(supporting_evidence):
+                            target_column = col1 if index % 2 == 0 else col2 # Alternate columns
+                            with target_column:
+                                parts = evidence_item_full_string.split(':')
+                                metric_name = parts[0].strip()
+                                metric_value_str = parts[1].strip() if len(parts) > 1 else "N/A"
+                                
+                                explanation = "_No specific explanation available for this exact metric line-item, but it contributes to the overall assessment._"
+                                emoji = "ℹ️"
+                                value_to_display = metric_value_str # Default to string
+                                numeric_val_for_assessment = None
 
-                            if "Mock Original Variant Evo2 Confidence" in evidence_item:
-                                explanation = "_(Simulated Evo2 VEP score. Represents predicted confidence that the original target mutation has a significant biological impact related to cancer. Higher suggests a good therapeutic target.)_"
-                            elif "Mock Original Variant Delta Likelihood" in evidence_item:
-                                explanation = "_(Simulated Evo2 VEP score. Predicts how the mutation changes the likelihood of the sequence appearing naturally. Large negative values can indicate impactful variants.)_"
-                            elif "Mock Overall System AF Score" in evidence_item:
-                                explanation = "_(Simulated AlphaFold3 score. Overall structural assessment of the entire multi-gene system. Higher suggests components are likely to fold/interact correctly.)_"
-                            elif "Comp " in evidence_item and "Avg AF" in evidence_item:
-                                explanation = "_(Simulated average AlphaFold metrics (pLDDT, ranking, similarity) for an individual component. Higher indicates better predicted structural quality for that component.)_"
-                            elif "Mock CHOPCHOP On-target Score" in evidence_item:
-                                explanation = "_(Simulated CHOPCHOP score. Predicted on-target efficacy of the guide RNA. Higher is better.)_ "
-                            elif "Mock CHOPCHOP Off-target Count" in evidence_item:
-                                explanation = "_(Simulated CHOPCHOP count. Predicted number of off-target sites for the guide RNA. Lower is better for specificity.)_ "
-                            elif "Mock CHOPCHOP MFE" in evidence_item:
-                                explanation = "_(Simulated CHOPCHOP score. Minimum Free Energy for the guide RNA's predicted secondary structure. More negative indicates a more stable structure.)_ "
-                            # Fallback for pLDDT, Ranking, Struct Similarity if they appear outside "Comp Avg AF" context, though less likely now
-                            elif "pLDDT" in evidence_item: # Should be caught by "Comp Avg AF" if it's an average
-                                explanation = "_(Simulated protein structure confidence; 0-100, higher >70 is generally better)_ "
-                            elif "Ranking" in evidence_item: # Should be caught by "Comp Avg AF"
-                                explanation = "_(Simulated quality/binding score; higher is generally better)_ "
-                            elif "Struct Similarity" in evidence_item: # Should be caught by "Comp Avg AF"
-                                explanation = "_(Simulated structural similarity to a reference; interpretation is context-dependent)_ "
+                                try:
+                                    numeric_val = float(metric_value_str)
+                                    numeric_val_for_assessment = numeric_val # Store for assessment
+                                    value_to_display = f"{numeric_val:.2f}"
+                                    if metric_name == "Mock Original Variant Delta Likelihood":
+                                        value_to_display = f"{numeric_val:.7f}"
+                                    elif "Count" in metric_name or "Off-target" in metric_name:
+                                        value_to_display = int(numeric_val)
+                                except ValueError:
+                                    pass
 
-                            st.markdown(f"- {evidence_item} {explanation}")
+                                st.markdown(f"##### {metric_name}")
+
+                                if "Mock Original Variant Evo2 Confidence" == metric_name:
+                                    emoji = "🌱"
+                                    explanation = ("_Simulated Evo 2 score indicating confidence in the **original target mutation\\'s** biological impact (e.g., pathogenicity). "
+                                                 "Higher scores suggest the mutation is a relevant therapeutic target._")
+                                elif "Mock Original Variant Delta Likelihood" == metric_name:
+                                    emoji = "📉"
+                                    explanation = ("_Simulated Evo 2 score predicting how the **original mutation** changes sequence likelihood. Large negative values can indicate impactful variants "
+                                                 "(e.g., disease-causing) that are selected against._")
+                                elif "Mock Overall System AF Score" == metric_name:
+                                    emoji = "🏗️"
+                                    explanation = ("_Simulated AlphaFold 3 aggregate score for the **entire system\\'s** structural integrity. Higher scores suggest components are likely to fold and interact correctly, which is crucial for function._")
+                                elif metric_name.startswith("Comp ") and " pLDDT" in metric_name:
+                                    emoji = "🧬"
+                                    comp_actual_name = metric_name.split(" pLDDT")[0].replace("Comp ","").strip("'")
+                                    explanation = (f"_Simulated AlphaFold pLDDT score (0-100) for the **{comp_actual_name}** component. Indicates confidence in the local accuracy of its predicted 3D structure. "
+                                                 f"Scores >70 are generally good; >90 suggest high confidence in the fold._")
+                                elif metric_name.startswith("Comp ") and " Rank" in metric_name:
+                                    emoji = "🏅"
+                                    comp_actual_name = metric_name.split(" Rank")[0].replace("Comp ","").strip("'")
+                                    explanation = (f"_Simulated AlphaFold ranking score for the **{comp_actual_name}** component. This can reflect overall structural quality or confidence in predicted interactions. Higher is generally better._")
+                                elif metric_name.startswith("Comp ") and " Similarity" in metric_name:
+                                    emoji = "🔗"
+                                    comp_actual_name = metric_name.split(" Similarity")[0].replace("Comp ","").strip("'")
+                                    explanation = (f"_Simulated AlphaFold structural similarity for the **{comp_actual_name}** to a reference. High similarity is key if restoring function (e.g., to wild-type). For disruption, lower similarity to an active form might be expected._")
+                                elif "Mock CHOPCHOP On-target Score" == metric_name:
+                                    emoji = "🎯"
+                                    explanation = ("_Simulated CHOPCHOP score for the **guide RNA\\'s** predicted on-target efficacy. Considers sequence features like GC content and PAM proximity. Higher scores suggest a greater likelihood of successful DNA cleavage at the intended site._")
+                                elif "Mock CHOPCHOP Off-target Count" == metric_name:
+                                    emoji = "⚠️"
+                                    explanation = ("_Simulated CHOPCHOP count for the **guide RNA\\'s** predicted off-target sites. Lower counts are crucial for specificity and safety, indicating fewer unintended edits._")
+                                elif "Mock CHOPCHOP MFE" == metric_name:
+                                    emoji = "➰"
+                                    explanation = ("_Simulated CHOPCHOP Minimum Free Energy (MFE) for the **guide RNA\\'s** predicted secondary structure. More negative values indicate a more stable structure, important for Cas protein interaction and DNA binding._")
+                                
+                                st.metric(label=emoji, value=value_to_display)
+                                st.caption(explanation)
+
+                                # --- Add Conditional Assessment ---
+                                assessment_text = ""
+                                assessment_emoji = ""
+                                design_goal = rec.get('editing_type', '').lower() # Example: "Mock System Design (disrupt_oncogene)"
+                                
+                                if numeric_val_for_assessment is not None:
+                                    # Default thresholds
+                                    good_threshold = 0.7
+                                    bad_threshold = 0.4
+                                    is_lower_better = False
+
+                                    if "Mock Original Variant Evo2 Confidence" == metric_name:
+                                        good_threshold = 0.7; bad_threshold = 0.3
+                                    elif "Mock Original Variant Delta Likelihood" == metric_name:
+                                        # Larger negative is more impactful, so "good" means more negative
+                                        # For simplicity, we'll treat it as higher absolute value is good if negative
+                                        good_threshold = -0.001; bad_threshold = -0.0001 
+                                        # This logic is tricky with "good" for more negative. Let's simplify for now.
+                                        # Or we can check if it's very negative.
+                                        if numeric_val_for_assessment < -0.0005: assessment_emoji = "👍"; assessment_text = "Potentially impactful variant signal."
+                                        else: assessment_emoji = "🤔"; assessment_text = "Less clear impact signal."
+                                    elif "Mock Overall System AF Score" == metric_name:
+                                        good_threshold = 0.75; bad_threshold = 0.5
+                                    elif "pLDDT" in metric_name:
+                                        good_threshold = 80; bad_threshold = 60 # pLDDT is 0-100
+                                    elif "Rank" in metric_name: # Assuming higher rank is better
+                                        good_threshold = 0.8; bad_threshold = 0.5 
+                                    elif "Similarity" in metric_name:
+                                        if "disrupt" in design_goal: # For disruption, lower similarity to active form might be okay/good
+                                            good_threshold = 0.3; bad_threshold = 0.6 # Inverted logic example
+                                            is_lower_better = True 
+                                        else: # For correction, higher similarity to WT is good
+                                            good_threshold = 0.7; bad_threshold = 0.4
+                                    elif "Mock CHOPCHOP On-target Score" == metric_name:
+                                        good_threshold = 0.8; bad_threshold = 0.5
+                                    elif "Mock CHOPCHOP Off-target Count" == metric_name:
+                                        good_threshold = 1; bad_threshold = 5 # Lower is better
+                                        is_lower_better = True
+                                    elif "Mock CHOPCHOP MFE" == metric_name:
+                                        good_threshold = -20; bad_threshold = -10 # More negative is better
+                                        # This needs careful handling: lower MFE (more negative) is better.
+                                        if numeric_val_for_assessment <= good_threshold: assessment_emoji = "👍"; assessment_text = "Favorable (stable structure)."
+                                        elif numeric_val_for_assessment > bad_threshold: assessment_emoji = "👎"; assessment_text = "Less favorable (potentially unstable)."
+                                        else: assessment_emoji = "🤔"; assessment_text = "Neutral/acceptable stability."
+                                    
+                                    # Apply general threshold logic if not handled by specific MFE/DeltaLikelihood
+                                    if not assessment_text: # If not already set by specific logic
+                                        if is_lower_better:
+                                            if numeric_val_for_assessment <= good_threshold: assessment_emoji = "👍"; assessment_text = "Good (meets/exceeds target for lower-is-better)."
+                                            elif numeric_val_for_assessment > bad_threshold: assessment_emoji = "👎"; assessment_text = "Potentially concerning (does not meet target for lower-is-better)."
+                                            else: assessment_emoji = "🤔"; assessment_text = "Acceptable/Neutral."
+                                        else: # This corresponds to the 'if is_lower_better:'
+                                            if numeric_val_for_assessment >= good_threshold: assessment_emoji = "👍"; assessment_text = "Good (meets/exceeds target)."
+                                            elif numeric_val_for_assessment < bad_threshold: assessment_emoji = "👎"; assessment_text = "Potentially concerning (below target)."
+                                            else: assessment_emoji = "🤔"; assessment_text = "Acceptable/Neutral."
+                                # This 'else' corresponds to 'if not assessment_text:'
+                                # It also handles the case where metric_value is not numeric initially
+                                else: # Non-numeric metric OR assessment_text was already set by specific logic
+                                    # If assessment_text is already set, we don't overwrite it.
+                                    # If it's not set AND it's non-numeric, then it's a qualitative point.
+                                    if not assessment_text:
+                                        assessment_emoji = "ℹ️"
+                                        assessment_text = "Qualitative data point."
+                                
+                                if assessment_text: # Ensure assessment_text has a value before displaying
+                                    st.markdown(f"**Assessment:** {assessment_emoji} _{assessment_text}_")
+                                # --- End Conditional Assessment ---
+                                st.divider() 
                     else:
-                        st.markdown("  _No supporting evidence provided._")
+                        st.markdown("  _No supporting evidence provided for this candidate._")
+
+                with tab_components:
+                    st.markdown("### 🧬 System Components (Mock)")
+                    st.markdown(
+                        "_These are the core biological parts that make up the proposed therapeutic system. "
+                        "Each plays a distinct role in achieving the desired genetic modification for "
+                        f"targeting **{current_target_mutation['hugo_gene_symbol']} "
+                        f"{current_target_mutation['protein_change']}**. "
+                        "The explanations below detail each mock component and its significance in this context._"
+                    )
+                    st.divider()
+
+                    components = rec.get('designed_system_components', {})
+                    design_goal_raw = rec.get('editing_type', 'unknown strategy') # e.g., "Mock System Design (disrupt_oncogene)"
+                    strategy_match = re.search(r'\\((.*?)\\)', design_goal_raw)
+                    design_goal = strategy_match.group(1).strip() if strategy_match else "disrupt_oncogene" # Default or extracted
+
+                    if components:
+                        # --- System ID and Description ---
+                        if "system_id" in components:
+                            st.markdown(f"#### System Identifier: `{components['system_id']}`")
+                            st.caption(f"_disrupt_oncogene: This is the chosen therapeutic strategy. In this case, the simulated goal is to disrupt the function of the BRAF oncogene (which is driving cancer growth due to the V600E mutation). (e.g., {design_goal}) for **{current_target_mutation['hugo_gene_symbol']} {current_target_mutation['protein_change']}**._")
+                            st.markdown("---")
+                        if "description" in components:
+                            st.markdown(f"#### System Description: {components['description']}")
+                            st.caption(f"_A concise summary of this system's intended purpose and target. For example, this system is designed to '{design_goal}' related to the **{current_target_mutation['hugo_gene_symbol']} {current_target_mutation['protein_change']}** mutation. Clear descriptions aid in collaborative efforts and maintaining focus on the therapeutic objective._")
+                            st.markdown("---")
+
+                        # --- Core CRISPR Components ---
+                        st.markdown("#### Key Therapeutic Sequences (Mock):")
+                        component_sequences_found = False
+
+                        if "guide_rna_sequence" in components:
+                            st.markdown(f"##### Guide RNA (gRNA) Sequence: `{components['guide_rna_sequence'][:60]}...`")
+                            st.caption(f"_This mock sequence represents the gRNA, the component responsible for **targeting specificity**. It contains a crucial 'spacer' region (typically ~20 nucleotides) that is designed to be complementary to a specific DNA sequence within or near the **{current_target_mutation['hugo_gene_symbol']}** gene, specifically at the site relevant to the **{current_target_mutation['protein_change']}** mutation. Its precise sequence dictates where the Cas enzyme will be directed to make a cut. For a '{design_goal}' strategy, this targeting is paramount for efficacy and safety._")
+                            component_sequences_found = True
+                            st.markdown(" ") # Add a little space
+
+                        if "cas_protein_sequence" in components:
+                            st.markdown(f"##### Cas Protein Sequence: `{components['cas_protein_sequence'][:60]}...`")
+                            st.caption(f"_This mock sequence represents the Cas enzyme (e.g., Cas9, Cas12). This protein acts as the 'molecular scissors' that performs the DNA cut once guided by the gRNA. The choice of Cas protein can influence editing efficiency, the type of cut made (e.g., double-strand break for NHEJ-mediated '{design_goal}', or nick for base editing), and PAM sequence requirements. The sequence itself can be optimized for better activity, stability, or reduced immunogenicity._")
+                            component_sequences_found = True
+                            st.markdown(" ")
+
+                        if "repair_template_dna" in components:
+                            st.markdown(f"##### Repair Template DNA Sequence: `{components['repair_template_dna'][:60]}...`")
+                            st.caption(f"_This mock sequence is for a DNA repair template, essential if the therapeutic goal is precise gene editing via Homology Directed Repair (HDR), such as correcting the **{current_target_mutation['protein_change']}** mutation in **{current_target_mutation['hugo_gene_symbol']}**. It contains the desired corrected sequence flanked by 'homology arms' that match the DNA sequence around the target site, guiding the cell's repair machinery to incorporate the change accurately. This component is critical for strategies like 'correct_mutation' or 'insert_gene'._")
+                            component_sequences_found = True
+                            st.markdown(" ")
+
+                        if "modified_cas_protein_sequence" in components:
+                            st.markdown(f"##### Modified Cas Protein Sequence: `{components['modified_cas_protein_sequence'][:60]}...`")
+                            st.caption(f"_This mock sequence represents an engineered Cas protein. Modifications can include: base editors (to make C>T or A>G changes without a full double-strand break), prime editors (for more complex edits like small insertions/deletions or all base conversions), nickases (to cut only one DNA strand, often used with paired guides for increased specificity), or dCas9 (catalytically inactive Cas9 used for gene activation/repression by fusing it to effector domains). The specific modification would be chosen based on the '{design_goal}' for **{current_target_mutation['hugo_gene_symbol']}**._")
+                            component_sequences_found = True
+                            st.markdown(" ")
+                        
+                        # --- Delivery & Expression Components (if applicable) ---
+                        delivery_components_present = any(k in components for k in ["viral_packaging_signal_dna", "therapeutic_gene_sequence", "promoter_sequence"])
+                        if delivery_components_present:
+                            st.markdown("#### Delivery & Expression Elements (Mock):")
+
+                        if "viral_packaging_signal_dna" in components:
+                            st.markdown(f"##### Viral Packaging Signal DNA: `{components['viral_packaging_signal_dna'][:60]}...`")
+                            st.caption("_This mock DNA sequence is essential for viral vector-based delivery systems (e.g., AAV, Lentivirus). It enables the therapeutic payload (containing the CRISPR components) to be encapsulated within viral particles for efficient delivery to target cells/tissues. The choice of signal depends on the viral vector used._")
+                            component_sequences_found = True
+                            st.markdown(" ")
+
+                        if "therapeutic_gene_sequence" in components:
+                             st.markdown(f"##### Therapeutic Gene Sequence (Payload): `{components['therapeutic_gene_sequence'][:60]}...`")
+                             st.caption(f"_This mock sequence represents the actual genetic material intended to exert the therapeutic effect, distinct from the CRISPR machinery itself. This could be a corrected version of **{current_target_mutation['hugo_gene_symbol']}**, a cDNA for a missing protein, or a shRNA. This is relevant for 'gene_addition' or 'gene_replacement' strategies._")
+                             component_sequences_found = True
+                             st.markdown(" ")
+
+                        if "promoter_sequence" in components:
+                             st.markdown(f"##### Promoter Sequence: `{components['promoter_sequence'][:60]}...`")
+                             st.caption(f"_This mock DNA sequence controls the expression of the linked therapeutic genes (e.g., Cas enzyme, gRNA, or a therapeutic payload gene). The choice of promoter (e.g., constitutive, tissue-specific, inducible) is critical for ensuring the CRISPR system or therapeutic gene is active in the correct cells and at appropriate levels, which is vital for both efficacy and safety when targeting **{current_target_mutation['hugo_gene_symbol']}**._")
+                             component_sequences_found = True
+                             st.markdown(" ")
+
+                        # --- Other/Generic Components ---
+                        st.markdown("#### Other System Components (Mock):")
+                        other_comp_count = 0
+                        for comp_name, comp_val in components.items():
+                            # Filter out already handled components
+                            if comp_name not in ["system_id", "description", "guide_rna_sequence",
+                                                "cas_protein_sequence", "repair_template_dna",
+                                                "modified_cas_protein_sequence", "viral_packaging_signal_dna",
+                                                "therapeutic_gene_sequence", "promoter_sequence"]:
+                                other_comp_count += 1
+                                st.markdown(f"##### {comp_name.replace('_', ' ').title()}: `{str(comp_val)[:60]}...`")
+                                st.caption(f"_This mock sequence represents an additional component, '{comp_name.replace('_', ' ')}'. In a real system, this could be a linker, a tag for purification/detection, a regulatory element, or another part of a multi-component delivery vehicle. Its specific role would be defined by the overall system architecture and therapeutic strategy for **{current_target_mutation['hugo_gene_symbol']} {current_target_mutation['protein_change']}**._")
+                                st.markdown(" ")
+                        
+                        if other_comp_count == 0 and not component_sequences_found and not delivery_components_present:
+                             st.markdown("  _No specific component sequences listed for this candidate beyond ID and description._")
+                        elif other_comp_count == 0 and (component_sequences_found or delivery_components_present):
+                            st.caption("  _All identified mock components listed above._")
+                        elif other_comp_count > 0:
+                             st.caption("  _The components above are mock placeholders for other necessary parts of a complex therapeutic system, each with a defined role contributing to the overall function._")
+
+                    else:
+                        st.markdown("  _No component details available for this candidate._")
+                    st.markdown("---") # Final divider for the tab
+
+                with tab_metrics:
+                    st.markdown("### 🔬 Evaluation Metrics (Mock)")
+                    st.caption("Below are the raw simulated metric values for each component's structure.")
+                    st.divider()
+
+                    # Display AlphaFold metrics
+                    alpha_fold_metrics = rec.get('alpha_fold_metrics', {})
+                    for component_name, component_metrics in alpha_fold_metrics.items():
+                        st.markdown(f"**{component_name}:**")
+                        for metric_name, metric_value in component_metrics.items():
+                            st.markdown(f"- {metric_name}: {metric_value}")
+                        st.divider()
+
+                with tab_next_steps:
+                    st.markdown("### ➡️ Suggested Next Steps")
+                    st.caption("Below are potential next steps for refining this system candidate.")
+                    st.divider()
+
+                    # --- In Silico Refinement Opportunities ---
+                    st.subheader("🛠️ In Silico Refinement Opportunities")
+                    st.markdown("""
+                    <div style="background-color: #f0f0f0; padding: 10px; border-radius: 5px;">
+                        <p>🧬 <strong>Optimize Guide RNA</strong></p>
+                        <ul>
+                            <li>📊 <strong>Common Approaches:</strong></li>
+                            <ul>
+                                <li>📊 <em>Analyze guide RNA sequence features</em> (e.g., GC content, PAM proximity) to optimize on-target efficiency.</li>
+                                <li>💻 <em>Use machine learning models</em> (like CHOPCHOP) to predict off-target sites and minimize their impact.</li>
+                                <li>🗺️ <em>Explore guide RNA sequence space</em> to find alternative sequences with similar on-target efficacy but lower off-target potential.</li>
+                                <li>🔬 <em>Evaluate guide RNA stability</em> using tools like Mfold or RNAfold to ensure it remains functional in the cellular environment.</li>
+                                <li>➰ <em>Optimize guide RNA secondary structure</em> to improve its binding to the Cas protein and DNA target.</li>
+                                <li>📈 <em>Compare multiple guide RNA designs</em> to find the most effective one for the target mutation.</li>
+                                <li>🖥️ <em>Utilize in silico tools</em> like CRISPRscan or CCTop to assess guide RNA performance.</li>
+                                <li>📋 <em>Consider using multiple guide RNAs</em> in combination to increase editing efficiency and specificity.</li>
+                            </ul>
+                        </ul>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    st.divider()
+
+                    st.subheader("🧪 Experimental Validation Plan")
+                    st.markdown("""
+                    <div style="background-color: #f0f0f0; padding: 10px; border-radius: 5px;">
+                        <p>🧪 <strong>Perform In Vitro Characterization</strong></p>
+                        <ul>
+                            <li>📊 <strong>Common Approaches:</strong></li>
+                            <ul>
+                                <li>🧪 <em>Test guide RNA activity</em> in vitro using assays like Cas9 cleavage or T7 endonuclease assays.</li>
+                                <li>🔬 <em>Evaluate guide RNA specificity</em> using techniques like Sanger sequencing or deep sequencing.</li>
+                                <li>📈 <em>Assess guide RNA efficiency</em> by measuring the percentage of edited cells or alleles.</li>
+                                <li>🌡️ <em>Test guide RNA stability</em> under various conditions (e.g., temperature, pH) to ensure its performance in vivo.</li>
+                                <li>🧬 <em>Analyze off-target effects</em> using techniques like genome-wide sequencing or targeted amplicon sequencing.</li>
+                                <li>📋 <em>Compare multiple guide RNA designs</em> in vitro to select the most promising ones for further testing.</li>
+                            </ul>
+                        </ul>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    st.divider()
+
+                    st.subheader("🌍 Broader Therapeutic Considerations")
+                    st.markdown("""
+                    <div style="background-color: #f0f0f0; padding: 10px; border-radius: 5px;">
+                        <p>🌎 <strong>Consider Off-Target Effects</strong></p>
+                        <ul>
+                            <li>📊 <strong>Common Approaches:</strong></li>
+                            <ul>
+                                <li>🧪 <em>Evaluate off-target effects</em> in relevant cell lines or animal models.</li>
+                                <li>🌡️ <em>Test guide RNA specificity</em> under various conditions to ensure minimal off-target activity.</li>
+                                <li>📋 <em>Compare multiple guide RNA designs</em> for their off-target profiles to select the safest ones.</li>
+                                <li>📈 <em>Assess the potential for on-target resistance</em> and develop strategies to mitigate it.</li>
+                                <li>🌐 <em>Consider the broader impact</em> of the therapy on the patient's health and well-being.</li>
+                            </ul>
+                        </ul>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    st.divider()
+
+                    st.subheader("🤖 Interactive AI Agents")
+                    st.markdown("""
+                    <div style="background-color: #f0f0f0; padding: 10px; border-radius: 5px;">
+                        <p>🤖 <strong>Utilize AI Agents for Guided Optimization</strong></p>
+                        <ul>
+                            <li>📊 <strong>Common Approaches:</strong></li>
+                            <ul>
+                                <li>🤖 <em>Leverage AI agents</em> to automate the design and optimization of guide RNAs.</li>
+                                <li>💻 <em>Use machine learning models</em> to predict guide RNA performance and suggest improvements.</li>
+                                <li>📈 <em>Iteratively refine guide RNA designs</em> based on AI agent feedback and experimental data.</li>
+                                <li>🌐 <em>Consider the broader impact</em> of the therapy on the patient's health and well-being.</li>
+                            </ul>
+                        </ul>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    st.divider()
+
+                    # --- Call to Action ---
+                    st.subheader("📝 Call to Action")
+                    st.markdown("""
+                    <div style="background-color: #f0f0f0; padding: 10px; border-radius: 5px;">
+                        <p>📝 <strong>Next Steps:</strong></p>
+                        <ul>
+                            <li>📊 <em>Refine the guide RNA sequence</em> based on the in silico analysis and experimental validation.</li>
+                            <li>🧪 <em>Perform additional in vitro characterization</em> to ensure the guide RNA's performance and safety.</li>
+                            <li>🌍 <em>Consider the broader therapeutic implications</em> and potential off-target effects.</li>
+                            <li>🤖 <em>Utilize AI agents</em> to guide the optimization process and suggest improvements.</li>
+                        </ul>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    st.divider()
 
                 with tab_components:
                     st.markdown("**Designed System Components (Mock):**")
@@ -384,21 +950,87 @@ def display_mock_therapy_design_page():
                 with tab_next_steps:
                     st.markdown("**Suggested Next Steps Based on Simulation:**")
                     st.caption("These are conceptual suggestions to guide further refinement and planning based on the simulated design and evaluation metrics. Experimental validation is always crucial.")
+                    st.divider()
 
-                    # Display In Silico Refinement Suggestions
-                    st.markdown("### 🛠️ In Silico Refinement Suggestions")
+                    st.markdown("### 🛠️ In Silico Refinement Opportunities")
+                    st.markdown("Explore these computational steps to potentially improve your design before wet-lab experiments. Review each area and consider simulating improvements with our Interactive AI Agents where applicable.")
+                    st.divider()
+
+                    # --- Guide RNA Optimization Section ---
+                    st.subheader("🧬 Optimize Guide RNA")
+                    st.info("**Importance:** Maximizing on-target editing efficacy and minimizing off-target effects are critical for therapeutic safety and success.")
                     st.markdown("""
-                    Based on the simulated evaluation metrics, the following *in silico* (computational) steps could be considered to potentially improve the design:
-                    * **Refine Component Sequences:** For components with lower simulated structural confidence (e.g., low pLDDT for a protein like the Cas enzyme) or other unfavorable metrics, explore generating or optimizing alternative sequences using tools like Evo 2. This could involve:
-                        * Investigating regions of predicted disorder or potential misfolding.
-                        * Considering sequence variants that are predicted to improve stability or desired interactions.
-                        * For protein components, exploring codon optimization for the intended host expression system to improve protein yield and folding.
-                    * **Optimize Guide RNA:** If the simulated CHOPCHOP metrics for the guide RNA are not ideal (e.g., high off-target count, suboptimal on-target score, unstable MFE), explore designing alternative guide sequences targeting the same region or nearby sites.
-                    * **Advanced Off-Target Analysis:** The simulated CHOPCHOP off-target count provides an initial estimate. For therapeutic applications, a more thorough *in silico* off-target analysis using tools that search against the entire genome with more sophisticated algorithms is crucial. This involves identifying all potential off-target sites and assessing their likelihood of being edited.
-                    * **Refine Repair Template (if applicable):** If the design involves a repair template for gene correction or knock-in, optimize the template sequence, including adjusting the length and sequence of homology arms, to improve the efficiency and accuracy of homology-directed repair (HDR).
+                        **🛠️ Common Approaches:**
+                        - 📊 **Analyze Metrics:** Scrutinize *on-target scores* (e.g., from CHOPCHOP), off-target predictions, and structural stability (MFE).
+                        - 💻 **Predict Impact:** Utilize *in silico tools* to forecast effects of sequence modifications.
+                        - 🗺️ **Explore Alternatives:** Investigate *different guide sequences* targeting the same or nearby genomic loci.
+                        - 🔬 **Key Factors:** Consider GC content, protospacer adjacent motif (PAM) compatibility, and potential RNA secondary structures that could impede function.
                     """)
+                    guide_metrics = rec.get('mock_chopchop_metrics', {}).get('guide_rna_sequence', {})
+                    if guide_metrics:
+                        on_target_score = guide_metrics.get('chopchop_on_target_score', 0.0)
+                        off_target_count = guide_metrics.get('chopchop_off_target_count', 0)
+                        mfe = guide_metrics.get('chopchop_mfe', 0.0)
+                        
+                        score_col1, score_col2, score_col3 = st.columns(3)
+                        score_col1.metric("Current On-Target", f"{on_target_score:.2f}")
+                        score_col2.metric("Current Off-Targets", off_target_count)
+                        score_col3.metric("Current MFE", f"{mfe:.2f}")
 
-                    # Display Experimental Validation Plan
+                        if on_target_score < 0.75 or off_target_count > 3:
+                            st.warning(f"Simulated metrics suggest potential for improvement.")
+                        else:
+                            st.success("Current simulated guide metrics appear strong!")
+                    else:
+                        st.markdown("_No specific guide metrics found in the current recommendation to display._")
+                    st.markdown("👉 **Simulate this:** Use the `Guide RNA Optimizer` agent in the 'Interactive AI Agents' section below.")
+                    st.divider()
+
+                    # --- Component Sequence Refinement Section ---
+                    st.subheader("🔄 Refine Component Sequences (e.g., Cas Protein, Repair Template)")
+                    st.info("**Importance:** Ensuring the stability, correct folding (for proteins), and functionality of all system components (Cas enzymes, repair templates, etc.) is vital for overall efficacy and can impact immunogenicity.")
+                    st.markdown("""
+                        **🛠️ Common Approaches:**
+                        - 🧬 **Proteins (e.g., Cas):** Analyze structural predictions (e.g., pLDDT from AlphaFold). Identify regions of low confidence or potential misfolding. Explore *sequence variants* (mutations, truncations) predicted to improve stability, activity, or specificity. Consider *codon optimization* for the target expression system.
+                        - 📄 **DNA (e.g., Repair Templates):** Optimize *homology arm lengths* and sequences for HDR. Ensure correct edit incorporation and minimize undesired integration or template-induced mutations.
+                        - ➰ **RNA (e.g., viral genome components):** Ensure structural integrity and proper function of elements like ITRs or packaging signals if applicable.
+                    """)
+                    component_metrics_af = rec.get('mock_alphafold_system_metrics', {})
+                    low_confidence_proteins = {
+                        name: metrics.get('mock_plddt_score') 
+                        for name, metrics in component_metrics_af.items() 
+                        if isinstance(metrics, dict) and "protein" in name.lower() and metrics.get('mock_plddt_score', 1.0) < 0.7
+                    }
+                    if low_confidence_proteins:
+                        st.warning("Found protein components with lower simulated structural confidence (pLDDT < 0.7):")
+                        for name, plddt in low_confidence_proteins.items():
+                            st.markdown(f"  - `{name}`: pLDDT {plddt:.2f}")
+                    else:
+                        st.success("Simulated structural confidence for protein components appears good (pLDDT ≥ 0.7 where applicable).")
+                    st.markdown("👉 **Simulate this:** Use the `Protein Component Optimizer` agent (for Cas/proteins) or conceptually refine template designs based on literature for DNA components.")
+                    st.divider()
+
+                    # --- Advanced Off-Target Analysis Section ---
+                    st.subheader("🎯 Perform Advanced Off-Target Analysis")
+                    st.info("**Importance:** Comprehensive off-target analysis is a cornerstone of safety for CRISPR-based therapies, aiming to identify and mitigate risks of unintended genomic modifications.")
+                    st.markdown("""
+                        **🛠️ Common Approaches:**
+                        - 📈 **Initial Scan:** Start with predictions from tools like CHOPCHOP.
+                        - 🖥️ **Deep Dive Tools:** Employ advanced *in silico* tools (e.g., CasOFFinder, DeepHF, CFD-Score based utilities) to search the entire genome with sophisticated algorithms. These consider mismatch tolerance, DNA accessibility (sometimes), and specific Cas enzyme profiles.
+                        - 📋 **Prioritize & Validate:** Generate a *prioritized list* of potential off-target sites for subsequent experimental validation.
+                    """)
+                    # current_off_targets is already defined if guide_metrics exists
+                    if guide_metrics and 'chopchop_off_target_count' in guide_metrics:
+                        current_off_targets = guide_metrics.get('chopchop_off_target_count', -1)
+                        st.markdown(f"Current CHOPCHOP predicted off-targets: **{current_off_targets}**.")
+                        if current_off_targets > 5:
+                            st.warning("An advanced off-target scan is highly recommended due to the number of initial predictions.")
+                    else:
+                        st.markdown("_Guide metrics for off-target count not available._")
+                    st.markdown("👉 **Simulate/Consider this:** While a direct agent for *advanced* genome-wide scans isn't simulated here, the *concept* is vital. Plan for using specialized bioinformatics tools for this analysis.")
+                    st.divider()
+
+                    # Display Experimental Validation Plan (original markdown)
                     st.markdown("### 🧪 Experimental Validation Plan (Conceptual)")
                     st.markdown("""
                     Promising *in silico* designs must be validated experimentally. The following steps outline a typical conceptual plan:
@@ -568,6 +1200,59 @@ def display_mock_therapy_design_page():
                                     st.write("### Explanation")
                                     st.write(result['explanation'])
 
+                # --- EXECUTIVE SUMMARY SECTION ---
+                st.divider()
+                st.subheader("📝 Executive Summary of Simulated Findings")
+                
+                confidence_score_value = rec.get('confidence_score', 0.0)
+                simulated_findings = rec.get('simulated_findings', [])
+                
+                # Safely extract strategy from editing_type, defaulting if not found
+                editing_type_raw = rec.get('editing_type', 'unknown strategy')
+                strategy_match = re.search(r'\\((.*?)\\)', editing_type_raw) # Regex to find content in parentheses
+                strategy_text = strategy_match.group(1).strip() if strategy_match else editing_type_raw
+
+                summary_intro = (
+                    f"This mock therapeutic system, **{rec.get('recommended_approach', f'Candidate {i+1}')}**, designed for "
+                    f"targeting **{current_target_mutation['hugo_gene_symbol']} {current_target_mutation['protein_change']}** via a "
+                    f"'{strategy_text}' strategy, achieved a simulated confidence score of **{confidence_score_value:.2f}**. "
+                    f"This score reflects an aggregation of various simulated metrics."
+                )
+                st.markdown(summary_intro)
+                
+                if simulated_findings:
+                    st.markdown("---")
+                    st.markdown("##### Key Simulated Findings:")
+                    strengths = [f for f in simulated_findings if f.get('type') == 'strength']
+                    weaknesses = [f for f in simulated_findings if f.get('type') == 'weakness']
+                    
+                    if strengths:
+                        st.markdown("<div style='margin-left: 20px;'><strong>Positive Indicators (Strengths):</strong></div>", unsafe_allow_html=True)
+                        for finding in strengths:
+                            st.markdown(f"<div style='margin-left: 40px;'>✅ <strong>{finding.get('metric', 'N/A').replace('_', ' ').title()} ({finding.get('component', 'N/A').replace('_', ' ').title()})</strong>: {finding.get('description', 'N/A')}</div>", unsafe_allow_html=True)
+                    else:
+                        st.markdown("<div style='margin-left: 20px;'><em>No specific positive indicators highlighted in simulated findings.</em></div>", unsafe_allow_html=True)
+                        
+                    if weaknesses:
+                        st.markdown("<div style='margin-left: 20px;'><strong>Areas for Attention (Weaknesses):</strong></div>", unsafe_allow_html=True)
+                        for finding in weaknesses:
+                            st.markdown(f"<div style='margin-left: 40px;'>⚠️ <strong>{finding.get('metric', 'N/A').replace('_', ' ').title()} ({finding.get('component', 'N/A').replace('_', ' ').title()})</strong>: {finding.get('description', 'N/A')}</div>", unsafe_allow_html=True)
+                    else:
+                        st.markdown("<div style='margin-left: 20px;'><em>No specific weaknesses highlighted in simulated findings, suggesting overall moderate to good simulated performance based on these criteria.</em></div>", unsafe_allow_html=True)
+                else:
+                    st.markdown("<em>No structured simulated findings were available to detail strengths or weaknesses. The 'Detailed Rationale' above provides an overall narrative.</em>")
+                
+                st.markdown("---")
+                st.markdown("##### Overall Simulated Assessment:")
+                if confidence_score_value >= 0.8:
+                    st.success(f"This candidate demonstrates **strong promise** based on simulated data for targeting {current_target_mutation['hugo_gene_symbol']} {current_target_mutation['protein_change']}. Key strengths support its potential, though experimental validation is paramount.")
+                elif confidence_score_value >= 0.5:
+                    st.warning(f"This candidate shows **moderate promise** for {current_target_mutation['hugo_gene_symbol']} {current_target_mutation['protein_change']}. While some aspects are positive, certain simulated metrics indicate areas requiring further investigation or optimization before proceeding.")
+                else:
+                    st.error(f"This candidate has a **lower simulated confidence** for {current_target_mutation['hugo_gene_symbol']} {current_target_mutation['protein_change']}. Significant refinement and review of foundational metrics (e.g., target validity, component scores) are likely necessary based on these mock results.")
+                st.caption("_Reminder: All findings and scores are part of a simulation and require rigorous experimental validation._")
+                # --- END EXECUTIVE SUMMARY SECTION ---
+
 
     # --- 5. Display AI Chat Assistant Interaction ---
     # This section can display the conversational output from the LLM if you integrate it
@@ -582,7 +1267,148 @@ def display_mock_therapy_design_page():
     #         with st.chat_message(role):
     #             st.markdown(content)
 
+    # --- 7. Display Workflow Log ---
+    if st.session_state.workflow_log:
+        with st.expander("🔍 View Full Workflow Log", expanded=False):
+            for log_entry in st.session_state.workflow_log:
+                if isinstance(log_entry, tuple) and len(log_entry) == 2: # Check if it's a tuple of (timestamp, message)
+                    timestamp, message = log_entry
+                    st.text(f"{timestamp}: {message}")
+                elif isinstance(log_entry, str): # Handle plain string log entries
+                    st.text(log_entry)
+                else:
+                    st.text(str(log_entry)) # Fallback for other types
+    else:
+        st.info("Workflow log is empty. Run a design process to populate it.")
 
-# --- Run the Streamlit Page ---
+    # --- 8. Simulated System Recommendations ---
+    st.header("🏆 Simulated System Recommendations")
+    if not st.session_state.therapy_recommendations:
+        st.info("No mock therapy system recommendations generated yet. Click the 'Design Mock Therapy System' button above.")
+    else:
+        # Sort recommendations by confidence score, highest first
+        sorted_recommendations = sorted(st.session_state.therapy_recommendations, key=lambda x: x.get('confidence_score', 0.0), reverse=True)
+        
+        # Use st.columns to create a layout for recommendations
+        # Determine number of columns (e.g., 2 or 3 based on preference)
+        # num_cols = 2 # Or 3
+        # cols = st.columns(num_cols)
+        
+        active_recommendation = None
+        if 'active_recommendation_id' in st.session_state and st.session_state.active_recommendation_id is not None:
+            for rec_item in sorted_recommendations: # Use a different variable name here
+                if rec_item.get("recommended_approach") == st.session_state.active_recommendation_id: 
+                    active_recommendation = rec_item # Assign to active_recommendation
+                    break
+        
+        if active_recommendation:
+            main_col, details_col = st.columns([0.6, 0.4])
+        else:
+            main_col = st.container() # Use a container for the main column if no details view
+
+        with main_col:
+            st.subheader("Select a System to Explore Further:")
+            for i, rec in enumerate(sorted_recommendations):
+                rec_id = rec.get("recommended_approach", f"System_{i}") # Use a unique ID
+                
+                with st.container(): # Removed border=True for cleaner look, can be re-added
+                    st.markdown(f"##### **{i+1}. {rec.get('recommended_approach', 'N/A')}**")
+                    st.metric(label="Mock Confidence Score", value=f"{rec.get('confidence_score', 0.0):.2f}")
+                    
+                    # Truncate or summarize components for brevity in this main list
+                    components = rec.get('designed_system_components', {})
+                    component_names = list(components.keys())
+                    if component_names:
+                        st.markdown(f"**Key Components (Simulated):** {', '.join(component_names[:3])}{'...' if len(component_names) > 3 else ''}")
+                    
+                    # Button to select this recommendation for detailed view
+                    if st.button(f"Explore System: {rec.get('recommended_approach', 'N/A')}", key=f"explore_{rec_id}"):
+                        st.session_state.active_recommendation_id = rec.get("recommended_approach")
+                        st.session_state.agent_results = {} # Clear previous agent results
+                        st.rerun() # Rerun to update the details column
+
+        if active_recommendation: # Only populate details_col if it exists
+            with details_col:
+                st.subheader(f"🔬 Details for: {active_recommendation.get('recommended_approach', 'N/A')}")
+                
+                # Use a more structured display for details
+                # Confidence Score (already shown in metric, but can repeat or add context)
+                st.markdown(f"**Mock Confidence Score:** {active_recommendation.get('confidence_score', 0.0):.2f}")
+
+                # Editing Type
+                st.markdown(f"**Editing Type (Simulated):** {active_recommendation.get('editing_type', 'N/A')}")
+
+                # Designed System Components with Sequences (using expander for long sequences)
+                with st.expander("🧬 Designed System Components (Simulated Sequences)", expanded=False):
+                    components = active_recommendation.get('designed_system_components', {})
+                    if components:
+                        for comp_name, comp_seq in components.items():
+                            st.code(f"{comp_name}:\n{comp_seq}", language="text")
+                    else:
+                        st.caption("No detailed components provided.")
+                
+                # Detailed Rationale
+                with st.expander("Detailed Rationale (Simulated)", expanded=True):
+                    st.markdown(active_recommendation.get('detailed_rationale', 'Not available.'))
+
+                # Simulated Findings (Strengths/Weaknesses)
+                with st.expander("🔍 Simulated Findings (Strengths & Weaknesses)", expanded=False):
+                    findings = active_recommendation.get('simulated_findings', [])
+                    if findings:
+                        for finding in findings:
+                            emoji = "👍" if finding.get('type') == 'strength' else "👎"
+                            st.markdown(f"{emoji} **{finding.get('type', '').capitalize()} in {finding.get('metric', '')} for '{finding.get('component', '')}' (Value: {finding.get('value', 'N/A')}):** {finding.get('description', '')}")
+                    else:
+                        st.caption("No specific findings provided.")
+
+                # Supporting Evidence (Raw Metrics)
+                with st.expander("📊 Supporting Evidence (Simulated Raw Metrics)", expanded=False):
+                    evidence = active_recommendation.get('supporting_evidence', [])
+                    if evidence:
+                        for item in evidence:
+                            st.markdown(f"- {item}")
+                    else:
+                        st.caption("No supporting evidence provided.")
+
+                # Mock AlphaFold System Metrics (Per Component)
+                with st.expander("🧱 Mock AlphaFold Component Metrics (Simulated)", expanded=False):
+                    af_metrics = active_recommendation.get('mock_alphafold_system_metrics', {})
+                    if af_metrics:
+                        for comp, metrics_dict in af_metrics.items():
+                            st.markdown(f"**Component: {comp}**")
+                            for key, val in metrics_dict.items():
+                                st.markdown(f"  - `{key}`: {val}")
+                    else:
+                        st.caption("No AlphaFold component metrics provided.")
+                
+                # Mock CHOPCHOP Metrics (for guide RNAs)
+                with st.expander("✂️ Mock CHOPCHOP Guide Metrics (Simulated)", expanded=False):
+                    cc_metrics_all = active_recommendation.get('mock_chopchop_metrics', {})
+                    if cc_metrics_all and 'guide_rna_sequence' in cc_metrics_all : # Assuming structure { 'guide_rna_sequence': {metrics} }
+                        guide_metrics = cc_metrics_all['guide_rna_sequence']
+                        st.markdown(f"**For Guide RNA:**") # Assuming one primary guide per system for this mock
+                        for key, val in guide_metrics.items():
+                             st.markdown(f"  - `{key}`: {val}")
+                    elif cc_metrics_all: # If structure is just {metrics} directly
+                        for key, val in cc_metrics_all.items():
+                             st.markdown(f"  - `{key}`: {val}")
+                    else:
+                        st.caption("No CHOPCHOP metrics provided.")
+
+                # --- Suggested Next Steps ---
+                st.markdown("<h4 style='color: black;'>➡️ Suggested Next Steps</h4>", unsafe_allow_html=True)
+                st.caption("Interactive agents for these steps have been moved to the 'Interactive Agents' page in the navigation panel.")
+
+                # The entire "Interactive Agents / Next Steps" section that was here has been removed.
+                # This section previously handled displaying potential agent suggestions and their execution.
+                # It started with a check for active_recommendation and 'potential_agent_suggestions'
+                # and included loops for buttons, agent calls, and results display.
+
+    # --- 9. Educational Content / LLM Chat - Already in Sidebar ---
+    # The main content of the display_mock_therapy_design_page function might end here or before fallbacks.
+
+# --- Main execution ---
 if __name__ == "__main__":
+    # This is where the Streamlit page content is actually rendered
     display_mock_therapy_design_page()
+

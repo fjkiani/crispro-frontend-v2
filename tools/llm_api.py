@@ -3,6 +3,8 @@ import subprocess
 import argparse
 import json # For potentially handling structured prompts/history in the future
 import sys  # Add sys for using the current Python executable
+import requests # Add requests for local_llm provider
+import time # Add time for retry logic
 
 # --- Constants ---
 # Assuming the script is in project_root/tools/llm_api.py
@@ -12,7 +14,7 @@ VENV_PYTHON = sys.executable
 LLM_API_SCRIPT_PATH = os.path.join(PROJECT_ROOT, "tools", "llm_api.py")
 
 # --- Simplified function for modules that directly import query_llm ---
-def query_llm(prompt, provider="gemini", image_path=None):
+def query_llm(prompt, provider="gemini", image_path=None, endpoint_url=None):
     """
     Simple wrapper function that accepts a string prompt and returns a string response.
     This is the function imported by other modules and called by streamlit_app.py.
@@ -21,6 +23,7 @@ def query_llm(prompt, provider="gemini", image_path=None):
         prompt (str): The text prompt to send to the LLM.
         provider (str): The LLM provider to use (e.g., "gemini", "openai", "anthropic").
         image_path (str, optional): Path to an image for multimodal LLMs.
+        endpoint_url (str, optional): The endpoint URL for the local_llm provider.
         
     Returns:
         str: The LLM's text response.
@@ -35,7 +38,8 @@ def query_llm(prompt, provider="gemini", image_path=None):
     return get_llm_chat_response(
         conversation_history=conversation_history,
         provider=provider,
-        image_path=image_path
+        image_path=image_path,
+        endpoint_url=endpoint_url
     )
 
 # --- Helper function for formatting conversation history for a single prompt string ---
@@ -53,7 +57,7 @@ def format_history_for_cli_prompt(conversation_history):
     return prompt_str.strip()
 
 # --- Python function for Agent to call ---
-def get_llm_chat_response(conversation_history, provider="gemini", model_name=None, image_path=None, temperature=0.7, max_tokens=1024):
+def get_llm_chat_response(conversation_history, provider="gemini", model_name=None, image_path=None, endpoint_url=None, temperature=0.7, max_tokens=1024):
     """
     Gets a chat response from the specified LLM provider by calling the CLI interface of this script.
 
@@ -62,6 +66,7 @@ def get_llm_chat_response(conversation_history, provider="gemini", model_name=No
         provider (str): The LLM provider to use (e.g., "gemini", "openai", "anthropic").
         model_name (str, optional): Specific model name if applicable.
         image_path (str, optional): Path to an image for multimodal LLMs.
+        endpoint_url (str, optional): The endpoint URL for the local_llm provider.
         temperature (float): Temperature for sampling.
         max_tokens (int): Max tokens for the response.
 
@@ -84,6 +89,8 @@ def get_llm_chat_response(conversation_history, provider="gemini", model_name=No
         cmd.extend(["--model", model_name])
     if image_path:
         cmd.extend(["--image", image_path])
+    if endpoint_url and provider == "local_llm":
+        cmd.extend(["--endpoint", endpoint_url])
 
     try:
         # print(f"DEBUG: LLM API calling command: {' '.join(cmd)}") # For debugging
@@ -127,6 +134,7 @@ def main_cli():
     parser.add_argument("--provider", type=str, required=True, choices=["gemini", "openai", "anthropic", "deepseek", "azure_openai", "local_llm"], help="The LLM provider.")
     parser.add_argument("--model", type=str, help="Optional: Specific model name for the provider.")
     parser.add_argument("--image", type=str, help="Optional: Path to an image for multimodal LLMs.")
+    parser.add_argument("--endpoint", type=str, help="Optional: Explicitly provide the endpoint URL for local_llm.")
     # Add other relevant CLI arguments here (e.g., temperature, max_tokens) if needed
 
     args = parser.parse_args()
@@ -234,7 +242,7 @@ To use OpenAI features, you need to:
 Please run the following command to install it:
 pip install openai>=1.0.0"""
         except Exception as e:
-            return f"Error calling OpenAI API: {e}"
+            return f"Error calling DeepSeek API: {e}"
 
     # Add support for Anthropic Claude
     elif args.provider == "anthropic":
@@ -275,6 +283,81 @@ Please run the following command to install it:
 pip install anthropic>=0.5.0"""
         except Exception as e:
             return f"Error calling Anthropic API: {e}"
+
+    elif args.provider == "local_llm":
+        try:
+            # Prioritize the explicitly passed endpoint, then fall back to environment variable
+            endpoint_url = args.endpoint or os.environ.get("EVO2_GENERATIVE_ENDPOINT")
+            if not endpoint_url:
+                return """⚠️ EVO2_GENERATIVE_ENDPOINT not configured!
+
+To use the local Evo2 generative model, you must set this environment variable in your .env file:
+EVO2_GENERATIVE_ENDPOINT=your_model_endpoint_url_here"""
+
+            # The prompt from the CLI is a formatted string. We need to extract the raw user prompt.
+            user_prompt = ""
+            lines = args.prompt.strip().split('\n\n')
+            for line in lines:
+                if line.startswith("User:"):
+                    user_prompt = line[5:].strip()
+                    break
+            
+            if not user_prompt:
+                return "Error: Could not extract a valid user prompt for the local LLM."
+
+            # Construct the payload for a typical generative endpoint
+            # This may need to be adjusted based on the specific API spec of the Evo2 model
+            payload = {
+                "prompt": user_prompt,
+                "temperature": 0.7,
+                "max_tokens": 200
+            }
+            
+            headers = {"Content-Type": "application/json"}
+            
+            # --- Retry logic for rate limiting ---
+            max_retries = 5 # Increased retries
+            base_delay = 1.5 # Increased base delay
+            for attempt in range(max_retries):
+                try:
+                    response = requests.post(endpoint_url, headers=headers, json=payload, timeout=90) # Increased timeout
+                    
+                    # If we get a 429 error and we have retries left, wait and continue
+                    if response.status_code == 429 and attempt < max_retries - 1:
+                        delay = base_delay * (2 ** attempt)
+                        print(f"Warning: Received 429 Too Many Requests. Retrying in {delay:.1f} seconds...", file=sys.stderr)
+                        time.sleep(delay)
+                        continue
+
+                    # For any other non-successful status code, raise an HTTPError
+                    response.raise_for_status()
+                    
+                    # If we get here, the request was successful. Process the response.
+                    response_json = response.json()
+                    completion = response_json.get("completion") or response_json.get("text") or response_json.get("generated_text")
+                    
+                    if completion is None:
+                        return f"Error: Local LLM API response did not contain a recognized completion key. Response: {response.text}"
+                        
+                    print(completion)
+                    return # Exit successfully
+
+                except requests.exceptions.RequestException as e:
+                    # If any request-based error occurs, we break the loop and handle it below
+                    print(f"Error on attempt {attempt + 1}: {e}", file=sys.stderr)
+                    if attempt < max_retries - 1:
+                        delay = base_delay * (2 ** attempt)
+                        print(f"Retrying in {delay:.1f} seconds...", file=sys.stderr)
+                        time.sleep(delay)
+                    else:
+                        # If it's the last attempt, we'll exit the loop and report failure
+                        pass
+
+            # This part is reached only if all retries fail
+            return f"Error: Failed to get a response from {endpoint_url} after {max_retries} attempts."
+
+        except Exception as e:
+            return f"An unexpected error occurred with the local_llm provider: {e}"
 
     else:
         return f"""Provider '{args.provider}' is not fully implemented.

@@ -1,0 +1,577 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Visualization Components
+
+## Knowledge Graph Architecture
+
+### Base Component Structure
+The knowledge graph visualization follows a hierarchical component pattern where base components provide core functionality and CrisPRO-specific extensions add therapeutic context and AI enhancements.
+
+```typescript
+// Base interfaces (assumed from KnowledgeGraph.tsx)
+interface BaseGraphNode {
+  id: string;
+  label: string;
+  type: 'gene' | 'variant' | 'outcome' | 'therapy' | 'publication' | 'other';
+  description?: string;
+  metadata?: Record<string, any>;
+}
+
+interface BaseGraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  type?: 'causes' | 'treats' | 'associates' | 'reports' | 'includes' | 'other';
+  label?: string;
+  metadata?: Record<string, any>;
+}
+```
+
+### CrisPRO Extensions
+```typescript
+// CrisPRO-enhanced interfaces in KnowledgeGraphExample.tsx
+export interface CrisPROGraphNode extends Omit<BaseGraphNode, 'type'> {
+  type: 'gene' | 'variant' | 'outcome' | 'therapy' | 'publication' | 'other';
+  
+  // CrisPRO-specific properties
+  aiRelevanceScore?: number;
+  predictedImpact?: {
+    proteinEffect: string;
+    severityScore: number;
+    structuralEffect: string;
+    expressionImpact: string;
+  };
+  therapeuticContext?: {
+    applicableStrategies: string[];
+    riskFactors: string[];
+    deliveryConsiderations: string[];
+  };
+  insightSummary?: string;
+  vusClassification?: 'pathogenic' | 'likely_pathogenic' | 'uncertain' | 'likely_benign' | 'benign';
+  clinicalSignificance?: string;
+  editingStrategy?: {
+    recommendedApproach: string;
+    confidence: number;
+    alternatives: string[];
+  };
+  
+  // Detailed CrisPRO type for internal use
+  crisproDetailedType?: 'pathway' | 'regulatory_element' | 'therapeutic_target' | 'biomarker';
+}
+
+export interface CrisPROGraphEdge extends Omit<BaseGraphEdge, 'type'> {
+  type?: 'causes' | 'treats' | 'associates' | 'reports' | 'includes' | 'other';
+  
+  // CrisPRO-specific properties
+  aiRelevanceScore?: number;
+  therapeuticContext?: {
+    strength: number;
+    evidence: string;
+    clinicalRelevance: string;
+  };
+  insightSummary?: string;
+  
+  // Detailed CrisPRO type for internal use
+  crisproDetailedType?: 'regulatory_interaction' | 'therapeutic_pathway' | 'resistance_mechanism';
+}
+```
+
+### Type Safety Pattern for Base Component Integration
+```typescript
+// Pattern for safely extending base components with CrisPRO enhancements
+function createCompatibleNode(crisproNode: CrisPROGraphNode): BaseGraphNode {
+  // Ensure compatibility with base component while preserving CrisPRO data
+  return {
+    ...crisproNode,
+    type: crisproNode.type, // Already compatible
+    metadata: {
+      ...crisproNode.metadata,
+      // Store CrisPRO-specific data in metadata for base component
+      crisproPredictedImpact: crisproNode.predictedImpact,
+      crisproTherapeuticContext: crisproNode.therapeuticContext,
+      crisproAIRelevance: crisproNode.aiRelevanceScore,
+      crisproDetailedType: crisproNode.crisproDetailedType
+    }
+  };
+}
+
+function createCompatibleEdge(crisproEdge: CrisPROGraphEdge): BaseGraphEdge {
+  return {
+    ...crisproEdge,
+    type: crisproEdge.type,
+    metadata: {
+      ...crisproEdge.metadata,
+      crisproTherapeuticContext: crisproEdge.therapeuticContext,
+      crisproAIRelevance: crisproEdge.aiRelevanceScore,
+      crisproDetailedType: crisproEdge.crisproDetailedType
+    }
+  };
+}
+```
+
+### AI-Enhanced Node Rendering
+```typescript
+function renderNodeWithAIInsights(node: CrisPROGraphNode): JSX.Element {
+  return (
+    <div className="crispro-node">
+      <div className="node-header">
+        <span className="node-label">{node.label}</span>
+        {node.aiRelevanceScore && (
+          <span className="ai-score">AI: {(node.aiRelevanceScore * 100).toFixed(0)}%</span>
+        )}
+      </div>
+      
+      {node.predictedImpact && (
+        <div className="predicted-impact">
+          <div className="severity-indicator" 
+               style={{ opacity: node.predictedImpact.severityScore }}>
+            {node.predictedImpact.proteinEffect}
+          </div>
+        </div>
+      )}
+      
+      {node.therapeuticContext && (
+        <div className="therapeutic-indicators">
+          {node.therapeuticContext.applicableStrategies.map(strategy => (
+            <span key={strategy} className="strategy-tag">{strategy}</span>
+          ))}
+        </div>
+      )}
+      
+      {node.insightSummary && (
+        <div className="ai-insight">
+          <span className="insight-icon">🤖</span>
+          <span className="insight-text">{node.insightSummary}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+## Sequence Viewer Enhancements
+
+### Enhanced Sequence Annotation Interface
+```typescript
+interface SequenceAnnotation {
+  id: string;
+  start: number;
+  end: number;
+  type: 'exon' | 'intron' | 'regulatory' | 'mutation' | 'guide_target' | 'off_target';
+  label: string;
+  description?: string;
+  
+  // CrisPRO-specific enhancements
+  aiGenerated?: boolean;
+  functionalAssessment?: string;
+  therapeuticRelevance?: number;
+  aiInsight?: string;
+  
+  // Mutation-specific properties
+  significance?: number;
+  predictedImpact?: {
+    proteinEffect: 'missense' | 'nonsense' | 'frameshift' | 'splice' | 'regulatory';
+    severityScore: number;
+    structuralEffect: 'stabilizing' | 'destabilizing' | 'neutral';
+    expressionImpact: 'increased' | 'decreased' | 'unchanged';
+  };
+  clinicalSignificance?: 'Pathogenic' | 'Likely Pathogenic' | 'VUS' | 'Likely Benign' | 'Benign';
+  
+  // CRISPR-specific properties
+  onTargetScore?: number;
+  nucleaseCompatibility?: {
+    cas9?: boolean;
+    cas12?: boolean;
+    baseeditor?: boolean;
+    primeeditor?: boolean;
+    preferredNuclease?: string;
+  };
+  
+  // Simulation data
+  simulationResults?: {
+    editingEfficiency?: number;
+    offTargetRisk?: number;
+    cellularImpact?: {
+      viability: number;
+      functionRestoration: number;
+      prophylacticBenefit: number;
+    };
+    deliveryCompatibility?: {
+      viral: number;
+      nonViral: number;
+      exVivo: number;
+    };
+  };
+}
+```
+
+### Simulation Data Integration
+```typescript
+function generateCRISPRSimulationData(annotation: SequenceAnnotation): SimulationResult {
+  // Integration with CrisPRO's Digital Twin simulation
+  return {
+    editingOutcome: {
+      nhejFrequency: 0.75,
+      hdrFrequency: 0.25,
+      indelSpectrum: generateIndelDistribution(),
+      baseConversion: annotation.type === 'mutation' ? 0.65 : 0,
+    },
+    
+    cellularImpact: {
+      viabilityScore: calculateViabilityImpact(annotation),
+      functionRestorationScore: calculateFunctionRestoration(annotation),
+      prophylacticBenefit: calculateProphylacticBenefit(annotation),
+    },
+    
+    therapeuticPredictions: {
+      dosageRequirements: calculateDosageNeeds(annotation),
+      deliveryOptimization: optimizeDeliveryStrategy(annotation),
+      riskBenefitRatio: calculateRiskBenefit(annotation),
+    },
+    
+    validationRecommendations: generateValidationPlan(annotation),
+  };
+}
+```
+
+### Therapeutic Context Visualization
+```typescript
+function renderTherapeuticContext(context: TherapeuticContext): JSX.Element {
+  return (
+    <div className="therapeutic-context-panel">
+      <div className="context-header">
+        <h4>Therapeutic Context</h4>
+        <span className={`goal-badge ${context.therapeuticGoal}`}>
+          {context.therapeuticGoal}
+        </span>
+      </div>
+      
+      <div className="context-details">
+        <div className="context-item">
+          <label>Disease Area:</label>
+          <span>{context.diseaseArea}</span>
+        </div>
+        
+        <div className="context-item">
+          <label>Target Gene:</label>
+          <span>{context.targetGene}</span>
+        </div>
+        
+        <div className="context-item">
+          <label>Edit Strategy:</label>
+          <span>{context.editType}</span>
+        </div>
+        
+        <div className="context-item">
+          <label>Safety Profile:</label>
+          <span className={`safety-indicator ${context.safetyProfile}`}>
+            {context.safetyProfile}
+          </span>
+        </div>
+      </div>
+      
+      <div className="ai-recommendations">
+        <h5>AI Recommendations</h5>
+        <ul>
+          {generateContextualRecommendations(context).map((rec, idx) => (
+            <li key={idx} className="recommendation-item">
+              <span className="recommendation-icon">💡</span>
+              <span>{rec}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+```
+
+## Interactive Tutorial System
+
+### Step-by-Step Tutorial Component
+```typescript
+interface TutorialStep {
+  id: string;
+  title: string;
+  description: string;
+  targetElement?: string;
+  action?: 'highlight' | 'click' | 'input' | 'observe';
+  aiExplanation?: string;
+  therapeuticContext?: string;
+  validationCriteria?: string[];
+}
+
+interface TutorialState {
+  currentStep: number;
+  completed: boolean[];
+  userProgress: Record<string, any>;
+  adaptiveRecommendations: string[];
+}
+
+function TutorialSystem({ 
+  steps, 
+  onStepComplete, 
+  therapeuticContext 
+}: TutorialSystemProps): JSX.Element {
+  const [tutorialState, setTutorialState] = useState<TutorialState>({
+    currentStep: 0,
+    completed: new Array(steps.length).fill(false),
+    userProgress: {},
+    adaptiveRecommendations: []
+  });
+
+  const generateAdaptiveGuidance = useCallback((step: TutorialStep, userAction: any) => {
+    // Use AI to provide context-aware guidance
+    const prompt = `
+      User is at tutorial step: ${step.title}
+      Therapeutic context: ${therapeuticContext?.therapeuticGoal}
+      User action: ${JSON.stringify(userAction)}
+      
+      Provide helpful, context-aware guidance for this step.
+    `;
+    
+    return queryAIForGuidance(prompt);
+  }, [therapeuticContext]);
+
+  return (
+    <div className="tutorial-system">
+      <div className="tutorial-progress">
+        <div className="progress-bar">
+          <div 
+            className="progress-fill"
+            style={{ width: `${(tutorialState.currentStep / steps.length) * 100}%` }}
+          />
+        </div>
+        
+        <span className="progress-text">
+          Step {tutorialState.currentStep + 1} of {steps.length}
+        </span>
+      </div>
+      
+      <div className="tutorial-content">
+        <TutorialStepRenderer 
+          step={steps[tutorialState.currentStep]}
+          onStepAction={generateAdaptiveGuidance}
+          therapeuticContext={therapeuticContext}
+        />
+      </div>
+    </div>
+  );
+}
+```
+
+### AI-Powered Help System
+```typescript
+function ContextualHelpSystem({ 
+  currentSection, 
+  userQuery, 
+  therapeuticContext 
+}: ContextualHelpProps): JSX.Element {
+  const [helpResponse, setHelpResponse] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const generateContextualHelp = async (query: string) => {
+    setIsLoading(true);
+    
+    const helpPrompt = `
+      Section: ${currentSection}
+      User question: ${query}
+      Therapeutic context: ${JSON.stringify(therapeuticContext)}
+      
+      As CrisPRO AI assistant, provide helpful, accurate guidance that:
+      1. Addresses the specific question
+      2. Considers the therapeutic context
+      3. Suggests next steps
+      4. Highlights any safety considerations
+      5. References relevant educational resources
+    `;
+    
+    try {
+      const response = await queryLLM(helpPrompt, { provider: 'anthropic' });
+      setHelpResponse(response);
+    } catch (error) {
+      setHelpResponse('I apologize, but I\'m having trouble generating help right now. Please refer to the documentation or contact support.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="contextual-help">
+      <div className="help-input">
+        <input
+          type="text"
+          placeholder="Ask CrisPRO AI for help..."
+          onKeyPress={(e) => {
+            if (e.key === 'Enter') {
+              generateContextualHelp(e.currentTarget.value);
+            }
+          }}
+        />
+        <button className="help-button">🤖 Ask AI</button>
+      </div>
+      
+      {isLoading && (
+        <div className="help-loading">
+          <span>CrisPRO AI is thinking...</span>
+        </div>
+      )}
+      
+      {helpResponse && (
+        <div className="help-response">
+          <div className="response-header">
+            <span className="ai-icon">🤖</span>
+            <span>CrisPRO AI Assistant</span>
+          </div>
+          <div className="response-content">
+            {helpResponse}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+## Performance Optimization Patterns
+
+### Lazy Loading for Large Datasets
+```typescript
+function LazyLoadedVisualization({ 
+  dataSource, 
+  chunkSize = 100,
+  therapeuticContext 
+}: LazyLoadedVisualizationProps): JSX.Element {
+  const [loadedChunks, setLoadedChunks] = useState<number>(1);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const loadMoreData = useCallback(async () => {
+    setIsLoading(true);
+    
+    // Load next chunk with AI enhancement
+    const nextChunk = await loadDataChunk(loadedChunks, chunkSize);
+    const enhancedChunk = await enhanceWithAI(nextChunk, therapeuticContext);
+    
+    setLoadedChunks(prev => prev + 1);
+    setIsLoading(false);
+  }, [loadedChunks, chunkSize, therapeuticContext]);
+
+  return (
+    <div className="lazy-loaded-visualization">
+      <VirtualizedRenderer 
+        data={getLoadedData(loadedChunks, chunkSize)}
+        onScrollNearEnd={loadMoreData}
+        isLoading={isLoading}
+      />
+    </div>
+  );
+}
+```
+
+### Memoization for AI-Enhanced Components
+```typescript
+const MemoizedAIEnhancedNode = React.memo(({ 
+  node, 
+  therapeuticContext, 
+  aiFeatures 
+}: AIEnhancedNodeProps) => {
+  // Expensive AI computation only runs when dependencies change
+  const aiInsights = useMemo(() => {
+    if (!aiFeatures) return null;
+    return generateAIInsights(node, therapeuticContext);
+  }, [node.id, therapeuticContext?.therapeuticGoal, aiFeatures]);
+
+  return (
+    <div className="ai-enhanced-node">
+      <BaseNodeRenderer node={node} />
+      {aiInsights && <AIInsightsOverlay insights={aiInsights} />}
+    </div>
+  );
+}, (prevProps, nextProps) => {
+  // Custom comparison for performance
+  return (
+    prevProps.node.id === nextProps.node.id &&
+    prevProps.therapeuticContext?.therapeuticGoal === nextProps.therapeuticContext?.therapeuticGoal &&
+    prevProps.aiFeatures === nextProps.aiFeatures
+  );
+});
+```
+
+## Accessibility & Responsive Design
+
+### Screen Reader Support
+```typescript
+function AccessibleVisualization({ 
+  data, 
+  therapeuticContext 
+}: AccessibleVisualizationProps): JSX.Element {
+  return (
+    <div 
+      role="application" 
+      aria-label="CrisPRO CRISPR Analysis Visualization"
+      className="accessible-visualization"
+    >
+      <div className="sr-only">
+        <h2>Analysis Summary</h2>
+        <p>
+          Showing {data.nodes.length} genetic elements and {data.edges.length} relationships
+          for {therapeuticContext?.targetGene} in {therapeuticContext?.diseaseArea} context.
+        </p>
+      </div>
+      
+      <div className="visual-content" aria-hidden="true">
+        <InteractiveVisualization data={data} context={therapeuticContext} />
+      </div>
+      
+      <div className="accessible-alternative">
+        <AccessibleDataTable data={data} context={therapeuticContext} />
+      </div>
+    </div>
+  );
+}
+```
+
+### Responsive Breakpoints
+```scss
+// CSS for responsive visualization components
+.crispro-visualization {
+  // Mobile-first approach
+  .node-details {
+    display: none;
+  }
+  
+  @media (min-width: 768px) {
+    .node-details {
+      display: block;
+      position: absolute;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 1rem;
+      z-index: 1000;
+    }
+  }
+  
+  @media (min-width: 1024px) {
+    .ai-insights-panel {
+      position: fixed;
+      right: 0;
+      top: 0;
+      width: 300px;
+      height: 100vh;
+      overflow-y: auto;
+    }
+  }
+}
+```
+
+## Reference Files
+- Knowledge graph base: KnowledgeGraph.tsx (assumed external)
+- CrisPRO enhanced example: [KnowledgeGraphExample.tsx](mdc:/Users/fahadkiani/Desktop/development/caspro/caspro/src/components/visualization/KnowledgeGraphExample.tsx)
+- Sequence viewer: SequenceViewer component (to be developed)
+- Tutorial system: Interactive guidance components
+- AI integration: [tools/llm_api.py](mdc:tools/llm_api.py) for backend AI calls
+- Therapeutic context: TherapeuticContext type definitions

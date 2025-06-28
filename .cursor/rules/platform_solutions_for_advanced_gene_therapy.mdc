@@ -1,0 +1,72 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Platform Solutions for Advanced Gene Therapy Use Cases
+
+This document details how the CRISPR Therapeutic Intelligence Platform, through its integrated AI agents, simulation tools (conceptual Evo2, AlphaFold, CHOPCHOP), and knowledge graph (KG), provides solutions for complex challenges in gene therapy development. Core logic often resides in [`ai_research_assistant.py`](mdc:ai_research_assistant.py), with AI interactions via [`tools/llm_api.py`](mdc:tools/llm_api.py) and literature insights from [`tools/literature_analyzer.py`](mdc:tools/literature_analyzer.py).
+
+## 1. Prioritizing Diseases for Gene Therapy Investment
+
+*   **Challenge:** Selecting which genetic diseases are optimal candidates for gene therapy development from numerous possibilities.
+*   **Platform Solution ("Therapeutic Target Assessment Agent" & KG):
+    *   **Mechanism:**
+        1.  Agent ingests disease/gene, queries KG for severity, unmet need, genetic basis (LoF/GoF), affected tissue accessibility, gene size, known editing challenges.
+        2.  Triggers `tools/literature_analyzer.py` for recent treatment landscape & prior gene therapy attempts.
+        3.  Calculates a "Gene Therapy Tractability Score" using a weighted algorithm based on these factors.
+    *   **How it Solves:** Provides an objective, data-driven ranking of potential gene therapy targets, optimizing resource allocation by highlighting diseases with high unmet need and technical feasibility (e.g., Tay-Sachs would rank high; Wilson's disease, with existing effective treatments, would rank lower).
+
+## 2. Strategic Choice: Gene Addition vs. Gene Editing
+
+*   **Challenge:** Determining the most appropriate molecular strategy (adding a gene vs. editing the existing one) for a specific genetic defect.
+*   **Platform Solution ("Therapeutic Strategy Agent" & KG):
+    *   **Mechanism:**
+        1.  Agent analyzes input variant (e.g., from newborn screening + DNA analysis) and queries KG for mutation type (LoF, GoF, dominant-negative), gene product function, and dosage sensitivity (e.g., HBB in Sickle Cell where addition is problematic).
+        2.  Evaluates gene addition viability (suitable for LoF where partial enzyme/protein restoration is beneficial and no strict dosage issues, e.g., HEXA for Tay-Sachs).
+        3.  Evaluates gene editing viability (for GoF, dominant-negatives, or specific LoF corrections where addition is unsuitable). It then sub-prioritizes editor types:
+            *   Base Editors for compatible Single Nucleotide Variants (SNVs).
+            *   Prime Editors for small indels/multiple SNVs or complex corrections.
+            *   Standard CRISPR-Cas (e.g., Cas9, Cas12) + HDR/NHEJ for other corrections or knockouts.
+    *   **How it Solves:** Automates the complex decision tree by integrating genetic knowledge with the pros/cons of molecular tools, preventing pursuit of biologically suboptimal strategies and guiding towards the most promising approach for the specific genetic context.
+
+## 3. Disease-Specific Application Workflows
+
+*   **Challenge:** Tailoring therapeutic design to the unique biology of different diseases (e.g., Tay-Sachs, Fragile X, Sickle Cell Anemia).
+*   **Platform Solutions (Illustrative Examples):
+    *   **A. Tay-Sachs (HEXA gene, CNS delivery for gene addition):**
+        *   `Delivery System Agent` evaluates brain-tropic AAVs (via KG data on serotypes, BBB penetration) and administration routes. Considers payload capacity from `ai_research_assistant.py` simulations.
+        *   `Protein Optimizer (Simulated AlphaFold)` codon-optimizes `HEXA` cDNA for neuronal expression and validates predicted protein structure.
+        *   Digital Twin attributes: `vector_cns_delivery_route_simulated`, `predicted_neuronal_expression_level_simulated`.
+    *   **B. Fragile X (FMR1 gene, repeat contraction editing):**
+        *   "Repeat Contraction Agent (Conceptual)" designs gRNAs flanking the CGG repeat for excision or PEgRNAs for Prime Editor-mediated contraction.
+        *   `Protein Optimizer (Simulated AlphaFold)` validates structure of large editor complexes (e.g., Prime Editors).
+        *   Rigorous off-target analysis crucial for repeat regions.
+    *   **C. Sickle Cell Anemia (HBB gene, editing/modulation in HSCs):**
+        *   "Base/Prime Editor Design Module" selects appropriate editor (e.g., ABE) for direct HBB correction, designs gRNA/PEgRNA.
+        *   Alternatively, for HbF upregulation: "Therapeutic Strategy Agent" identifies BCL11A enhancer as target; `Guide RNA Optimizer` designs gRNAs for CRISPRi/KO in HSCs.
+        *   Digital Twins created for each strategy, allowing *in silico* comparison of `predicted_functional_hemoglobin_percentage`, `editing_complexity_score`, etc.
+    *   **How it Solves:** Provides tailored design workflows by leveraging disease-specific knowledge from its KG, appropriate simulation modules from `ai_research_assistant.py`, and specialized agent logic for each disease type, enabling the design of highly contextualized therapeutic candidates.
+
+## 4. Addressing Gene Editing Complexities & Enhancing Fidelity
+
+*   **Challenge:** Managing variable editing complexities (SNVs vs. repeats), and mitigating risks of DSBs (instability, off-targets) from standard CRISPR-Cas9.
+*   **Platform Solutions:
+    *   **Support for Diverse Editors:** Includes distinct design modules for Base Editors (considering activity windows, bystander edits) and Prime Editors (designing PEgRNA, RT template).
+    *   **Editor-Specific Off-Target Prediction:** Utilizes different scoring matrices/models based on the chosen editor (e.g., for Base Editors, considers target base presence in activity window).
+    *   **Structural Validation for Fidelity (Simulated AlphaFold):** Predicts structure of editor-gRNA-DNA complexes to assess how modifications (e.g., in HiFi Cas variants, Base Editors) might influence DNA contacts, on-target efficiency, and off-target propensity.
+    *   **How it Solves:** Allows rational selection and design of the most appropriate editor for the mutation type, moving beyond one-size-fits-all Cas9 by considering editor-specific mechanisms and using structural insights to predict and enhance editing fidelity.
+
+## 5. Future Horizons: Polygenic Diseases & Epigenetics (Conceptual)
+
+*   **Challenge:** Tackling genetically complex conditions like polygenic diseases (e.g., obesity) or those with epigenetic dysregulation.
+*   **Platform's Potential Future Solutions:
+    *   **A. Polygenic Diseases ("Polygenic Target Deconvolution Agent" - Conceptual):**
+        *   Integrates GWAS data and pathway analysis (from KG) to identify "hub" genes or master regulators in disease pathways as potential (though complex) targets for modulation (e.g., via CRISPRa/i).
+    *   **B. Epigenome Editing Tool Design:**
+        *   For a given epigenetic target (e.g., specific histone mark at a promoter), `Guide RNA Optimizer` designs gRNAs for dCas9.
+        *   KG provides library of epigenetic effector domains (writers/erasers).
+        *   `Protein Optimizer (Simulated AlphaFold)` models dCas9-effector fusion proteins, predicting stability, effector accessibility, and optimal linker design.
+        *   **How it Solves (Conceptually):** Extends the platform's design capabilities beyond simple gene knockout/correction to address more complex regulatory and multi-gene disorders by providing tools to i) identify potential master regulatory targets and ii) rationally design the sophisticated molecular machinery for epigenome editing.
+
+This framework illustrates the platform's capacity to address a wide spectrum of gene therapy challenges by intelligently integrating data, applying diverse simulation tools, and utilizing specialized AI agent logic.

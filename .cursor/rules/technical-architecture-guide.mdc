@@ -1,0 +1,628 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Technical Architecture Guide: AI-Powered CRISPR Design Ecosystem
+
+## System Architecture Overview
+
+### High-Level Architecture
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    CrisPRO Intelligence Platform                │
+├─────────────────────────────────────────────────────────────────┤
+│  Frontend Layer (Streamlit)                                    │
+│  ├── AI CRISPR Design Studio                                   │
+│  ├── Intelligent Guide Designer                                │
+│  ├── Multi-Modal Results Dashboard                             │
+│  └── Real-Time Optimization Interface                          │
+├─────────────────────────────────────────────────────────────────┤
+│  Application Layer (Python)                                    │
+│  ├── Integrated AI Pipeline Controller                         │
+│  ├── Multi-Modal Scoring Framework                             │
+│  ├── AI Guide Generator                                         │
+│  ├── Optimization Engine                                        │
+│  └── Complete Editing System Designer                          │
+├─────────────────────────────────────────────────────────────────┤
+│  AI Services Layer                                             │
+│  ├── Discriminative AI Endpoints                               │
+│  │   ├── /predict_variant_impact                               │
+│  │   ├── /predict_gene_essentiality                            │
+│  │   └── /predict_crispr_spacer_efficacy                       │
+│  ├── Generative AI Endpoints                                   │
+│  │   ├── /generate_optimized_guide_rna                         │
+│  │   ├── /generate_repair_template                             │
+│  │   └── /generate_epigenome_optimized_sequence                │
+│  └── Legacy AI Services                                        │
+│      └── Evo2 Generative Model (Generate & Compare)            │
+├─────────────────────────────────────────────────────────────────┤
+│  Data Layer                                                     │
+│  ├── Genomic Databases (CHOPCHOP, Ensembl)                     │
+│  ├── Off-Target Analysis Services                              │
+│  ├── Optimization History Storage                              │
+│  └── User Session Management                                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Core Components Architecture
+
+### 1. API Client Layer (`tools/llm_api.py`)
+
+#### Current Implementation
+```python
+# Existing functions
+def query_llm(prompt, provider="openai", model=None, image_path=None)
+def generate_sequence_continuation(sequence, length=100)
+```
+
+#### Phase 5 Extensions (Discriminative AI)
+```python
+def predict_variant_impact(reference_sequence, alternative_sequence, genomic_coordinates=None)
+def predict_gene_essentiality(gene_symbol, organism="Homo sapiens", cell_line_type=None)
+def predict_crispr_spacer_efficacy(guide_rna_spacer_sequence, target_dna_sequence)
+```
+
+#### Phase 6 Extensions (Generative AI)
+```python
+def generate_optimized_guide_rna(target_genomic_region, design_goal="knockout")
+def generate_repair_template(target_genomic_region, desired_sequence_change)
+def generate_epigenome_optimized_sequence(seed_sequence, desired_epigenomic_features)
+```
+
+#### Error Handling Strategy
+```python
+class AIServiceError(Exception):
+    """Base exception for AI service errors."""
+    pass
+
+class EndpointUnavailableError(AIServiceError):
+    """Raised when AI endpoint is unavailable."""
+    pass
+
+class InvalidResponseError(AIServiceError):
+    """Raised when AI response is malformed."""
+    pass
+
+def robust_api_call(endpoint_func, *args, max_retries=3, backoff_factor=2, **kwargs):
+    """
+    Robust API call with exponential backoff and error handling.
+    
+    Returns:
+        tuple: (success: bool, result: dict, error: str)
+    """
+    for attempt in range(max_retries):
+        try:
+            result = endpoint_func(*args, **kwargs)
+            return True, result, None
+        except requests.exceptions.RequestException as e:
+            if attempt == max_retries - 1:
+                return False, None, f"API call failed after {max_retries} attempts: {str(e)}"
+            time.sleep(backoff_factor ** attempt)
+        except Exception as e:
+            return False, None, f"Unexpected error: {str(e)}"
+```
+
+### 2. Multi-Modal Scoring Framework (`tools/multi_modal_scorer.py`)
+
+#### Architecture
+```python
+class MultiModalScorer:
+    """
+    Centralized scoring system integrating all AI methods.
+    """
+    
+    def __init__(self):
+        self.scoring_methods = {
+            'generate_compare': GenerateCompareScorer(),
+            'variant_impact': VariantImpactScorer(),
+            'gene_essentiality': GeneEssentialityScorer(),
+            'spacer_efficacy': SpacerEfficacyScorer(),
+            'off_target_safety': OffTargetSafetyScorer()
+        }
+        self.scoring_weights = DEFAULT_SCORING_WEIGHTS
+    
+    def score_guide_comprehensive(self, guide_data, target_context):
+        """
+        Score guide using all available AI methods.
+        
+        Returns:
+            dict: {
+                'overall_score': float,
+                'component_scores': dict,
+                'confidence_metrics': dict,
+                'scoring_rationale': str,
+                'method_availability': dict
+            }
+        """
+        results = {}
+        available_methods = []
+        
+        for method_name, scorer in self.scoring_methods.items():
+            try:
+                score_result = scorer.score(guide_data, target_context)
+                results[method_name] = score_result
+                available_methods.append(method_name)
+            except Exception as e:
+                logger.warning(f"Scoring method {method_name} failed: {e}")
+                results[method_name] = None
+        
+        # Calculate weighted overall score
+        overall_score = self._calculate_weighted_score(results, available_methods)
+        
+        return {
+            'overall_score': overall_score,
+            'component_scores': results,
+            'confidence_metrics': self._calculate_confidence(results),
+            'scoring_rationale': self._generate_rationale(results),
+            'method_availability': {method: results[method] is not None 
+                                  for method in self.scoring_methods.keys()}
+        }
+```
+
+### 3. AI Guide Generator (`tools/ai_guide_generator.py`)
+
+#### Architecture
+```python
+class AIGuideGenerator:
+    """
+    AI-powered guide generation with iterative optimization.
+    """
+    
+    def __init__(self):
+        self.scorer = MultiModalScorer()
+        self.optimization_engine = CRISPROptimizationEngine()
+        self.generation_history = []
+    
+    def generate_and_optimize(self, therapeutic_specification):
+        """
+        Complete generation and optimization pipeline.
+        
+        Pipeline:
+        1. Initial generation based on therapeutic goals
+        2. Multi-modal scoring of candidates
+        3. Iterative optimization loops
+        4. Final validation and ranking
+        
+        Returns:
+            dict: Complete optimized CRISPR system
+        """
+        # Phase 1: Initial Generation
+        initial_candidates = self._generate_initial_candidates(therapeutic_specification)
+        
+        # Phase 2: Multi-Modal Scoring
+        scored_candidates = []
+        for candidate in initial_candidates:
+            score_result = self.scorer.score_guide_comprehensive(candidate, therapeutic_specification)
+            candidate.update(score_result)
+            scored_candidates.append(candidate)
+        
+        # Phase 3: Iterative Optimization
+        if therapeutic_specification.get('enable_optimization', True):
+            optimized_candidates = self.optimization_engine.optimize_iteratively(
+                scored_candidates, 
+                therapeutic_specification
+            )
+        else:
+            optimized_candidates = scored_candidates
+        
+        # Phase 4: Final Ranking and Validation
+        final_results = self._rank_and_validate(optimized_candidates)
+        
+        return final_results
+```
+
+### 4. Optimization Engine (`tools/optimization_engine.py`)
+
+#### Multi-Objective Optimization Architecture
+```python
+class CRISPROptimizationEngine:
+    """
+    Advanced optimization engine with multiple strategies.
+    """
+    
+    def __init__(self):
+        self.optimization_strategies = {
+            'pareto_optimization': ParetoOptimizer(),
+            'genetic_algorithm': GeneticAlgorithmOptimizer(),
+            'bayesian_optimization': BayesianOptimizer(),
+            'gradient_free': GradientFreeOptimizer()
+        }
+    
+    def optimize_multi_objective(self, candidates, objectives, strategy='pareto_optimization'):
+        """
+        Optimize for multiple competing objectives.
+        
+        Objectives:
+        - Efficacy (maximize)
+        - Safety (maximize)
+        - Therapeutic relevance (maximize)
+        - Experimental feasibility (maximize)
+        - Cost (minimize)
+        
+        Returns:
+            dict: {
+                'pareto_front': list,  # Non-dominated solutions
+                'recommended_solution': dict,
+                'trade_off_analysis': dict,
+                'optimization_metrics': dict
+            }
+        """
+```
+
+## Data Flow Architecture
+
+### 1. User Input Processing
+```
+User Input → Input Validation → Therapeutic Specification → AI Pipeline
+```
+
+### 2. AI Pipeline Data Flow
+```
+Therapeutic Spec → Guide Generation → Multi-Modal Scoring → Optimization → Results
+                ↓                    ↓                     ↓             ↓
+            Generation Log    Component Scores    Optimization Log   Final Ranking
+```
+
+### 3. Error Handling Flow
+```
+API Call → Timeout/Error → Retry Logic → Fallback Method → User Notification
+```
+
+## Environment Configuration
+
+### Required Environment Variables
+```bash
+# Core AI Endpoints
+EVO2_DISCRIMINATIVE_ENDPOINT=https://your-discriminative-endpoint.com
+EVO2_GENERATIVE_ENDPOINT=https://your-generative-endpoint.com
+
+# Advanced AI Endpoints (Phase 5)
+VARIANT_IMPACT_ENDPOINT=https://your-variant-impact-endpoint.com
+GENE_ESSENTIALITY_ENDPOINT=https://your-gene-essentiality-endpoint.com
+SPACER_EFFICACY_ENDPOINT=https://your-spacer-efficacy-endpoint.com
+
+# Generative AI Endpoints (Phase 6)
+GUIDE_GENERATION_ENDPOINT=https://your-guide-generation-endpoint.com
+REPAIR_TEMPLATE_ENDPOINT=https://your-repair-template-endpoint.com
+EPIGENOME_OPTIMIZATION_ENDPOINT=https://your-epigenome-endpoint.com
+
+# API Keys
+OPENAI_API_KEY=your-openai-key
+ANTHROPIC_API_KEY=your-anthropic-key
+
+# Performance Configuration
+MAX_CONCURRENT_REQUESTS=5
+API_TIMEOUT_SECONDS=30
+OPTIMIZATION_MAX_ITERATIONS=10
+```
+
+### Configuration Management
+```python
+# tools/config_manager.py
+class ConfigManager:
+    """
+    Centralized configuration management with validation.
+    """
+    
+    def __init__(self):
+        self.config = self._load_config()
+        self._validate_config()
+    
+    def _validate_config(self):
+        """
+        Validate that required endpoints are available.
+        """
+        required_endpoints = [
+            'EVO2_DISCRIMINATIVE_ENDPOINT',
+            'EVO2_GENERATIVE_ENDPOINT'
+        ]
+        
+        for endpoint in required_endpoints:
+            if not os.getenv(endpoint):
+                raise ConfigurationError(f"Missing required endpoint: {endpoint}")
+    
+    def get_endpoint(self, service_name):
+        """
+        Get endpoint URL with fallback logic.
+        """
+        primary_endpoint = os.getenv(f"{service_name}_ENDPOINT")
+        fallback_endpoint = os.getenv(f"{service_name}_FALLBACK_ENDPOINT")
+        
+        return primary_endpoint or fallback_endpoint
+```
+
+## Performance Optimization
+
+### 1. Concurrent Processing
+```python
+import asyncio
+import aiohttp
+from concurrent.futures import ThreadPoolExecutor
+
+class ConcurrentAIProcessor:
+    """
+    Process multiple AI requests concurrently for better performance.
+    """
+    
+    def __init__(self, max_concurrent=5):
+        self.max_concurrent = max_concurrent
+        self.session = None
+    
+    async def process_guides_concurrently(self, guide_candidates):
+        """
+        Process multiple guides concurrently across all AI methods.
+        """
+        async with aiohttp.ClientSession() as session:
+            self.session = session
+            
+            # Create tasks for all guides and all scoring methods
+            tasks = []
+            for guide in guide_candidates:
+                for method in self.scoring_methods:
+                    task = self._score_guide_async(guide, method)
+                    tasks.append(task)
+            
+            # Process with concurrency limit
+            semaphore = asyncio.Semaphore(self.max_concurrent)
+            results = await asyncio.gather(*[
+                self._limited_task(semaphore, task) for task in tasks
+            ])
+            
+            return self._aggregate_results(results)
+```
+
+### 2. Caching Strategy
+```python
+from functools import lru_cache
+import redis
+
+class AIResultCache:
+    """
+    Cache AI results to avoid redundant API calls.
+    """
+    
+    def __init__(self):
+        self.redis_client = redis.Redis(host='localhost', port=6379, db=0)
+        self.cache_ttl = 3600  # 1 hour
+    
+    def get_cached_result(self, method_name, input_hash):
+        """
+        Get cached result if available.
+        """
+        cache_key = f"ai_result:{method_name}:{input_hash}"
+        cached_result = self.redis_client.get(cache_key)
+        
+        if cached_result:
+            return json.loads(cached_result)
+        return None
+    
+    def cache_result(self, method_name, input_hash, result):
+        """
+        Cache AI result for future use.
+        """
+        cache_key = f"ai_result:{method_name}:{input_hash}"
+        self.redis_client.setex(
+            cache_key, 
+            self.cache_ttl, 
+            json.dumps(result)
+        )
+```
+
+## Testing Architecture
+
+### 1. Unit Testing Strategy
+```python
+# tests/test_multi_modal_scorer.py
+class TestMultiModalScorer:
+    """
+    Comprehensive tests for multi-modal scoring system.
+    """
+    
+    def test_all_methods_available(self):
+        """Test scoring when all AI methods are available."""
+        
+    def test_partial_method_failure(self):
+        """Test graceful degradation when some methods fail."""
+        
+    def test_scoring_consistency(self):
+        """Test that scoring is consistent across runs."""
+        
+    def test_weighted_scoring_calculation(self):
+        """Test weighted scoring calculation accuracy."""
+```
+
+### 2. Integration Testing
+```python
+# tests/test_complete_pipeline.py
+class TestCompletePipeline:
+    """
+    End-to-end pipeline testing.
+    """
+    
+    def test_therapeutic_goal_to_results(self):
+        """Test complete pipeline from therapeutic goal to final results."""
+        
+    def test_optimization_convergence(self):
+        """Test that optimization converges within expected iterations."""
+        
+    def test_error_recovery(self):
+        """Test pipeline behavior under various error conditions."""
+```
+
+### 3. Performance Testing
+```python
+# tests/test_performance.py
+class TestPerformance:
+    """
+    Performance and scalability testing.
+    """
+    
+    def test_concurrent_processing_speed(self):
+        """Test that concurrent processing improves performance."""
+        
+    def test_memory_usage_under_load(self):
+        """Test memory usage with large numbers of candidates."""
+        
+    def test_api_rate_limiting(self):
+        """Test behavior under API rate limits."""
+```
+
+## Deployment Architecture
+
+### 1. Development Environment
+```yaml
+# docker-compose.dev.yml
+version: '3.8'
+services:
+  crispr-platform:
+    build: .
+    ports:
+      - "8501:8501"
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=true
+    volumes:
+      - .:/app
+      - ./data:/app/data
+  
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+```
+
+### 2. Production Environment
+```yaml
+# docker-compose.prod.yml
+version: '3.8'
+services:
+  crispr-platform:
+    image: crispr-platform:latest
+    ports:
+      - "80:8501"
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=false
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+  
+  redis:
+    image: redis:alpine
+    deploy:
+      replicas: 1
+  
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+```
+
+### 3. Monitoring and Logging
+```python
+# tools/monitoring.py
+import logging
+import time
+from functools import wraps
+
+class PerformanceMonitor:
+    """
+    Monitor AI pipeline performance and errors.
+    """
+    
+    def __init__(self):
+        self.metrics = {
+            'api_calls': 0,
+            'successful_calls': 0,
+            'failed_calls': 0,
+            'average_response_time': 0,
+            'optimization_convergence_rate': 0
+        }
+    
+    def track_api_call(self, func):
+        """
+        Decorator to track API call performance.
+        """
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            start_time = time.time()
+            self.metrics['api_calls'] += 1
+            
+            try:
+                result = func(*args, **kwargs)
+                self.metrics['successful_calls'] += 1
+                return result
+            except Exception as e:
+                self.metrics['failed_calls'] += 1
+                logger.error(f"API call failed: {e}")
+                raise
+            finally:
+                response_time = time.time() - start_time
+                self._update_average_response_time(response_time)
+        
+        return wrapper
+```
+
+## Security Considerations
+
+### 1. API Key Management
+```python
+# tools/security.py
+class SecureConfigManager:
+    """
+    Secure management of API keys and sensitive configuration.
+    """
+    
+    def __init__(self):
+        self.key_rotation_interval = 86400  # 24 hours
+        self.encrypted_keys = {}
+    
+    def get_api_key(self, service_name):
+        """
+        Get API key with automatic rotation and encryption.
+        """
+        encrypted_key = os.getenv(f"{service_name}_API_KEY_ENCRYPTED")
+        if encrypted_key:
+            return self._decrypt_key(encrypted_key)
+        
+        # Fallback to plain text (development only)
+        return os.getenv(f"{service_name}_API_KEY")
+```
+
+### 2. Input Validation
+```python
+# tools/input_validator.py
+class InputValidator:
+    """
+    Validate and sanitize user inputs to prevent injection attacks.
+    """
+    
+    def validate_gene_symbol(self, gene_symbol):
+        """
+        Validate gene symbol format and prevent injection.
+        """
+        if not re.match(r'^[A-Z0-9-]+$', gene_symbol.upper()):
+            raise ValidationError("Invalid gene symbol format")
+        
+        if len(gene_symbol) > 20:
+            raise ValidationError("Gene symbol too long")
+        
+        return gene_symbol.upper()
+    
+    def validate_sequence(self, sequence):
+        """
+        Validate DNA sequence format.
+        """
+        if not re.match(r'^[ATCG]+$', sequence.upper()):
+            raise ValidationError("Invalid DNA sequence")
+        
+        return sequence.upper()
+```
+
+This technical architecture provides the complete blueprint for implementing the AI-powered CRISPR design ecosystem, ensuring scalability, reliability, and maintainability.

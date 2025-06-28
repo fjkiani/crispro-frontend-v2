@@ -1,0 +1,87 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# CasPro Assistant: Proof of Concept Use Cases for Radiology (e.g., Saint Clare's)
+
+This document outlines potential Proof of Concept (POC) use cases for leveraging the CasPro Assistant stack to support a clinical diagnostic imaging/radiology department. The goal is to demonstrate how our platform can provide adjunctive genomic insights to enhance the clinical picture, **without directly analyzing radiological images.**
+
+**Overarching POC Goal:**
+Demonstrate how the CasPro Assistant can provide rapid, AI-driven interpretation of genetic variants and relevant scientific literature to clinicians in a radiology department, aiding in the contextual understanding of complex cases, particularly in oncology and rare diseases with imaging manifestations.
+
+## Core Stack Components for the POC:
+*   **Evo 2 Variant Predictor (`tools/evo_variant_predictor.py`):** For predicting the functional impact of SNVs.
+*   **Literature Analyzer (`tools/literature_analyzer.py`):** For targeted searches (PubMed, etc.) and LLM-powered summarization.
+*   **LLM API (`tools/llm_api.py`):** For generating human-readable explanations, summaries, and integrating information.
+*   **Streamlit UI:** A new page/module (e.g., "Clinical Genomic Insights" or "Radiology Genomic Assist").
+*   **`ai_research_assistant.py` (Chat):** Optional, for guided interaction.
+
+## Use Case 1: Enhanced Understanding of Genetic Factors in Disease (Oncology Focus)
+
+*   **Scenario:**
+    *   A patient undergoes imaging (CT, MRI) for a suspected tumor.
+    *   Pathology/oncology identifies a somatic mutation (e.g., *KRAS* in colorectal cancer, *EGFR* in lung cancer, *TP53* in various cancers) from a biopsy.
+*   **CasPro Assistant Role:**
+    1.  **Variant Input:** Clinician inputs the gene (e.g., *TP53*), variant details (e.g., chromosome, position, reference allele, alternate allele like c.742C>T).
+    2.  **Evo 2 Prediction:** The system uses the Evo 2 module to predict the variant's functional impact (e.g., "Likely Pathogenic," "Likely Benign," "VUS" along with a delta score).
+    3.  **LLM Interpretation & Context:**
+        *   The LLM provides a concise, clinician-friendly summary of the Evo 2 prediction.
+        *   It connects the variant to known disease associations (e.g., "Variants in *TP53* are linked to Li-Fraumeni syndrome and increased predisposition to various cancers. This specific prediction suggests the variant may disrupt normal protein function.").
+        *   It can pull in information about the gene's general role (e.g., "TP53 is a critical tumor suppressor gene.").
+    4.  **Literature Snippets (Optional):** Display key sentences from recent papers linking this gene/variant to cancer types or imaging-relevant phenotypes, if available.
+*   **Value Proposition:** Helps radiologists and the broader clinical team understand the potential molecular drivers underlying the observed tumor, facilitating discussions with oncology and genetic counseling.
+
+## Use Case 2: Insights for Rare Diseases & Variants of Unknown Significance (VUS)
+
+*   **Scenario:**
+    *   A patient (e.g., pediatric) presents with developmental delays or unusual symptoms, and imaging (e.g., brain MRI) shows specific abnormalities.
+    *   Genetic testing reveals a Variant of Unknown Significance (VUS) in a gene potentially related to neurodevelopmental disorders or the observed phenotype.
+*   **CasPro Assistant Role:**
+    1.  **Variant Input:** Clinician inputs the VUS details.
+    2.  **Evo 2 Prediction:** Provides a functional impact score for the VUS, which might offer a piece of evidence towards pathogenicity or benignness (though interpretation remains cautious for VUS).
+    3.  **LLM Interpretation & Context:**
+        *   Explains the Evo 2 score in the context of a VUS (e.g., "While Evo 2 predicts this VUS might be functionally disruptive, further clinical correlation and segregation studies are typically needed for VUS reclassification.").
+        *   Summarizes known functions of the gene and its association with any known syndromes.
+    4.  **Targeted Literature Search:**
+        *   The system performs a literature search for the gene, the VUS (if published), and the observed clinical/imaging phenotype.
+        *   The LLM summarizes relevant findings: "Literature suggests mutations in gene *ABC* are associated with [Syndrome X], which can present with [specific imaging finding A and B similar to the patient's]. Some studies report on VUS in this gene, but data is limited."
+*   **Value Proposition:** Assists in the complex task of VUS interpretation by providing computational predictions and collating relevant literature, potentially guiding further diagnostic steps or discussions with genetic specialists.
+
+## Use Case 3: Integrated "Genomic Insights" for Multidisciplinary Team (MDT) Meetings
+
+*   **Scenario:**
+    *   During MDT meetings, imaging findings are discussed alongside pathology reports, genetic test results, and other clinical data.
+*   **CasPro Assistant Role:**
+    *   Serves as a **quick-reference, real-time information tool**.
+    *   A clinician can rapidly input a gene/variant mentioned during the discussion.
+    *   The system displays:
+        *   Evo 2 functional prediction.
+        *   LLM-generated summary of variant implications.
+        *   Key literature snippets related to the gene/variant and associated phenotypes/imaging findings.
+*   **Value Proposition:** Enhances MDT discussions by providing immediate access to contextual genomic information, fostering a more holistic understanding of the case and potentially informing collaborative decision-making.
+
+## POC Demonstration Steps for Saint Clare's:
+1.  **Develop 2-3 Anonymized, Hypothetical Case Vignettes:**
+    *   One oncology case.
+    *   One rare disease/VUS case.
+    *   Ensure these vignettes have plausible genetic components and imaging findings.
+2.  **Build a Simplified Streamlit Interface:**
+    *   Input fields for gene, chromosome, position, reference/alternate alleles.
+    *   Input field for gene/disease name for literature search.
+    *   Clear display sections for Evo 2 output, LLM interpretation, and literature summaries.
+3.  **Prepare Presentation:**
+    *   Introduce the CasPro Assistant concept.
+    *   Walk through the case vignettes using the live POC interface.
+    *   Emphasize how the tool provides *adjunctive* information and does *not* replace clinical judgment or direct image analysis.
+4.  **Highlight Benefits:**
+    *   **Efficiency:** Rapid access to complex genomic data and interpretations.
+    *   **Enhanced Understanding:** Deeper insights into potential molecular underpinnings of disease relevant to imaging.
+    *   **Decision Support:** Inform discussions and potentially guide further diagnostic or therapeutic considerations (in collaboration with other specialists).
+    *   **Educational Value:** Helps clinicians stay abreast of relevant genetic information.
+
+## Key Considerations for the POC:
+*   **Data Privacy & Security (HIPAA):** For a real-world deployment, this would be paramount. The POC will use hypothetical/anonymized data.
+*   **Disclaimer:** Clearly state the tool is for informational and research support, not direct diagnosis or treatment decisions.
+*   **User-Friendly Interface:** Keep it simple and intuitive for clinicians.
+*   **Integration with Clinical Workflow:** For a future product, consider how this could integrate with existing EMR/PACS systems (beyond POC scope).

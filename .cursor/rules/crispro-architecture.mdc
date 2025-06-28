@@ -1,0 +1,174 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# CrisPRO Platform Architecture
+
+## System Architecture Overview
+
+### Core Components
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    CrisPRO Platform                        │
+├─────────────────────────────────────────────────────────────┤
+│  UI Layer (Streamlit/React)                               │
+├─────────────────────────────────────────────────────────────┤
+│  AI Orchestration Layer                                   │
+│  ├── Therapeutic Context Manager                          │
+│  ├── Multi-Agent Coordinator                              │
+│  └── LLM Integration Hub                                   │
+├─────────────────────────────────────────────────────────────┤
+│  Core Analysis Modules                                    │
+│  ├── CHOPCHOP Integration                                 │
+│  ├── CRISPResso2 Analysis                                 │
+│  ├── Guide RNA Designer                                   │
+│  └── Off-Target Predictor                                 │
+├─────────────────────────────────────────────────────────────┤
+│  Digital Twin Simulation Core                             │
+│  ├── Cellular Risk Model                                  │
+│  ├── Tumor Mosaicism Model                                │
+│  ├── Editing Outcome Predictor                            │
+│  └── Prophylactic Efficacy Simulator                      │
+├─────────────────────────────────────────────────────────────┤
+│  Knowledge Integration Layer                              │
+│  ├── Literature Analyzer                                  │
+│  ├── Nuclease/Editor Library                              │
+│  ├── Clinical Trial Database                              │
+│  └── Regulatory Guidelines DB                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## AI Agents & Their Roles
+
+### 1. Variant Investigation Agent
+- **Location**: [tools/variant_analyzer.py](mdc:tools/variant_analyzer.py)
+- **Function**: Analyzes genetic variants for pathogenicity and therapeutic relevance
+- **Capabilities**: ClinVar integration, structural impact prediction, inheritance pattern analysis
+
+### 2. Therapeutic Strategy Agent
+- **Location**: [tools/experiment_advisor.py](mdc:tools/experiment_advisor.py)
+- **Function**: Recommends optimal CRISPR modalities based on variant type and therapeutic goals
+- **Capabilities**: Knockout vs. correction decisions, nuclease selection, delivery vector optimization
+
+### 3. Guide RNA Optimization Agent
+- **Location**: [tools/guide_interpreter.py](mdc:tools/guide_interpreter.py)
+- **Function**: Designs and evaluates guide RNAs with therapeutic context
+- **Capabilities**: On-target scoring, off-target prediction, PAM site optimization
+
+### 4. Risk/Feasibility Assessment Agent
+- **Location**: [tools/result_interpreter.py](mdc:tools/result_interpreter.py)
+- **Function**: Evaluates experimental results and provides go/no-go recommendations
+- **Capabilities**: Editing efficiency analysis, safety assessment, developability scoring
+
+### 5. Literature Analysis Agent
+- **Location**: [tools/literature_analyzer.py](mdc:tools/literature_analyzer.py)
+- **Function**: Automated literature search and therapeutic relevance scoring
+- **Capabilities**: PubMed integration, clinical trial matching, safety signal detection
+
+### 6. Educational Agent
+- **Location**: [tools/educational_context.py](mdc:tools/educational_context.py)
+- **Function**: Provides context-aware explanations for novice users
+- **Capabilities**: Step-by-step guidance, concept explanations, decision support
+
+## Digital Twin Methodology
+
+### Cellular Risk Model (Prophylactic)
+```python
+# Predicts cellular risk markers before disease onset
+def simulate_prophylactic_efficacy(variant, correction_strategy):
+    """
+    Models cellular response to corrective editing
+    Returns: Predicted Correction Longevity (PCL) score
+    """
+    # Implementation in tools/coordinate_handler.py
+```
+
+### Tumor Mosaicism Model (Therapeutic)
+```python
+# Models heterogeneous tumor editing requirements
+def simulate_tumor_editing(vaf_data, editing_efficiency):
+    """
+    Predicts required editing levels for therapeutic benefit
+    Accounts for tumor heterogeneity and resistance
+    """
+```
+
+### Editing Outcome Predictor
+- **NHEJ Prediction**: Indel frequency and size distribution
+- **HDR Prediction**: Template integration efficiency and fidelity
+- **Base Editing**: Target conversion rates and bystander effects
+- **Prime Editing**: Precise edit frequency and byproduct formation
+
+## Therapeutic Context Integration
+
+### Context-Aware Behavior
+- **Workflow Adaptation**: UI and recommendations change based on therapeutic vs. prophylactic goals
+- **Risk Threshold Adjustment**: Safety requirements differ between contexts
+- **Literature Prioritization**: Relevant studies highlighted based on context
+
+### Implementation Pattern
+```python
+# Therapeutic context flows through all major functions
+@contextual_analysis
+def analyze_guide_rna(sequence, context):
+    if context.is_prophylactic:
+        # Higher safety standards, focus on durability
+        return prophylactic_analysis(sequence)
+    elif context.is_therapeutic:
+        # Balance efficacy vs. safety for treatment
+        return therapeutic_analysis(sequence)
+```
+
+## Key Integration Points
+
+### CHOPCHOP Enhancement
+- **Location**: Pages for guide design and analysis
+- **Enhancement**: LLM-powered result interpretation with therapeutic context
+- **Pattern**: Raw scores → AI interpretation → Actionable recommendations
+
+### CRISPResso2 Integration
+- **Location**: [tools/result_interpreter.py](mdc:tools/result_interpreter.py)
+- **Enhancement**: Context-aware result analysis and next-step recommendations
+- **Pattern**: Editing data → Functional impact assessment → Clinical relevance scoring
+
+### LLM Integration Hub
+- **Location**: [tools/llm_api.py](mdc:tools/llm_api.py)
+- **Providers**: OpenAI, Anthropic, DeepSeek, Gemini, Local models
+- **Pattern**: Specialized prompts for each analysis type with therapeutic context injection
+
+## Data Flow Architecture
+
+### Input Processing
+1. User provides gene/variant → Variant Investigation Agent
+2. Therapeutic context specified → Context Manager
+3. Analysis parameters set → Relevant agents activated
+
+### Analysis Pipeline
+1. Guide RNA design → Guide RNA Optimization Agent
+2. Off-target analysis → Risk Assessment Agent
+3. Literature review → Literature Analysis Agent
+4. Experimental design → Therapeutic Strategy Agent
+
+### Output Synthesis
+1. Individual agent results → Multi-Agent Coordinator
+2. Therapeutic context application → Final recommendations
+3. Next steps generation → User interface
+
+## Performance & Scalability
+
+### Caching Strategy
+- Guide RNA analyses cached by sequence + context
+- Literature searches cached with expiration
+- Simulation results cached by input parameters
+
+### Parallel Processing
+- Multiple LLM calls executed concurrently
+- Independent agent analyses run in parallel
+- Background literature updates
+
+## Reference Implementation Files
+- Core app structure: [app.py](mdc:app.py)
+- Agent coordination: [tools/](mdc:tools/)
+- UI components: [pages/](mdc:pages/)
+- Configuration: [.env](mdc:.env) template

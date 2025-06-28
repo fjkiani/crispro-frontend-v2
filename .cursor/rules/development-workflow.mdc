@@ -1,0 +1,340 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Development Workflow & Best Practices
+
+## TypeScript/React Development
+
+### Component Architecture Pattern
+```typescript
+// Standard CrisPRO component structure
+'use client';
+
+import React, { useState, useCallback, useEffect } from 'react';
+import { ComponentProps } from './types';
+
+interface CrisPROComponentProps {
+  // Always include therapeutic context
+  therapeuticContext?: TherapeuticContext;
+  // Include AI enhancement toggles
+  enableAIFeatures?: boolean;
+  // Standard props
+  data: ComponentData;
+  onUpdate?: (result: ComponentResult) => void;
+}
+
+export default function CrisPROComponent({ 
+  therapeuticContext, 
+  enableAIFeatures = true,
+  data,
+  onUpdate 
+}: CrisPROComponentProps) {
+  // Implementation follows established patterns
+}
+```
+
+### Type Safety Guidelines
+
+#### Base Interface Extensions
+```typescript
+// Pattern for extending base interfaces without conflicts
+export interface CrisPROGraphNode extends Omit<BaseGraphNode, 'type'> {
+  // Redefine conflicting properties with proper types
+  type: 'gene' | 'variant' | 'pathway' | 'other';
+  
+  // Add CrisPRO-specific properties
+  aiRelevanceScore?: number;
+  therapeuticContext?: TherapeuticContext;
+  predictedImpact?: PredictedImpact;
+}
+```
+
+#### Error Handling Pattern
+```typescript
+// Consistent error handling across components
+try {
+  const result = await performAnalysis(data);
+  setResult(result);
+} catch (error) {
+  console.error('Analysis failed:', error);
+  setError(`Analysis failed: ${error.message}`);
+  // Provide user-friendly fallback
+  setResult(generateFallbackResult(data));
+}
+```
+
+## Python Development Patterns
+
+### LLM API Integration
+```python
+# Standardized LLM function pattern
+def analyze_with_context(data, context, provider="openai"):
+    """
+    Template for LLM-enhanced analysis functions
+    
+    Args:
+        data: Analysis input data
+        context: Therapeutic context object
+        provider: LLM provider to use
+    
+    Returns:
+        Enhanced analysis with AI insights
+    """
+    try:
+        # Prepare context-aware prompt
+        prompt = generate_prompt(data, context)
+        
+        # Query LLM with error handling
+        response = query_llm(prompt, provider=provider)
+        
+        # Parse and validate response
+        return parse_llm_response(response, expected_format)
+        
+    except Exception as e:
+        logger.error(f"LLM analysis failed: {e}")
+        return fallback_analysis(data)
+```
+
+### Tool Integration Pattern
+```python
+# Standard tool wrapper pattern
+class CrisPROTool:
+    def __init__(self, config):
+        self.config = config
+        self.cache = {}
+    
+    def analyze(self, input_data, context=None):
+        # Check cache first
+        cache_key = self.generate_cache_key(input_data, context)
+        if cache_key in self.cache:
+            return self.cache[cache_key]
+        
+        # Perform analysis
+        result = self._perform_analysis(input_data, context)
+        
+        # Cache result
+        self.cache[cache_key] = result
+        return result
+    
+    def _perform_analysis(self, input_data, context):
+        # Tool-specific implementation
+        pass
+```
+
+## Error Handling & Recovery
+
+### Common Error Patterns & Solutions
+
+#### LLM API Failures
+```python
+def robust_llm_query(prompt, provider="openai", max_retries=3):
+    """Handle LLM API failures gracefully"""
+    for attempt in range(max_retries):
+        try:
+            return query_llm(prompt, provider=provider)
+        except APIError as e:
+            if attempt == max_retries - 1:
+                logger.error(f"LLM API failed after {max_retries} attempts: {e}")
+                return generate_fallback_response(prompt)
+            time.sleep(2 ** attempt)  # Exponential backoff
+```
+
+#### TypeScript Type Compatibility
+```typescript
+// When extending base types with conflicts, use Omit pattern
+interface ExtendedType extends Omit<BaseType, 'conflictingProperty'> {
+  conflictingProperty: CorrectType;
+  additionalProperties: AdditionalType;
+}
+
+// For runtime type checking
+function isValidType(obj: unknown): obj is ExpectedType {
+  return obj !== null && 
+         typeof obj === 'object' && 
+         'requiredProperty' in obj;
+}
+```
+
+#### File I/O and External Dependencies
+```python
+def safe_file_operation(filepath, operation):
+    """Safe file operations with proper error handling"""
+    try:
+        with open(filepath, operation) as f:
+            return f.read() if 'r' in operation else f.write()
+    except FileNotFoundError:
+        logger.warning(f"File not found: {filepath}")
+        return None
+    except PermissionError:
+        logger.error(f"Permission denied: {filepath}")
+        return None
+```
+
+## Testing Strategy
+
+### Unit Testing Pattern
+```python
+import pytest
+from unittest.mock import Mock, patch
+
+class TestCrisPROComponent:
+    @pytest.fixture
+    def mock_context(self):
+        return {
+            'therapeutic_goal': 'prophylactic',
+            'disease_area': 'oncology',
+            'target_gene': 'BRCA1'
+        }
+    
+    @patch('tools.llm_api.query_llm')
+    def test_analysis_with_context(self, mock_llm, mock_context):
+        # Mock LLM response
+        mock_llm.return_value = "Expected AI response"
+        
+        # Test function
+        result = analyze_variant(test_data, mock_context)
+        
+        # Assertions
+        assert result.confidence > 0.7
+        assert 'therapeutic_relevance' in result
+        mock_llm.assert_called_once()
+```
+
+### Integration Testing
+```python
+def test_end_to_end_workflow():
+    """Test complete analysis pipeline"""
+    # Simulate user input
+    user_input = {
+        'gene': 'BRCA1',
+        'variant': 'c.185delAG',
+        'context': 'prophylactic'
+    }
+    
+    # Run through complete pipeline
+    result = run_complete_analysis(user_input)
+    
+    # Validate output structure
+    assert 'guide_rnas' in result
+    assert 'risk_assessment' in result
+    assert 'recommendations' in result
+```
+
+## Performance Optimization
+
+### Caching Strategy
+```python
+from functools import lru_cache
+import hashlib
+
+@lru_cache(maxsize=1000)
+def cached_analysis(data_hash, context_hash):
+    """Cache expensive analysis operations"""
+    return perform_expensive_analysis(data_hash, context_hash)
+
+def generate_cache_key(data, context):
+    """Generate stable cache keys"""
+    data_str = json.dumps(data, sort_keys=True)
+    context_str = json.dumps(context, sort_keys=True)
+    return hashlib.md5(f"{data_str}:{context_str}".encode()).hexdigest()
+```
+
+### Concurrent Processing
+```python
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+
+async def parallel_analysis(input_list):
+    """Run multiple analyses in parallel"""
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        tasks = [
+            loop.run_in_executor(executor, analyze_item, item)
+            for item in input_list
+        ]
+        return await asyncio.gather(*tasks)
+```
+
+## Configuration Management
+
+### Environment Variables
+```python
+# Standard configuration pattern
+import os
+from dataclasses import dataclass
+
+@dataclass
+class CrisPROConfig:
+    openai_api_key: str = os.getenv('OPENAI_API_KEY', '')
+    anthropic_api_key: str = os.getenv('ANTHROPIC_API_KEY', '')
+    default_llm_provider: str = os.getenv('DEFAULT_LLM_PROVIDER', 'openai')
+    cache_enabled: bool = os.getenv('CACHE_ENABLED', 'true').lower() == 'true'
+    
+    def validate(self):
+        """Validate configuration"""
+        if not self.openai_api_key and self.default_llm_provider == 'openai':
+            raise ValueError("OpenAI API key required")
+```
+
+## Logging & Monitoring
+
+### Logging Pattern
+```python
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+def log_analysis_result(function_name, input_data, result, execution_time):
+    """Standardized logging for analysis functions"""
+    logger.info(f"{function_name} completed in {execution_time:.2f}s")
+    logger.debug(f"Input: {input_data}")
+    logger.debug(f"Result: {result}")
+```
+
+## Code Quality Standards
+
+### Documentation Requirements
+```python
+def analyze_guide_rna(sequence: str, context: dict) -> dict:
+    """
+    Analyze guide RNA with therapeutic context.
+    
+    Args:
+        sequence: Guide RNA sequence (20-24 nucleotides)
+        context: Therapeutic context including disease area, goals
+    
+    Returns:
+        Analysis result with AI insights, scores, and recommendations
+    
+    Raises:
+        ValueError: If sequence format is invalid
+        APIError: If LLM analysis fails
+    
+    Example:
+        >>> result = analyze_guide_rna("ATCGATCGATCGATCGATCG", {"goal": "knockout"})
+        >>> print(result["on_target_score"])
+        0.85
+    """
+```
+
+### Code Review Checklist
+- [ ] Therapeutic context properly propagated
+- [ ] Error handling implemented
+- [ ] Type annotations complete
+- [ ] Tests written for new functionality
+- [ ] Documentation updated
+- [ ] Performance implications considered
+- [ ] Security implications reviewed (API keys, user input)
+
+## Reference Files
+- Main configuration: [.env](mdc:.env) template
+- LLM integration: [tools/llm_api.py](mdc:tools/llm_api.py)
+- Error handling examples: [tools/](mdc:tools/) modules
+- Type definitions: TypeScript component files
+- Testing examples: Test files in respective directories

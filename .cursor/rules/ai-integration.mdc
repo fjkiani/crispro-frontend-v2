@@ -1,0 +1,445 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# AI Integration Patterns
+
+## LLM Provider Integration
+
+### Supported Providers & Models
+- **OpenAI**: GPT-4o (default), GPT-4, GPT-3.5-turbo
+- **Azure OpenAI**: Configurable deployment model (defaults to gpt-4o-ms)
+- **Anthropic**: Claude-3-sonnet-20240229, Claude-3.5-sonnet
+- **DeepSeek**: deepseek-chat
+- **Google**: Gemini-1.5-pro, Gemini-1.0-pro
+- **Local LLM**: Qwen/Qwen2.5-32B-Instruct-AWQ
+
+### API Configuration
+```python
+# LLM API configuration in tools/llm_api.py
+PROVIDERS = {
+    'openai': {
+        'model': 'gpt-4o',
+        'api_key_env': 'OPENAI_API_KEY',
+        'base_url': None
+    },
+    'anthropic': {
+        'model': 'claude-3-sonnet-20240229',
+        'api_key_env': 'ANTHROPIC_API_KEY',
+        'base_url': None
+    },
+    # Additional providers...
+}
+```
+
+### Error Handling Strategy
+```python
+def query_llm_with_fallback(prompt, primary_provider="openai", fallback_provider="anthropic"):
+    """Query LLM with automatic fallback to secondary provider"""
+    try:
+        return query_llm(prompt, provider=primary_provider)
+    except Exception as e:
+        logger.warning(f"Primary LLM {primary_provider} failed: {e}")
+        try:
+            return query_llm(prompt, provider=fallback_provider)
+        except Exception as e2:
+            logger.error(f"Fallback LLM {fallback_provider} also failed: {e2}")
+            return generate_static_fallback(prompt)
+```
+
+## Prompt Engineering Guidelines
+
+### Context-Aware Prompt Structure
+```python
+def generate_therapeutic_prompt(analysis_type, data, context):
+    """Generate context-aware prompts for therapeutic applications"""
+    
+    base_prompt = f"""
+    You are CrisPRO AI, an expert CRISPR therapeutic design assistant.
+    
+    Analysis Type: {analysis_type}
+    Therapeutic Context: {context.get('therapeutic_goal', 'general')}
+    Disease Area: {context.get('disease_area', 'unspecified')}
+    Target Gene: {context.get('target_gene', 'unspecified')}
+    
+    Data to analyze: {format_analysis_data(data)}
+    
+    Please provide analysis considering:
+    1. Therapeutic efficacy requirements
+    2. Safety and off-target concerns
+    3. Delivery and dosing implications
+    4. Regulatory pathway considerations
+    5. Clinical development feasibility
+    
+    Format your response with specific scores and actionable recommendations.
+    """
+    
+    return base_prompt
+```
+
+### Specialized Prompt Templates
+
+#### Guide RNA Analysis
+```python
+GUIDE_ANALYSIS_PROMPT = """
+As CrisPRO AI, analyze this guide RNA for therapeutic {therapeutic_goal}:
+
+Guide Sequence: {sequence}
+Target Gene: {gene}
+Disease Context: {disease_area}
+
+Evaluate:
+1. On-target efficiency (0-1 scale)
+2. Off-target risk assessment (0-1 scale)  
+3. Therapeutic relevance score (0-1 scale)
+4. Recommended validation experiments
+5. Delivery system compatibility
+
+For {therapeutic_goal} applications, prioritize {priority_factors}.
+
+Provide specific numeric scores and brief explanations.
+"""
+```
+
+#### Experimental Design
+```python
+EXPERIMENT_DESIGN_PROMPT = """
+Design therapeutic validation experiments for:
+
+Target: {target_description}
+Edit Strategy: {edit_strategy}
+Therapeutic Goal: {therapeutic_goal}
+Development Stage: {development_stage}
+
+Recommend:
+1. Cell line/model system selection
+2. Key controls and validation assays
+3. Delivery method optimization
+4. Safety assessment protocols
+5. Efficacy readouts
+6. Regulatory considerations
+
+Focus on experiments needed for {regulatory_pathway} pathway.
+"""
+```
+
+#### Literature Analysis
+```python
+LITERATURE_ANALYSIS_PROMPT = """
+Analyze this literature for therapeutic CRISPR development:
+
+Abstract: {abstract}
+Therapeutic Context: {context}
+
+Extract and score (0-1):
+1. Therapeutic relevance
+2. Safety findings
+3. Efficacy data quality
+4. Clinical translation potential
+5. Key insights for {specific_application}
+
+Highlight any safety signals or contraindications.
+"""
+```
+
+### Dynamic Prompt Adaptation
+```python
+def adapt_prompt_for_context(base_prompt, context):
+    """Dynamically adapt prompts based on therapeutic context"""
+    
+    adaptations = {
+        'prophylactic': {
+            'priority': 'long-term safety and durability',
+            'risk_tolerance': 'very low',
+            'efficacy_threshold': 'high precision required'
+        },
+        'therapeutic': {
+            'priority': 'therapeutic efficacy balance with safety',
+            'risk_tolerance': 'moderate, context-dependent',
+            'efficacy_threshold': 'sufficient for clinical benefit'
+        },
+        'research': {
+            'priority': 'mechanistic understanding',
+            'risk_tolerance': 'higher for hypothesis testing',
+            'efficacy_threshold': 'proof-of-concept level'
+        }
+    }
+    
+    context_params = adaptations.get(context.get('therapeutic_goal'), adaptations['research'])
+    
+    return base_prompt.format(**context_params, **context)
+```
+
+## Context Management
+
+### Therapeutic Context Object
+```python
+@dataclass
+class TherapeuticContext:
+    therapeutic_goal: str  # 'prophylactic', 'therapeutic', 'research'
+    disease_area: str      # 'oncology', 'rare_disease', 'metabolic', etc.
+    target_gene: str       # Primary gene of interest
+    edit_type: str         # 'knockout', 'correction', 'modulation'
+    development_stage: str # 'discovery', 'preclinical', 'clinical'
+    safety_profile: str    # 'high_risk', 'moderate_risk', 'low_risk'
+    delivery_method: str   # 'viral', 'non_viral', 'ex_vivo'
+    
+    def to_prompt_context(self):
+        """Convert to prompt-friendly format"""
+        return {
+            'therapeutic_goal': self.therapeutic_goal,
+            'disease_area': self.disease_area,
+            'target_gene': self.target_gene,
+            'edit_type': self.edit_type,
+            'development_stage': self.development_stage,
+            'priority_factors': self._get_priority_factors(),
+            'regulatory_pathway': self._get_regulatory_pathway()
+        }
+    
+    def _get_priority_factors(self):
+        """Determine priority factors based on context"""
+        if self.therapeutic_goal == 'prophylactic':
+            return 'safety, durability, minimal off-targets'
+        elif self.safety_profile == 'high_risk':
+            return 'safety validation, controlled efficacy'
+        else:
+            return 'balanced efficacy and safety'
+```
+
+### Session State Management
+```python
+# Streamlit session state integration
+def initialize_ai_context():
+    """Initialize AI context in session state"""
+    if 'therapeutic_context' not in st.session_state:
+        st.session_state.therapeutic_context = TherapeuticContext(
+            therapeutic_goal='research',
+            disease_area='unspecified',
+            target_gene='',
+            edit_type='knockout',
+            development_stage='discovery',
+            safety_profile='moderate_risk',
+            delivery_method='viral'
+        )
+    
+    if 'ai_conversation_history' not in st.session_state:
+        st.session_state.ai_conversation_history = []
+
+def update_context_from_analysis(analysis_result):
+    """Update context based on analysis results"""
+    context = st.session_state.therapeutic_context
+    
+    # Update based on analysis findings
+    if analysis_result.get('high_risk_indicators'):
+        context.safety_profile = 'high_risk'
+    
+    if analysis_result.get('suggested_edit_type'):
+        context.edit_type = analysis_result['suggested_edit_type']
+```
+
+## Safety & Ethics Guidelines
+
+### Content Filtering
+```python
+def validate_therapeutic_request(prompt, context):
+    """Validate requests for therapeutic appropriateness"""
+    
+    # Flag potentially problematic requests
+    red_flags = [
+        'human enhancement',
+        'cosmetic editing',
+        'non-medical applications',
+        'germline modification for enhancement'
+    ]
+    
+    prompt_lower = prompt.lower()
+    for flag in red_flags:
+        if flag in prompt_lower:
+            return False, f"Request involves {flag} which is outside therapeutic scope"
+    
+    # Ensure medical/research context
+    if context.therapeutic_goal not in ['prophylactic', 'therapeutic', 'research']:
+        return False, "Must specify valid therapeutic context"
+    
+    return True, "Request validated"
+
+def sanitize_llm_response(response, context):
+    """Sanitize LLM responses for safety"""
+    
+    # Remove any inappropriate recommendations
+    if 'germline enhancement' in response.lower():
+        response = response.replace(
+            'germline enhancement',
+            'germline therapeutic correction'
+        )
+    
+    # Add safety disclaimers
+    if context.therapeutic_goal in ['prophylactic', 'therapeutic']:
+        response += "\n\n⚠️ This analysis is for research purposes. Clinical applications require extensive validation and regulatory approval."
+    
+    return response
+```
+
+### Bias Mitigation
+```python
+def check_response_bias(response, context):
+    """Check for potential biases in AI responses"""
+    
+    bias_indicators = {
+        'population_bias': ['certain populations', 'genetic predisposition'],
+        'technology_bias': ['always recommend', 'best option is'],
+        'safety_bias': ['perfectly safe', 'no risks']
+    }
+    
+    detected_biases = []
+    for bias_type, indicators in bias_indicators.items():
+        for indicator in indicators:
+            if indicator in response.lower():
+                detected_biases.append(bias_type)
+    
+    if detected_biases:
+        logger.warning(f"Potential bias detected: {detected_biases}")
+        # Add balancing information
+        response += f"\n\n🔍 Note: Consider diverse perspectives and additional validation for {', '.join(detected_biases)}."
+    
+    return response
+```
+
+### Rate Limiting & Usage Monitoring
+```python
+import time
+from collections import defaultdict
+
+class AIUsageMonitor:
+    def __init__(self):
+        self.usage_counts = defaultdict(int)
+        self.last_request_time = defaultdict(float)
+    
+    def check_rate_limit(self, user_id, requests_per_minute=30):
+        """Implement rate limiting for AI requests"""
+        current_time = time.time()
+        last_time = self.last_request_time[user_id]
+        
+        if current_time - last_time < 60:  # Within last minute
+            if self.usage_counts[user_id] >= requests_per_minute:
+                return False, "Rate limit exceeded"
+        else:
+            # Reset counter for new minute
+            self.usage_counts[user_id] = 0
+        
+        self.usage_counts[user_id] += 1
+        self.last_request_time[user_id] = current_time
+        return True, "Request allowed"
+    
+    def log_usage(self, user_id, provider, tokens_used, cost_estimate):
+        """Log AI usage for monitoring"""
+        logger.info(f"AI Usage - User: {user_id}, Provider: {provider}, Tokens: {tokens_used}, Cost: ${cost_estimate:.4f}")
+```
+
+## Performance Optimization
+
+### Response Caching
+```python
+import hashlib
+import json
+from functools import wraps
+
+def cache_ai_response(cache_duration_hours=24):
+    """Cache AI responses to reduce API calls"""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Generate cache key
+            cache_key = hashlib.md5(
+                json.dumps(args + tuple(kwargs.items()), sort_keys=True).encode()
+            ).hexdigest()
+            
+            # Check cache
+            cached_response = get_cached_response(cache_key)
+            if cached_response and not is_cache_expired(cached_response, cache_duration_hours):
+                return cached_response['response']
+            
+            # Generate new response
+            response = func(*args, **kwargs)
+            
+            # Cache response
+            cache_response(cache_key, response)
+            return response
+        return wrapper
+    return decorator
+
+@cache_ai_response(cache_duration_hours=6)
+def analyze_guide_with_ai(sequence, context):
+    """Cached AI analysis function"""
+    return query_llm(generate_guide_prompt(sequence, context))
+```
+
+### Batch Processing
+```python
+async def batch_ai_analysis(items, analysis_function, batch_size=5):
+    """Process multiple items with AI in batches"""
+    results = []
+    
+    for i in range(0, len(items), batch_size):
+        batch = items[i:i + batch_size]
+        
+        # Process batch concurrently
+        tasks = [analysis_function(item) for item in batch]
+        batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        results.extend(batch_results)
+        
+        # Rate limiting between batches
+        if i + batch_size < len(items):
+            await asyncio.sleep(1)
+    
+    return results
+```
+
+## Integration Points
+
+### CHOPCHOP Enhancement
+```python
+def enhance_chopchop_results(results, context):
+    """Add AI interpretation to CHOPCHOP results"""
+    enhanced_results = []
+    
+    for guide in results:
+        ai_analysis = analyze_guide_with_ai(
+            guide['sequence'], 
+            context.to_prompt_context()
+        )
+        
+        guide['ai_interpretation'] = ai_analysis
+        guide['therapeutic_score'] = extract_therapeutic_score(ai_analysis)
+        enhanced_results.append(guide)
+    
+    return enhanced_results
+```
+
+### CRISPResso2 Integration
+```python
+def interpret_crispresso_results(results, context):
+    """AI-powered interpretation of CRISPResso2 results"""
+    interpretation_prompt = generate_result_interpretation_prompt(
+        results, context.to_prompt_context()
+    )
+    
+    ai_interpretation = query_llm(interpretation_prompt)
+    
+    return {
+        'summary': extract_summary(ai_interpretation),
+        'recommendations': extract_recommendations(ai_interpretation),
+        'next_steps': extract_next_steps(ai_interpretation),
+        'risk_assessment': extract_risk_assessment(ai_interpretation)
+    }
+```
+
+## Reference Files
+- Core LLM API: [tools/llm_api.py](mdc:tools/llm_api.py)
+- Guide interpretation: [tools/guide_interpreter.py](mdc:tools/guide_interpreter.py)
+- Experiment advisor: [tools/experiment_advisor.py](mdc:tools/experiment_advisor.py)
+- Literature analyzer: [tools/literature_analyzer.py](mdc:tools/literature_analyzer.py)
+- Result interpretation: [tools/result_interpreter.py](mdc:tools/result_interpreter.py)
+- Educational context: [tools/educational_context.py](mdc:tools/educational_context.py)

@@ -274,7 +274,7 @@ def compare_guides(guides: List[Dict[str, Any]], gene_symbol: Optional[str] = No
     }
 
 def generate_llm_explanation(guides: List[Dict[str, Any]], gene_symbol: Optional[str] = None, 
-                            experiment_type: Optional[str] = None) -> str:
+                            experiment_type: Optional[str] = None, provide_therapeutic_context: bool = False) -> str:
     """
     Generate a natural language explanation of guide RNAs using an LLM.
     
@@ -282,6 +282,7 @@ def generate_llm_explanation(guides: List[Dict[str, Any]], gene_symbol: Optional
         guides: List of guide dictionaries
         gene_symbol: Optional gene symbol
         experiment_type: Optional experiment type (e.g., 'knockout', 'knock-in', 'base-editing')
+        provide_therapeutic_context: Whether to include therapeutic context in the explanation
         
     Returns:
         A natural language explanation
@@ -311,13 +312,28 @@ def generate_llm_explanation(guides: List[Dict[str, Any]], gene_symbol: Optional
     Keep your explanation concise and focused on the practical aspects of guide selection.
     """
     
+    if provide_therapeutic_context:
+        prompt += f"""
+        
+        ADDITIONALLY, as an expert in CRISPR therapeutic development, please include a separate section that:
+        
+        1. Explains how guide efficiency and specificity scores directly relate to therapeutic goals (e.g., high efficiency is critical for cell product potency).
+        2. Discusses the importance of the guide's target location (exon vs. intron) for functional knockout efficacy in therapeutic applications.
+        3. Explains why off-target risk assessment is particularly critical for therapeutic applications and recommends specific validation methods (e.g., GUIDE-seq, CIRCLE-seq).
+        4. Suggests whether high-fidelity enzyme variants might be beneficial based on the specificity scores of these guides.
+        5. Discusses how these guides' properties might affect delivery vector selection for therapeutic use.
+        
+        Label this section clearly as "Therapeutic Development Considerations" and ensure it provides actionable insights for researchers considering therapeutic applications.
+    """
+    
     # Call the LLM
     explanation = query_llm(prompt)
     
     return explanation
 
 def add_context_to_guide_results(top_guides_file: str, gene_symbol: Optional[str] = None,
-                               experiment_type: Optional[str] = None) -> Dict[str, Any]:
+                               experiment_type: Optional[str] = None,
+                               provide_therapeutic_context: bool = False) -> Dict[str, Any]:
     """
     Load guide RNA results from a file and add contextual explanations.
     
@@ -325,6 +341,7 @@ def add_context_to_guide_results(top_guides_file: str, gene_symbol: Optional[str
         top_guides_file: Path to a JSON file containing guide RNA results
         gene_symbol: Optional gene symbol
         experiment_type: Optional experiment type
+        provide_therapeutic_context: Whether to include therapeutic context in the explanations
         
     Returns:
         Dictionary with guides and explanations
@@ -352,7 +369,7 @@ def add_context_to_guide_results(top_guides_file: str, gene_symbol: Optional[str
     
     # Add explanations
     comparison = compare_guides(guides, gene_symbol)
-    llm_explanation = generate_llm_explanation(guides, gene_symbol, experiment_type)
+    llm_explanation = generate_llm_explanation(guides, gene_symbol, experiment_type, provide_therapeutic_context)
     
     return {
         "guides": guides,
@@ -371,10 +388,11 @@ if __name__ == "__main__":
     parser.add_argument('--experiment', '-e', type=str, choices=['knockout', 'knock-in', 'base-editing'], 
                         help='Experiment type')
     parser.add_argument('--output', '-o', type=str, help='Output file for the explanation (JSON)')
+    parser.add_argument('--therapeutic', '-t', action='store_true', help='Include therapeutic development context')
     
     args = parser.parse_args()
     
-    result = add_context_to_guide_results(args.file, args.gene, args.experiment)
+    result = add_context_to_guide_results(args.file, args.gene, args.experiment, args.therapeutic)
     
     if "error" in result:
         print(f"Error: {result['error']}")

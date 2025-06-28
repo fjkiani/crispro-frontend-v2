@@ -1,0 +1,680 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Phase 6 Implementation Guide: AI-Powered Guide Generation & Optimization
+
+## Overview
+This guide details the implementation of generative AI endpoints to transform our platform from "Intelligent Guide Scoring" to "Intelligent Guide Creation" - a complete AI-powered CRISPR design ecosystem.
+
+## Revolutionary Paradigm Shift
+
+### Current State (Phase 5): Enhanced Scoring
+- Input: Gene target → Find existing guides → Score with multiple AI methods → Rank results
+
+### Future State (Phase 6): Complete AI Design
+- Input: Therapeutic goal → AI generates optimal guides → Multi-modal validation → Context optimization → Complete CRISPR system
+
+## Task 6.1: AI Guide Generation
+
+### 6.1.1: Add `/generate_optimized_guide_rna` Integration
+
+#### Step 1: Extend API Client
+**File**: [tools/llm_api.py](mdc:tools/llm_api.py)
+
+```python
+def generate_optimized_guide_rna(target_genomic_region, design_goal="knockout", organism="Homo sapiens", 
+                                num_candidates=10, desired_on_target_features=None, avoid_off_target_features=None):
+    """
+    Generate novel, optimized guide RNA sequences using AI.
+    
+    Args:
+        target_genomic_region (dict): {chromosome, start_position, end_position}
+        design_goal (str): "knockout", "gene_activation", "base_editing", "prime_editing"
+        organism (str): Target organism
+        num_candidates (int): Number of guide candidates to generate
+        desired_on_target_features (list): ["frameshift_inducing", "splice_disrupting", "promoter_targeting"]
+        avoid_off_target_features (list): ["coding_regions", "known_oncogenes", "essential_genes"]
+    
+    Returns:
+        dict: {
+            'guide_rna_sequences': [
+                {
+                    'sequence': str,
+                    'position': int,
+                    'pam_sequence': str,
+                    'predicted_properties': dict,
+                    'design_rationale': str
+                }
+            ],
+            'generation_metadata': {
+                'design_goal': str,
+                'optimization_criteria': list,
+                'generation_confidence': float
+            }
+        }
+    """
+```
+
+#### Step 2: Create AI Guide Generator Controller
+**File**: [tools/ai_guide_generator.py](mdc:tools/ai_guide_generator.py) (New file)
+
+```python
+class AIGuideGenerator:
+    """
+    Controller for AI-powered guide RNA generation and optimization.
+    """
+    
+    def __init__(self):
+        self.discriminative_scorer = None  # Will use Phase 5 scoring system
+        self.optimization_history = []
+    
+    def generate_therapeutic_guides(self, gene_symbol, therapeutic_context):
+        """
+        Generate guides optimized for specific therapeutic applications.
+        
+        Args:
+            gene_symbol (str): Target gene
+            therapeutic_context (dict): {
+                'disease_type': str,
+                'cell_line': str,
+                'treatment_goal': str,  # "knockout", "correction", "activation"
+                'safety_priority': str  # "high", "medium", "low"
+            }
+        
+        Returns:
+            list: Generated and pre-scored guide candidates
+        """
+        
+    def iterative_optimization(self, initial_guides, optimization_rounds=3):
+        """
+        Perform iterative guide optimization using generate-score-optimize loops.
+        
+        Process:
+        1. Score initial guides with multi-modal AI
+        2. Identify best-performing characteristics
+        3. Generate new candidates incorporating successful features
+        4. Repeat until convergence or max rounds
+        
+        Returns:
+            dict: {
+                'optimized_guides': list,
+                'optimization_history': list,
+                'convergence_metrics': dict
+            }
+        """
+```
+
+### 6.1.2: Create UI for Design Goals and Constraints
+
+#### Step 1: Build Advanced Design Interface
+**File**: [streamlit_app.py](mdc:streamlit_app.py)
+
+Add new page: "AI Guide Designer"
+```python
+def ai_guide_designer_page():
+    """
+    Advanced AI-powered guide design interface.
+    """
+    st.title("🧬 AI Guide Designer")
+    st.write("Generate optimal CRISPR guides using AI, tailored to your specific therapeutic goals.")
+    
+    # Design Goal Selection
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("🎯 Design Goals")
+        design_goal = st.selectbox(
+            "Primary Objective",
+            ["knockout", "gene_activation", "base_editing", "prime_editing", "epigenome_editing"]
+        )
+        
+        therapeutic_context = st.selectbox(
+            "Therapeutic Context",
+            ["cancer_therapy", "genetic_disease", "research_tool", "agricultural_application"]
+        )
+        
+        safety_priority = st.selectbox(
+            "Safety Priority",
+            ["maximum_safety", "balanced", "maximum_efficacy"]
+        )
+    
+    with col2:
+        st.subheader("🧬 Target Specification")
+        gene_symbol = st.text_input("Gene Symbol", placeholder="e.g., KRAS, TP53, BRCA1")
+        
+        cell_line_context = st.selectbox(
+            "Cell Line Context",
+            ["HEK293T", "K562", "HeLa", "primary_T_cells", "iPSCs", "other"]
+        )
+        
+        num_candidates = st.slider("Number of Candidates to Generate", 5, 50, 20)
+    
+    # Advanced Constraints
+    with st.expander("🔧 Advanced Design Constraints"):
+        col3, col4 = st.columns(2)
+        
+        with col3:
+            st.write("**Desired Features:**")
+            frameshift_preference = st.checkbox("Prefer frameshift-inducing cuts")
+            splice_targeting = st.checkbox("Target splice sites")
+            promoter_targeting = st.checkbox("Target promoter regions")
+            
+        with col4:
+            st.write("**Avoidance Criteria:**")
+            avoid_coding = st.checkbox("Avoid essential gene coding regions")
+            avoid_oncogenes = st.checkbox("Avoid known oncogenes")
+            minimize_off_targets = st.checkbox("Minimize off-target potential")
+    
+    # Generation Button
+    if st.button("🚀 Generate AI-Optimized Guides", type="primary"):
+        with st.spinner("AI is designing optimal guides for your application..."):
+            # Call AI generation pipeline
+            results = generate_and_optimize_guides(
+                gene_symbol=gene_symbol,
+                design_goal=design_goal,
+                therapeutic_context=therapeutic_context,
+                constraints=build_constraints_dict(locals())
+            )
+            
+            # Display results with comprehensive analysis
+            display_ai_generated_results(results)
+```
+
+## Task 6.2: Repair Template Generation
+
+### 6.2.1: Add `/generate_repair_template` for HDR Applications
+
+#### Step 1: Extend API Client
+**File**: [tools/llm_api.py](mdc:tools/llm_api.py)
+
+```python
+def generate_repair_template(target_genomic_region, desired_sequence_change, homology_arm_length=500, 
+                           organism="Homo sapiens", num_candidates=5):
+    """
+    Generate optimized DNA repair templates for HDR applications.
+    
+    Args:
+        target_genomic_region (dict): {chromosome, start_position, end_position}
+        desired_sequence_change (str): Exact sequence to insert/replace
+        homology_arm_length (int): Length of homology arms (bp)
+        organism (str): Target organism
+        num_candidates (int): Number of template variants to generate
+    
+    Returns:
+        dict: {
+            'repair_template_sequences': [
+                {
+                    'full_template': str,
+                    'left_homology_arm': str,
+                    'insert_sequence': str,
+                    'right_homology_arm': str,
+                    'predicted_integration_efficiency': float,
+                    'optimization_features': list
+                }
+            ],
+            'design_recommendations': {
+                'optimal_template_length': int,
+                'integration_strategy': str,
+                'potential_complications': list
+            }
+        }
+    """
+```
+
+#### Step 2: Create HDR Template Designer
+**File**: [tools/hdr_template_designer.py](mdc:tools/hdr_template_designer.py) (New file)
+
+```python
+class HDRTemplateDesigner:
+    """
+    AI-powered HDR template design and optimization.
+    """
+    
+    def design_therapeutic_correction(self, mutation_info, correction_strategy):
+        """
+        Design repair templates for therapeutic gene correction.
+        
+        Args:
+            mutation_info (dict): {
+                'gene_symbol': str,
+                'mutation_type': str,  # "point_mutation", "deletion", "insertion"
+                'pathogenic_sequence': str,
+                'corrected_sequence': str,
+                'genomic_context': str
+            }
+            correction_strategy (str): "precise_correction", "functional_rescue", "exon_skipping"
+        
+        Returns:
+            dict: Optimized repair templates with integration predictions
+        """
+        
+    def optimize_integration_efficiency(self, base_template, target_cell_type):
+        """
+        Optimize repair template for maximum integration efficiency.
+        
+        Optimization factors:
+        - Homology arm length and sequence composition
+        - Codon optimization for insert sequences
+        - Avoidance of secondary structures
+        - Cell-type specific integration preferences
+        """
+```
+
+### 6.2.2: Integrate with Guide Design Workflow
+
+#### Step 1: Create Complete Editing System Designer
+**File**: [tools/complete_editing_system.py](mdc:tools/complete_editing_system.py) (New file)
+
+```python
+class CompleteEditingSystemDesigner:
+    """
+    Design complete CRISPR editing systems (guides + repair templates).
+    """
+    
+    def design_therapeutic_system(self, therapeutic_goal):
+        """
+        Design complete CRISPR system for therapeutic applications.
+        
+        Args:
+            therapeutic_goal (dict): {
+                'target_gene': str,
+                'edit_type': str,  # "knockout", "correction", "insertion"
+                'therapeutic_sequence': str,  # For corrections/insertions
+                'disease_context': str,
+                'delivery_method': str
+            }
+        
+        Returns:
+            dict: {
+                'guide_rnas': list,  # AI-generated optimal guides
+                'repair_templates': list,  # AI-generated HDR templates
+                'delivery_recommendations': dict,
+                'experimental_protocol': dict,
+                'success_predictions': dict
+            }
+        """
+        
+    def validate_system_compatibility(self, guides, templates):
+        """
+        Validate compatibility between guides and repair templates.
+        
+        Checks:
+        - Cut site positioning relative to repair region
+        - Homology arm compatibility with guide cutting
+        - Potential for template-guide interactions
+        - Optimal timing for guide and template delivery
+        """
+```
+
+## Task 6.3: Epigenome-Aware Design
+
+### 6.3.1: Add `/generate_epigenome_optimized_sequence` Integration
+
+#### Step 1: Extend API Client
+**File**: [tools/llm_api.py](mdc:tools/llm_api.py)
+
+```python
+def generate_epigenome_optimized_sequence(seed_sequence, desired_epigenomic_features, 
+                                        length=100, num_candidates=5):
+    """
+    Generate sequences optimized for specific epigenomic contexts.
+    
+    Args:
+        seed_sequence (str): Initial sequence or context
+        desired_epigenomic_features (list): [
+            "open_chromatin_at_target",
+            "accessible_in_T_cells", 
+            "CTCF_binding_site_present",
+            "H3K4me3_enriched_region"
+        ]
+        length (int): Desired sequence length
+        num_candidates (int): Number of optimized sequences to generate
+    
+    Returns:
+        dict: {
+            'optimized_sequences': [
+                {
+                    'sequence': str,
+                    'predicted_epigenomic_profile': dict,
+                    'accessibility_score': float,
+                    'tf_binding_predictions': list,
+                    'chromatin_state_prediction': str
+                }
+            ],
+            'optimization_summary': {
+                'target_features_achieved': list,
+                'confidence_scores': dict
+            }
+        }
+    """
+```
+
+#### Step 2: Create Chromatin Context Analyzer
+**File**: [tools/chromatin_context_analyzer.py](mdc:tools/chromatin_context_analyzer.py) (New file)
+
+```python
+class ChromatinContextAnalyzer:
+    """
+    Analyze and optimize for chromatin accessibility and epigenomic context.
+    """
+    
+    def analyze_target_accessibility(self, genomic_region, cell_type):
+        """
+        Analyze chromatin accessibility at target region.
+        
+        Returns:
+            dict: {
+                'accessibility_score': float,
+                'chromatin_state': str,
+                'tf_binding_sites': list,
+                'histone_modifications': dict,
+                'accessibility_prediction_confidence': float
+            }
+        """
+        
+    def optimize_for_accessibility(self, guide_candidates, target_region, cell_type):
+        """
+        Optimize guide selection based on chromatin accessibility.
+        
+        Process:
+        1. Predict accessibility for each guide target site
+        2. Generate accessibility-optimized alternatives if needed
+        3. Score guides based on predicted cutting efficiency in chromatin context
+        
+        Returns:
+            list: Guides ranked by accessibility-adjusted efficacy
+        """
+```
+
+### 6.3.2: Enable Chromatin Context Optimization
+
+#### Step 1: Integrate Epigenomic Data into Scoring
+**File**: [tools/intelligent_guide_finder.py](mdc:tools/intelligent_guide_finder.py)
+
+```python
+def calculate_context_aware_score(guide_data, target_sequence, cell_type_context):
+    """
+    Calculate guide scores incorporating chromatin context.
+    
+    Scoring factors:
+    1. Base AI efficacy scores (from Phase 5)
+    2. Predicted chromatin accessibility
+    3. Cell-type specific cutting efficiency
+    4. Epigenomic feature compatibility
+    
+    Returns:
+        dict: {
+            'context_adjusted_score': float,
+            'accessibility_factor': float,
+            'chromatin_state_compatibility': str,
+            'cell_type_optimization': dict
+        }
+    """
+```
+
+## Task 6.4: Generative-Discriminative Pipeline
+
+### 6.4.1: Connect Generative to Discriminative Scoring
+
+#### Step 1: Create Integrated Pipeline Controller
+**File**: [tools/integrated_ai_pipeline.py](mdc:tools/integrated_ai_pipeline.py) (New file)
+
+```python
+class IntegratedAIPipeline:
+    """
+    Complete AI pipeline connecting generation, scoring, and optimization.
+    """
+    
+    def __init__(self):
+        self.generator = AIGuideGenerator()
+        self.scorer = MultiModalScorer()  # From Phase 5
+        self.optimizer = IterativeOptimizer()
+    
+    def complete_design_pipeline(self, therapeutic_specification):
+        """
+        Execute complete AI-powered design pipeline.
+        
+        Pipeline stages:
+        1. GENERATE: Create initial guide candidates using AI
+        2. SCORE: Evaluate with multi-modal discriminative AI
+        3. OPTIMIZE: Iteratively improve based on scoring results
+        4. VALIDATE: Final comprehensive assessment
+        5. PACKAGE: Prepare complete experimental protocol
+        
+        Args:
+            therapeutic_specification (dict): Complete therapeutic goal specification
+        
+        Returns:
+            dict: {
+                'final_crispr_system': dict,
+                'optimization_history': list,
+                'confidence_metrics': dict,
+                'experimental_protocol': dict,
+                'success_predictions': dict
+            }
+        """
+        
+    def iterative_optimization_loop(self, initial_candidates, max_iterations=5):
+        """
+        Perform iterative generate-score-optimize cycles.
+        
+        Process:
+        1. Score current candidates with all AI methods
+        2. Identify top-performing characteristics
+        3. Generate new candidates incorporating successful features
+        4. Evaluate improvement and convergence
+        5. Repeat until convergence or max iterations
+        
+        Returns:
+            dict: Optimization results with convergence analysis
+        """
+```
+
+### 6.4.2: Implement Iterative Optimization Loops
+
+#### Step 1: Create Optimization Engine
+**File**: [tools/optimization_engine.py](mdc:tools/optimization_engine.py) (New file)
+
+```python
+class CRISPROptimizationEngine:
+    """
+    Advanced optimization engine for iterative CRISPR system improvement.
+    """
+    
+    def __init__(self):
+        self.optimization_strategies = {
+            'genetic_algorithm': self.genetic_algorithm_optimization,
+            'gradient_ascent': self.gradient_based_optimization,
+            'bayesian_optimization': self.bayesian_optimization,
+            'multi_objective': self.multi_objective_optimization
+        }
+    
+    def optimize_multi_objective(self, candidates, objectives):
+        """
+        Optimize for multiple objectives simultaneously.
+        
+        Objectives:
+        - On-target efficacy
+        - Off-target safety
+        - Therapeutic relevance
+        - Experimental feasibility
+        
+        Uses Pareto optimization to find optimal trade-offs.
+        """
+        
+    def convergence_analysis(self, optimization_history):
+        """
+        Analyze optimization convergence and recommend stopping criteria.
+        
+        Returns:
+            dict: {
+                'converged': bool,
+                'improvement_rate': float,
+                'recommended_action': str,
+                'confidence_in_result': float
+            }
+        """
+```
+
+## Task 6.5: Advanced Design Interface
+
+### 6.5.1: Build Comprehensive Design Studio
+
+#### Step 1: Create "AI CRISPR Design Studio" Interface
+**File**: [streamlit_app.py](mdc:streamlit_app.py)
+
+```python
+def ai_crispr_design_studio():
+    """
+    Complete AI-powered CRISPR design studio interface.
+    """
+    st.title("🧬 AI CRISPR Design Studio")
+    st.write("Complete AI-powered CRISPR system design from therapeutic goal to optimized protocol.")
+    
+    # Multi-step wizard interface
+    if 'design_step' not in st.session_state:
+        st.session_state.design_step = 1
+    
+    # Step 1: Therapeutic Goal Definition
+    if st.session_state.design_step == 1:
+        therapeutic_goal_definition_step()
+    
+    # Step 2: AI Guide Generation
+    elif st.session_state.design_step == 2:
+        ai_guide_generation_step()
+    
+    # Step 3: Multi-Modal Scoring
+    elif st.session_state.design_step == 3:
+        multi_modal_scoring_step()
+    
+    # Step 4: Iterative Optimization
+    elif st.session_state.design_step == 4:
+        iterative_optimization_step()
+    
+    # Step 5: Complete System Assembly
+    elif st.session_state.design_step == 5:
+        complete_system_assembly_step()
+    
+    # Step 6: Protocol Generation
+    elif st.session_state.design_step == 6:
+        protocol_generation_step()
+
+def therapeutic_goal_definition_step():
+    """
+    Step 1: Define therapeutic goals and constraints.
+    """
+    st.subheader("🎯 Step 1: Define Your Therapeutic Goal")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.write("**Target Information**")
+        gene_symbol = st.text_input("Target Gene")
+        disease_context = st.selectbox("Disease Context", 
+            ["cancer", "genetic_disease", "infectious_disease", "research"])
+        
+    with col2:
+        st.write("**Edit Type**")
+        edit_type = st.selectbox("Desired Edit", 
+            ["knockout", "gene_correction", "gene_insertion", "epigenome_editing"])
+        delivery_method = st.selectbox("Delivery Method",
+            ["lipofection", "electroporation", "viral_vector", "in_vivo"])
+    
+    with col3:
+        st.write("**Optimization Priorities**")
+        efficacy_priority = st.slider("Efficacy Priority", 0, 10, 7)
+        safety_priority = st.slider("Safety Priority", 0, 10, 8)
+        feasibility_priority = st.slider("Feasibility Priority", 0, 10, 6)
+```
+
+### 6.5.2: Add Real-Time Optimization and Scoring
+
+#### Step 1: Implement Real-Time Feedback
+**File**: [streamlit_app.py](mdc:streamlit_app.py)
+
+```python
+def real_time_optimization_interface():
+    """
+    Real-time optimization interface with live feedback.
+    """
+    st.subheader("🔄 Real-Time Optimization")
+    
+    # Live optimization controls
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        # Real-time parameter adjustment
+        st.write("**Optimization Parameters**")
+        optimization_method = st.selectbox("Method", 
+            ["genetic_algorithm", "bayesian_optimization", "multi_objective"])
+        
+        max_iterations = st.slider("Max Iterations", 1, 20, 10)
+        convergence_threshold = st.slider("Convergence Threshold", 0.001, 0.1, 0.01)
+        
+    with col2:
+        # Real-time metrics
+        st.write("**Live Metrics**")
+        if 'optimization_running' in st.session_state:
+            st.metric("Current Best Score", st.session_state.get('best_score', 0))
+            st.metric("Iteration", st.session_state.get('current_iteration', 0))
+            st.metric("Improvement Rate", st.session_state.get('improvement_rate', 0))
+    
+    # Live optimization visualization
+    if st.button("🚀 Start Real-Time Optimization"):
+        optimization_placeholder = st.empty()
+        progress_bar = st.progress(0)
+        
+        # Run optimization with real-time updates
+        for iteration in range(max_iterations):
+            # Update progress
+            progress_bar.progress((iteration + 1) / max_iterations)
+            
+            # Run optimization step
+            results = run_optimization_step(iteration)
+            
+            # Update visualization
+            with optimization_placeholder.container():
+                display_optimization_progress(results, iteration)
+            
+            # Check convergence
+            if check_convergence(results, convergence_threshold):
+                st.success(f"Optimization converged at iteration {iteration + 1}")
+                break
+            
+            time.sleep(0.5)  # Brief pause for visualization
+```
+
+## Implementation Timeline
+
+### Month 1: Foundation (Tasks 6.1-6.2)
+- **Week 1-2**: Implement AI guide generation endpoints and basic UI
+- **Week 3-4**: Add repair template generation and HDR system design
+
+### Month 2: Advanced Features (Tasks 6.3-6.4)
+- **Week 1-2**: Implement epigenome-aware design and chromatin context analysis
+- **Week 3-4**: Build generative-discriminative pipeline and optimization engine
+
+### Month 3: Complete Studio (Task 6.5)
+- **Week 1-2**: Build comprehensive design studio interface
+- **Week 3-4**: Add real-time optimization and final testing
+
+## Success Metrics
+
+### Technical Performance
+- **Generation Speed**: < 30 seconds for 20 guide candidates
+- **Optimization Convergence**: 90% of cases converge within 10 iterations
+- **System Integration**: Seamless pipeline from goal to protocol
+
+### Biological Accuracy
+- **Prediction Accuracy**: >80% correlation with experimental outcomes
+- **Safety Assessment**: <5% false negative rate for off-target prediction
+- **Therapeutic Relevance**: Guides show improved therapeutic potential
+
+### User Experience
+- **Workflow Completion**: >90% of users complete full design pipeline
+- **Result Comprehension**: Users understand AI reasoning and recommendations
+- **Adoption Rate**: Transition from manual to AI-assisted design
+
+This implementation transforms our platform into the world's first complete AI-powered CRISPR design ecosystem, capable of generating, optimizing, and validating entire CRISPR systems for therapeutic applications.

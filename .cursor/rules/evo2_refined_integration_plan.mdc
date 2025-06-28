@@ -1,0 +1,102 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Evo 2 Integration: Refined Plan Based on Detailed Analysis Output
+
+This document refines the integration strategy for Evo 2 based on the newly available detailed analysis output format. It complements the broader [Evo 2 Integration Plan](mdc:.cursor/rules/evo2_integration_plan.mdc) and the main project tasks in [`.cursorrules`](mdc:.cursorrules).
+
+## 1. Understanding the New Output & Its Significance
+
+The recent output from an experimental `evo2Model.analyze_single_variant.remote()` call provides a structured and highly useful result:
+
+```
+Variant Analysis Result Interpretation:
+🧬 Variant Details:
+Position: chr17:43119628 (chromosome 17, which contains BRCA1)
+Change: T → G (reference nucleotide T changed to G)
+🔬 AI Prediction:
+Prediction: "Likely benign" = This variant is predicted to be harmless
+Confidence: 1.000 = Maximum confidence (the model is very certain)
+Delta Score: 0.000098 = Positive, small value
+📊 How it works:
+Evo2 model scores the likelihood of both the original (reference) and mutated (variant) DNA sequences
+Delta score = variant_likelihood - reference_likelihood
+Threshold: -0.0009178519
+If delta_score < threshold → "Likely pathogenic"
+If delta_score ≥ threshold → "Likely benign"
+Since 0.000098 > -0.0009178519, it\'s classified as benign
+```
+
+**Key Takeaways from this output:**
+
+*   **Comprehensive Data:** It includes variant details, the raw delta score, a human-readable prediction ("Likely benign/pathogenic"), the confidence of the analysis run, and crucially, the threshold and logic used for classification.
+*   **Actionable Insights:** The delta score and classification provide direct, actionable information for the user.
+*   **Clarity on "Confidence":** The "Confidence: 1.000" pertains to the successful execution of the analysis pipeline (model loading, sequence fetching via UCSC API, variant application, scoring completion), not directly to the biological confidence of the pathogenicity call (though high analysis confidence is a prerequisite).
+*   **UCSC API Integration:** The successful use of the UCSC API for fetching genome windows is a significant practical advancement, simplifying sequence acquisition.
+
+## 2. How This Refines Our Next Steps (Phase 8 of [`.cursorrules`](mdc:.cursorrules))
+
+This detailed output allows us to be more specific in our implementation for Phase 8:
+
+**Task 8.1: Setup Evo 2 Environment & Model Access**
+*   8.1.3 (Genome Acquisition): Prioritize leveraging or adapting the demonstrated UCSC API fetching mechanism within our backend. Document fallback strategies (e.g., user-provided FASTA) if API access fails or for offline use.
+
+**Task 8.2: Create Backend Module (`tools/evo_variant_predictor.py`)**
+*   **8.2.1 (Adapt `parse_sequences`):** Ensure this function (or its equivalent) correctly handles UCSC API calls for sequence windows based on chromosome, position, and genome build. It should also correctly substitute the variant allele into the fetched reference window.
+*   **8.2.3 (Core Logic for Scoring):** The core logic should aim to replicate the process that produced the example output. This includes:
+    *   Invoking the Evo 2 model to score reference and variant sequences.
+    *   Calculating the delta score: `variant_likelihood - reference_likelihood`.
+*   **8.2.4 (Define Output):** This is significantly clarified. The backend function should return a structured dictionary or object containing:
+    *   `variant_details`: (chromosome, position, ref_allele, alt_allele)
+    *   `genome_build`
+    *   `delta_score`: (float)
+    *   `classification`: ("Likely benign" or "Likely pathogenic")
+    *   `threshold_used`: (float)
+    *   `analysis_confidence`: (float, e.g., 1.0 for success)
+    *   `explanation_logic`: (string, e.g., "Delta score > threshold -> Likely benign")
+    *   Optionally: `raw_reference_score`, `raw_variant_score`.
+    *   The classification itself should be determined within this backend module by comparing the delta score to the appropriate threshold.
+    *   **Threshold Management:** Determine how the threshold value (`-0.0009178519` in the example) will be managed. Is it model-specific? Configurable? Hardcoded initially based on a reference publication (e.g., for *BRCA1* predictions with a specific Evo 2 model)? This needs to be clarified and documented.
+
+**Task 8.3: Develop Streamlit UI for Variant Prediction**
+*   **8.3.2 (Input Widgets):** Standard inputs for gene, chromosome, position, reference allele, alternate allele. Genome build selection (e.g., hg19, hg38).
+*   **8.3.4 (Display Results):** The UI should clearly present all fields from the structured output defined in 8.2.4. This includes:
+    *   A summary prediction (e.g., "AI Prediction: Likely benign").
+    *   The numerical Delta Score.
+    *   An expandable section detailing "How it works," showing the threshold and the comparison that led to the classification.
+    *   The Analysis Confidence/Status.
+
+**Task 8.4: LLM Enhancement for Evo 2 Predictions**
+*   **8.4.1 (LLM Prompts):** The prompt will be richer. It will include:
+    *   The structured output from the backend (delta score, classification, threshold).
+    *   Gene context, variant details.
+    *   The LLM will be tasked to:
+        *   Explain the result in simpler terms if needed.
+        *   Discuss the significance of the delta score *magnitude and sign* (e.g., "The positive delta score of 0.000098 suggests the variant sequence is slightly more likely or as likely, according to the model, than the reference sequence at this locus.").
+        *   Relate the "Likely benign/pathogenic" classification to the therapeutic context of the gene (e.g., "For a tumor suppressor like *BRCA1*, a 'Likely pathogenic' variant would be a strong candidate for correction. This 'Likely benign' finding suggests other factors might be at play if this variant is suspected in disease, or it may indeed be harmless.").
+        *   Comment on the analysis confidence.
+        *   *Crucially, avoid simply repeating the classification. The LLM adds value by contextualizing and elaborating.*
+
+**Task 8.5: Documentation and User Guidance**
+*   **8.5.1 (Setup):** Include instructions for any API access requirements (e.g., UCSC if direct calls are made) or if there are rate limits.
+*   **8.5.2 (Interpreting Scores):** Clearly explain the delta score, the source and relevance of the threshold, and the meaning of "Likely benign/pathogenic" classifications. Emphasize that these are *in silico* predictions and should be part of a broader evidence base.
+
+## 3. Immediate Next Steps (Post-Current UI/UX Task)
+
+Once the current priority (Task 6.6.1 - Unified Navigation) is addressed:
+
+1.  **Finalize Backend (`tools/evo_variant_predictor.py` - Task 8.2):**
+    *   **ACTION:** Implement or adapt the `analyze_single_variant` (or equivalent) function to produce the structured output discussed (including delta score, classification based on a threshold).
+    *   **ACTION:** Research and decide on the threshold management strategy. For initial implementation, it might be specific to the model and potentially a target gene class (e.g., *BRCA1* if using parameters from the notebook).
+    *   **ACTION:** Ensure robust error handling for API calls and model execution.
+2.  **Develop Basic UI (Task 8.3):**
+    *   **ACTION:** Create the Streamlit page/section with input fields and placeholders for displaying the structured backend output.
+3.  **Integrate Backend with UI:**
+    *   **ACTION:** Connect the UI to call the backend function and display its results (without LLM enhancement initially).
+4.  **Develop and Integrate LLM Enhancement (Task 8.4):**
+    *   **ACTION:** Design the LLM prompts based on the structured backend output.
+    *   **ACTION:** Integrate the LLM call to provide the enhanced interpretation in the UI.
+
+This refined plan, leveraging the concrete output example, provides a clearer path for implementing a highly valuable Evo 2 prediction feature within the CasPro Assistant.

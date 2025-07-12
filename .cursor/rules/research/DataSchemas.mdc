@@ -1,0 +1,126 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Data Architecture: Project LEAP
+
+This document outlines the core data schemas for the CasPro platform, designed to meet the objectives of the LEAP Grant. Our data architecture is built around two primary missions, mirroring the grant's areas of focus: understanding the *mechanisms* of leukemogenesis and designing novel cancer *interception* therapies.
+
+---
+
+## Part 1: Mechanistic Understanding Schemas (LEAP Focus Area 1)
+
+These schemas are designed to capture and synthesize the intelligence needed to understand the precise steps of leukemogenesis, from a single mutation to a comprehensive threat assessment.
+
+### 1.1 `variants` (The Foundation)
+
+This schema defines the structured data for a single somatic mutation, sourced from the COSMIC database. It provides the ground truth for our analysis.
+
+```
+{
+  "gene_symbol": "ASXL1",
+  "mutation_id": "COSM33924",
+  "mutation_cds": "c.1934dupG",
+  "mutation_aa": "p.G646fs",
+  "primary_site": "haematopoietic_and_lymphoid_tissue",
+  "primary_histology": "chronic_myelomonocytic_leukaemia",
+  "pubmed_pmid": 21828135
+}
+```
+
+### 1.2 `literature_intelligence` (The Context)
+
+This schema stores the raw and processed intelligence from scientific literature associated with a variant. It is the output of our `literature_analyzer.py` tool.
+
+```
+{
+  // --- Raw Data from Diffbot ---
+  "pubmed_id": 21828135,
+  "full_text_url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3193268/",
+  "title": "Mutational spectrum analysis of chronic myelomonocytic leukemia...",
+  "author": "Anna M Jankowska",
+  "publication_date": "2011-10-06",
+  "full_text": "...",
+  "diffbot_tags": [
+    {"label": "EZH2", "score": 0.57, ...},
+    {"label": "DNMT3A", "score": 0.57, ...}
+  ],
+  // --- Processed Intelligence from LLM ---
+  "strategic_summaries": [
+    {
+      "prompt": "1. What is the role of epigenetic dysregulation in CMML? ...",
+      "summary": "The article highlights the discovery of mutations in genes related to epigenetic regulation...",
+      "model_used": "gemini"
+    }
+  ]
+}
+```
+
+### 1.3 `Threat Dossier` (The Verdict)
+
+This is the unified output of our `threat_assessor.py` module. It synthesizes information from multiple sources into a single, actionable verdict on a variant's pathogenicity. This is the primary data object displayed in the "Threat Assessment" UI.
+
+```
+{
+  "gene_symbol": "ASXL1",
+  "protein_change": "p.Gly646fs",
+  "verdict": "PATHOGENIC",
+  "determination_protocol": "Triumvirate Protocol: Truncation Sieve",
+  "vep_annotation": "Bypassed: Frameshift/Nonsense mutation is definitively pathogenic.",
+  "clinvar_significance": "Not Found",
+  "triumvirate_score": -1000.0,
+  "supporting_literature": [21828135]
+}
+```
+---
+
+## Part 2: Cancer Interception Schemas (LEAP Focus Area 2)
+
+Once a threat is validated, these schemas define the structure of the de-risked therapeutic candidates our platform designs. They represent the contents of the "Arsenal Expansion" UI.
+
+### 2.1 `CRISPR Interception` ('Clone Assassin')
+
+Defines a single CRISPR guide RNA designed to target and eliminate cells carrying the pathogenic mutation.
+
+```
+{
+  "target_variant": "ASXL1:p.Gly646fs",
+  "guide_sequence": "GCAUACAUAGCAGUACAGUG",
+  "efficacy_score_zeta": 0.92,
+  "off_target_analysis": {
+    "hits": 0,
+    "summary": "No off-target sites found in the human genome."
+  }
+}
+```
+
+### 2.2 `Biologic Interception` (Inhibitor)
+
+Defines a novel, AI-generated protein (e.g., a nanobody) designed to inhibit the function of the pathogenic protein.
+
+```
+{
+  "target_protein": "ASXL1 (mutant)",
+  "modality": "Nanobody",
+  "amino_acid_sequence": "EVQLVESGGGLVQPGGSLRLSCAASGFTFSSYAMSWVRQAPGKGLEWVSAISGSGGSTYYADSVKGRFTISRDNAKNSLYLQMNSLRAEDTAVYYCAASSLAYSGWYFDYWGQGTLVTVSS",
+  "predicted_affinity": "High",
+  "confidence_score": 0.88
+}
+```
+
+### 2.3 `Campaign Dossier` (The Plan)
+
+A final, LLM-generated document that synthesizes all the above data into a comprehensive pre-clinical experimental plan, directly addressing the grant's requirement for a "strong scientific rationale."
+
+```
+{
+  "campaign_title": "Integrated Interception Strategy for ASXL1-mutated Clonal Hematopoiesis",
+  "target_threat_dossier": {...},
+  "recommended_interventions": [
+    {"type": "CRISPR", "details": {...}},
+    {"type": "Biologic", "details": {...}}
+  ],
+  "experimental_plan_text": "### Executive Summary\nThis document outlines a dual-pronged strategy to intercept ASXL1-driven clonal expansion...\n\n### Aim 1: Validate CRISPR-based Clone Assassin...\n\n### Aim 2: Assess Nanobody Inhibitor Efficacy..."
+}
+```

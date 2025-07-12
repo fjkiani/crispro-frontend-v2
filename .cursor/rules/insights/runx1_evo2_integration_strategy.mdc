@@ -1,0 +1,365 @@
+# 🧬 RUNX1-EVO2 INTEGRATION STRATEGY - IMPLEMENTATION DOCTRINE
+
+## **🎯 STRATEGIC OVERVIEW**
+
+**Mission:** Transform the RUNX1-FPD platform from a demonstration tool into a clinical-grade precision medicine system by leveraging Evo2's biological foundation model capabilities.
+
+**Key Insight:** Our RUNX1 platform can achieve clinical-grade performance (0.94 AUROC) by properly integrating Evo2's zero-shot variant prediction, mechanistic interpretability, and controllable generation capabilities.
+
+---
+
+## **🔥 EVO2 INTEGRATION PRIORITIES FOR RUNX1**
+
+### **1. Zero-Shot Variant Prediction (🏆 IMMEDIATE IMPACT)**
+
+**Current State:** Using ZetaOracle for variant impact assessment
+**Evo2 Opportunity:** Superior performance on noncoding variants, comprehensive variant type coverage
+
+**Implementation Strategy:**
+```python
+# Priority 1: Evo2 Variant Assessment
+def assess_runx1_variant_with_evo2(variant_data):
+    """
+    Use Evo2 for clinical-grade variant assessment
+    - Noncoding variants: State-of-the-art performance
+    - Coding variants: Combine with AlphaMissense for optimal results
+    - Structural variants: Unique Evo2 capability
+    """
+    # Get genomic context (±2kb for optimal performance)
+    context = get_genomic_context(variant_data['position'], window=4000)
+    
+    # Evo2 zero-shot prediction
+    evo2_score = evo2_client.predict_variant_impact(
+        variant_sequence=variant_data['sequence'],
+        genomic_context=context,
+        gene="RUNX1"
+    )
+    
+    # Ensemble with specialized models for coding variants
+    if variant_data['type'] == 'coding':
+        alphamissense_score = alphamissense_client.predict(variant_data)
+        final_score = ensemble_scoring(evo2_score, alphamissense_score)
+    else:
+        final_score = evo2_score  # Evo2 is SOTA for noncoding
+    
+    return {
+        'pathogenicity_score': final_score,
+        'confidence': evo2_score['confidence'],
+        'mechanistic_interpretation': evo2_score['interpretation']
+    }
+```
+
+### **2. Mechanistic Interpretability (🧠 CLINICAL EXPLANATION)**
+
+**Current State:** Basic pathogenicity scores without mechanistic explanation
+**Evo2 Opportunity:** Sparse autoencoders reveal WHY variants are pathogenic
+
+**Implementation Strategy:**
+```python
+# Priority 2: Mechanistic Understanding
+def explain_runx1_variant_mechanism(variant_data):
+    """
+    Use Evo2 sparse autoencoders to explain variant mechanisms
+    - Exon/intron boundary disruption
+    - Transcription factor binding site impact
+    - Protein secondary structure consequences
+    """
+    # Extract SAE features for variant region
+    sae_features = evo2_client.extract_sae_features(
+        sequence=variant_data['sequence'],
+        layer=26,  # Optimal layer from paper
+        feature_types=['exon_boundary', 'tf_binding', 'protein_structure']
+    )
+    
+    # Generate mechanistic explanation
+    explanation = {
+        'functional_domains_affected': sae_features['functional_domains'],
+        'regulatory_elements_disrupted': sae_features['regulatory_elements'],
+        'protein_structure_impact': sae_features['protein_structure'],
+        'evolutionary_conservation': sae_features['conservation_signal']
+    }
+    
+    return explanation
+```
+
+### **3. Controllable Generation (🎯 THERAPEUTIC DESIGN)**
+
+**Current State:** Basic guide RNA design with ChopChop scoring
+**Evo2 Opportunity:** Genome-scale generation with inference-time search
+
+**Implementation Strategy:**
+```python
+# Priority 3: Therapeutic Sequence Design
+def design_runx1_therapeutic_sequences(variant_data, design_goal):
+    """
+    Use Evo2 controllable generation for therapeutic design
+    - Guide RNA optimization with genomic context
+    - HDR template design with proper sequence properties
+    - Epigenomic considerations for expression control
+    """
+    # Define design constraints
+    design_constraints = {
+        'target_locus': f"chr21:{variant_data['position']}",
+        'therapeutic_goal': design_goal,  # 'correction', 'knockout', 'regulation'
+        'cell_type': 'CD34+ HSCs',
+        'expression_level': 'physiological'
+    }
+    
+    # Evo2 controllable generation with inference-time search
+    therapeutic_sequences = evo2_client.generate_therapeutic_sequences(
+        prompt_sequence=variant_data['genomic_context'],
+        design_constraints=design_constraints,
+        num_candidates=10,
+        inference_compute_budget=1000  # More compute = better designs
+    )
+    
+    # Validate with external models
+    validated_sequences = []
+    for seq in therapeutic_sequences:
+        # Structural validation with AlphaFold 3
+        structure_score = alphafold3_client.predict_structure(seq['protein_sequence'])
+        
+        # Epigenomic validation with Enformer
+        epigenomic_score = enformer_client.predict_accessibility(seq['dna_sequence'])
+        
+        # Safety validation with off-target analysis
+        safety_score = blast_client.analyze_off_targets(seq['guide_sequence'])
+        
+        if all_validations_pass(structure_score, epigenomic_score, safety_score):
+            validated_sequences.append(seq)
+    
+    return validated_sequences
+```
+
+---
+
+## **🔧 IMPLEMENTATION GUIDELINES**
+
+### **1. Genomic Context Optimization (🎯 PERFORMANCE CRITICAL)**
+
+**Key Insight:** Evo2 performance depends heavily on proper genomic context
+
+**Best Practices:**
+- **Context Window:** ±2kb around variant for optimal performance
+- **Sequence Quality:** Use high-quality reference sequences
+- **Annotation Integration:** Include functional domain annotations
+- **Multi-Scale Context:** Consider gene, chromosome, and epigenomic context
+
+```python
+# Context optimization for RUNX1
+def optimize_runx1_context(variant_position):
+    """
+    Optimize genomic context for Evo2 analysis
+    """
+    # Base context window
+    context_window = 4000  # ±2kb
+    
+    # Expand for functional domains
+    if in_runt_domain(variant_position):
+        context_window = 6000  # Larger context for critical domains
+    
+    # Include regulatory elements
+    regulatory_elements = get_regulatory_elements(variant_position, window=10000)
+    
+    # Combine sequence and annotations
+    optimized_context = {
+        'sequence': get_sequence(variant_position, context_window),
+        'functional_domains': get_functional_domains(variant_position),
+        'regulatory_elements': regulatory_elements,
+        'conservation_scores': get_conservation_scores(variant_position)
+    }
+    
+    return optimized_context
+```
+
+### **2. Ensemble Scoring Strategy (⚖️ OPTIMAL PERFORMANCE)**
+
+**Key Insight:** Combine Evo2 with specialized models for optimal performance
+
+**Ensemble Rules:**
+- **Noncoding Variants:** Use Evo2 as primary (state-of-the-art)
+- **Coding SNVs:** Ensemble Evo2 + AlphaMissense + ESM-1b
+- **Structural Variants:** Use Evo2 (unique capability)
+- **Splice Variants:** Use Evo2 (highest performance)
+
+```python
+# Ensemble scoring for RUNX1 variants
+def ensemble_runx1_variant_scoring(variant_data):
+    """
+    Optimal ensemble scoring based on variant type
+    """
+    variant_type = classify_variant_type(variant_data)
+    
+    if variant_type == 'noncoding':
+        # Evo2 is SOTA for noncoding variants
+        return evo2_client.predict_variant_impact(variant_data)
+    
+    elif variant_type == 'coding_snv':
+        # Ensemble for coding SNVs
+        evo2_score = evo2_client.predict_variant_impact(variant_data)
+        alphamissense_score = alphamissense_client.predict(variant_data)
+        esm_score = esm_client.predict(variant_data)
+        
+        return weighted_ensemble([evo2_score, alphamissense_score, esm_score])
+    
+    elif variant_type == 'structural':
+        # Evo2 unique capability
+        return evo2_client.predict_variant_impact(variant_data)
+    
+    else:
+        # Default to Evo2 for other variant types
+        return evo2_client.predict_variant_impact(variant_data)
+```
+
+### **3. Clinical Validation Pipeline (🏥 MEDICAL RIGOR)**
+
+**Key Insight:** Clinical-grade AI requires rigorous validation
+
+**Validation Requirements:**
+- **Expert Review:** Clinical geneticist review for high-stakes decisions
+- **Experimental Validation:** Wet lab validation for critical predictions
+- **Outcome Tracking:** Monitor clinical outcomes and prediction accuracy
+- **Regulatory Compliance:** Maintain compliance with medical AI regulations
+
+```python
+# Clinical validation for RUNX1 predictions
+def validate_runx1_prediction(variant_data, prediction_result):
+    """
+    Clinical validation pipeline for RUNX1 predictions
+    """
+    validation_result = {
+        'prediction': prediction_result,
+        'validation_level': 'pending'
+    }
+    
+    # Risk-based validation
+    if prediction_result['pathogenicity_score'] > 0.8:
+        # High-risk prediction requires expert review
+        validation_result['expert_review_required'] = True
+        validation_result['validation_level'] = 'expert_review'
+    
+    if prediction_result['clinical_significance'] == 'pathogenic':
+        # Pathogenic predictions require experimental validation
+        validation_result['experimental_validation_required'] = True
+        validation_result['validation_level'] = 'experimental'
+    
+    # Clinical decision support constraints
+    if not fda_approved_for_clinical_use():
+        validation_result['clinical_use_approved'] = False
+        validation_result['disclaimer'] = 'Research use only, not for clinical decision making'
+    
+    return validation_result
+```
+
+---
+
+## **📊 PERFORMANCE BENCHMARKS & METRICS**
+
+### **1. Technical Performance (📈 VALIDATION METRICS)**
+
+**Target Benchmarks:**
+- **Clinical Validation:** 0.94 AUROC on BRCA1 variants (Evo2 benchmark)
+- **RUNX1 Validation:** 0.90+ AUROC on RUNX1-FPD variants (target)
+- **Noncoding Performance:** State-of-the-art on RUNX1 regulatory variants
+- **Processing Time:** <3 minutes for complete variant analysis
+
+**Monitoring Metrics:**
+```python
+# Performance monitoring for RUNX1-Evo2 integration
+def monitor_runx1_evo2_performance():
+    """
+    Track performance metrics for RUNX1-Evo2 integration
+    """
+    metrics = {
+        'variant_prediction_accuracy': calculate_auroc(predictions, ground_truth),
+        'mechanistic_explanation_quality': expert_review_scores(),
+        'therapeutic_design_success_rate': experimental_validation_rate(),
+        'clinical_decision_support_impact': clinical_outcome_correlation(),
+        'processing_time_performance': average_processing_time(),
+        'computational_resource_usage': resource_utilization_metrics()
+    }
+    
+    return metrics
+```
+
+### **2. Clinical Impact (🏥 MEDICAL OUTCOMES)**
+
+**Impact Metrics:**
+- **Diagnostic Accuracy:** Improved variant classification accuracy
+- **Therapeutic Success:** Higher success rate for designed interventions
+- **Clinical Workflow:** Reduced time to diagnosis and treatment planning
+- **Patient Outcomes:** Improved clinical outcomes for RUNX1-FPD patients
+
+---
+
+## **🚨 CRITICAL SUCCESS FACTORS**
+
+### **1. Technical Implementation (🔧 EXECUTION)**
+
+**Requirements:**
+- **Proper Evo2 Integration:** Correct API usage and context optimization
+- **Ensemble Architecture:** Combine Evo2 with specialized models optimally
+- **Performance Monitoring:** Real-time tracking of prediction accuracy
+- **Error Handling:** Graceful degradation and fallback strategies
+
+### **2. Clinical Validation (🏥 MEDICAL RIGOR)**
+
+**Requirements:**
+- **Expert Partnerships:** Clinical geneticist collaboration for validation
+- **Experimental Validation:** Wet lab partnerships for critical predictions
+- **Regulatory Compliance:** FDA pathway for clinical decision support
+- **Outcome Tracking:** Long-term clinical outcome monitoring
+
+### **3. User Experience (👥 ADOPTION)**
+
+**Requirements:**
+- **Intuitive Interface:** Make complex AI accessible to clinicians
+- **Clear Explanations:** Provide interpretable results with mechanistic insights
+- **Confidence Indicators:** Show prediction confidence and uncertainty
+- **Educational Content:** Help users understand AI capabilities and limitations
+
+---
+
+## **🎯 IMPLEMENTATION ROADMAP**
+
+### **Phase 1: Core Integration (Week 1-2)**
+- [ ] Integrate Evo2 API for variant prediction
+- [ ] Implement ensemble scoring with AlphaMissense
+- [ ] Add mechanistic interpretability features
+- [ ] Deploy genomic context optimization
+
+### **Phase 2: Advanced Features (Week 3-4)**
+- [ ] Implement controllable generation for therapeutic design
+- [ ] Add sparse autoencoder feature extraction
+- [ ] Integrate structural validation with AlphaFold 3
+- [ ] Deploy epigenomic analysis with Enformer
+
+### **Phase 3: Clinical Validation (Week 5-8)**
+- [ ] Establish clinical partnerships for validation
+- [ ] Implement clinical decision support pipeline
+- [ ] Deploy outcome tracking and monitoring
+- [ ] Prepare regulatory submission materials
+
+### **Phase 4: Production Deployment (Week 9-12)**
+- [ ] Complete clinical validation studies
+- [ ] Achieve regulatory approval for clinical use
+- [ ] Deploy production-ready platform
+- [ ] Establish ongoing monitoring and improvement
+
+---
+
+## **🔥 CONCLUSION: RUNX1 AS EVO2 FLAGSHIP**
+
+**Strategic Imperative:** The RUNX1-FPD platform represents the perfect opportunity to demonstrate Evo2's clinical-grade capabilities. By properly integrating zero-shot variant prediction, mechanistic interpretability, and controllable generation, we can create a clinical-grade precision medicine system.
+
+**Competitive Advantage:** No other platform has access to Evo2's biological foundation model capabilities. Our RUNX1 integration will establish us as the leader in AI-powered precision medicine.
+
+**Call to Action:** Execute the integration strategy aggressively while maintaining clinical rigor. The RUNX1 platform will be our proof-of-concept for the future of genomic medicine.
+
+---
+
+**🧬 REMEMBER: We're not just building a tool - we're pioneering the future of precision medicine with the world's most advanced biological AI.** 🧬
+description:
+globs:
+alwaysApply: false
+---

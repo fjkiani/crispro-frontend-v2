@@ -1,0 +1,277 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+Overall Mission Objective
+Our goal is to create a general-purpose metastasis modeling system that:
+
+Predicts Metastatic Potential: Identifies high-threat mutations ("seeds") in cancer driver genes that could initiate metastasis, using AI predictions (via Zeta Oracle and potentially Boltz-2) and real-world data validation.
+
+Maps Metastatic Sites: Pinpoints likely "soils" (metastatic sites) for any cancer type through a multi-layered intelligence-gathering approach, ensuring we understand where these seeds might spread.
+
+Informs Therapeutic Design: Feeds into our broader pipeline (Phases I and II as previously planned) to design targeted therapies like gRNAs and nanobodies to intercept cancer progression, aligning with the LEAP Grant Program’s focus on cancer interception and prevention for RUNX1-FPD. Boltz-2 could accelerate this by predicting binding affinities for therapeutic candidates.
+
+This isn’t just about modeling; it’s about building a weaponized platform to dominate cancer research with speed and precision, collapsing years of manual work into seconds of automated analysis, with Boltz-2 potentially amplifying our impact.
+
+What We’re Looking to Implement: "Seed & Soil" Framework Details
+Here’s a detailed rundown of the two main components of the doctrine—Seed Characterization and Soil Identification—and what coding tasks you’ll be tackling to bring this to life, including how Boltz-2 fits into the strategy.
+
+1. "Seed" Characterization: Defining the Aggressor
+Purpose: Identify high-threat mutations ("seeds") that can initiate metastasis by quantifying their impact and cones.
+
+Primary Filter - High Functional Impact:
+
+What It Is: We’re using our AI model, Zeta Oracle (via run_second_hit_simulation.py), to generate a Zeta Score—a measure of how deleterious a mutation is (large negative scores = high impact). We’re also considering Boltz-2 to add binding affinity predictions for a more biophysical assessment of mutation impact.
+
+Coding Task: Ensure the simulation script processes mutations (e.g., in ASXL1 for AML) and outputs Zeta Scores. You’ll need to integrate API calls to Zeta Oracle for scoring and handle batch processing of multiple mutations (e.g., 50 mutations as in prior plans). Additionally, prepare for potential integration of Boltz-2 by coding a microservice to call its API for affinity scoried ASXL1 binds to metastasis drivers like adhesion proteins).
+
+Boltz-2 Integration: Use Boltz-2 to predict binding affinity between mutated proteins and key partners, enhancing "seed" aggression ranking. Example from search result : Boltz-2 calculates binding affinity in 20 seconds, 1000x faster than free-energy perturbation (FEP) simulations. Code a Python wrapper like:
+
+python
+from boltz import Boltz2
+model = Boltz2(weights="boltz2_affinity")
+affinity_score = model.predict_affinity(protein_sequence="MUTATED_ASXL1", ligand_sequence="METASTASIS_RECEPTOR")
+Validation Sources: Benchmark these scores (both Zeta and Boltz-2 affinity if integrated) against real-world data.
+
+ClinVar (https://www.ncbi.nlm.nih.gov/clinvar/): Query for pathogenicity of mutations.
+
+COSMIC (https://cancer.sanger.ac.uk/cosmic): Check somatic impact in cancer.
+
+Task: Write scripts to pull data from ClinVar and COSMIC APIs (e.g., using Python’s requests or Bio.Entrez) and compare Zeta Scores and Boltz-2 affinity scores against their classifications to validate our predictions. Store results in a database for reference.
+
+Context - Location in Driver Gene:
+
+What It Is: Mutations must be in known cancer driver genes (e.g., ASXL1 for AML, TP53 for solid tumors) to be considered high-threat seeds.
+
+Coding Task: Build a reference list of driver genes by cancer type.
+
+OncoKB (https://www.oncokb.org/api/v1): API to fetch driver genes.
+
+Cancer Gene Census (via COSMIC): Download or query driver gene lists.
+
+Task: Code a script to compile a driver gene database from these sources, then filter mutations from run_second_hit_simulation.py output to ensure they map to these genes. Implement a check in the pipeline to flag non-driver gene mutations as low priority.
+
+(Future) Functional Analysis:
+
+What It Is: Evolve the platform to prioritize mutations affecting pro-metastatic functions (cell adhesion, motility, immune evasion). Boltz-2 can play a role here by predicting how mutations alter binding to pathway-specific targets.
+
+Coding Task: Lay the groundwork for pathway analysis and affinity-based functional scoring.
+
+KEGG Pathways (https://www.genome.jp/kegg/pathway.html): API for pathway maps.
+
+Reactome (https://reactome.org/dev/graph-database): API for biological pathways.
+
+Boltz-2 Role: Use Boltz-2 to predict binding affinity changes in mutated proteins to pathway targets (e.g., integrins for adhesion), as noted in search result  for its FEP-level accuracy.
+
+Task: Develop a module to query KEGG and Reactome APIs, mapping mutations to pathways. Design a scoring system to weight mutations higher if they impact metastasis-related pathways (e.g., adhesion). For Boltz-2, code a function to score affinity for pathway-specific protein-ligand pairs. This is a future feature, so start with basic API integration scripts for now.
+
+2. "Soil" Identification: A General-Purpose Scouting System
+Purpose: Identify high-probability metastatic sites ("soils") for any cancer type using a three-tiered intelligence-gathering process.
+
+Intelligence Layer 1: Clinical Precedent:
+
+What It Is: Establish a baseline of common metastatic sites for a given cancer type (e.g., bone marrow, spleen for AML).
+
+Coding Task: Create a static reference table or database.
+
+NCCN Guidelines (https://www.nccn.org/guidelines/category_1): Manually compile or scrape data on metastatic sites by cancer type.
+
+SEER Database (https://seer.cancer.gov/): Use SEER*Stat or online tools to extract metastasis statistics.
+
+PubMed Review Articles: Manually search for landmark reviews.
+
+Task: Code a simple database structure (e.g., SQLite or JSON) to store metastatic site data by cancer type from these sources. Build a script to parse manually downloaded data or scraped content into this database for quick lookup in the CommandCenter.
+
+Intelligence Layer 2: Automated Literature Scouting:
+
+What It Is: Keep intelligence current by mining recent research on metastatic sites.
+
+Coding Task: Enhance the existing @tools/literature_analyzer.py tool.
+
+PubMed API (https://www.ncbi.nlm.nih.gov/books/NBK25499/): Use E-Utilities for programmatic searches.
+
+Europe PMC API (https://europepmc.org/RestfulWebService): Complementary literature search.
+
+Task: Modify literature_analyzer.py to automate searches with queries like "[Cancer Type]" AND ("metastasis" OR "extramedullary" OR "secondary site")". Use Python’s Bio.Entrez for PubMed and requests for Europe PMC to fetch abstracts or full-text links. Summarize findings (e.g., extract metastatic sites mentioned) and update the metastatic site database weekly or monthly.
+
+Intelligence Layer 3: Database Reconnaissance:
+
+What It Is: Query biological databases for empirical evidence on metastatic sites and tissue receptivity. Boltz-2 can enhance this by scoring affinity between "seed" mutations and soil-specific proteins.
+
+Coding Task: Develop tools for programmatic data extraction and affinity analysis.
+
+cBioPortal/TCGA (https://www.cbioportal.org/api): Query for metastasis site statistics by cancer type.
+
+GTEx (https://gtexportal.org/home/api-docs): Analyze gene expression in potential soils.
+
+Human Protein Atlas (HPA) (https://www.proteinatlas.org/about/download): Check protein expression in tissues.
+
+Boltz-2 Role: Use Boltz-2 to predict binding affinity between "seed" mutated proteins (e.g., ASXL1 variants) and proteins overexpressed in potential soils (e.g., bone marrow receptors), leveraging its speed (search result ) and accuracy (search result ).
+
+Task: Write Python scripts using requests or dedicated libraries (e.g., cbioportal-client) to query these APIs. For cBioPortal, extract clinical data on metastasis sites (e.g., bone frequency in AML). For GTEx/HPA, pull expression data for driver genes (e.g., ASXL1) in potential soils (e.g., spleen) to score receptivity. Code a Boltz-2 function to score affinity for seed-soil protein pairs, integrating results into the metastatic site database for cross-referencing.
+
+Additional Context: Integration with Broader Pipeline and Boltz-2 Rationale
+Sergeant, this "Seed & Soil" framework isn’t standalone—it feeds into our larger pipeline:
+
+Phase I (In Silico Analysis): "Seed" characterization ties directly into mutation impact scoring (Task 1.1: Establish Initial State, Task 1.2: Model Clonal Evolution) using Zeta Oracle, with Boltz-2 potentially enhancing with binding affinity scores (search result : 1000x faster than FEP). Your code will support generating and validating these scores.
+
+Phase II (Therapeutic Design): Insights from "Seed & Soil" will guide therapeutic targets (e.g., designing gRNAs for high-impact seeds or soils with high receptivity). Boltz-2 can rank therapeutic designs (e.g., gRNAs, nanobodies) by affinity (search result ), slashing wet-lab screening time. You’ll eventually code modules to link modeling outputs to therapeutic blueprints.
+CrisPRO Studio UI: Results (e.g., Zeta Scores, affinity scores, metastatic site maps) will be visualized in the UI. Keep data outputs structured (e.g., JSON, database tables) for easy frontend integration later.
+
+Why Boltz-2?: We’re considering Boltz-2 because it bridges a critical gap—predicting binding affinity with FEP-level accuracy at 1000x the speed (search result ), which Zeta Oracle doesn’t cover. It’s open-source (MIT license, search result ), runs on consumer GPUs (~18 sec/prediction, search result ), and offers controllability (e.g., distance constraints, proprietary data integration, search result ). It’s particularly strong for rigid, well-characterized proteins (search result ) like many cancer drivers, though it may need refinement for flexible targets. Integrating Boltz-2 could accelerate "seed" aggression ranking, soil receptivity scoring, and therapeutic design, making our pipeline a fuckin’ juggernaut.
+
+Immediate Coding Priorities for Sergeant
+To get you started and aligned with our attack plan, here are the immediate coding tasks to focus on:
+
+Seed Characterization - Functional Impact Validation:
+
+Write a script to query ClinVar and COSMIC APIs for mutation pathogenicity/impact data. Compare these with Zeta Scores from run_second_hit_simulation.py output. Store results in a local database (e.g., SQLite) for reference.
+
+Seed Characterization - Driver Gene Filter:
+
+Build a script to fetch driver gene lists from OncoKB and Cancer Gene Census. Create a filter in the simulation pipeline to flag mutations in driver genes (e.g., ASXL1 for AML).
+
+Soil Identification - Clinical Precedent Database:
+
+Set up a simple database (JSON or SQLite) for metastatic sites by cancer type using manually compiled data from NCCN Guidelines and SEER. Write a parser to input this data.
+
+Soil Identification - Literature Scouting Enhancement:
+
+Update @tools/literature_analyzer.py to automate PubMed searches for metastatic site data. Test with a query like "acute myeloid leukemia" AND "metastasis".
+
+Boltz-2 Integration Prep (Exploratory):
+
+Research Boltz-2 setup by reviewing GitHub resources (search result ) and NVIDIA BioNeMo docs (search result ). Code a prototype microservice to call Boltz-2 for binding affinity prediction using a dummy protein-ligand pair. This is prep work in case we fully commit to integration.
+
+Why This Matters
+Sergeant, your code will be the backbone of a platform that automates cancer metastasis modeling at a scale and speed never seen before. By coding these components, you’re enabling us to predict where cancer might spread (soils) and which mutations are the deadliest (seeds), directly informing therapies to intercept progression. With Boltz-2 in the mix, we could turbocharge our predictions and therapeutic designs with biophysical accuracy, aligning with the LEAP Grant’s mission to advance cancer prevention for RUNX1-FPD and beyond, positioning us to dominate the field.
+
+Resources and Support
+Data Sources: All API links and access details for ClinVar, COSMIC, OncoKB, etc., are provided above. Most are free or require simple registration (e.g., OncoKB token, PubMed API access).
+
+Boltz-2 Info: Review search results [1-6] for details on Boltz-2 capabilities, code availability (GitHub, search result ), and performance benchmarks.
+
+Existing Code: Check run_second_hit_simulation.py and @tools/literature_analyzer.py to understand current pipeline structure.
+
+Relevant Codebases from Search Results
+The search results highlight several GitHub repositories that contain code or frameworks relevant to our project. I’ve evaluated each for applicability to our "Seed & Soil" doctrine, therapeutic design pipeline, and data processing needs. Here’s what’s out there and how we can utilize it.
+
+HaploDynamics (https://github.com/remytuyeras/HaploDynamics)
+
+What It Is: A Python 3+ library for simulating realistic VCF (Variant Call Format) data, designed for benchmarking and pipeline testing. It generates synthetic genomic datasets with customizable genetic architecture (e.g., population size, linkage disequilibrium levels, rare mutations) without requiring input files .
+
+Relevance to Our Work: This directly supports our need for sample VCF files to test the VCFProcessor logic in Task 0.2, as we’ve struggled with acquiring real data from sources like LOVD or TCGA. It’s perfect for creating synthetic RUNX1-FPD or AML-related variant data to simulate "seed" mutations.
+
+How to Use:
+
+Clone the repo and install it (git clone https://github.com/remytuyeras/HaploDynamics.git; pip install .).
+
+Use provided scripts to generate a VCF file for a population (e.g., 1000 individuals). Customize output to focus on chromosome 21q22.12 (RUNX1 locus) by adjusting parameters if possible, or manually edit the VCF to include known RUNX1 mutations (e.g., R201Q).
+
+Place the generated VCF in data/vcf/ for ingestion into our pipeline.
+
+Benefit: Saves time and bypasses access barriers for real data, allowing immediate testing of mutation impact scoring workflows (run_second_hit_simulation.py).
+
+Limitation: Synthetic data lacks real-world clinical context, so it’s a temporary solution until real data is secured.
+
+Dave Tang’s Learning VCF File Repository (https://github.com/davetang/learning_vcf_file.git)
+
+What It Is: A repository providing a workflow to generate example VCF files using tools like BCFtools, HaplotypeCaller, and FreeBayes. It includes scripts to create mutated reference sequences and call variants, resulting in files like aln.bt.vcf.gz .
+
+Relevance to Our Work: Similar to HaploDynamics, this helps with generating synthetic VCF data for testing our pipeline, especially for "seed" mutation analysis in RUNX1 or ASXL1.
+
+How to Use:
+
+Clone the repo (git clone https://github.com/davetang/learning_vcf_file.git).
+
+Run the workflow as outlined (cd workflow && ./install.sh; cd simple && make) to generate example VCFs.
+
+Modify the reference sequence to focus on relevant genomic regions (e.g., RUNX1 on chromosome 21) or insert known FPD-MM variants to make the output applicable.
+
+Benefit: Provides a quick way to create test data for pipeline development, supporting Task 0.2.
+
+Limitation: Like HaploDynamics, it’s synthetic and requires customization for relevance to RUNX1-FPD.
+
+Boltz-2 (https://github.com/ncats/boltz2)
+
+What It Is: The official GitHub repository for Boltz-2, an AI model for molecular modeling with capabilities in binding affinity prediction and protein-ligand co-folding. It’s open-source (MIT-licensed), includes model weights and code, and is designed for drug discovery and structural biology applications .
+
+Relevance to Our Work: As discussed extensively, Boltz-2 is a game-changer for our "Seed & Soil" framework. It can predict binding affinity between mutated proteins (e.g., ASXL1 variants as "seeds") and metastasis drivers or soil-specific receptors, enhancing aggression ranking. It also supports therapeutic design by ranking gRNAs/nanobodies by affinity for targets like mutant RUNX1.
+
+How to Use:
+
+Clone the repo (git clone https://github.com/ncats/boltz2.git).
+
+Follow setup instructions to install dependencies and download model weights (as per search result ). It runs on consumer GPUs (~18 sec/prediction).
+
+Integrate as a microservice in our CommandCenter backend with a simple Python wrapper:
+
+python
+from boltz import Boltz2
+model = Boltz2(weights="boltz2_affinity")
+affinity_score = model.predict_affinity(protein_sequence="MUTATED_ASXL1", ligand_sequence="METASTASIS_RECEPTOR")
+Use for "seed" characterization (affinity scoring alongside Zeta Scores in run_second_hit_simulation.py) and therapeutic design (ranking candidates in Phase II tasks).
+
+Benefit: Provides FEP-level accuracy 1000x faster than traditional methods, directly enhancing our ability to quantify "seed" aggression and design precision therapies.
+
+Limitation: May require fine-tuning with proprietary data for niche targets like RUNX1-FPD mutations, and excels more with rigid proteins than highly flexible ones.
+
+Seven Bridges API Client (https://github.com/sbg/sevenbridges2)
+
+What It Is: An API client (available in R and Python as sevenbridges-python) for the Seven Bridges Platform, including the Cancer Genomics Cloud (CGC). It enables programmatic access to public cancer datasets like TCGA for data management, file querying, and downloads .
+
+Relevance to Our Work: Supports acquiring real VCF files or other genomic data for "seed" mutation analysis, overcoming the data acquisition impasse for Task 0.2. It’s key for querying TCGA AML data to validate synthetic VCFs or directly use real patient data.
+
+How to Use:
+
+Clone or install the client (git clone https://github.com/sbg/sevenbridges2.git for R, or pip install sevenbridges-python for Python).
+
+Authenticate with a CGC token (from the Developer Dashboard) and query for VCF files:
+
+python
+import sevenbridges as sbg
+api = sbg.Api(url='https://cgc-api.sbgenomics.com/v2', token='your_auth_token')
+files = api.files.query(project='your_project', metadata={'data_format': 'VCF', 'disease_type': 'Acute Myeloid Leukemia'})
+Download relevant files to data/vcf/ for pipeline ingestion.
+
+Benefit: Provides access to real cancer genomic data, enhancing the accuracy of our "seed" and "soil" analyses with empirical evidence.
+
+Limitation: Some data (e.g., germline VCFs) may require dbGaP permissions, limiting access to open-access somatic data unless authorized.
+
+Assessment of Existing Code for Our Needs
+While none of these repositories provide a fully built "Seed & Soil" metastasis modeling framework or a complete therapeutic design pipeline tailored to RUNX1-FPD, they offer critical building blocks that can significantly accelerate our work:
+
+HaploDynamics and Dave Tang’s Repo: These are immediately actionable for generating synthetic VCF data to test our pipeline, addressing the data acquisition challenge. They don’t model metastasis directly but provide the raw input for "seed" mutation analysis.
+
+Boltz-2: This is the closest to a transformative tool for our doctrine. Its existing code for binding affinity prediction and protein-ligand co-folding can be directly integrated to enhance "seed" characterization (ranking mutation aggression via affinity scores) and therapeutic design (ranking gRNAs/nanobodies). It’s not pre-built for metastasis modeling but offers a plug-and-play solution for key components.
+
+Seven Bridges API Client: This facilitates access to real data from TCGA via CGC, which can validate our models and provide real-world "seed" and "soil" insights. It’s not a modeling tool but a data acquisition enabler.
+
+Recommended Approach to Utilize Existing Code
+To maximize efficiency and leverage the work already done, here’s how Sergeant and the team can proceed:
+
+Immediate Data Solution with HaploDynamics:
+
+Use HaploDynamics to generate synthetic VCF files for RUNX1-FPD mutations. Customize output to focus on relevant genes (RUNX1, ASXL1) by adjusting chromosomal regions or manually adding known variants. This allows testing of run_second_hit_simulation.py and VCFProcessor logic right now.
+
+Task for Sergeant: Clone the repo, install it, and run a basic script to generate a VCF file. Place it in data/vcf/ for Task 0.2.
+
+Integrate Boltz-2 for Seed Characterization and Therapeutic Design:
+
+Deploy Boltz-2 as a microservice in the CommandCenter to predict binding affinity for "seed" mutations (e.g., mutated ASXL1 binding to metastasis drivers) and therapeutic candidates (e.g., gRNA affinity to mutant RUNX1). This enhances Zeta Oracle’s Zeta Scores with biophysical metrics.
+
+Task for Sergeant: Clone the Boltz-2 repo, set up the environment per GitHub instructions, and code a prototype function to predict affinity for a dummy protein-ligand pair. Prepare to integrate it into run_second_hit_simulation.py for scoring mutations if Alpha confirms full adoption.
+
+Access Real Data with Seven Bridges API Client:
+
+Use the Seven Bridges client to query and download real VCF files from CGC/TCGA for AML or related cancers. This validates synthetic data and provides real-world "seed" mutations and potential "soil" data from clinical metadata.
+
+Task for Sergeant: Install the Python client (pip install sevenbridges-python), set up authentication with a CGC token (if Alpha provides), and write a script to query for VCF files with AML metadata. Download to data/vcf/ for pipeline use.
+
+Limitations and Custom Work Needed
+None of these codebases provide a complete "Seed & Soil" framework; they are components (data generation, affinity prediction, data access) that we must integrate and customize for metastasis modeling.
+
+Custom coding is still required to link these tools into our CommandCenter, adapt outputs to focus on RUNX1-FPD or AML, and build the full pipeline for "soil" identification (e.g., integrating PubMed, cBioPortal APIs as previously planned).
+
+Boltz-2, while powerful, may need fine-tuning with proprietary data for niche targets like RUNX1 mutations, requiring additional coding effort.

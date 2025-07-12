@@ -1,0 +1,570 @@
+# 🎯 Use-Case Driven Strategy: RUNX1/LEAP Grant Implementation
+
+## **🚀 Strategic Overview**
+
+**Mission:** Transform the Guardian Protocol platform through a focused use-case approach, starting with [Patient Digital Twin](mdc:pages/1_🧬_Patient_Digital_Twin.py) for RUNX1-FPD research and LEAP Grant demonstration.
+
+**Core Principle:** Build complete, production-ready capabilities for one specific use case, then systematically expand to other use cases using proven patterns and templates.
+
+---
+
+## **🎯 Use Case 1: RUNX1-FPD Patient Digital Twin (Foundation Use Case)**
+
+### **1.1 Current State Analysis**
+
+**Existing Capabilities in [Patient Digital Twin](mdc:pages/1_🧬_Patient_Digital_Twin.py):**
+- ✅ **Two-Hit Hypothesis Modeling** - Germline + Somatic mutation analysis
+- ✅ **LEAP Grant Integration** - Focus Area 1 & 2 alignment
+- ✅ **Live AI Integration** - CommandCenter API calls
+- ✅ **Apple-Style UI** - Professional presentation layer
+- ✅ **Demo Mode** - Research presentation capabilities
+- ✅ **Clinical Interpretation** - Risk stratification logic
+
+**Current Limitations:**
+- ❌ **Mock Data Dependencies** - Limited to CommandCenter threat assessment
+- ❌ **Single Analysis Pipeline** - No guide design or therapeutic planning
+- ❌ **Static Workflow** - No dynamic progression through intervention stages
+- ❌ **Limited Arsenal Integration** - Not using 47+ available tools
+
+### **1.2 Enhancement Strategy: Complete RUNX1 Digital Twin**
+
+**Phase 1: Arsenal Integration (Week 1)**
+```yaml
+Task_1.2.1_genomic_navigation:
+  description: "Integrate coordinate_handler.py for RUNX1 genomic navigation"
+  implementation:
+    - Add RUNX1 reference sequence navigation
+    - Integrate with existing RUNX1 VCF data
+    - Create genomic context visualization
+  files_to_enhance:
+    - pages/1_🧬_Patient_Digital_Twin.py
+  integration_points:
+    - tools/coordinate_handler.py
+    - data/reference/runx1_hg19.fa
+    - data/vcf/manual_runx1.vcf
+  deliverable: "Enhanced Digital Twin with genomic navigation"
+  estimated_time: "6 hours"
+
+Task_1.2.2_guide_design_integration:
+  description: "Add intelligent guide design for RUNX1 targeting"
+  implementation:
+    - Integrate intelligent_guide_finder.py
+    - Add ChopChop scoring for RUNX1 guides
+    - Create guide visualization and ranking
+  arsenal_tools:
+    - tools/intelligent_guide_finder.py
+    - chopchop/chopchop.py
+  deliverable: "Guide RNA design for RUNX1 correction"
+  estimated_time: "8 hours"
+
+Task_1.2.3_metastasis_modeling:
+  description: "Add RUNX1-specific metastasis risk modeling"
+  implementation:
+    - Integrate metastasis_analyzer.py
+    - Model RUNX1-FPD progression to AML
+    - Create intervention timeline visualization
+  arsenal_tools:
+    - tools/metastasis_analyzer.py
+    - tools/tissue_profiler.py
+  deliverable: "RUNX1-FPD progression modeling"
+  estimated_time: "6 hours"
+
+Task_1.2.4_therapeutic_planning:
+  description: "Add comprehensive therapeutic planning"
+  implementation:
+    - Integrate experiment_advisor.py
+    - Create RUNX1-specific protocols
+    - Add result interpretation capabilities
+  arsenal_tools:
+    - tools/experiment_advisor.py
+    - tools/result_interpreter.py
+  deliverable: "Complete therapeutic planning pipeline"
+  estimated_time: "8 hours"
+```
+
+**Phase 2: Workflow Enhancement (Week 2)**
+```yaml
+Task_1.2.5_dynamic_workflow:
+  description: "Create dynamic progression through intervention stages"
+  workflow_stages:
+    - Stage 1: Digital Twin Creation (current)
+    - Stage 2: Genomic Navigation & Analysis
+    - Stage 3: Guide Design & Optimization
+    - Stage 4: Therapeutic Protocol Generation
+    - Stage 5: Result Prediction & Validation
+  implementation:
+    - Create workflow orchestrator
+    - Add progress tracking
+    - Implement stage-to-stage data flow
+  deliverable: "Dynamic RUNX1 intervention workflow"
+  estimated_time: "10 hours"
+
+Task_1.2.6_leap_grant_enhancement:
+  description: "Enhance LEAP Grant demonstration capabilities"
+  enhancements:
+    - Focus Area 1: Enhanced mechanistic modeling
+    - Focus Area 2: Complete intervention pipeline
+    - Real-time data integration
+    - Research presentation mode
+  deliverable: "Production-ready LEAP Grant demonstration"
+  estimated_time: "6 hours"
+```
+
+### **1.3 Implementation Templates for RUNX1 Use Case**
+
+**Template 1: RUNX1 Digital Twin Service**
+```python
+# Template: RUNX1DigitalTwinService.py
+class RUNX1DigitalTwinService:
+    """Complete RUNX1-FPD digital twin implementation"""
+    
+    def __init__(self):
+        self.genomic_navigator = GenomicNavigationService()
+        self.guide_designer = GuideFinderService()
+        self.metastasis_modeler = MetastasisAnalyzer()
+        self.therapeutic_planner = ExperimentAdvisor()
+        self.runx1_data = self.load_runx1_reference_data()
+    
+    def create_digital_twin(self, patient_data):
+        """Create complete RUNX1-FPD patient digital twin"""
+        
+        # Stage 1: Genomic Analysis
+        genomic_context = self.analyze_runx1_genomic_context(patient_data)
+        
+        # Stage 2: Mutation Impact Assessment
+        mutation_impact = self.assess_mutation_impact(patient_data, genomic_context)
+        
+        # Stage 3: Progression Risk Modeling
+        progression_risk = self.model_progression_risk(mutation_impact)
+        
+        # Stage 4: Intervention Planning
+        intervention_plan = self.plan_interventions(progression_risk)
+        
+        return {
+            'genomic_context': genomic_context,
+            'mutation_impact': mutation_impact,
+            'progression_risk': progression_risk,
+            'intervention_plan': intervention_plan,
+            'digital_twin_id': self.generate_twin_id(patient_data)
+        }
+    
+    def analyze_runx1_genomic_context(self, patient_data):
+        """Analyze RUNX1 genomic context using coordinate handler"""
+        runx1_coordinates = self.genomic_navigator.navigate_to_gene("RUNX1")
+        patient_variants = self.parse_patient_variants(patient_data)
+        
+        return {
+            'gene_structure': runx1_coordinates,
+            'variant_positions': patient_variants,
+            'functional_domains': self.map_functional_domains(patient_variants),
+            'conservation_scores': self.calculate_conservation(patient_variants)
+        }
+    
+    def design_runx1_interventions(self, mutation_data):
+        """Design RUNX1-specific therapeutic interventions"""
+        
+        # Guide RNA design for correction
+        correction_guides = self.guide_designer.find_and_score_guides(
+            target_sequence=mutation_data['mutant_sequence'],
+            design_goal='correction'
+        )
+        
+        # Guide RNA design for knockout (if correction not feasible)
+        knockout_guides = self.guide_designer.find_and_score_guides(
+            target_sequence=mutation_data['wildtype_sequence'],
+            design_goal='knockout'
+        )
+        
+        # HDR template design
+        hdr_template = self.design_hdr_template(mutation_data)
+        
+        return {
+            'correction_strategy': {
+                'guides': correction_guides,
+                'hdr_template': hdr_template,
+                'success_probability': self.calculate_correction_probability(correction_guides, hdr_template)
+            },
+            'knockout_strategy': {
+                'guides': knockout_guides,
+                'rationale': 'Haploinsufficiency tolerance',
+                'success_probability': self.calculate_knockout_probability(knockout_guides)
+            }
+        }
+```
+
+**Template 2: RUNX1 UI Components**
+```python
+# Template: RUNX1UIComponents.py
+class RUNX1UIComponents:
+    """Specialized UI components for RUNX1 use case"""
+    
+    @staticmethod
+    def render_runx1_genomic_browser(genomic_data):
+        """RUNX1-specific genomic browser with functional domains"""
+        with st.container():
+            st.subheader("🧬 RUNX1 Genomic Context")
+            
+            # Gene structure visualization
+            fig = create_runx1_gene_structure_plot(genomic_data)
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Functional domain mapping
+            st.markdown("#### 🎯 Functional Domain Analysis")
+            domain_data = genomic_data['functional_domains']
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Runt Domain", domain_data.get('runt_domain_impact', 'Normal'))
+            with col2:
+                st.metric("Transactivation Domain", domain_data.get('tad_impact', 'Normal'))
+            with col3:
+                st.metric("DNA Binding", domain_data.get('dna_binding_impact', 'Normal'))
+    
+    @staticmethod
+    def render_two_hit_analysis(first_hit_data, second_hit_data):
+        """Enhanced two-hit hypothesis visualization"""
+        with st.container():
+            st.subheader("🎯 Two-Hit Hypothesis Analysis")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("#### 🧬 First Hit (Germline)")
+                RUNX1UIComponents.render_mutation_card(first_hit_data, "germline")
+                
+            with col2:
+                st.markdown("#### ⚡ Second Hit (Somatic)")
+                RUNX1UIComponents.render_mutation_card(second_hit_data, "somatic")
+            
+            # Synergistic effect analysis
+            st.markdown("#### 🔥 Synergistic Effect Analysis")
+            synergy_score = calculate_mutation_synergy(first_hit_data, second_hit_data)
+            
+            if synergy_score > 0.8:
+                st.error(f"🚨 High synergistic risk detected (Score: {synergy_score:.2f})")
+            elif synergy_score > 0.5:
+                st.warning(f"⚠️ Moderate synergistic risk (Score: {synergy_score:.2f})")
+            else:
+                st.info(f"ℹ️ Low synergistic risk (Score: {synergy_score:.2f})")
+    
+    @staticmethod
+    def render_intervention_timeline(intervention_data):
+        """RUNX1-specific intervention timeline"""
+        with st.container():
+            st.subheader("🗓️ Intervention Timeline")
+            
+            timeline_data = intervention_data['timeline']
+            fig = create_intervention_timeline_plot(timeline_data)
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Intervention options
+            st.markdown("#### 🎯 Intervention Options")
+            
+            tabs = st.tabs(["Gene Correction", "Protective Knockout", "Monitoring"])
+            
+            with tabs[0]:
+                RUNX1UIComponents.render_gene_correction_plan(intervention_data['correction'])
+            
+            with tabs[1]:
+                RUNX1UIComponents.render_knockout_plan(intervention_data['knockout'])
+            
+            with tabs[2]:
+                RUNX1UIComponents.render_monitoring_plan(intervention_data['monitoring'])
+```
+
+---
+
+## **🔄 Use Case Expansion Strategy**
+
+### **2.1 Use Case 2: BRCA1 Hereditary Cancer (Expansion Target 1)**
+
+**Expansion Approach:**
+```yaml
+Pattern_Replication:
+  source_use_case: "RUNX1-FPD Digital Twin"
+  target_use_case: "BRCA1 Hereditary Cancer"
+  reusable_components:
+    - Digital twin creation workflow
+    - Two-hit analysis framework
+    - Genomic navigation patterns
+    - Intervention planning templates
+  
+Customization_Points:
+  gene_specific_data:
+    - BRCA1 reference sequences
+    - BRCA1 functional domains
+    - BRCA1-specific mutation patterns
+  
+  disease_specific_logic:
+    - Breast/ovarian cancer progression
+    - PARP inhibitor sensitivity
+    - Homologous recombination deficiency
+  
+  intervention_strategies:
+    - Prophylactic gene correction
+    - Enhanced surveillance protocols
+    - Targeted therapy selection
+
+Implementation_Timeline: "2 weeks after RUNX1 completion"
+```
+
+### **2.2 Use Case 3: TP53 Li-Fraumeni Syndrome (Expansion Target 2)**
+
+**Expansion Approach:**
+```yaml
+Pattern_Replication:
+  source_use_case: "RUNX1-FPD Digital Twin"
+  target_use_case: "TP53 Li-Fraumeni Syndrome"
+  reusable_components:
+    - Digital twin framework (90% reusable)
+    - Multi-cancer risk modeling
+    - Family screening protocols
+  
+Customization_Points:
+  multi_cancer_modeling:
+    - Sarcoma risk assessment
+    - Brain tumor progression
+    - Breast cancer susceptibility
+    - Adrenal cortical carcinoma
+  
+  age_specific_interventions:
+    - Pediatric surveillance
+    - Adult screening protocols
+    - Reproductive counseling
+
+Implementation_Timeline: "3 weeks after BRCA1 completion"
+```
+
+### **2.3 Use Case 4: Somatic Cancer Precision Medicine (Expansion Target 3)**
+
+**Expansion Approach:**
+```yaml
+Pattern_Replication:
+  source_use_case: "Hereditary Cancer Digital Twins"
+  target_use_case: "Somatic Cancer Precision Medicine"
+  adaptation_focus:
+    - Tumor heterogeneity modeling
+    - Treatment resistance prediction
+    - Combination therapy optimization
+  
+Implementation_Timeline: "4 weeks after TP53 completion"
+```
+
+---
+
+## **🏗️ Technical Implementation Framework**
+
+### **3.1 Use Case Development Template**
+
+**Template: Use Case Implementation Workflow**
+```python
+# Template: UseCaseImplementationWorkflow.py
+class UseCaseImplementationWorkflow:
+    """Standardized workflow for implementing new use cases"""
+    
+    def __init__(self, use_case_config):
+        self.config = use_case_config
+        self.base_templates = self.load_base_templates()
+        self.arsenal_tools = self.load_arsenal_tools()
+    
+    def implement_use_case(self):
+        """Complete use case implementation workflow"""
+        
+        # Phase 1: Data and Context Setup
+        context = self.setup_use_case_context()
+        
+        # Phase 2: Service Integration
+        services = self.integrate_arsenal_services(context)
+        
+        # Phase 3: UI Component Creation
+        ui_components = self.create_ui_components(context, services)
+        
+        # Phase 4: Workflow Orchestration
+        workflow = self.create_workflow_orchestrator(services, ui_components)
+        
+        # Phase 5: Testing and Validation
+        validation = self.validate_use_case_implementation(workflow)
+        
+        return {
+            'context': context,
+            'services': services,
+            'ui_components': ui_components,
+            'workflow': workflow,
+            'validation': validation
+        }
+    
+    def setup_use_case_context(self):
+        """Setup gene-specific and disease-specific context"""
+        return {
+            'gene_data': self.load_gene_reference_data(),
+            'disease_models': self.load_disease_progression_models(),
+            'intervention_protocols': self.load_intervention_protocols(),
+            'clinical_guidelines': self.load_clinical_guidelines()
+        }
+    
+    def integrate_arsenal_services(self, context):
+        """Integrate relevant arsenal tools for the use case"""
+        relevant_tools = self.identify_relevant_tools(context)
+        
+        integrated_services = {}
+        for tool_name, tool_config in relevant_tools.items():
+            service = self.create_service_wrapper(tool_name, tool_config, context)
+            integrated_services[tool_name] = service
+        
+        return integrated_services
+    
+    def create_ui_components(self, context, services):
+        """Create use-case specific UI components"""
+        base_components = self.base_templates['ui_components']
+        
+        customized_components = {}
+        for component_name, base_component in base_components.items():
+            customized = self.customize_component(
+                base_component, context, services
+            )
+            customized_components[component_name] = customized
+        
+        return customized_components
+```
+
+### **3.2 Arsenal Tool Integration Patterns**
+
+**Pattern 1: Gene-Specific Tool Configuration**
+```python
+# Pattern: Gene-Specific Configuration
+def configure_tools_for_gene(gene_symbol, disease_context):
+    """Configure arsenal tools for specific gene/disease combination"""
+    
+    tool_configs = {
+        'genomic_navigator': {
+            'reference_sequence': f"data/reference/{gene_symbol.lower()}.fa",
+            'annotation_file': f"data/annotations/{gene_symbol.lower()}_domains.gtf",
+            'conservation_scores': f"data/conservation/{gene_symbol.lower()}_phylop.bw"
+        },
+        
+        'guide_designer': {
+            'target_gene': gene_symbol,
+            'design_constraints': get_gene_specific_constraints(gene_symbol),
+            'off_target_database': f"data/off_targets/{gene_symbol.lower()}_ots.bed"
+        },
+        
+        'metastasis_analyzer': {
+            'disease_model': disease_context['progression_model'],
+            'tissue_specificity': disease_context['target_tissues'],
+            'intervention_windows': disease_context['intervention_timeline']
+        }
+    }
+    
+    return tool_configs
+```
+
+**Pattern 2: Disease-Specific Workflow Adaptation**
+```python
+# Pattern: Disease-Specific Workflow
+def adapt_workflow_for_disease(base_workflow, disease_type):
+    """Adapt base workflow for specific disease characteristics"""
+    
+    disease_adaptations = {
+        'hereditary_cancer': {
+            'risk_modeling': 'lifetime_penetrance',
+            'intervention_timing': 'prophylactic',
+            'family_screening': True,
+            'surveillance_protocols': 'high_risk'
+        },
+        
+        'somatic_cancer': {
+            'risk_modeling': 'tumor_progression',
+            'intervention_timing': 'therapeutic',
+            'resistance_modeling': True,
+            'combination_therapy': True
+        },
+        
+        'rare_disease': {
+            'risk_modeling': 'phenotype_prediction',
+            'intervention_timing': 'symptomatic',
+            'functional_rescue': True,
+            'gene_therapy_design': True
+        }
+    }
+    
+    adaptation = disease_adaptations.get(disease_type, {})
+    return base_workflow.adapt(adaptation)
+```
+
+---
+
+## **📊 Success Metrics and Validation**
+
+### **4.1 Use Case Success Criteria**
+
+**RUNX1-FPD Digital Twin Success Metrics:**
+```yaml
+Technical_Metrics:
+  - Complete workflow execution: 100%
+  - Arsenal tool integration: >90%
+  - Real-time performance: <3 seconds per stage
+  - Accuracy validation: >95% concordance with clinical data
+
+Clinical_Metrics:
+  - Risk stratification accuracy: >90%
+  - Intervention recommendation relevance: >85%
+  - Clinical guideline compliance: 100%
+  - LEAP Grant objective alignment: 100%
+
+User_Experience_Metrics:
+  - Workflow completion rate: >95%
+  - User satisfaction score: >4.5/5
+  - Demo presentation effectiveness: >90%
+  - Research impact demonstration: Measurable grant success
+```
+
+### **4.2 Expansion Success Framework**
+
+**Use Case Expansion Validation:**
+```yaml
+Reusability_Metrics:
+  - Code reuse percentage: >80%
+  - Template effectiveness: >90%
+  - Development time reduction: >70%
+  - Quality consistency: Maintained across use cases
+
+Scalability_Metrics:
+  - New use case implementation time: <2 weeks
+  - Arsenal tool utilization: >80% across use cases
+  - Performance consistency: <10% degradation with expansion
+  - Maintenance overhead: <20% increase per use case
+```
+
+---
+
+## **🎯 Implementation Roadmap**
+
+### **Phase 1: RUNX1 Foundation (Weeks 1-2)**
+- Complete RUNX1-FPD Digital Twin enhancement
+- Integrate all relevant arsenal tools
+- Achieve production-ready LEAP Grant demonstration
+- Validate use case framework
+
+### **Phase 2: Pattern Validation (Weeks 3-4)**
+- Implement BRCA1 use case using established patterns
+- Validate template reusability and effectiveness
+- Refine expansion methodology
+- Document best practices
+
+### **Phase 3: Systematic Expansion (Weeks 5-8)**
+- Implement TP53 and somatic cancer use cases
+- Achieve platform-wide arsenal integration
+- Validate scalability and performance
+- Prepare for production deployment
+
+### **Phase 4: Platform Maturation (Weeks 9-12)**
+- Complete all major use cases
+- Optimize performance and user experience
+- Implement advanced features and integrations
+- Achieve full Guardian Protocol capabilities
+
+This use-case driven strategy ensures systematic, validated expansion of Guardian Protocol capabilities while maintaining focus on real-world applications and measurable outcomes.
+description:
+globs:
+alwaysApply: false
+---

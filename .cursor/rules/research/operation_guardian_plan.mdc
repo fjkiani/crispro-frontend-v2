@@ -1,0 +1,68 @@
+# Master Plan: Operation Guardian (The BRCA1 Digital Twin)
+
+**Mission:** To evolve our platform from a single-analysis tool into a longitudinal **Digital Twin for a BRCA1 carrier**. This twin will model a patient's entire clinical journey—from pre-screening and risk assessment through treatment and post-treatment surveillance—using the 8-Step Metastasis Framework as its core therapeutic strategy engine.
+
+**Core Principles:**
+*   **Apply Lessons from "Phoenix":** Foundational data integrity (especially reference sequences) is Task #1.
+*   **Narrative-Driven:** The user experience will follow the patient's journey (Pre, During, Post).
+*   **Action-Oriented:** Every analysis will be coupled with the 8-Step Framework to propose concrete, AI-driven interventions.
+
+---
+
+### **Phase 1: Reconnaissance & Platform Hardening (Weeks 1-2)**
+
+*The goal of this phase is to fully understand our existing foundation and prepare the platform for the new gene target, applying all our hard-won lessons upfront.*
+
+-   [ ] **Task 1.1: Analyze the Existing Digital Twin.**
+    -   Action: Thoroughly read and document the architecture of the existing Leukemia Digital Twin pages (`1_...`, `2_...`, etc.) to understand the current narrative flow, data handling, and UI components.
+-   [ ] **Task 1.2: Define the Clinical Use Case & Acquire Data.**
+    -   Action: Finalize the primary clinical question (e.g., *Predicting PARP inhibitor response in BRCA1+ ovarian cancer*).
+    -   Action: Download the relevant TCGA (or other) dataset containing BRCA1 mutations and corresponding clinical outcomes.
+-   [ ] **Task 1.3: Synchronize the BRCA1 Reference Sequence (Phoenix Lesson #1).**
+    -   Action: Identify the canonical protein FASTA for BRCA1.
+    -   Action: Add `BRCA1.fasta` to `data/reference/`.
+    -   Action: Update the `ZetaOracle`'s `_load_reference_sequences` method to include BRCA1, making it a dictionary lookup (`self.sequences[gene_symbol]`). Deploy the updated service. This is a non-negotiable first step.
+-   [ ] **Task 1.4: Validate the Adjudicator for BRCA1.**
+    -   Action: Find the DMS (Deep Mutational Scanning) dataset used to validate BRCA1 in the original `evo2` paper.
+    -   Action: Run this dataset through our existing platform to benchmark the Adjudicator's out-of-the-box accuracy for BRCA1. Retrain if necessary.
+
+---
+
+### **Phase 2: Building the BRCA1 Digital Twin (Weeks 3-4)**
+
+*The goal of this phase is to construct the interactive, multi-page Streamlit experience that brings the patient journey to life.*
+
+-   [ ] **Task 2.1: Create the Digital Twin Landing Page.**
+    -   Action: Create `pages/4_🧬_Guardian_Digital_Twin.py`.
+    -   Content: This page will introduce the patient (a BRCA1 carrier), visualize their baseline risk, and serve as the main navigation hub for their journey.
+-   [ ] **Task 2.2: Build the "Pre-Screening & Interception" Page.**
+    -   Action: Create `pages/5_🔬_Guardian_Pre-Screening.py`.
+    -   Content: This page will focus on analyzing Variants of Uncertain Significance (VUS) in the patient's germline report. It will allow a user to assess any VUS and understand its potential risk.
+    -   **Framework Integration:** For any pathogenic-classified VUS, it will use the 8-Step Metastasis framework to proactively model *potential future* metastatic pathways and design theoretical "interception" strategies (e.g., designing guides to target pathways that might be activated years from now).
+-   [ ] **Task 2.3: Build the "Treatment Co-Pilot" Page.**
+    -   Action: Create `pages/6_💊_Guardian_Treatment_Co-Pilot.py`.
+    -   Content: This page simulates the scenario where the patient has developed cancer. It will allow analysis of somatic "second hits" and run the full PARP inhibitor response prediction analysis based on the data from Phase 1.
+-   [ ] **Task 2.4: Build the "Metastasis Defense" Page.**
+    -   Action: Create `pages/7_🛡️_Guardian_Metastasis_Defense.py`.
+    -   Content: This page is for the post-treatment phase. It will be a fully interactive implementation of the 8-Step Metastasis Framework.
+    -   **Framework Integration:** A user can select a potential site of metastasis (e.g., "Bone") and the platform will:
+        1.  Identify the most likely "Homing" pathways (Step 6).
+        2.  Propose CRISPR guides to "blind" the receptors (Step 6).
+        3.  Suggest targets to block "Invasion" enzymes (Step 4).
+        4.  Design strategies to restore "Immune Visibility" (Step 5).
+
+---
+
+### **Phase 3: Integration & Narrative Polish (Week 5)**
+
+*The goal of this phase is to ensure all pages connect into a single, seamless, and compelling story.*
+
+-   [ ] **Task 3.1: Implement Session State.**
+    -   Action: Use Streamlit's `st.session_state` to carry the patient's context (e.g., their specific VUS, their "second hit" mutation) across all the "Guardian" pages, creating the illusion of a single, persistent digital entity.
+-   [ ] **Task 3.2: Refine the Narrative.**
+    -   Action: Review and edit all text on the pages to ensure the story flows logically from pre-screening to treatment to post-treatment surveillance, guided by the "Digital Twin" metaphor.
+
+description:
+globs:
+alwaysApply: false
+---

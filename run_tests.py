@@ -7,78 +7,78 @@ Run this script to verify that the application is working correctly.
 import os
 import sys
 import unittest
-import subprocess
-import argparse
+import requests
+from dotenv import load_dotenv
 
-def run_tests(test_type="all", verbose=False):
-    """Run the specified tests and return True if all tests pass"""
-    print("Running tests for AI Research Assistant")
-    print("======================================")
-    
-    # Create tests directory if it doesn't exist
-    os.makedirs('tests', exist_ok=True)
-    
-    # Create __init__.py if it doesn't exist
-    init_file = os.path.join('tests', '__init__.py')
-    if not os.path.exists(init_file):
-        with open(init_file, 'w') as f:
-            f.write("# Tests package\n")
-    
-    # Discover tests
-    test_suite = unittest.TestSuite()
-    loader = unittest.TestLoader()
-    
-    if test_type in ["all", "unit"]:
-        print("Discovering unit tests...")
-        unit_tests = loader.discover('tests', pattern='test_*.py', top_level_dir='.')
-        test_suite.addTests(unit_tests)
-    
-    if test_type in ["all", "integration"]:
-        print("Discovering integration tests...")
-        integration_tests = loader.discover('tests', pattern='test_integration.py', top_level_dir='.')
-        test_suite.addTests(integration_tests)
-    
-    # Run tests
-    runner = unittest.TextTestRunner(verbosity=2 if verbose else 1)
-    result = runner.run(test_suite)
-    
-    # Check if Streamlit app can start
-    if test_type in ["all", "app"]:
-        print("\nTesting Streamlit app imports...")
-        app_success = True
-        try:
-            # Just verify the imports work and basic init functions
-            import streamlit_app
-            print("Successfully imported streamlit_app.py")
-        except Exception as e:
-            print(f"Error importing Streamlit app: {str(e)}")
-            app_success = False
-            
-    # Print summary
-    print("\nTest Summary:")
-    print(f"Ran {result.testsRun} tests")
-    print(f"Failures: {len(result.failures)}")
-    print(f"Errors: {len(result.errors)}")
-    
-    # Return success only if both unittest and app test (if run) succeeded
-    success = len(result.failures) == 0 and len(result.errors) == 0
-    if test_type in ["all", "app"]:
-        success = success and app_success
+# Load environment variables from .env file
+load_dotenv()
+
+# --- Test Configuration ---
+# DEPLOYMENT OVERRIDE: Forcing the test to use the new v2 endpoint.
+COMMAND_CENTER_URL = "https://crispro--command-center-v2-commandcenter-api.modal.run"
+# if not COMMAND_CENTER_URL:
+#     print("❌ CRITICAL: COMMAND_CENTER_URL environment variable is not set and no fallback is available. Cannot run tests.")
+#     sys.exit(1)
+
+BASE_URL = COMMAND_CENTER_URL.rstrip('/')
+
+class TestCommandCenterAPI(unittest.TestCase):
+
+    def test_health_check(self):
+        """Tests if the CommandCenter health check endpoint is responsive."""
+        print(f"\n--- Running Test: Health Check Endpoint ---")
+        response = requests.post(f"{BASE_URL}/health", timeout=30)
+        self.assertEqual(response.status_code, 200, f"Expected status 200, got {response.status_code}")
+        self.assertEqual(response.json(), {"status": "healthy", "service": "command-center"}, "Health check response body mismatch")
+        print(f"✅ PASS: Health Check Endpoint")
+
+    def test_assess_threat_endpoint_frameshift(self):
+        """Tests the /workflow/assess_threat endpoint with a known frameshift mutation."""
+        print(f"\n--- Running Test: Threat Assessor (Frameshift) ---")
+        endpoint = "/workflow/assess_threat"
+        payload = {"gene_symbol": "ASXL1", "protein_change": "p.Gly646fs"}
+        response = requests.post(f"{BASE_URL}{endpoint}", json=payload, timeout=120)
         
-    return success
+        self.assertEqual(response.status_code, 200, f"Expected status 200, got {response.status_code}")
+        data = response.json()
+        print(f"DEBUG: Full API response for frameshift test: {data}")
+        
+        self.assertEqual(data['gene_symbol'], "ASXL1", "Returned gene symbol mismatch")
+        self.assertEqual(data['protein_change'], "p.Gly646fs", "Returned protein change mismatch")
+        self.assertEqual(data['assessment']['assessment_source'], "Truncation Sieve", "Assessment source should be Truncation Sieve")
+        self.assertTrue(data['assessment']['is_pathogenic'], "Frameshift mutation should be marked as pathogenic")
+        
+        print(f"✅ PASS: Threat Assessor (Frameshift)")
 
-def main():
-    """Main function to parse arguments and run tests"""
-    parser = argparse.ArgumentParser(description="Run tests for AI Research Assistant")
-    parser.add_argument('--test-type', choices=['all', 'unit', 'integration', 'app'], 
-                      default='all', help='Type of tests to run')
-    parser.add_argument('--verbose', action='store_true', help='Enable verbose output')
-    
-    args = parser.parse_args()
-    
-    success = run_tests(args.test_type, args.verbose)
-    
-    sys.exit(0 if success else 1)
+    def test_assess_threat_endpoint_missense(self):
+        """
+        Tests the /workflow/assess_threat endpoint with a known missense mutation.
+        This should trigger the 'Zeta Oracle' path. Since the oracle may not be configured,
+        we'll check for either a proper oracle response or an error condition.
+        """
+        print(f"\n--- Running Test: Threat Assessor (Missense) ---")
+        endpoint = "/workflow/assess_threat"
+        payload = {"gene_symbol": "BRAF", "protein_change": "p.Val600Glu"} # V600E
+        response = requests.post(f"{BASE_URL}{endpoint}", json=payload, timeout=120)
+        
+        self.assertEqual(response.status_code, 200, f"Expected status 200, got {response.status_code}")
+        data = response.json()
+        print(f"DEBUG: Full API response for missense test: {data}")
+        
+        self.assertEqual(data['gene_symbol'], "BRAF", "Returned gene symbol mismatch")
+        self.assertEqual(data['protein_change'], "p.Val600Glu", "Returned protein change mismatch")
+        
+        # Assertions for a successful missense assessment
+        self.assertIsNone(data.get('error'), "Error field should be null in a successful response")
+        self.assertIsNotNone(data['assessment'], "Assessment dictionary should be present")
+        
+        # DEFINITIVE FIX: The Triumvirate Protocol correctly uses the Adjudicator for missense mutations.
+        # The test must be updated to reflect this new, correct logic.
+        self.assertEqual(data['assessment']['assessment_source'], "Adjudicator", "Assessment source should be Adjudicator")
+        self.assertTrue(data['assessment']['is_pathogenic'], "BRAF V600E should be classified as pathogenic")
+        self.assertIn(data['assessment']['prediction'], ["Pathogenic", 1], "Prediction should be 'Pathogenic' or 1")
+        print("✅ PASS: Threat Assessor (Missense)")
 
 if __name__ == "__main__":
-    main() 
+    print("🚀 Starting CommandCenter API Validation Suite 🚀\n")
+    unittest.main() 

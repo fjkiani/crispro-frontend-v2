@@ -1,0 +1,89 @@
+# Operation Adjudicator: The Plan to Forge a True Pathogenicity Classifier
+
+**Objective:** Correct the platform's critical flaw in assessing missense mutations by creating a supervised classifier—The Adjudicator—that leverages the deep intelligence of Evo2 embeddings to deliver true clinical pathogenicity scores. This is mandated by our findings in the [Zeta Oracle Score Interpretation doctrine](mdc:.cursor/rules/zeta_oracle_limitations.mdc).
+
+---
+
+## Phase 1: Intelligence Gathering & Feature Engineering
+
+**Objective:** Create a high-quality, labeled dataset of missense mutations and their corresponding Evo2 embeddings.
+
+1.  **Acquire Labeled Data**:
+    *   **Action:** Build a tool to programmatically query the **ClinVar** database via their public API.
+    *   **Scope:** Extract all missense mutations for key cancer driver genes (e.g., TP53, BRCA1, KRAS, EGFR).
+    *   **Output:** A structured dataset (`.csv` or `.json`) with variants and their clinical significance (`pathogenic` / `benign`).
+
+2.  **Upgrade the Zeta Oracle for Embeddings**:
+    *   **Action:** Add a new `embed()` method to the `ZetaOracle` class in [services/oracle/main.py](mdc:services/oracle/main.py).
+    *   **Functionality:** This method will take a DNA sequence and return the high-dimensional Evo2 embedding vector.
+    *   **Endpoint:** Expose this new functionality through the `/invoke` endpoint with an `embed` action.
+
+3.  **Generate Embedding Dataset**:
+    *   **Action:** Create a new tool (`tools/adjudicator_trainer/generate_embeddings.py`).
+    *   **Workflow:** This script will:
+        1.  Read the curated ClinVar dataset.
+        2.  Construct the mutated DNA sequence for each variant.
+        3.  Call the upgraded Zeta Oracle's `embed` action.
+        4.  Store the resulting embedding alongside the pathogenicity label.
+
+---
+
+## Phase 2: Adjudicator Training & Deployment
+
+**Objective:** Train and deploy a lightweight, specialized service to classify embeddings.
+
+4.  **Train the Classifier**:
+    *   **Action:** Create a training script (`tools/adjudicator_trainer/train.py`).
+    *   **Technology:** Use `scikit-learn` to train a standard but effective model (e.g., `RandomForestClassifier` or `XGBoost`) on the labeled embedding dataset.
+    *   **Output:** A serialized model artifact (`adjudicator_model.pkl`).
+
+5.  **Deploy the Adjudicator Service**:
+    *   **Action:** Build and deploy a new, lightweight Modal service (`services/adjudicator/main.py`).
+    *   **Functionality:**
+        1.  Load the `adjudicator_model.pkl` on startup.
+        2.  Expose a single `/predict` endpoint that accepts an Evo2 embedding.
+        3.  Return a calibrated pathogenicity score (e.g., a probability between 0 and 1).
+
+---
+
+## Phase 3: Platform Integration & Hardening
+
+**Objective:** Integrate The Adjudicator into the core assessment workflow.
+
+6.  **Evolve the Triumvirate Protocol**:
+    *   **Action:** Upgrade the `run_triumvirate_assessment` workflow in [services/command_center/main.py](mdc:services/command_center/main.py).
+    *   **New Logic for Missense Mutations:**
+        1.  Call Zeta Oracle to get the sequence **embedding**.
+        2.  Dispatch the embedding to the new Adjudicator service.
+        3.  Use the Adjudicator's score as the final, authoritative assessment.
+    *   **Outcome:** The `zeta_score` will no longer be used for final missense classification, only for initial triage if needed.
+
+---
+
+## Next-Generation Enhancement: The AlphaFold Fusion
+
+**Objective:** Achieve predictive dominance by fusing evolutionary data with biophysical structure. This addresses the model's blindness to 3D functional context.
+
+**The Improved Adjudicator Workflow:**
+
+1.  **Dual-Source Intelligence**:
+    *   When assessing a missense variant, the CommandCenter will query **both**:
+        *   **Zeta Oracle:** For the sequence embedding.
+        *   **AlphaFold Service:** For the predicted 3D structure (PDB file) of the mutated protein.
+
+2.  **Structural Feature Extraction**:
+    *   **Action:** Develop a utility to parse PDB files and extract critical biophysical features for the mutated residue.
+    *   **Features:**
+        *   **Relative Solvent Accessibility (RSA):** Is the residue buried or exposed?
+        *   **pLDDT Change:** How confident is AlphaFold in the local structure post-mutation?
+        *   **Distance to Functional Sites:** How far is the mutation from known active sites or binding interfaces?
+
+3.  **Multi-Modal Adjudicator Training**:
+    *   **Action:** Retrain The Adjudicator on an enhanced feature set.
+    *   **Input Vector:** `[Evo2_embedding] + [RSA, pLDDT_change, distance_to_active_site, ...]`
+    *   **Result:** A classifier that understands both the evolutionary context and the direct, predicted biophysical impact of a mutation.
+
+description:
+globs:
+alwaysApply: false
+---

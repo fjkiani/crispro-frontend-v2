@@ -1,0 +1,24 @@
+# Doctrine: Zeta Oracle Score Interpretation
+
+## 1. The `zeta_score` is NOT a Pathogenicity Score
+
+Our analysis of the TP53 R175H mutation has revealed a critical insight into the Zeta Oracle's function, as detailed in the [Evo2 paper](mdc:documents/concept/evo2-paper.txt).
+
+*   **What it IS**: The `zeta_score` is a delta log-likelihood. It measures how evolutionarily "surprising" or "implausible" a mutated sequence is compared to the reference. A score near zero means the model finds the mutation perfectly plausible from a sequence perspective.
+*   **What it is NOT**: It is **not** a direct measure of biological function or clinical pathogenicity. The model is blind to the functional context (e.g., DNA binding domains, active sites).
+
+## 2. The Mandate for a Supervised Adjudicator
+
+The Evo2 paper states the correct approach for clinical variant classification:
+
+> "...a **supervised model built on Evo 2 embeddings** attains state-of-the-art performance on classifying BRCA1 variants of unknown significance..."
+
+Therefore, the following protocol is now doctrine:
+*   **Catastrophic Mutations** (frameshift, nonsense) can be reliably classified by the Truncation Sieve.
+*   **Missense Mutations** MUST be assessed by a supervised classifier (The Adjudicator) trained on top of Evo2 embeddings. Relying solely on the `zeta_score` for these nuanced variants is a critical failure mode.
+
+This doctrine mandates the development of **Operation Adjudicator**.
+description:
+globs:
+alwaysApply: false
+---

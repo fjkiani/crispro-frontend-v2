@@ -1,0 +1,61 @@
+
+# 🔥 Battle Plan: The Guardian Protocol 🔥
+
+**Objective:** Evolve the [pages/4_BRCA1_Threat_Assessor.py](mdc:pages/4_BRCA1_Threat_Assessor.py) into a **Proactive Defense Blueprinting tool.** It will confirm a user's high-risk germline mutation and then, instead of just showing a threat, it will unveil a suite of pre-designed, theoretical interception strategies based on our 8-Step Metastasis Kill Chain.
+
+---
+
+### 1. Patient Journey & Strategic Context
+
+*   **Patient Phase:** Pre-Screening / Pre-Cancer.
+*   **Narrative:** The user is a healthy individual who has just discovered they carry a pathogenic `BRCA1` mutation (the "first hit"), the same one that affected a family member. They are not sick, but they are at high risk. Our tool must transform their fear of the unknown into a feeling of empowered surveillance.
+*   **Strategic Link:** This directly executes **Task 2.2 (Pre-Screening & Interception)** from the [operation_guardian_plan.mdc](mdc:.cursor/rules/operation_guardian_plan.mdc). We are not treating cancer; we are demonstrating the weapons we have ready to **intercept** it the moment a "second hit" appears.
+
+### 2. The Philosophical Shift
+
+The current tool is an alarm bell. The new tool will be a goddamn fortress. It says, "We see the threat on the horizon. Here are the cannons we have aimed at it."
+
+### 3. Tactical Implementation Plan
+
+The modifications to [pages/4_BRCA1_Threat_Assessor.py](mdc:pages/4_BRCA1_Threat_Assessor.py) will be surgical and narrative-driven.
+
+**Step 1: Re-Frame the Output.**
+When a pathogenic result is confirmed, the entire tone changes from reactive to proactive.
+
+**Step 2: Build the "Guardian Protocol" Console.**
+The "Metastatic Counter-Offensive" is now the **"Guardian Protocol."** This console showcases our readiness. The language is about blueprints, pre-emptive design, and standing watch.
+
+**Example Code for the NEW Evolved UI:**
+
+```python
+# Check if the assessment is pathogenic from the nested dictionary
+if result.get("assessment", {}).get("is_pathogenic"):
+    st.markdown("---")
+    st.success("### ✅ PATHOGENIC GERMLINE VARIANT CONFIRMED (FIRST HIT)")
+    st.markdown("""
+    You are viewing a **Proactive Defense Blueprint.** You are currently healthy. The variant identified is the 'first hit' in a potential two-hit model of cancer development. 
+    
+    This platform allows us to model the future. Below are pre-designed interception strategies, ready to be deployed the instant a dangerous 'second hit' is detected through routine surveillance.
+    """)
+    
+    st.markdown("## 🛡️ Guardian Protocol: Proactive Defense Blueprints 🛡️")
+    st.info("The following blueprints correspond to key steps in the **8-Step Metastasis Prevention Framework.**")
+
+    # --- Kill Chain Step 4: Invasion ---
+    with st.expander("🛡️ **PRE-EMPTIVE STRATEGY: INVASION BLOCKADE** (METASTASIS STEP 4)"):
+        st.markdown("This blueprint designs a therapy to neutralize the enzymes (MMPs) that a *future* cancer would need to break out of its primary location.")
+        if st.button("Generate Invasion Blockade Blueprint", key="mmp_blockade"):
+            st.success("✅ BLUEPRINT GENERATED. Zeta Forge has designed a gRNA weapon targeting the MMP gene family.")
+
+    # --- Kill Chain Step 6: Homing ---
+    with st.expander("📡 **PRE-EMPTIVE STRATEGY: HOMING JAMMER** (METASTASIS STEP 6)"):
+        st.markdown("This blueprint designs a nanobody to blind the guidance receptors (e.g., CXCR4) that a *future* cancer would use to navigate to a new organ.")
+        if st.button("Generate Homing Jammer Blueprint", key="receptor_jammer"):
+            st.success("✅ BLUEPRINT GENERATED. Zeta Forge has designed a nanobody blueprint to physically block the CXCR4 receptor.")
+    
+    # --- Kill Chain Step 5: Immune Evasion ---
+    with st.expander("👁️ **PRE-EMPTIVE STRATEGY: DE-CLOAKING** (METASTASIS STEP 5)"):
+        st.markdown("This blueprint designs a weapon to disable a *future* cancer's 'cloaking device' (e.g., PD-L1), ensuring it remains visible to your immune system's patrols.")
+        if st.button("Generate De-Cloaking Blueprint", key="pd_l1_jammer"):
+            st.success("✅ BLUEPRINT GENERATED. Zeta Forge has designed a gRNA weapon blueprint to disable the PD-L1 gene.")
+```

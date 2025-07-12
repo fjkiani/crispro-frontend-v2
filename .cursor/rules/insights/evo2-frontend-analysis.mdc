@@ -1,0 +1,190 @@
+# Evo2 Frontend Analysis & Guardian Protocol Integration
+
+## 🎯 Executive Summary
+
+We have a **sophisticated genomic analysis frontend** already built that provides core capabilities we can leverage for the Guardian Protocol. The frontend is a Next.js application with comprehensive variant analysis, gene visualization, and ClinVar integration.
+
+## 🔧 Core Frontend Architecture
+
+### Main Application Structure
+- **Framework**: Next.js 14 with TypeScript
+- **Styling**: Tailwind CSS with custom color scheme (`#3c4f3d`, `#de8246`, `#e9eeea`)
+- **Components**: Modular React components with shadcn/ui library
+- **API Integration**: UCSC Genome Browser API + NCBI E-utils + Custom Evo2 API
+
+### Key Files Analysis
+- [page.tsx](.streamlit/evo2-frontend/src/app/page.tsx) - Main homepage with genome/gene search
+- [gene-viewer.tsx](.streamlit/evo2-frontend/src/components/gene-viewer.tsx) - Core gene analysis interface
+- [variant-analysis.tsx](.streamlit/evo2-frontend/src/components/variant-analysis.tsx) - Evo2 variant prediction
+- [gene-sequence.tsx](.streamlit/evo2-frontend/src/components/gene-sequence.tsx) - Interactive sequence visualization
+- [known-variants.tsx](.streamlit/evo2-frontend/src/components/known-variants.tsx) - ClinVar integration
+- [genome-api.ts](.streamlit/evo2-frontend/src/utils/genome-api.ts) - Backend API integration
+
+## 🚀 Existing Capabilities (What We Have)
+
+### 1. Genome Browser & Gene Search
+- **Genome Assembly Selection**: Human genome assemblies (hg38, etc.)
+- **Chromosome Browsing**: Interactive chromosome selection
+- **Gene Search**: Symbol/name search with NCBI integration
+- **Gene Details**: Comprehensive gene information display
+
+### 2. Variant Analysis Engine
+- **Evo2 Integration**: Direct API calls to Evo2 variant prediction service
+- **Position-based Analysis**: Input genomic position + alternative nucleotide
+- **Real-time Prediction**: Delta scores, pathogenicity classification
+- **Visual Feedback**: Color-coded nucleotide display and results
+
+### 3. Sequence Visualization
+- **Interactive Sequence Display**: Click-to-analyze nucleotides
+- **Range Selection**: Draggable slider for sequence region selection
+- **Position Tracking**: Precise genomic coordinate display
+- **Sequence Loading**: Dynamic sequence fetching from UCSC API
+
+### 4. ClinVar Integration
+- **Known Variants Display**: Comprehensive ClinVar variant listing
+- **Batch Analysis**: Analyze multiple known variants with Evo2
+- **Comparison View**: Side-by-side ClinVar vs Evo2 predictions
+- **External Links**: Direct links to ClinVar variant pages
+
+### 5. Advanced UI Components
+- **Responsive Design**: Mobile-friendly interface
+- **Loading States**: Proper loading indicators throughout
+- **Error Handling**: Graceful error display and recovery
+- **Keyboard Navigation**: Accessible interface design
+
+## 🎯 Guardian Protocol Integration Opportunities
+
+### 1. **Threat Assessment Dashboard** (HIGH PRIORITY)
+**What We Can Leverage:**
+- Existing variant analysis engine for pathogenicity scoring
+- Gene viewer for target gene analysis
+- ClinVar integration for known threat variants
+
+**Guardian Protocol Enhancement:**
+- Integrate with CommandCenter battle plans
+- Add "Threat Level" visualization overlays
+- Implement 8-step metastasis cascade analysis display
+- Add ensemble scoring (Evo2 + ZetaOracle + AlphaMissense)
+
+### 2. **Weapon Forging Interface** (HIGH PRIORITY)
+**What We Can Leverage:**
+- Sequence visualization for guide RNA design
+- Position-based analysis for target validation
+- Interactive sequence clicking for precise targeting
+
+**Guardian Protocol Enhancement:**
+- Add guide RNA generation interface
+- Integrate ChopChop scoring visualization
+- Implement repair template design workflow
+- Add therapeutic sequence generation
+
+### 3. **Intelligence Reconnaissance** (MEDIUM PRIORITY)
+**What We Can Leverage:**
+- Gene search and browsing capabilities
+- Comprehensive gene information display
+- Multi-genome assembly support
+
+**Guardian Protocol Enhancement:**
+- Add cancer gene database integration
+- Implement driver mutation identification
+- Add tissue-specific expression overlays
+- Integrate with Command Center reconnaissance
+
+### 4. **Validation & Verification** (MEDIUM PRIORITY)
+**What We Can Leverage:**
+- Comparison modal system
+- Batch analysis capabilities
+- Real-time API integration
+
+**Guardian Protocol Enhancement:**
+- Add structural validation (AlphaFold 3 integration)
+- Implement multi-modal scoring comparison
+- Add experimental validation tracking
+- Integrate with validation workflows
+
+## 🔧 Technical Integration Strategy
+
+### Phase 1: Direct Integration (IMMEDIATE)
+1. **API Endpoint Alignment**
+   - Modify genome-api.ts to call CommandCenter endpoints
+   - Add ZetaOracle and Evo Service integration
+   - Implement battle plan creation/retrieval
+
+2. **UI Component Extension**
+   - Add "Guardian Analysis" tab to gene-viewer
+   - Extend variant-analysis with ensemble scoring
+   - Add threat level visualization to known-variants
+
+### Phase 2: Enhanced Capabilities (SHORT-TERM)
+1. **Weapon Forging Module**
+   - New component: `weapon-forging.tsx`
+   - Guide RNA design interface
+   - Repair template generation
+   - Therapeutic sequence design
+
+2. **Metastasis Analysis**
+   - New component: `metastasis-cascade.tsx`
+   - 8-step protocol visualization
+   - Stage-specific intervention design
+   - Seed-soil compatibility scoring
+
+### Phase 3: Advanced Integration (MEDIUM-TERM)
+1. **Command Center Integration**
+   - Real-time battle plan synchronization
+   - Multi-user collaboration features
+   - Strategic dossier generation
+
+2. **Advanced Visualization**
+   - 3D protein structure integration
+   - Chromatin accessibility visualization
+   - Tissue-specific expression heatmaps
+
+## 🚨 Critical Dependencies & Limitations
+
+### What We DON'T Have (Need to Build/Integrate)
+1. **CommandCenter Integration**: No current connection to our Modal services
+2. **Multi-Modal Scoring**: Only Evo2 integration, missing ZetaOracle/AlphaMissense
+3. **Weapon Forging**: No guide RNA design or repair template generation
+4. **Structural Validation**: No AlphaFold 3 or protein structure integration
+5. **Batch Processing**: Limited to single-variant analysis
+6. **Authentication**: No user management or session handling
+
+### Technical Challenges
+1. **API Compatibility**: Current APIs are UCSC/NCBI, need Modal service integration
+2. **Data Flow**: Need to align with CommandCenter battle plan schema
+3. **Performance**: Large sequence visualization may need optimization
+4. **Security**: No current authentication or authorization
+
+## 🎯 Immediate Action Items
+
+### HIGH PRIORITY (Week 1)
+1. **Audit API Integration**: Map current genome-api.ts to CommandCenter endpoints
+2. **Extend Variant Analysis**: Add ensemble scoring with ZetaOracle
+3. **Add Guardian Mode**: New tab/mode for threat assessment
+4. **Test Integration**: Verify compatibility with existing Modal services
+
+### MEDIUM PRIORITY (Week 2-3)
+1. **Weapon Forging Component**: Build guide RNA design interface
+2. **Metastasis Visualization**: Add 8-step cascade analysis
+3. **Battle Plan Integration**: Connect to CommandCenter database
+4. **Enhanced Validation**: Add multi-modal scoring comparison
+
+### LOW PRIORITY (Month 2)
+1. **Advanced Visualization**: 3D structure integration
+2. **Batch Processing**: Multi-variant analysis capabilities
+3. **User Management**: Authentication and session handling
+4. **Performance Optimization**: Large dataset handling
+
+## 🔥 Strategic Assessment
+
+**CONFIDENCE LEVEL: HIGH** - We have a solid foundation with sophisticated genomic analysis capabilities that directly align with Guardian Protocol requirements.
+
+**ALIGNMENT SCORE: 70%** - The existing frontend covers most of our core needs with some gaps in weapon forging and multi-modal integration.
+
+**RECOMMENDATION**: Prioritize API integration and component extension over building from scratch. The existing architecture is well-designed and can be enhanced rather than replaced.
+
+**NEXT STEPS**: Focus on connecting the existing frontend to our Modal services and extending the variant analysis capabilities with Guardian Protocol-specific features.
+description:
+globs:
+alwaysApply: false
+---

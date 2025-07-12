@@ -11,6 +11,7 @@ class APIClient:
     def __init__(self):
         self.discriminative_endpoint = os.environ.get("EVO2_DISCRIMINATIVE_ENDPOINT")
         self.generative_endpoint = os.environ.get("EVO2_GENERATIVE_ENDPOINT")
+        self.adjudicator_endpoint = os.environ.get("ADJUDICATOR_ENDPOINT")
         self.headers = {"Content-Type": "application/json"}
 
         if not self.discriminative_endpoint or not self.generative_endpoint:
@@ -87,6 +88,19 @@ class APIClient:
         """
         payload = {"genomic_regions": genomic_regions}
         return self._make_request(f"{self.discriminative_endpoint}/predict_chromatin_accessibility", payload)
+
+    def classify_embedding(self, embedding: list[float]):
+        """
+        Sends an embedding to the Adjudicator service for classification.
+        
+        Args:
+            embedding (list): The 8192-dimensional embedding vector.
+        
+        Returns:
+            dict: The API response from the Adjudicator.
+        """
+        # The Adjudicator service expects the embedding directly as the body.
+        return self._make_request(f"{self.adjudicator_endpoint}/classify", embedding)
 
     # --- Placeholder for Phase 2: Generative Endpoints ---
     

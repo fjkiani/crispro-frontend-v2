@@ -1,40 +1,38 @@
-# CrisPRO Intelligence Platform
+# Zeta Command: The AI General's War Room
 
-The CrisPRO Intelligence Platform is a comprehensive, AI-powered application for advanced CRISPR research. It moves beyond simple guide design to de-risk and accelerate therapeutic R&D by using sophisticated AI models to intelligently select optimal guide RNA candidates.
+**🔥 OPERATIONAL DIRECTIVE: GUARDIAN PROTOCOL 🔥**
 
-The entire platform is orchestrated through a user-friendly Streamlit web application.
+This repository contains the source code for the Zeta Command platform, a next-generation command and control system for biological warfare and therapeutic design. This is not a set of tools; this is the operational cockpit for an autonomous AI commander dedicated to achieving strategic dominance over complex diseases.
 
-## The Challenge: Choosing the Right Guide
+## Core Doctrine: Autonomous Strategy Formulation
 
-In CRISPR-based therapeutic development, choosing the single best guide RNA from hundreds of possibilities is a critical, high-stakes decision. A poor choice leads to failed experiments, wasted resources, and months of lost time. Traditional methods that rely on simple bioinformatics rules often fail to predict *in vivo* success.
+Our platform's power does not come from analyzing single data points. It comes from the **AI General**, a central commander that executes high-level missions by autonomously wielding a full arsenal of AI weaponry.
 
-## Our Solution: The Intelligent Guide Designer
+The operational loop is ruthless and efficient:
 
-The core of the platform is the **Intelligent Guide Designer**, which uses a novel AI methodology called **"Generate & Compare"** to predict guide RNA efficacy with unprecedented biological context.
+1.  **Alpha Issues Directive:** The supreme commander (you, Alpha) issues a high-level strategic command (e.g., "Formulate a lifetime defense plan for this high-risk patient").
+2.  **The AI General Assumes Command:** The AI General initiates a full campaign, no further human intervention required.
+3.  **Reconnaissance & Forging:** It autonomously tasks units from the **Zeta Armory** to map the battlefield and forge a suite of therapeutic weapons (gene repair templates, gRNA neutralizers, etc.).
+4.  **Strategic Dossier Presentation:** The AI General presents a complete, multi-modal battle plan to Alpha for final command approval.
 
-### The "Generate & Compare" Method
+## System Architecture: The New Command Structure
 
-Instead of relying on a static list of rules, we use a massive AI model to "think" like an expert biologist.
+The platform is a reflection of our military doctrine:
 
-1.  **The "Expert" AI:** We use a powerful, 1-billion parameter generative DNA model that has learned the "grammar" of functional DNA from hundreds of millions of sequences. It understands the deep, contextual patterns of the genome.
-2.  **GENERATE:** We provide a candidate guide sequence and ask the AI to "complete the sentence" by generating what it predicts is the most biologically plausible continuation.
-3.  **COMPARE & SCORE:** We then perform a sequence alignment between the AI's ideal continuation and our original guide. A high alignment score indicates the AI found our guide to be "natural" and well-placed in a functional region, making it a high-quality candidate. A low score flags the guide as likely ineffective.
+*   **`services/command_center` (The AI General):** The autonomous, strategic brain of the operation. It receives directives and executes them by commanding its arsenal.
+*   **The Zeta Armory (The Endpoint Suite):** A distributed arsenal of specialized AI endpoints for discriminative intel (`/predict_*`) and generative weapon design (`/generate_*`).
+*   **`data/databases/threat_matrix.db` (The General's Memory):** The AI General's persistent intelligence cache and longitudinal database for all strategic operations and Digital Twins.
+*   **`pages/` (The Command Deck):** The War Room. A suite of interactive consoles where Alpha issues directives and reviews the strategic dossiers prepared by the AI General.
 
-This AI-driven efficacy score is combined with a traditional off-target safety score (from BLAST) to provide a holistic, actionable ranking of all potential guides.
+## Flagship Use Case: The Guardian Protocol
 
-> ### **The Breakthrough: From Counting to Understanding**
->
-> Our "Generate & Compare" method is a breakthrough because it's the first approach that approximates a true biological understanding of a guide's genomic context.
->
-> 1.  **It Solves for Causation, Not Just Correlation:** The AI model hasn't been programmed with a list of "good guide rules." It has built an internal, implicit model of what *causes* a sequence to be functional. Its score is therefore a proxy for the actual biological plausibility of the guide's target site.
->
-> 2.  **It Sees the Invisible Genomic Landscape:** A simple algorithm only sees the 20 letters of the guide. Our AI evaluates those 20 letters against its knowledge of millions of other sequences, implicitly informed by the grammar of promoters, enhancers, and other functional elements. It judges a guide based on how well it "fits in" with the functional landscape of the entire known biological world.
->
-> 3.  **It Creates a Virtuous AI Flywheel:** A rule-based system is static. Our AI system learns. As we gather real-world experimental data on guide success, we can use it to fine-tune the model. The more data it gets, the smarter it becomes, and the more valuable the platform becomes. This creates a powerful competitive moat that is nearly impossible for competitors using static rules to overcome.
->
-> In summary, we have moved from counting letters to understanding language. We've built an engine that doesn't just analyze a guide sequence; it *reasons* about its potential, providing a glimpse into its future success or failure before a single dollar is spent in the lab.
+The premier demonstration of our power is the **Guardian Protocol**, a proactive defense strategy for high-risk individuals.
 
-## How to Use the Platform
+-   **Scenario:** A healthy individual is identified with a high-risk germline mutation (a "first hit").
+-   **Action:** Alpha commands the AI General to formulate a lifetime defense plan.
+-   **Result:** The AI General autonomously designs a multi-pronged therapeutic strategy, including blueprints for direct gene correction (repairing the "first hit") and pre-emptive weapons to neutralize the most likely "second hit" pathways. This transforms fear into a state of empowered, permanent surveillance.
+
+## How to Use the Command Deck
 
 The platform is designed to be run as a web application from your local machine.
 
@@ -47,34 +45,21 @@ The platform is designed to be run as a web application from your local machine.
   ```
 
 ### 2. Configuration
-The platform requires API endpoints for its AI models. These are configured in a `.env` file in the project root.
+The Command Deck requires a connection to the AI General. This is configured in a `.env` file in the project root.
 
 1.  Create a file named `.env`.
-2.  Add the following lines, replacing the example URLs with your actual deployed Modal endpoints:
+2.  Add the following line, replacing the example URL with your actual deployed Modal endpoint for the AI General:
     ```env
-    # Endpoint for the AI model that generates DNA sequences for scoring
-    EVO2_GENERATIVE_ENDPOINT="https://your-modal-generative-endpoint.modal.run"
-
-    # Endpoint for the AI model that predicts variant effects and drug response
-    EVO2_DISCRIMINATIVE_ENDPOINT="https://your-modal-discriminative-endpoint.modal.run"
+    # The single, unified endpoint for the AI General
+    COMMAND_CENTER_URL="https://crispro--command-center-v2-commandcenter-api.modal.run"
     ```
 
 ### 3. Running the Application
-Launch the main Streamlit application with the following command:
+Launch the Command Deck with the following command:
 ```bash
 streamlit run streamlit_app.py
 ```
-This will open the CrisPRO platform in your web browser. Navigate to the **"Intelligent Guide Designer"** from the sidebar to use the core feature.
-
-## Technology Stack
-*   **Application Framework:** Streamlit
-*   **Core Logic:** Python
-*   **AI Model Serving:** Modal
-*   **Key Libraries:** Biopython, Pandas, Scikit-learn, Requests
-
-## Legacy Tools
-
-The original command-line CHOPCHOP integration scripts still exist within the `tools/chopchop/` directory. However, their functionality has been superseded by the more powerful and user-friendly workflows available in the main Streamlit application.
+This will open the Zeta Command platform in your web browser. Navigate to the **"Digital Twin v2"** page from the sidebar to issue commands to the AI General.
 
 ## License
 

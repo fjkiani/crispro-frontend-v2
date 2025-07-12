@@ -471,12 +471,18 @@ def estimate_experiment_timeline(
     # Calculate total time (using minimum estimates for simplicity)
     total_days = 0
     for stage in timeline:
-        # Parse the minimum days from ranges like "3-5 days" or "2-3 weeks"
+        # Parse the minimum days from ranges like "3-5 days" or "2-3 weeks" or "1 day"
         duration = stage["duration"]
         if "weeks" in duration:
-            days = int(duration.split("-")[0]) * 7
+            if "-" in duration:
+                days = int(duration.split("-")[0]) * 7
+            else:
+                days = int(duration.split()[0]) * 7
         else:
-            days = int(duration.split("-")[0])
+            if "-" in duration:
+                days = int(duration.split("-")[0])
+            else:
+                days = int(duration.split()[0])
         total_days += days
     
     return {

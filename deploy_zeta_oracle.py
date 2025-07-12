@@ -68,52 +68,6 @@ class ZetaOracleService:
             print("⚠️ Operating in fallback mode - API will return mock responses")
 
     @modal.method()
-    def score_variant(self, ref_sequence: str, alt_sequence: str) -> dict:
-        """Score the likelihood difference between reference and alternate sequences."""
-        try:
-            if not self.model_loaded or self.model is None:
-                # Fallback: return a mock score based on sequence differences
-                print("⚠️ Using fallback scoring method")
-                
-                # Simple heuristic: count differences
-                min_len = min(len(ref_sequence), len(alt_sequence))
-                differences = sum(1 for i in range(min_len) if ref_sequence[i] != alt_sequence[i])
-                
-                # Add length difference penalty
-                len_diff = abs(len(ref_sequence) - len(alt_sequence))
-                total_changes = differences + len_diff
-                
-                # Convert to a likelihood-like score (more changes = more negative)
-                mock_delta = -0.1 * total_changes / max(len(ref_sequence), len(alt_sequence))
-                
-                return {
-                    "delta_score": mock_delta,
-                    "status": "fallback",
-                    "message": f"Using fallback scoring: {getattr(self, 'model_error', 'Model not available')}",
-                    "changes_detected": total_changes
-                }
-            
-            print(f"🧬 Scoring sequences: REF={ref_sequence[:20]}... ALT={alt_sequence[:20]}...")
-            log_likelihoods = self.model.score_sequences([ref_sequence, alt_sequence])
-            delta_score = float(log_likelihoods[1] - log_likelihoods[0])
-            
-            print(f"📊 Delta score: {delta_score}")
-            return {
-                "delta_score": delta_score,
-                "status": "success",
-                "ref_likelihood": float(log_likelihoods[0]),
-                "alt_likelihood": float(log_likelihoods[1])
-            }
-            
-        except Exception as e:
-            print(f"❌ Error scoring variant: {e}")
-            return {
-                "delta_score": 0.0,
-                "status": "error",
-                "message": str(e)
-            }
-
-    @modal.method()
     def generate_variant(self, prompt_sequence: str, gen_params: dict) -> dict:
         """Generate a new sequence based on a prompt and generation parameters."""
         try:
@@ -159,49 +113,19 @@ class ZetaOracleService:
             }
 
     @modal.fastapi_endpoint(method="POST")
-    def invoke(self, item: dict):
+    def web(self, item: dict):
         """
-        Unified invocation endpoint for the Zeta Oracle.
-        Routes requests to the appropriate method based on the 'action' field.
+        Web endpoint for the Generative Oracle.
         """
         from fastapi.responses import JSONResponse
 
-        action = item.get("action")
-        params = item.get("params", {})
+        prompt = item.get("prompt")
+        gen_params = item.get("gen_params", {})
 
-        if not action:
-            return JSONResponse({"status": "error", "message": "'action' field is required"}, status_code=400)
+        if not prompt:
+            return JSONResponse({"status": "error", "message": "Generation requires a 'prompt' sequence"}, status_code=400)
         
-        print(f"Received action: {action}")
-
-        if action == "score":
-            ref_seq = params.get("reference_sequence")
-            alt_seq = params.get("alternate_sequence")
-            if not ref_seq or not alt_seq:
-                return JSONResponse({"status": "error", "message": "Scoring requires 'reference_sequence' and 'alternate_sequence'"}, status_code=400)
-            
-            result = self.score_variant.remote(ref_seq, alt_seq)
-            # Add interpretation for scoring
-            if result.get("status") == "success":
-                 if result["delta_score"] < -0.1:
-                    result["interpretation"] = "Disruptive (Likely Pathogenic)"
-                 elif result["delta_score"] > 0.1:
-                    result["interpretation"] = "Tolerated (Likely Benign)"
-                 else:
-                    result["interpretation"] = "Uncertain Significance"
-
-            return result
-        
-        elif action == "generate":
-            prompt = params.get("prompt")
-            gen_params = params.get("gen_params", {})
-            if not prompt:
-                return JSONResponse({"status": "error", "message": "Generation requires a 'prompt' sequence"}, status_code=400)
-            
-            return self.generate_variant.remote(prompt, gen_params)
-
-        else:
-            return JSONResponse({"status": "error", "message": f"Unknown action: {action}"}, status_code=400)
+        return self.generate_variant.remote(prompt, gen_params)
 
     @staticmethod
     @modal.fastapi_endpoint(method="GET")
@@ -209,13 +133,9 @@ class ZetaOracleService:
         """Health check endpoint."""
         return {
             "status": "healthy", 
-            "service": "zeta-oracle", 
-            "version": "1.2.0",
-            "model": "evo2_40b_base",
-            "endpoints": {
-                "health": "/health_check",
-                "predict": "/predict_variant_impact"
-            }
+            "service": "zeta-oracle-generative", 
+            "version": "1.3.0",
+            "model": "evo2_6.5b_base"
         }
 
 # Local test entrypoint
@@ -227,16 +147,13 @@ def main():
     oracle = ZetaOracleService()
     
     # Test with sample sequences
-    ref_sequence = "ATCGATCGATCGATCG"
-    alt_sequence = "ATCGATCGATCGTTCG"
+    prompt_sequence = "ATCGATCGATCGATCG"
     
-    print(f"🧪 Testing Zeta Oracle with sequences:")
-    print(f"REF: {ref_sequence}")
-    print(f"ALT: {alt_sequence}")
+    print(f"🧪 Testing Zeta Oracle with prompt:")
+    print(f"PROMPT: {prompt_sequence}")
     
-    # Call the 'score_variant' method remotely. This blocks until it completes.
-    result = oracle.score_variant.remote(ref_sequence, alt_sequence)
+    result = oracle.generate_variant.remote(prompt_sequence, {})
     
-    print(f"\n--- Test Scoring Result ---")
+    print(f"\n--- Test Generation Result ---")
     print(f"Result: {result}")
     print("---------------------------") 

@@ -1,390 +1,324 @@
-import subprocess
-import json
+# \"\"\"
+# Literature Intelligence Analyzer (Diffbot Edition)
+
+# This tool enriches the "Threat Matrix" database by analyzing scientific
+# literature associated with variants. It uses the Diffbot Article API to ensure
+# clean, reliable text extraction for high-quality LLM summarization.
+
+# Workflow:
+# 1.  Reads all unique PubMed IDs (PMIDs) from the `variants` table.
+# 2.  Converts each PMID to a PubMed Central (PMC) URL.
+# 3.  Calls the Diffbot Article API to extract the clean text of the article.
+# 4.  Sends the text to an LLM for a deep, strategic summary.
+# 5.  Stores the summary and source URL in the `literature_intelligence` table.
+# \"\"\"
 import os
-import requests # For PubMed API calls
-import time
-import xml.etree.ElementTree as ET # For parsing PubMed XML
-import re
-from dotenv import load_dotenv # Add this import
+import sqlite3
+import requests
+from pathlib import Path
+from dotenv import load_dotenv
+from llm_api import query_llm
+import json
+from sentence_transformers import SentenceTransformer
+import textwrap
 
-# Assuming llm_api.py is in the same directory or accessible in PYTHONPATH
-from .llm_api import query_llm # Relative import
+# --- Configuration ---
+load_dotenv()
+DB_PATH = Path("data/databases/threat_matrix.db")
+DIFFBOT_TOKEN = os.getenv("DIFFBOT_TOKEN")
+DIFFBOT_API_URL = "https://api.diffbot.com/v3/article"
+ID_CONVERTER_API_URL = "https://www.ncbi.nlm.nih.gov/pmc/utils/idconv/v1.0/"
 
-# Load environment variables from .env file
-load_dotenv() # Add this call
+class LiteratureAnalyzer:
+    def __init__(self):
+        if not DB_PATH.exists():
+            raise FileNotFoundError(f"Database not found at {DB_PATH}. Please run cosmic_importer.py first.")
+        if not DIFFBOT_TOKEN:
+            raise ValueError("DIFFBOT_TOKEN not found in environment variables. Please set it in your .env file.")
+        self.conn = sqlite3.connect(DB_PATH)
+        self.conn.enable_load_extension(True)
+        self.cursor = self.conn.cursor()
+        self._setup_database()
+        print("🧠 Loading sentence-transformer model...")
+        self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+        print("✅ Model loaded.")
 
-# Constants for PubMed API
-PUBMED_API_BASE_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
-PUBMED_ESEARCH_URL = PUBMED_API_BASE_URL + "esearch.fcgi"
-PUBMED_EFETCH_URL = PUBMED_API_BASE_URL + "efetch.fcgi"
-# It's good practice to include an email for NCBI to contact if there are issues
-# However, for a client-side app, this might not be directly set by the user.
-# For now, we'll omit it, but for a server-side app, it would be important.
-# NCBI_TOOL_EMAIL = {'tool': 'crispr_ai_assistant', 'email': 'user@example.com'} 
+    def run_ingestion(self):
+        print("🚀 Starting Literature Intelligence Ingestion (Phase 1: Metadata & Embeddings)...")
+        pmids = self._get_unique_pmids()
+        print(f"  - Found {len(pmids)} unique PubMed IDs to process.")
 
-# Diffbot API Configuration
-DIFFBOT_ANALYZE_API_URL = "https://api.diffbot.com/v3/analyze"
-# Load Diffbot token from environment variable for security
-DIFFBOT_TOKEN = os.getenv("DIFFBOT_TOKEN") # Now this should work if .env is loaded
-
-# Constants for PubMed URL construction (still useful for targeting Diffbot)
-PUBMED_SEARCH_BASE_URL = "https://pubmed.ncbi.nlm.nih.gov/"
-
-def get_pubmed_search_results_via_diffbot(query_string: str, diffbot_token: str, retmax: int = 5) -> list:
-    """
-    Uses Diffbot's Analyze API to get structured data from a PubMed search results page.
-
-    Args:
-        query_string (str): The raw search query for PubMed.
-        diffbot_token (str): Your Diffbot API token.
-        retmax (int): Number of results Diffbot attempts to extract (actual may vary).
-
-    Returns:
-        list: A list of article dictionaries, or an empty list if an error occurs.
-    """
-    if not diffbot_token:
-        print("Error: DIFFBOT_TOKEN is not set. Please set it as an environment variable.")
-        return []
-
-    # Construct the PubMed search URL
-    # We need to URL-encode the query_string for the `term` parameter of PubMed URL
-    try:
-        from urllib.parse import quote_plus
-        encoded_query = quote_plus(query_string)
-    except ImportError:
-        # Fallback for older Python if needed, though quote_plus is standard
-        import urllib
-        encoded_query = urllib.parse.quote_plus(query_string)
-        
-    pubmed_url = f"{PUBMED_SEARCH_BASE_URL}?term={encoded_query}"
-    print(f"Constructed PubMed URL for Diffbot: {pubmed_url}")
-
-    params = {
-        'url': pubmed_url,
-        'token': diffbot_token,
-        # 'fields': 'links,meta,querystring,items' # Optional: specify fields if needed
-        # 'maxPages': '1' # Limit Diffbot to the first page of PubMed results
-    }
-    headers = {}
-    
-    articles_extracted = []
-    try:
-        response = requests.get(DIFFBOT_ANALYZE_API_URL, params=params, headers=headers, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-
-        # Diffbot's Analyze API returns a list of objects, one for each page analyzed.
-        # For a PubMed search URL, we expect one primary object.
-        if isinstance(data, list) and len(data) > 0:
-            page_data = data[0] # Assuming the first object contains the relevant page analysis
-        elif isinstance(data, dict) and data.get('type') == 'page':
-            page_data = data
-        else:
-            page_data = data # If it's already the page object for some reason
-        
-        if page_data and page_data.get('type') == 'page' and 'items' in page_data:
-            # 'items' usually contains the list of articles/results Diffbot found on the page
-            items = page_data['items']
-            print(f"Diffbot found {len(items)} items on the page.")
+        for pmid in pmids[:5]: # Let's process a few for demonstration
+            if self._is_already_processed(pmid):
+                print(f"  - ⏭️ PMID: {pmid} already processed. Skipping.")
+                continue
             
-            for item in items[:retmax]: # Respect retmax
-                # The structure of 'item' can vary based on Diffbot's analysis.
-                # We need to flexibly extract title, summary (abstract), and link.
-                title = item.get('title', 'No title available')
-                # Diffbot's 'summary' is often the abstract snippet
-                abstract_snippet = item.get('summary', item.get('text', 'No abstract available')) 
-                link = item.get('link', item.get('resolvedPageUrl', item.get('pageUrl', 'No URL available')))
-                pmid = None
-                # Try to extract PMID from the link
-                if link and "pubmed.ncbi.nlm.nih.gov/" in link:
-                    match = re.search(r'/(\d+)/?', link)
-                    if match:
-                        pmid = match.group(1)
-                
-                articles_extracted.append({
-                    'pmid': pmid,
-                    'title': title,
-                    'abstract': abstract_snippet, # Using Diffbot's summary as abstract
-                    'url': link
-                })
-        else:
-            print(f"Diffbot Analyze API did not return the expected 'items' array for PubMed URL: {pubmed_url}")
-            print(f"Diffbot Response (or relevant part): {json.dumps(page_data, indent=2)[:1000]}...")
-
-    except requests.exceptions.RequestException as e:
-        print(f"Error during Diffbot API call for PubMed URL '{pubmed_url}': {e}")
-    except json.JSONDecodeError as e:
-        print(f"Error decoding JSON from Diffbot API for PubMed URL '{pubmed_url}': {e}")
-        print(f"Response text: {response.text if 'response' in locals() else 'N/A'}")
-    
-    return articles_extracted
-
-def search_pubmed(query_string: str, retmax: int = 5) -> list:
-    """
-    Searches PubMed for a given query string and returns a list of PubMed IDs (PMIDs).
-
-    Args:
-        query_string (str): The search query.
-        retmax (int): Maximum number of PMIDs to return.
-
-    Returns:
-        list: A list of PMIDs (as strings), or an empty list if an error occurs or no results.
-    """
-    params = {
-        'db': 'pubmed',
-        'term': query_string,
-        'retmode': 'json',
-        'retmax': str(retmax),
-        # 'usehistory': 'y' # Useful if we were doing many related queries
-    }
-    # params.update(NCBI_TOOL_EMAIL) # If we were to add email/tool name
-
-    pmids = []
-    try:
-        response = requests.get(PUBMED_ESEARCH_URL, params=params, timeout=10)
-        response.raise_for_status()  # Raises an HTTPError for bad responses (4XX or 5XX)
-        data = response.json()
-        
-        if 'esearchresult' in data and 'idlist' in data['esearchresult']:
-            pmids = data['esearchresult']['idlist']
-        else:
-            print(f"PubMed ESearch did not return the expected idlist for query: {query_string}")
-            print(f"Response: {data}")
-
-    except requests.exceptions.RequestException as e:
-        print(f"Error during PubMed ESearch for query '{query_string}': {e}")
-    except json.JSONDecodeError as e:
-        print(f"Error decoding JSON from PubMed ESearch for query '{query_string}': {e}")
-        print(f"Response text: {response.text if 'response' in locals() else 'N/A'}")
-    
-    return pmids
-
-def fetch_pubmed_articles(pmids: list) -> list:
-    """
-    Fetches article details (title, abstract, URL) from PubMed for a list of PMIDs.
-    Uses EFetch with retmode=xml to get abstracts.
-
-    Args:
-        pmids (list): A list of PubMed IDs (strings).
-
-    Returns:
-        list: A list of dictionaries, each containing pmid, title, abstract, and url.
-              Returns an empty list if an error occurs or no articles found.
-    """
-    if not pmids:
-        return []
-
-    articles = []
-    # Process PMIDs in batches if necessary, though for small numbers (e.g., < 200) one call is fine.
-    # Max PMIDs per EFetch GET request is around 200.
-    pmid_string = ",".join(pmids)
-    
-    params = {
-        'db': 'pubmed',
-        'id': pmid_string,
-        'retmode': 'xml', # XML is often more complete for abstracts
-        'rettype': 'abstract' # We want abstract, not full text
-    }
-    # params.update(NCBI_TOOL_EMAIL)
-
-    try:
-        response = requests.get(PUBMED_EFETCH_URL, params=params, timeout=20) # Longer timeout for fetch
-        response.raise_for_status()
-        
-        # Parse the XML response
-        root = ET.fromstring(response.content)
-        
-        for pubmed_article in root.findall('.//PubmedArticle'):
-            article_data = {'pmid': '', 'title': '', 'abstract': '', 'url': ''}
+            print(f"📄 Processing PMID: {pmid}")
+            article_url = self._convert_pmid_to_pmc_url(pmid)
+            if not article_url:
+                print(f"   - ❌ Could not find a full-text PMC URL for PMID {pmid}. Skipping.")
+                self._mark_as_processed(pmid, success=False)
+                continue
             
-            pmid_node = pubmed_article.find('.//PMID')
-            if pmid_node is not None and pmid_node.text:
-                article_data['pmid'] = pmid_node.text
-                article_data['url'] = f"https://pubmed.ncbi.nlm.nih.gov/{pmid_node.text}/"
+            print(f"   - ✅ Found PMC URL: {article_url}")
+            article_data = self._get_article_data_from_diffbot(article_url)
+            if not article_data:
+                print(f"   - ❌ Diffbot failed to extract data from {article_url}. Skipping.")
+                self._mark_as_processed(pmid, success=False)
+                continue
+
+            self._store_structured_intelligence(pmid, article_url, article_data)
+            self._generate_and_store_embeddings(pmid, article_data.get("text", ""))
+            print(f"   - ✅ Successfully processed and stored structured data for PMID {pmid}.")
+
+        # self.conn.close()
+        print("✅ Literature ingestion complete.")
+
+    def run_strategic_summary(self, pmid: int, prompt_template: str, provider: str = "gemini"):
+        """
+        Runs a targeted, strategic analysis on a single pre-ingested article.
+        """
+        print(f"🕵️  Running strategic summary for PMID: {pmid}")
+        self.cursor.execute("SELECT full_text, title, author FROM literature_intelligence WHERE pubmed_id = ? AND processed_successfully = TRUE", (pmid,))
+        result = self.cursor.fetchone()
+
+        if not result:
+            print(f"  - ❌ Could not find pre-processed data for PMID {pmid}. Run ingestion first.")
+            return
+
+        full_text, title, author = result
+        if not full_text:
+            print(f"  - ❌ No full text available for PMID {pmid}.")
+            return
+
+        print(f"  - Title: {title}")
+
+        prompt = prompt_template.format(
+            pmid=pmid,
+            title=title,
+            full_text=full_text[:25000] # Stay within reasonable token limits
+        )
+
+        print("  - 🧠 Sending request to LLM for targeted analysis...")
+        summary = query_llm(prompt, provider=provider)
+
+        self._store_strategic_summary(pmid, prompt_template, summary, provider)
+        print(f"  - ✅ Stored strategic summary for PMID {pmid}.")
+
+    def force_reingest(self, pmid: int):
+        """Forces the re-ingestion of a specific PMID by deleting its existing records."""
+        print(f"🔥 Forcing re-ingestion for PMID: {pmid}")
+        self.cursor.execute("DELETE FROM strategic_summaries WHERE pubmed_id = ?", (pmid,))
+        self.cursor.execute("DELETE FROM article_tags WHERE pubmed_id = ?", (pmid,))
+        self.cursor.execute("DELETE FROM literature_intelligence WHERE pubmed_id = ?", (pmid,))
+        self.conn.commit()
+        print(f"  - ✅ Cleared all previous records for PMID: {pmid}")
+
+    def close_connection(self):
+        """Closes the database connection."""
+        if self.conn:
+            self.conn.close()
+            print("🔒 Database connection closed.")
+
+    def _convert_pmid_to_pmc_url(self, pmid: int) -> str | None:
+        params = {"ids": pmid, "format": "json"}
+        try:
+            response = requests.get(ID_CONVERTER_API_URL, params=params)
+            response.raise_for_status()
+            data = response.json()
+            if data.get("status") == "ok" and data.get("records"):
+                record = data["records"][0]
+                if "pmcid" in record:
+                    return f"https://www.ncbi.nlm.nih.gov/pmc/articles/{record['pmcid']}/"
+        except requests.RequestException as e:
+            print(f"   - ⚠️ ID Converter API request failed for PMID {pmid}: {e}")
+        return None
+
+    def _get_article_data_from_diffbot(self, article_url: str) -> dict | None:
+        params = {"token": DIFFBOT_TOKEN, "url": article_url, "fields": "title,author,date,siteName,tags,images,html,text"}
+        try:
+            response = requests.get(DIFFBOT_API_URL, params=params, timeout=60)
+            response.raise_for_status()
+            data = response.json()
+            if "objects" in data and data["objects"]:
+                return data["objects"][0]
+        except requests.RequestException as e:
+            print(f"   - ⚠️ Diffbot API request failed for URL {article_url}: {e}")
+        return None
+
+    def _store_structured_intelligence(self, pmid: int, url: str, data: dict):
+        self.cursor.execute(
+            """
+            INSERT OR REPLACE INTO literature_intelligence (
+                pubmed_id, full_text_url, title, author, publication_date, 
+                site_name, full_text, full_html, diffbot_response_json, processed_successfully
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                pmid, url, data.get("title"), data.get("author"), data.get("date"),
+                data.get("siteName"), data.get("text"), data.get("html"),
+                json.dumps(data), True
+            )
+        )
+
+        # Clear existing tags for this pmid before inserting new ones
+        # self.cursor.execute("DELETE FROM article_tags WHERE pubmed_id = ?", (pmid,))
+        
+        tags = data.get("tags", [])
+        for tag in tags:
+            self.cursor.execute(
+                """
+                INSERT INTO article_tags (pubmed_id, label, uri, score, sentiment) 
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (pmid, tag.get("label"), tag.get("uri"), tag.get("score"), tag.get("sentiment"))
+            )
+        
+        self.conn.commit()
+
+    def _mark_as_processed(self, pmid: int, success: bool):
+        self.cursor.execute(
+            "INSERT OR REPLACE INTO literature_intelligence (pubmed_id, processed_successfully) VALUES (?, ?)",
+            (pmid, success)
+        )
+        self.conn.commit()
+
+    def _is_already_processed(self, pmid: int) -> bool:
+        self.cursor.execute("SELECT processed_successfully FROM literature_intelligence WHERE pubmed_id = ?", (pmid,))
+        result = self.cursor.fetchone()
+        return result is not None
+
+    def _store_strategic_summary(self, pmid: int, prompt: str, summary: str, provider: str):
+        self.cursor.execute(
+            """
+            INSERT INTO strategic_summaries (pubmed_id, prompt, summary, model_used)
+            VALUES (?, ?, ?, ?)
+            """,
+            (pmid, prompt, summary, provider)
+        )
+        self.conn.commit()
+
+    def _generate_and_store_embeddings(self, pmid: int, text: str):
+        if not text:
+            return
             
-            article_title_node = pubmed_article.find('.//ArticleTitle')
-            if article_title_node is not None:
-                 # Join all text parts of the ArticleTitle, handling any inline tags like <i>
-                article_data['title'] = "".join(article_title_node.itertext()).strip()
+        print(f"   - 🔮 Generating embeddings for PMID: {pmid}")
+        
+        # More robust chunking strategy
+        chunks = textwrap.wrap(text, width=1500, break_long_words=False, replace_whitespace=False)
+        
+        if not chunks:
+            print("   - ⚠️ No suitable text chunks found for embedding.")
+            return
 
-            abstract_text_parts = []
-            # Abstracts can be structured with multiple AbstractText nodes
-            for abstract_node in pubmed_article.findall('.//Abstract/AbstractText'):
-                label = abstract_node.get('Label')
-                text_content = "".join(abstract_node.itertext()).strip()
-                if label:
-                    abstract_text_parts.append(f"{label}: {text_content}")
-                else:
-                    abstract_text_parts.append(text_content)
-            
-            if abstract_text_parts:
-                article_data['abstract'] = "\n".join(abstract_text_parts)
-            elif article_title_node is not None: # Fallback if no abstract, use title
-                article_data['abstract'] = "Abstract not available. " + article_data['title']
-            else:
-                article_data['abstract'] = "Title and abstract not available."
+        embeddings = self.embedding_model.encode(chunks, convert_to_tensor=False)
+        
+        self.cursor.execute("DELETE FROM vector_store WHERE pubmed_id = ?", (pmid,))
+        
+        for i, chunk in enumerate(chunks):
+            embedding_blob = json.dumps(embeddings[i].tolist())
+            self.cursor.execute(
+                "INSERT INTO vector_store (pubmed_id, chunk_id, chunk_text, embedding) VALUES (?, ?, ?, ?)",
+                (pmid, i, chunk, embedding_blob)
+            )
+        self.conn.commit()
+        print(f"   - ✅ Stored {len(chunks)} text chunks and embeddings.")
 
-            if article_data['pmid'] and article_data['title']:
-                 articles.append(article_data)
+    def _setup_database(self):
+        # self.cursor.execute("DROP TABLE IF EXISTS literature_intelligence")
+        # self.cursor.execute("DROP TABLE IF EXISTS article_tags")
+        # self.cursor.execute("DROP TABLE IF EXISTS strategic_summaries")
+        # self.cursor.execute("DROP TABLE IF EXISTS vector_store")
 
-    except requests.exceptions.RequestException as e:
-        print(f"Error during PubMed EFetch for PMIDs '{pmid_string}': {e}")
-    except ET.ParseError as e:
-        print(f"Error parsing XML from PubMed EFetch for PMIDs '{pmid_string}': {e}")
-        # print(f"Response text: {response.text if 'response' in locals() else 'N/A'}") # Be careful printing large XML
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS literature_intelligence (
+                pubmed_id INTEGER PRIMARY KEY,
+                full_text_url TEXT,
+                title TEXT,
+                author TEXT,
+                publication_date TEXT,
+                site_name TEXT,
+                summary TEXT, -- For future use in Phase 2
+                full_text TEXT,
+                full_html TEXT,
+                diffbot_response_json TEXT,
+                processed_successfully BOOLEAN DEFAULT FALSE,
+                ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS article_tags (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pubmed_id INTEGER,
+                label TEXT,
+                uri TEXT,
+                score REAL,
+                sentiment REAL,
+                FOREIGN KEY (pubmed_id) REFERENCES literature_intelligence (pubmed_id)
+            )
+        """)
+        
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS strategic_summaries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pubmed_id INTEGER,
+                prompt TEXT,
+                summary TEXT,
+                model_used TEXT,
+                analyzed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (pubmed_id) REFERENCES literature_intelligence (pubmed_id)
+            )
+        """)
 
-    return articles
-
-def get_literature_summary_for_therapeutic_context(target_keyword, challenge_keyword, research_area="CRISPR gene editing", max_articles_to_summarize=3):
-    """
-    Performs a literature search using the PubMed E-utilities API and uses an LLM to summarize the findings.
-    """
-    # Construct a simplified PubMed search query for E-utilities
-    query_parts = []
-    if target_keyword:
-        query_parts.append(f'"{target_keyword}"[Title/Abstract]')
-    if challenge_keyword:
-        query_parts.append(f'"{challenge_keyword}"[Title/Abstract]')
-    # Optional: Include research area if it helps narrow down.
-    # For now, keeping it simpler based on previous results.
-    # if research_area:
-    #     query_parts.append(f'"{research_area}"[Title/Abstract]')
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS vector_store (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pubmed_id INTEGER,
+                chunk_id INTEGER,
+                chunk_text TEXT,
+                embedding TEXT, -- Storing as JSON string
+                FOREIGN KEY (pubmed_id) REFERENCES literature_intelligence (pubmed_id)
+            )
+        """)
+        self.conn.commit()
     
-    # Add therapeutic context terms, ensuring they are ANDed with the main query if other parts exist
-    therapeutic_terms = "(therapeutic[Title/Abstract] OR therapy[Title/Abstract] OR clinical[Title/Abstract] OR preclinical[Title/Abstract])"
-    if query_parts: # Only add AND if there are other terms
-        query_parts.append(therapeutic_terms)
-    else: # If no other terms, this becomes the main query
-        query_parts.append(therapeutic_terms) # This case is unlikely if target_keyword is mandatory
+    def _get_unique_pmids(self) -> list[int]:
+        self.cursor.execute("SELECT DISTINCT pubmed_pmid FROM variants WHERE pubmed_pmid IS NOT NULL")
+        return [row[0] for row in self.cursor.fetchall()]
 
-    pubmed_search_term = " AND ".join(query_parts)
-    print(f"Constructed Simplified PubMed search term for E-utilities: {pubmed_search_term}")
-
-    # Use direct PubMed API
-    pmids = search_pubmed(pubmed_search_term, retmax=max_articles_to_summarize) 
-
-    if not pmids:
-        return f"No relevant literature found via PubMed API for query: '{pubmed_search_term}'. Please check search terms or try broadening your query."
-    
-    print(f"Found PMIDs: {pmids}")
-    
-    # Fetch article details for the found PMIDs
-    articles = fetch_pubmed_articles(pmids)
-
-    if not articles:
-        return f"Found PMIDs ({', '.join(pmids)}), but could not retrieve article details via PubMed API."
-
-    # Filter for articles that have a meaningful abstract
-    valid_articles_for_summary = []
-    for article in articles:
-        if article.get('abstract') and "not available" not in article.get('abstract', "").lower() and len(article.get('abstract', "")) > 20:
-            valid_articles_for_summary.append(article)
-
-    if not valid_articles_for_summary:
-        return f"Retrieved article details for PMIDs ({', '.join(pmids)}), but could not find sufficient abstract details for LLM summarization."
-
-    context_for_llm = "Based on the following article summaries obtained from PubMed:\n\n"
-    for i, article in enumerate(valid_articles_for_summary):
-        max_abstract_length = 1500 
-        title = article.get('title', 'No title')
-        abstract = article.get('abstract', 'No abstract available') 
-        url = article.get('url', 'No URL')
-        pmid = article.get('pmid', 'N/A')
-        safe_abstract = abstract if abstract else ""
-        context_for_llm += f"{i+1}. PMID: {pmid}\\n   Title: {title}\\n   Abstract: {safe_abstract[:max_abstract_length]}...\\n   URL: {url}\\n\\n"
-    
-    print("\\n" + "-"*20 + " DEBUG: Data sent to LLM for Summarization (PubMed API) " + "-"*20)
-    print(f"Original PubMed Search Term: {pubmed_search_term}")
-    print(f"Target Keyword: {target_keyword}, Challenge: {challenge_keyword}, Research Area: {research_area}")
-    print(f"Number of valid articles for summary: {len(valid_articles_for_summary)}")
-    print("Valid articles (titles and PMIDs from PubMed API):")
-    for art in valid_articles_for_summary:
-        print(f"  - PMID: {art.get('pmid')}, Title: {art.get('title')}")
-    print("-"*60 + "\\n")
-
-    summary_prompt = f"""
-As an expert in CRISPR-based therapeutic development, please synthesize the key findings from the following article abstracts (obtained from PubMed).
-Original search query aimed for: '{pubmed_search_term}'.
-
-Focus your summary on how these findings relate to the challenge of '{challenge_keyword}' when developing '{target_keyword}' as a therapeutic using '{research_area}'. 
-
-Highlight:
-- Key insights or data points relevant to the challenge from the provided abstracts.
-- Any novel approaches or solutions mentioned.
-- Remaining gaps or future directions suggested by the abstracts.
-
-Keep the summary concise (2-4 paragraphs) and directly relevant to the therapeutic development context. Cite PMIDs using (PMID: XXXXX) where appropriate.
-
-Article Abstracts from PubMed:
-{context_for_llm}
-
-Synthesized Summary:
-"""
-
+if __name__ == "__main__":
+    analyzer = LiteratureAnalyzer()
     try:
-        summary = query_llm(summary_prompt)
-        source_info = []
-        for art in valid_articles_for_summary:
-            if art['pmid']:
-                source_info.append(f"PMID: {art['pmid']}")
-        if source_info:
-            summary += f"\\n\\n_Summary based on insights from: { '; '.join(source_info) }._"
-        return summary
-    except Exception as e:
-        print(f"Error during LLM summarization: {e}")
-        return f"Error generating summary: {str(e)}"
+        target_pmid = 21828135
 
-if __name__ == '__main__':
-    # Example Usage (for testing this module directly)
-    # No longer need to check DIFFBOT_TOKEN here as we are using PubMed API directly.
+        # Force a clean re-ingestion for our target to ensure we have the full text
+        analyzer.force_reingest(target_pmid)
 
-    print("--- Test 1: PDCD1 Off-target Effects (PubMed API) ---")
-    summary1 = get_literature_summary_for_therapeutic_context(
-        target_keyword="PDCD1", 
-        challenge_keyword="off-target effects",
-        research_area="T-cell cancer immunotherapy",
-        max_articles_to_summarize=3 # Changed max to 3
-    )
-    print(summary1)
-    print("\\n")
+        # == PHASE 1: Run once to ingest metadata from all new papers ==
+        print("--- Running Phase 1: Metadata Ingestion ---")
+        analyzer.run_ingestion() 
+        print("--- Phase 1 Complete ---\n")
 
-    time.sleep(1) 
-    print("--- Test 2: CRISPR Delivery to T-cells (PubMed API) ---")
-    summary2 = get_literature_summary_for_therapeutic_context(
-        target_keyword="CRISPR Cas9", 
-        challenge_keyword="delivery methods",
-        research_area="T-cell gene therapy",
-        max_articles_to_summarize=3 # Changed max to 3
-    )
-    print(summary2)
-    print("\\n")
+        # == PHASE 2: Run targeted analysis on specific papers of interest ==
+        print("--- Running Phase 2: Strategic Analysis ---")
+        # Using one of the PMIDs we know was successfully ingested in the last run.
+        
+        # This is a much more focused prompt than a generic summary.
+        strategic_prompt = (
+            "This article is being analyzed for its relevance to leukemogenesis, specifically concerning the genes ASXL1 and RUNX1, and its potential metastatic sites (or 'soils'). "
+            "Based on the article text provided, answer the following questions with direct quotes and citations where possible:\n\n"
+            "1. What is the role of epigenetic dysregulation in Chronic Myelomonocytic Leukemia (CMML)?\n"
+            "2. Does this paper mention ASXL1 mutations? If so, what is their frequency and what is their presumed functional consequence (e.g., loss-of-function, truncating)?\n"
+            "3. Does the paper discuss the co-occurrence of ASXL1 mutations with other known driver mutations like TET2 or CBL?\n"
+            "4. **Crucially, what tissues or organs (e.g., spleen, liver, CNS, skin, lymph nodes) are mentioned as sites of extramedullary disease or leukemic infiltration? List them directly.**\n"
+            "5. Is there any mention of RUNX1 in the context of CMML in this paper?\n\n"
+            "Article Title: {title}\n"
+            "Article Text:\n---\n{full_text}"
+        )
 
-    time.sleep(1)
-    print("--- Test 3: BCL11A Editing Efficacy for Sickle Cell (PubMed API) ---")
-    summary3 = get_literature_summary_for_therapeutic_context(
-        target_keyword="BCL11A", 
-        challenge_keyword="editing efficacy AND durability", 
-        research_area="sickle cell disease gene therapy",
-        max_articles_to_summarize=3 # Changed max to 3
-    )
-    print(summary3)
-    print("\\n")
-    
-    time.sleep(1)
-    print("--- Test 4: NonExistentGene BogusChallenge (PubMed API - expect no results) ---")
-    summary4 = get_literature_summary_for_therapeutic_context(
-        target_keyword="NonExistentGeneXYZ", 
-        challenge_keyword="BogusChallengeABC",
-        research_area="made up research",
-        max_articles_to_summarize=3 # Changed max to 3
-    )
-    print(summary4)
-    print("\\n")
-
-    # Remove the old run_search_engine function as it's replaced by PubMed specific ones
-    # Path to the search_engine.py script - adjust if necessary
-    # SEARCH_ENGINE_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), 'search_engine.py')
-    # VENV_PYTHON_PATH = 'venv/bin/python' # Adjust if your venv python is elsewhere or use sys.executable if run from same env
-
-    # def run_search_engine(query_string):
-    #     ... 
+        analyzer.run_strategic_summary(target_pmid, strategic_prompt, provider="gemini")
+        
+        print("\n✅ Strategic analysis demonstration complete.")
+    finally:
+        analyzer.close_connection() 

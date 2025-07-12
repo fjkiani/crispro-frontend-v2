@@ -1,8 +1,12 @@
+# FORCE REDEPLOY: v1.6 (Adding debug check for BRAF)
+# FORCE REDEPLOY: v1.8 (Internalizing sequence utils)
 import modal
 import os
+import re
 
 # --- Image Definition ---
-# Use the same battle-tested image from the working generative model
+# This is the battle-tested image definition from the proven Zeta Oracle and Evo Service.
+# It correctly handles all dependencies and build complexities for Evo2.
 evo2_image = (
     modal.Image.from_registry(
         "nvidia/cuda:12.4.0-devel-ubuntu22.04", add_python="3.11"
@@ -16,20 +20,24 @@ evo2_image = (
         "CXX": "/usr/bin/g++",
         "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True",
     })
-    # The numpy build process has a hardcoded path for the `ar` archiver.
-    # We create a symlink from the system's `ar` to the path that numpy expects.
-    .run_commands(
-        "mkdir -p /tools/llvm/bin",
-        "ln -s /usr/bin/ar /tools/llvm/bin/llvm-ar",
-    )
     .run_commands("git clone --recurse-submodules https://github.com/ArcInstitute/evo2.git && cd evo2 && pip install .")
     .run_commands("pip uninstall -y transformer-engine transformer_engine")
     .run_commands("pip install 'transformer_engine[pytorch]==1.13' --no-build-isolation")
-    .pip_install("fastapi", "numpy==1.22.0", "func-timeout", "python-dotenv")
+    .pip_install(
+        "fastapi",
+        "uvicorn[standard]",
+        "loguru",
+        "pydantic",
+        "numpy==1.22.0",
+        "scikit-learn==1.3.2",
+        "func-timeout",
+        "python-dotenv",
+        "pandas"
+    )
 )
 
 # --- App Definition ---
-app = modal.App("zeta-oracle", image=evo2_image)
+app = modal.App("zeta-oracle-v2", image=evo2_image)
 
 # --- Volume for Caching ---
 volume = modal.Volume.from_name("hf_cache", create_if_missing=True)
@@ -37,6 +45,49 @@ mount_path = "/root/.cache/huggingface"
 
 @app.cls(gpu="H100:2", volumes={mount_path: volume}, scaledown_window=600, timeout=1200)
 class ZetaOracle:
+    # --- Internalized Sequence Utilities ---
+    AA_CODES = {
+        'Ala': 'A', 'Arg': 'R', 'Asn': 'N', 'Asp': 'D', 'Cys': 'C',
+        'Gln': 'Q', 'Glu': 'E', 'Gly': 'G', 'His': 'H', 'Ile': 'I',
+        'Leu': 'L', 'Lys': 'K', 'Met': 'M', 'Phe': 'F', 'Pro': 'P',
+        'Ser': 'S', 'Thr': 'T', 'Trp': 'W', 'Tyr': 'Y', 'Val': 'V'
+    }
+
+    def _get_canonical_sequence(self, gene_symbol: str) -> str:
+        """Retrieves the canonical protein sequence from a local FASTA file."""
+        fasta_path = f"/root/data/reference/{gene_symbol}.fasta"
+        if not os.path.exists(fasta_path):
+            raise FileNotFoundError(f"FASTA file for gene '{gene_symbol}' not found at {fasta_path}")
+        with open(fasta_path, 'r') as f:
+            lines = f.readlines()
+            return "".join([line.strip() for line in lines if not line.startswith('>')])
+
+    def _apply_hgvs_mutation(self, sequence: str, hgvsp: str) -> str:
+        """Applies a missense mutation described in HGVS protein notation."""
+        match = re.match(r"p\.\(?(?P<ref>[A-Z][a-z]{2}|[A-Z])(?P<pos>\d+)(?P<alt>[A-Z][a-z]{2}|[A-Z])\)?", hgvsp)
+        if not match:
+            raise ValueError(f"Invalid or unsupported HGVS notation: {hgvsp}")
+        
+        groups = match.groupdict()
+        ref_aa, pos_str, alt_aa = groups['ref'], groups['pos'], groups['alt']
+        position = int(pos_str) - 1
+        
+        ref_aa_one = self.AA_CODES.get(ref_aa) if len(ref_aa) == 3 else ref_aa
+        alt_aa_one = self.AA_CODES.get(alt_aa) if len(alt_aa) == 3 else alt_aa
+        
+        if not all([ref_aa_one, alt_aa_one, ref_aa_one in self.AA_CODES.values(), alt_aa_one in self.AA_CODES.values()]):
+            raise ValueError(f"Invalid amino acid code in HGVS string: {hgvsp}")
+        
+        if not position < len(sequence):
+            raise ValueError(f"Position {position+1} is out of bounds for sequence of length {len(sequence)}")
+        
+        if sequence[position] != ref_aa_one:
+            raise ValueError(f"Reference AA mismatch for {hgvsp} at position {position+1}. Expected {ref_aa_one}, found {sequence[position]}.")
+        
+        mutated_sequence = list(sequence)
+        mutated_sequence[position] = alt_aa_one
+        return "".join(mutated_sequence)
+
     @modal.enter()
     def load_model(self):
         """
@@ -46,7 +97,7 @@ class ZetaOracle:
         from dotenv import load_dotenv
         load_dotenv()
         
-        self.tier = os.getenv("ORACLE_TIER", "testing")
+        self.tier = os.getenv("ORACLE_TIER", "production")
         self.model = None
 
         print(f"--- CrisPRO Zeta Oracle ---")
@@ -60,11 +111,11 @@ class ZetaOracle:
             self.model = Evo2('evo2_40b')
             print("🎉 Zeta Oracle model loaded successfully! WE ARE OPERATIONAL. 💥")
         else:
-            print("✅ Zeta Oracle loaded in TESTING tier. Using fast, low-cost heuristics.")
-            print("   To enable the full model, set ORACLE_TIER=production in your environment.")
+            print(f"✅ Zeta Oracle loaded in TESTING tier. Using fast, low-cost heuristics.")
+            print(f"   To enable the full model, set ORACLE_TIER=production in your environment.")
 
 
-    def _score_variant(self, ref_sequence: str, alt_sequence: str) -> dict:
+    def score_variant(self, ref_sequence: str, alt_sequence: str) -> dict:
         """
         Internal method to score the likelihood difference between reference and alternate sequences.
         This is the core weapon of the Oracle.
@@ -97,7 +148,7 @@ class ZetaOracle:
                 "alternate_likelihood": -100.0 + mock_delta
             }
 
-    def _generate_sequence(self, prompt: str, **kwargs) -> str:
+    def generate_sequence(self, prompt: str, **kwargs) -> str:
         """
         Internal method to generate a DNA sequence completion for a given prompt.
         """
@@ -119,6 +170,42 @@ class ZetaOracle:
             print(f"✅ Generated mock sequence: {mock_sequence}")
             return mock_sequence
 
+    def embed_sequence(self, sequence: str) -> list[float]:
+        """
+        Internal method to generate an embedding for a given DNA sequence.
+        This now correctly uses the forward pass with embedding extraction.
+        """
+        import torch
+
+        if self.tier == "production":
+            print(f"🧠 Generating embedding (Production Tier): SEQ={sequence[:30]}...")
+
+            # Tokenize the input sequence
+            input_ids = torch.tensor(
+                self.model.tokenizer.tokenize(sequence),
+                dtype=torch.int,
+            ).unsqueeze(0).to('cuda:0')
+
+            # Layer to extract embeddings from. Intermediate layers are best.
+            # From the 40B model's 50 layers, we choose a later one.
+            layer_name = 'blocks.40.mlp.l3'
+
+            # Get the embeddings via the forward pass
+            _logits, embeddings = self.model(
+                input_ids, 
+                return_embeddings=True, 
+                layer_names=[layer_name]
+            )
+            
+            # Pool the embeddings across the sequence length and convert to a list
+            embedding_tensor = embeddings[layer_name].mean(dim=1).squeeze()
+            print(f"✅ Embedding generated with shape: {embedding_tensor.shape}")
+            return embedding_tensor.tolist()
+            
+        else: # Testing tier
+            print(f"🧠 Generating mock embedding (Testing Tier): SEQ={sequence[:30]}...")
+            return [0.1] * 8192 # Matching the hidden_size of the 40B model
+
     @modal.asgi_app()
     def api(self):
         """A single, unified endpoint to handle all Oracle tasks (scoring and generation)."""
@@ -133,7 +220,7 @@ class ZetaOracle:
             params = item.get("params", {})
 
             if not action:
-                return JSONResponse(content={"status": "error", "message": "No 'action' specified. Must be 'score' or 'generate'."}, status_code=400)
+                return JSONResponse(content={"status": "error", "message": "No 'action' specified. Must be 'score', 'generate', or 'embed'."}, status_code=400)
 
             try:
                 if action == "score":
@@ -143,7 +230,7 @@ class ZetaOracle:
                     if not ref_seq or not alt_seq:
                          return JSONResponse(content={"status": "error", "message": "Missing reference_sequence or alternate_sequence for 'score' action"}, status_code=400)
 
-                    result = self._score_variant(ref_seq, alt_seq)
+                    result = self.score_variant(ref_seq, alt_seq)
                     
                     if result["zeta_score"] < -0.1:
                         interpretation = "Disruptive (Likely Pathogenic)"
@@ -167,14 +254,32 @@ class ZetaOracle:
                         return JSONResponse(content={"error": "No prompt provided for 'generate' action"}, status_code=400)
                     
                     gen_params = params.get("gen_params", {})
-                    completion = self._generate_sequence(prompt, **gen_params)
+                    completion = self.generate_sequence(prompt, **gen_params)
                     return JSONResponse(content={"status": "success", "completion": completion}, status_code=200)
 
+                elif action == "embed":
+                    gene = params.get("gene_symbol")
+                    hgvsp = params.get("variant")
+                    
+                    if not gene or not hgvsp:
+                        return JSONResponse(content={"error": "Missing gene_symbol or variant for 'embed' action"}, status_code=400)
+                    
+                    try:
+                        # Generate the correct sequence using internal methods
+                        canonical_seq = self._get_canonical_sequence(gene)
+                        mutated_seq = self._apply_hgvs_mutation(canonical_seq, hgvsp)
+                    except (FileNotFoundError, ValueError) as e:
+                        print(f"SEQUENCE GENERATION ERROR for {gene} {hgvsp}: {e}")
+                        return JSONResponse(content={"status": "error", "message": str(e)}, status_code=400)
+
+                    embedding = self.embed_sequence(mutated_seq)
+                    return JSONResponse(content={"status": "success", "embedding": embedding}, status_code=200)
+
                 else:
-                    return JSONResponse(content={"status": "error", "message": f"Invalid action '{action}'. Must be 'score' or 'generate'."}, status_code=400)
+                    return JSONResponse(content={"status": "error", "message": f"Invalid action '{action}' specified."}, status_code=400)
 
             except Exception as e:
-                print(f"💥 ZETA ORACLE CRITICAL ERROR (Action: {action}): {e}")
+                print(f"💥 ZETA ORACLE CRITICAL ERROR: {e}")
                 import traceback
                 print(f"📋 Full traceback: {traceback.format_exc()}")
                 return JSONResponse(
@@ -184,16 +289,8 @@ class ZetaOracle:
         
         @app.get("/health")
         def health_check():
-            """Health check endpoint to confirm service is alive."""
-            model_name = "evo2_40b" if self.tier == "production" else "heuristic_testing_model"
-            return {
-                "status": "healthy", 
-                "service": "zeta-oracle", 
-                "version": "3.1.0-tiered",
-                "tier": self.tier,
-                "model": model_name,
-                "message": "I am the Oracle. I score and I create. All queries flow through me."
-            }
+            """A simple health check endpoint to confirm the service is running."""
+            return {"status": "healthy", "service": "zeta-oracle"}
         
         return app
 
@@ -215,7 +312,7 @@ def main():
     
     try:
         # We must call the internal method for local tests as it's not a web endpoint.
-        result = oracle._score_variant(ref_sequence, alt_sequence)
+        result = oracle.score_variant(ref_sequence, alt_sequence)
         print("\n--- ✅ Test Scoring Result ---")
         print(f"  Result: {result}")
         print("---------------------------")

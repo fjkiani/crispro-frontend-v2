@@ -16,6 +16,11 @@ import pandas as pd
 import importlib.util
 from tools.intelligent_guide_finder import find_intelligent_guides
 from tools.next_steps import get_next_steps_recommendation
+from tools.st_utils import (
+    init_session_state,
+    create_educational_sidebar,
+    apply_custom_css
+)
 
 # Load environment variables from .env file
 load_dotenv()
@@ -24,7 +29,7 @@ load_dotenv()
 
 # 1. Set page config first (MUST be the first Streamlit command)
 st.set_page_config(
-    page_title="CasPro 🧬 - AI CRISPR Assistant",
+    page_title="CrisPro 🧬 - AI CRISPR Assistant",
     page_icon="🧬",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -1717,78 +1722,286 @@ def get_educational_content(topic):
     
 # --- NEW HOME PAGE FUNCTION ---
 def display_home_page():
-    st.markdown("<h1 style='text-align: center; color: #4A90E2;'>🧬 Welcome to CasPro: Your AI-Enhanced CRISPR Co-Pilot 🧬</h1>", unsafe_allow_html=True)
-    st.markdown("---")
-    st.markdown(
-        """
-        <p style='text-align: center; font-size: 1.1em;'>
-        CasPro is a cutting-edge platform designed to streamline and enhance your CRISPR-Cas9 research from start to finish.
-        Leveraging the power of artificial intelligence, CasPro provides intuitive tools for guide RNA design,
-        comprehensive analysis of editing outcomes, and insightful exploration of therapeutic applications.
+    """
+    Renders the main landing page of the application with modern Apple-style UI and LEAP Grant context.
+    """
+    
+    # Import UI enhancements after page config is set
+    try:
+        from tools.ui_enhancements import (
+            DemoFlowManager, 
+            LEAPGrantAligner,
+            PatientJourneyVisualizer,
+            create_enhanced_sidebar,
+            apply_leap_styling
+        )
+        
+        # Apply modern styling
+        apply_leap_styling()
+        
+        # Initialize demo manager
+        demo_manager = DemoFlowManager()
+        
+        # Enhanced sidebar
+        create_enhanced_sidebar("CasPro Platform", {"focus_area": "platform_overview"})
+        
+    except ImportError:
+        # Fallback if UI enhancements not available
+        demo_manager = None
+    
+    # Hero Section - Apple-style clean design
+    st.markdown("""
+    <div style='text-align: center; padding: 2rem 0;'>
+        <h1 style='font-size: 3.5rem; font-weight: 300; color: #1d1d1f; margin-bottom: 0.5rem;'>
+            🧬 CrisPro
+        </h1>
+        <h2 style='font-size: 1.5rem; font-weight: 400; color: #86868b; margin-bottom: 2rem;'>
+            AI-Powered Precision Therapeutic Design Platform
+        </h2>
+        <p style='font-size: 1.2rem; color: #515154; max-width: 800px; margin: 0 auto; line-height: 1.6;'>
+            From genomic risk assessment to targeted cancer interception, CrisPro transforms months of research 
+            into hours of intelligent analysis. Powered by cutting-edge AI and designed for the future of precision medicine.
         </p>
-        """, unsafe_allow_html=True
-    )
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Demo mode toggle
+    if demo_manager:
+        demo_manager.show_demo_toggle()
+    
+    # LEAP Grant context for demo mode
+    if demo_manager and demo_manager.demo_mode:
+        st.markdown("""
+        <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                    padding: 2rem; border-radius: 12px; margin: 2rem 0; color: white;'>
+            <h3 style='color: white; margin-bottom: 1rem;'>🎯 LEAP Grant Demonstration Mode</h3>
+            <p style='font-size: 1.1rem; margin-bottom: 1rem;'>
+                <strong>Target Population:</strong> RUNX1 Familial Platelet Disorder patients (35-50% lifetime hematologic malignancy risk)
+            </p>
+            <div style='display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;'>
+                <div>
+                    <strong>Focus Area 1:</strong> Dissecting mechanisms of cancer initiation
+                    <br>• Cell-autonomous factors
+                    <br>• Cell-nonautonomous factors  
+                    <br>• Clonal hematopoiesis progression
+                </div>
+                <div>
+                    <strong>Focus Area 2:</strong> Cancer interception treatments
+                    <br>• Evidence-based therapeutic design
+                    <br>• Multi-modal intervention strategies
+                    <br>• Clinical translation readiness
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Patient journey visualization
+        if hasattr(PatientJourneyVisualizer, 'display_journey_timeline'):
+            PatientJourneyVisualizer.display_journey_timeline("platform_overview")
+    
     st.markdown("---")
-
-    st.header("🚀 Our Core Capabilities")
-    st.markdown("Navigate your CRISPR journey with our specialized modules:")
-
-    col1, col2 = st.columns(2)
-
+    
+    # Core Platform Capabilities - Modern card layout
+    st.markdown("""
+    <h2 style='text-align: center; font-size: 2.5rem; font-weight: 300; color: #1d1d1f; margin: 3rem 0 2rem;'>
+        Revolutionary AI-Driven Workflows
+    </h2>
+    """, unsafe_allow_html=True)
+    
+    # Workflow cards in responsive grid
+    col1, col2 = st.columns(2, gap="large")
+    
     with col1:
-        st.subheader("✂️ Guide RNA Design & Optimization")
-        st.markdown(
-            """
-            - **CHOPCHOP Powered**: Efficiently design and rank guide RNAs for your target.
-            - **AI-Enhanced Suggestions**: Get intelligent tips and considerations for optimal guide selection.
-            - **Therapeutic Context**: Design with downstream therapeutic challenges in mind.
-            """
-        )
-        # Using Streamlit's built-in emoji support for icons
-        st.markdown("##### 🧬 CHOPCHOP Integration") 
-
-        st.subheader("🔬 Editing Outcome Analysis")
-        st.markdown(
-            """
-            - **CRISPResso2 Integration**: Analyze your NGS data to quantify editing efficiency and identify alleles.
-            - **AI-Driven Interpretation**: Understand complex results with LLM-generated summaries and explanations.
-            - **Visualize Your Data**: Intuitive charts and graphs to make sense of your editing outcomes.
-            """
-        )
-        st.markdown("##### 📊 CRISPResso2 Analysis")
-
+        st.markdown("""
+        <div style='background: white; border-radius: 16px; padding: 2rem; box-shadow: 0 4px 20px rgba(0,0,0,0.1); margin-bottom: 2rem;'>
+            <div style='font-size: 2.5rem; margin-bottom: 1rem;'>🧬</div>
+            <h3 style='color: #1d1d1f; margin-bottom: 1rem;'>Patient Digital Twin</h3>
+            <p style='color: #515154; line-height: 1.6; margin-bottom: 1.5rem;'>
+                Create computational models of patient genomics to predict clonal evolution, 
+                therapeutic responses, and disease progression with unprecedented accuracy.
+            </p>
+            <div style='background: #f5f5f7; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;'>
+                <strong>Key Features:</strong><br>
+                • Germline risk assessment<br>
+                • Clonal hematopoiesis modeling<br>
+                • Therapeutic response prediction<br>
+                • Multi-scale biological simulation
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div style='background: white; border-radius: 16px; padding: 2rem; box-shadow: 0 4px 20px rgba(0,0,0,0.1);'>
+            <div style='font-size: 2.5rem; margin-bottom: 1rem;'>🌱</div>
+            <h3 style='color: #1d1d1f; margin-bottom: 1rem;'>Seed & Soil Analysis</h3>
+            <p style='color: #515154; line-height: 1.6; margin-bottom: 1.5rem;'>
+                Model how pathogenic mutations interact with tissue microenvironments to predict 
+                metastatic behavior and identify intervention points.
+            </p>
+            <div style='background: #f5f5f7; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;'>
+                <strong>Revolutionary Approach:</strong><br>
+                • Microenvironment modeling<br>
+                • Metastasis prediction<br>
+                • Synthetic lethality discovery<br>
+                • Tissue-specific targeting
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
     with col2:
-        st.subheader("💡 Mock Therapeutic System Design")
-        st.markdown(
-            """
-            - **End-to-End Simulation**: Explore the design of multi-gene therapeutic systems.
-            - **Multi-Tool Integration (Mock)**: Conceptualize workflows involving Evo2 (generation), AlphaFold3 (structure), and CHOPCHOP (validation).
-            - **Confidence Scoring**: Evaluate mock system candidates based on integrated simulated metrics.
-            """
-        )
-        st.markdown("##### 🧪 Therapeutic Simulations") 
-
-        st.subheader("🧠 AI & Educational Co-Pilot")
-        st.markdown(
-            """
-            - **Contextual Chatbots**: Get instant help and explanations tailored to your current task.
-            - **LLM-Powered Tooltips**: Understand parameters and results with AI-generated insights.
-            - **Educational Resources**: Learn about CRISPR terminology, concepts, and best practices via the sidebar.
-            """
-        )
-        st.markdown("##### 🤖 AI Assistance") 
-
+        st.markdown("""
+        <div style='background: white; border-radius: 16px; padding: 2rem; box-shadow: 0 4px 20px rgba(0,0,0,0.1); margin-bottom: 2rem;'>
+            <div style='font-size: 2.5rem; margin-bottom: 1rem;'>⚔️</div>
+            <h3 style='color: #1d1d1f; margin-bottom: 1rem;'>Threat Assessor</h3>
+            <p style='color: #515154; line-height: 1.6; margin-bottom: 1.5rem;'>
+                Rapidly evaluate genetic variants using our proprietary Triumvirate Protocol - 
+                combining bioinformatics, AI analysis, and clinical intelligence.
+            </p>
+            <div style='background: #f5f5f7; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;'>
+                <strong>Triumvirate Protocol:</strong><br>
+                • Truncation Sieve (instant analysis)<br>
+                • Zeta Oracle (AI assessment)<br>
+                • Intelligence Fusion (multi-source)<br>
+                • Clinical context integration
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div style='background: white; border-radius: 16px; padding: 2rem; box-shadow: 0 4px 20px rgba(0,0,0,0.1);'>
+            <div style='font-size: 2.5rem; margin-bottom: 1rem;'>✂️</div>
+            <h3 style='color: #1d1d1f; margin-bottom: 1rem;'>Precision Therapeutics</h3>
+            <p style='color: #515154; line-height: 1.6; margin-bottom: 1.5rem;'>
+                Design targeted interventions using AI-optimized CRISPR guides, nanobody inhibitors, 
+                and drug repurposing strategies tailored to specific mutations.
+            </p>
+            <div style='background: #f5f5f7; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;'>
+                <strong>Multi-Modal Design:</strong><br>
+                • CRISPR guide optimization<br>
+                • Nanobody engineering<br>
+                • Drug repurposing analysis<br>
+                • Safety prediction & validation
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
     st.markdown("---")
-    st.info("🌟 **Navigate using the sidebar on the left** to explore these tools and begin your AI-assisted CRISPR journey! Please remember that all simulations and AI-generated therapeutic advice are for educational and conceptual exploration purposes.")
-
-    # Example of how to include dynamic educational content on home page
-    # with st.expander("Learn about CRISPR Basics"):
-    #     basics_content = get_educational_content("CRISPR_BASICS")
-    #     if basics_content:
-    #         st.markdown(basics_content.get("summary", "Content not found."))
-    #         st.markdown(f"[Learn more about {basics_content.get('title', 'CRISPR Basics')}]({basics_content.get('url', '#')})")
-    #     else:
-    #         st.write("Basic CRISPR educational content is currently unavailable.")
+    
+    # Platform Intelligence Section
+    st.markdown("""
+    <h2 style='text-align: center; font-size: 2.5rem; font-weight: 300; color: #1d1d1f; margin: 3rem 0 2rem;'>
+        Powered by Advanced AI Intelligence
+    </h2>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("""
+        <div style='text-align: center; padding: 2rem;'>
+            <div style='font-size: 3rem; margin-bottom: 1rem;'>🧠</div>
+            <h3 style='color: #1d1d1f;'>Zeta Oracle</h3>
+            <p style='color: #515154;'>
+                Our flagship AI model for variant pathogenicity assessment, 
+                trained on massive genomic datasets for unprecedented accuracy.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+        <div style='text-align: center; padding: 2rem;'>
+            <div style='font-size: 3rem; margin-bottom: 1rem;'>⚡</div>
+            <h3 style='color: #1d1d1f;'>CommandCenter</h3>
+            <p style='color: #515154;'>
+                Orchestrates complex multi-step workflows, integrating dozens of 
+                specialized AI models and databases seamlessly.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown("""
+        <div style='text-align: center; padding: 2rem;'>
+            <div style='font-size: 3rem; margin-bottom: 1rem;'>🔍</div>
+            <h3 style='color: #1d1d1f;'>Intelligence Fusion</h3>
+            <p style='color: #515154;'>
+                Combines COSMIC databases, PubMed literature, clinical trials, 
+                and real-time API data for comprehensive analysis.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Getting Started Section
+    st.markdown("""
+    <h2 style='text-align: center; font-size: 2.5rem; font-weight: 300; color: #1d1d1f; margin: 3rem 0 2rem;'>
+        Ready to Transform Your Research?
+    </h2>
+    """, unsafe_allow_html=True)
+    
+    # Navigation guidance
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        st.markdown("""
+        <div style='background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%); 
+                    padding: 2rem; border-radius: 16px; text-align: center; color: white;'>
+            <h3 style='color: white; margin-bottom: 1rem;'>🚀 Start Your Analysis Journey</h3>
+            <p style='font-size: 1.1rem; margin-bottom: 1.5rem;'>
+                Choose your entry point based on your research goals:
+            </p>
+            <div style='background: rgba(255,255,255,0.2); padding: 1rem; border-radius: 8px; margin: 1rem 0;'>
+                <strong>For RUNX1-FPD Research:</strong> Start with Patient Digital Twin
+            </div>
+            <div style='background: rgba(255,255,255,0.2); padding: 1rem; border-radius: 8px; margin: 1rem 0;'>
+                <strong>For Variant Analysis:</strong> Use the Threat Assessor
+            </div>
+            <div style='background: rgba(255,255,255,0.2); padding: 1rem; border-radius: 8px; margin: 1rem 0;'>
+                <strong>For Metastasis Modeling:</strong> Explore Seed & Soil Analysis
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Current research focus
+    if demo_manager and demo_manager.demo_mode:
+        st.markdown("---")
+        st.markdown("""
+        <div style='background: #f8f9fa; padding: 2rem; border-radius: 12px; border-left: 4px solid #007AFF;'>
+            <h3 style='color: #1d1d1f; margin-bottom: 1rem;'>🔬 Currently Designing For</h3>
+            <div style='display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;'>
+                <div>
+                    <h4 style='color: #007AFF;'>Target Population</h4>
+                    <p><strong>RUNX1 Familial Platelet Disorder</strong></p>
+                    <p>• 35-50% lifetime hematologic malignancy risk</p>
+                    <p>• Germline RUNX1 mutations</p>
+                    <p>• High clonal hematopoiesis rates</p>
+                </div>
+                <div>
+                    <h4 style='color: #007AFF;'>Research Focus</h4>
+                    <p><strong>Cancer Interception</strong></p>
+                    <p>• Prevent malignant transformation</p>
+                    <p>• Target dangerous "second hits"</p>
+                    <p>• Modulate microenvironments</p>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Footer
+    st.markdown("---")
+    st.markdown("""
+    <div style='text-align: center; padding: 2rem; color: #86868b;'>
+        <p style='font-size: 1rem;'>
+            Navigate using the sidebar to explore our AI-powered workflows. 
+            All analyses use real-time API integration with our deployed CommandCenter platform.
+        </p>
+        <p style='font-size: 0.9rem; margin-top: 1rem;'>
+            🧬 CasPro Platform | Powered by Zeta Oracle AI | Real-time intelligence fusion
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
 def intelligent_guide_designer_page():
     """

@@ -1,0 +1,650 @@
+# 📋 Task Breakdown Workflows: Detailed Implementation Guide
+
+## **🎯 Overview**
+
+This rule provides granular task breakdowns, dependency management, and workflow orchestration for systematic arsenal deployment across the Guardian Protocol platform.
+
+---
+
+## **🔥 Week 1: Arsenal Deployment - Detailed Task Breakdown**
+
+### **Task 1.1: Deploy intelligent_guide_finder.py**
+
+**Subtasks:**
+```yaml
+1.1.1_audit_mock_functions:
+  description: "Identify and catalog all mock guide generation functions"
+  files_to_check:
+    - pages/8_🔬_Mock_Therapy_Design.py
+    - pages/2_⚔️_Threat_Assessor.py
+    - pages/1_⚔️_AI_General_Command_Deck.py
+  deliverable: "mock_functions_inventory.json"
+  estimated_time: "2 hours"
+
+1.1.2_create_service_wrapper:
+  description: "Create GuideFinderService wrapper for intelligent_guide_finder.py"
+  dependencies: ["1.1.1_audit_mock_functions"]
+  implementation:
+    - Create services/guide_finder_service.py
+    - Implement error handling and logging
+    - Add configuration management
+    - Create unit tests
+  deliverable: "services/guide_finder_service.py"
+  estimated_time: "4 hours"
+
+1.1.3_integrate_chopchop_scoring:
+  description: "Integrate ChopChop scoring with guide finder"
+  dependencies: ["1.1.2_create_service_wrapper"]
+  implementation:
+    - Load ChopChop models from chopchop/models/
+    - Implement scoring pipeline
+    - Add comprehensive guide analysis
+    - Create scoring visualization
+  deliverable: "Enhanced GuideFinderService with ChopChop integration"
+  estimated_time: "6 hours"
+
+1.1.4_replace_mock_functions:
+  description: "Replace mock functions with real implementations"
+  dependencies: ["1.1.3_integrate_chopchop_scoring"]
+  implementation:
+    - Update Mock_Therapy_Design.py
+    - Update Threat_Assessor.py
+    - Update AI_General_Command_Deck.py
+    - Maintain UI consistency
+  deliverable: "Updated pages with real guide generation"
+  estimated_time: "4 hours"
+
+1.1.5_validation_testing:
+  description: "Validate guide finder integration"
+  dependencies: ["1.1.4_replace_mock_functions"]
+  test_cases:
+    - Compare mock vs real guide quality
+    - Verify ChopChop scoring accuracy
+    - Test error handling scenarios
+    - Performance benchmarking
+  deliverable: "test_guide_finder_integration.py"
+  estimated_time: "3 hours"
+```
+
+**Workflow Orchestration:**
+```python
+# Workflow: GuideFinderDeployment.py
+class GuideFinderDeploymentWorkflow:
+    def __init__(self):
+        self.tasks = self.load_task_definitions()
+        self.progress_tracker = ProgressTracker()
+    
+    def execute_deployment(self):
+        """Execute complete guide finder deployment workflow"""
+        
+        # Phase 1: Audit and Analysis
+        mock_inventory = self.audit_mock_functions()
+        self.progress_tracker.mark_complete("1.1.1_audit_mock_functions")
+        
+        # Phase 2: Service Creation
+        service_wrapper = self.create_service_wrapper(mock_inventory)
+        self.progress_tracker.mark_complete("1.1.2_create_service_wrapper")
+        
+        # Phase 3: ChopChop Integration
+        enhanced_service = self.integrate_chopchop_scoring(service_wrapper)
+        self.progress_tracker.mark_complete("1.1.3_integrate_chopchop_scoring")
+        
+        # Phase 4: Mock Function Replacement
+        updated_pages = self.replace_mock_functions(enhanced_service)
+        self.progress_tracker.mark_complete("1.1.4_replace_mock_functions")
+        
+        # Phase 5: Validation
+        validation_results = self.validate_integration(updated_pages)
+        self.progress_tracker.mark_complete("1.1.5_validation_testing")
+        
+        return self.compile_deployment_report(validation_results)
+```
+
+### **Task 1.2: Integrate chopchop/ Complete Suite**
+
+**Subtasks:**
+```yaml
+1.2.1_chopchop_audit:
+  description: "Audit ChopChop components and capabilities"
+  files_to_analyze:
+    - chopchop/chopchop.py
+    - chopchop/models/
+    - chopchop/uCRISPR/
+    - chopchop/CRISPRoff/
+  deliverable: "chopchop_capabilities_report.md"
+  estimated_time: "3 hours"
+
+1.2.2_service_architecture:
+  description: "Design ChopChop service architecture"
+  dependencies: ["1.2.1_chopchop_audit"]
+  components:
+    - ChopChopService class
+    - Model loading and management
+    - Scoring pipeline orchestration
+    - Result formatting and visualization
+  deliverable: "chopchop_service_architecture.md"
+  estimated_time: "2 hours"
+
+1.2.3_implement_service:
+  description: "Implement ChopChopService"
+  dependencies: ["1.2.2_service_architecture"]
+  implementation:
+    - Create services/chopchop_service.py
+    - Implement model loading
+    - Create scoring methods
+    - Add visualization functions
+  deliverable: "services/chopchop_service.py"
+  estimated_time: "8 hours"
+
+1.2.4_ui_components:
+  description: "Create reusable ChopChop UI components"
+  dependencies: ["1.2.3_implement_service"]
+  components:
+    - GuideScoreCard component
+    - IndelpredictionChart component
+    - OffTargetRiskPanel component
+    - SpecificityMetrics component
+  deliverable: "components/chopchop_ui_components.py"
+  estimated_time: "4 hours"
+
+1.2.5_integration_testing:
+  description: "Test ChopChop integration across pages"
+  dependencies: ["1.2.4_ui_components"]
+  test_scenarios:
+    - Single guide scoring
+    - Batch guide analysis
+    - Model performance validation
+    - UI component rendering
+  deliverable: "test_chopchop_integration.py"
+  estimated_time: "3 hours"
+```
+
+### **Task 1.3: Connect coordinate_handler.py**
+
+**Subtasks:**
+```yaml
+1.3.1_genomic_nav_analysis:
+  description: "Analyze coordinate_handler.py capabilities"
+  analysis_points:
+    - Coordinate system support (GRCh37/GRCh38)
+    - Variant notation parsing (HGVS, VCF)
+    - Genomic context retrieval
+    - Annotation integration
+  deliverable: "genomic_navigation_analysis.md"
+  estimated_time: "2 hours"
+
+1.3.2_navigation_service:
+  description: "Create GenomicNavigationService"
+  dependencies: ["1.3.1_genomic_nav_analysis"]
+  implementation:
+    - Wrap coordinate_handler functionality
+    - Add genome browser integration
+    - Implement context retrieval
+    - Create visualization methods
+  deliverable: "services/genomic_navigation_service.py"
+  estimated_time: "6 hours"
+
+1.3.3_digital_twin_integration:
+  description: "Integrate genomic navigation into Digital Twin"
+  dependencies: ["1.3.2_navigation_service"]
+  features:
+    - Variant position visualization
+    - Genomic context display
+    - Gene annotation overlay
+    - Interactive genome browser
+  deliverable: "Enhanced Patient Digital Twin with genomic navigation"
+  estimated_time: "5 hours"
+
+1.3.4_cross_page_integration:
+  description: "Add genomic navigation to other pages"
+  dependencies: ["1.3.3_digital_twin_integration"]
+  pages_to_update:
+    - Threat_Assessor.py
+    - AI_General_Command_Deck.py
+    - Mock_Therapy_Design.py
+  deliverable: "Genomic navigation across all relevant pages"
+  estimated_time: "4 hours"
+
+1.3.5_navigation_testing:
+  description: "Test genomic navigation functionality"
+  dependencies: ["1.3.4_cross_page_integration"]
+  test_cases:
+    - Coordinate resolution accuracy
+    - Variant notation parsing
+    - Visualization rendering
+    - Performance benchmarking
+  deliverable: "test_genomic_navigation.py"
+  estimated_time: "3 hours"
+```
+
+### **Task 1.4: Enable result_interpreter.py**
+
+**Subtasks:**
+```yaml
+1.4.1_result_analysis_audit:
+  description: "Audit result_interpreter.py capabilities"
+  analysis_focus:
+    - CRISPResso2 integration
+    - Quality metrics calculation
+    - Result visualization
+    - Recommendation generation
+  deliverable: "result_analysis_capabilities.md"
+  estimated_time: "2 hours"
+
+1.4.2_validation_service:
+  description: "Create ResultValidationService"
+  dependencies: ["1.4.1_result_analysis_audit"]
+  implementation:
+    - Wrap result_interpreter functionality
+    - Add CRISPResso2 integration
+    - Implement quality assessment
+    - Create recommendation engine
+  deliverable: "services/result_validation_service.py"
+  estimated_time: "7 hours"
+
+1.4.3_validation_ui:
+  description: "Create result validation UI components"
+  dependencies: ["1.4.2_validation_service"]
+  components:
+    - EditingEfficiencyCard
+    - IndelAnalysisChart
+    - QualityMetricsPanel
+    - RecommendationsList
+  deliverable: "components/result_validation_ui.py"
+  estimated_time: "4 hours"
+
+1.4.4_page_integration:
+  description: "Integrate result validation across pages"
+  dependencies: ["1.4.3_validation_ui"]
+  integration_points:
+    - Add to experiment result pages
+    - Integrate with guide design workflows
+    - Connect to protocol generation
+  deliverable: "Result validation integrated across platform"
+  estimated_time: "3 hours"
+
+1.4.5_validation_testing:
+  description: "Test result validation integration"
+  dependencies: ["1.4.4_page_integration"]
+  test_scenarios:
+    - Mock experimental data validation
+    - Quality metrics accuracy
+    - Recommendation relevance
+    - UI component functionality
+  deliverable: "test_result_validation.py"
+  estimated_time: "3 hours"
+```
+
+---
+
+## **🔗 Week 2: Tool Integration - Detailed Task Breakdown**
+
+### **Task 2.1: Integrate guide_interpreter.py**
+
+**Subtasks:**
+```yaml
+2.1.1_interpreter_analysis:
+  description: "Analyze guide_interpreter.py capabilities"
+  focus_areas:
+    - LLM integration patterns
+    - Explanation generation methods
+    - Context-aware responses
+    - Educational content creation
+  deliverable: "guide_interpreter_analysis.md"
+  estimated_time: "2 hours"
+
+2.1.2_explanation_service:
+  description: "Create GuideExplanationService"
+  dependencies: ["2.1.1_interpreter_analysis"]
+  implementation:
+    - Wrap guide_interpreter functionality
+    - Add LLM client integration
+    - Implement context-aware explanations
+    - Create educational content generation
+  deliverable: "services/guide_explanation_service.py"
+  estimated_time: "5 hours"
+
+2.1.3_explanation_ui:
+  description: "Create explanation UI components"
+  dependencies: ["2.1.2_explanation_service"]
+  components:
+    - GuideExplanationPanel
+    - TechnicalAnalysisCard
+    - EducationalOverlay
+    - ContextualHelpButton
+  deliverable: "components/explanation_ui.py"
+  estimated_time: "4 hours"
+
+2.1.4_cross_page_integration:
+  description: "Add explanations to all guide-related pages"
+  dependencies: ["2.1.3_explanation_ui"]
+  pages_to_update:
+    - All pages with guide generation
+    - Add contextual help buttons
+    - Integrate with existing guide displays
+  deliverable: "LLM-powered explanations across platform"
+  estimated_time: "4 hours"
+
+2.1.5_explanation_testing:
+  description: "Test explanation system"
+  dependencies: ["2.1.4_cross_page_integration"]
+  test_cases:
+    - Explanation quality assessment
+    - Context relevance validation
+    - Educational content accuracy
+    - UI component functionality
+  deliverable: "test_guide_explanations.py"
+  estimated_time: "3 hours"
+```
+
+### **Task 2.2: Connect experiment_advisor.py**
+
+**Subtasks:**
+```yaml
+2.2.1_protocol_analysis:
+  description: "Analyze experiment_advisor.py capabilities"
+  analysis_focus:
+    - Protocol generation methods
+    - Experimental design patterns
+    - Control recommendations
+    - Troubleshooting guides
+  deliverable: "experiment_advisor_analysis.md"
+  estimated_time: "2 hours"
+
+2.2.2_protocol_service:
+  description: "Create ExperimentProtocolService"
+  dependencies: ["2.2.1_protocol_analysis"]
+  implementation:
+    - Wrap experiment_advisor functionality
+    - Add protocol generation methods
+    - Implement control recommendations
+    - Create troubleshooting system
+  deliverable: "services/experiment_protocol_service.py"
+  estimated_time: "6 hours"
+
+2.2.3_protocol_ui:
+  description: "Create protocol UI components"
+  dependencies: ["2.2.2_protocol_service"]
+  components:
+    - ProtocolCard
+    - ExperimentalDesignWizard
+    - ControlsRecommendationPanel
+    - TroubleshootingGuide
+  deliverable: "components/protocol_ui.py"
+  estimated_time: "5 hours"
+
+2.2.4_workflow_integration:
+  description: "Integrate protocols into design workflows"
+  dependencies: ["2.2.3_protocol_ui"]
+  integration_points:
+    - Connect to guide design results
+    - Add to therapy design pages
+    - Integrate with result validation
+  deliverable: "Complete experimental protocols in workflows"
+  estimated_time: "4 hours"
+
+2.2.5_protocol_testing:
+  description: "Test protocol generation system"
+  dependencies: ["2.2.4_workflow_integration"]
+  test_scenarios:
+    - Protocol completeness validation
+    - Control recommendation accuracy
+    - Troubleshooting guide relevance
+    - Workflow integration functionality
+  deliverable: "test_experiment_protocols.py"
+  estimated_time: "3 hours"
+```
+
+---
+
+## **🎨 Week 3: UI Enhancement - Detailed Task Breakdown**
+
+### **Task 3.1: Arsenal-Powered Interface Enhancement**
+
+**Subtasks:**
+```yaml
+3.1.1_ui_audit:
+  description: "Audit all pages for enhancement opportunities"
+  pages_to_audit:
+    - All 16 pages in pages/ directory
+    - Identify mock data usage
+    - Catalog UI inconsistencies
+    - Document enhancement priorities
+  deliverable: "ui_enhancement_audit.md"
+  estimated_time: "4 hours"
+
+3.1.2_component_library:
+  description: "Create standardized component library"
+  dependencies: ["3.1.1_ui_audit"]
+  components:
+    - ArsenalComponents base class
+    - Standardized metric displays
+    - Consistent chart templates
+    - Reusable analysis cards
+  deliverable: "components/arsenal_components.py"
+  estimated_time: "6 hours"
+
+3.1.3_page_templates:
+  description: "Create page enhancement templates"
+  dependencies: ["3.1.2_component_library"]
+  templates:
+    - StandardPageLayout
+    - ArsenalPoweredPage
+    - ServiceIntegrationMixin
+    - ContextualHelpMixin
+  deliverable: "templates/page_templates.py"
+  estimated_time: "5 hours"
+
+3.1.4_systematic_enhancement:
+  description: "Systematically enhance all pages"
+  dependencies: ["3.1.3_page_templates"]
+  enhancement_process:
+    - Apply page templates
+    - Replace mock data with real services
+    - Add arsenal components
+    - Ensure UI consistency
+  deliverable: "All 16 pages enhanced with arsenal integration"
+  estimated_time: "12 hours"
+
+3.1.5_ui_testing:
+  description: "Test UI enhancements"
+  dependencies: ["3.1.4_systematic_enhancement"]
+  test_categories:
+    - Component rendering validation
+    - Service integration testing
+    - UI consistency verification
+    - Performance impact assessment
+  deliverable: "test_ui_enhancements.py"
+  estimated_time: "4 hours"
+```
+
+---
+
+## **🔄 Week 4: Workflow Orchestration - Detailed Task Breakdown**
+
+### **Task 4.1: Deploy metastasis_analyzer.py**
+
+**Subtasks:**
+```yaml
+4.1.1_metastasis_analysis:
+  description: "Analyze metastasis_analyzer.py capabilities"
+  analysis_focus:
+    - 8-step protocol implementation
+    - Tissue profiling integration
+    - Stress simulation capabilities
+    - Intervention strategy generation
+  deliverable: "metastasis_analyzer_analysis.md"
+  estimated_time: "3 hours"
+
+4.1.2_orchestration_service:
+  description: "Create MetastasisWorkflowOrchestrator"
+  dependencies: ["4.1.1_metastasis_analysis"]
+  implementation:
+    - Wrap metastasis_analyzer functionality
+    - Implement 8-step protocol execution
+    - Add tissue profiling integration
+    - Create intervention strategy compilation
+  deliverable: "services/metastasis_orchestrator.py"
+  estimated_time: "8 hours"
+
+4.1.3_protocol_visualization:
+  description: "Create 8-step protocol visualizations"
+  dependencies: ["4.1.2_orchestration_service"]
+  visualizations:
+    - Metastasis cascade flowchart
+    - Intervention timeline
+    - Risk assessment heatmap
+    - Strategy effectiveness metrics
+  deliverable: "visualizations/metastasis_protocol_viz.py"
+  estimated_time: "6 hours"
+
+4.1.4_command_center_integration:
+  description: "Integrate real 8-step protocol into Command Center"
+  dependencies: ["4.1.3_protocol_visualization"]
+  integration_points:
+    - Replace mock metastasis forecast
+    - Add real protocol execution
+    - Integrate with battle plan generation
+    - Connect to intervention recommendations
+  deliverable: "Enhanced AI General Command Deck with real 8-step protocol"
+  estimated_time: "5 hours"
+
+4.1.5_protocol_testing:
+  description: "Test 8-step protocol implementation"
+  dependencies: ["4.1.4_command_center_integration"]
+  test_scenarios:
+    - Complete protocol execution
+    - Intervention strategy validation
+    - Visualization accuracy
+    - Command center integration
+  deliverable: "test_metastasis_protocol.py"
+  estimated_time: "4 hours"
+```
+
+### **Task 4.2: Complete End-to-End Workflow Integration**
+
+**Subtasks:**
+```yaml
+4.2.1_workflow_mapping:
+  description: "Map complete Guardian Protocol workflow"
+  workflow_stages:
+    - Intelligence gathering
+    - Threat assessment
+    - Weapon forging
+    - Protocol execution
+    - Result validation
+  deliverable: "guardian_protocol_workflow_map.md"
+  estimated_time: "3 hours"
+
+4.2.2_workflow_orchestrator:
+  description: "Create GuardianProtocolWorkflow orchestrator"
+  dependencies: ["4.2.1_workflow_mapping"]
+  implementation:
+    - Integrate all services
+    - Implement workflow stages
+    - Add progress tracking
+    - Create result compilation
+  deliverable: "services/guardian_protocol_workflow.py"
+  estimated_time: "8 hours"
+
+4.2.3_strategic_dossier:
+  description: "Create strategic dossier generation"
+  dependencies: ["4.2.2_workflow_orchestrator"]
+  dossier_components:
+    - Executive summary
+    - Threat assessment results
+    - Intervention recommendations
+    - Protocol execution plan
+  deliverable: "Strategic dossier generation system"
+  estimated_time: "5 hours"
+
+4.2.4_end_to_end_testing:
+  description: "Test complete workflow integration"
+  dependencies: ["4.2.3_strategic_dossier"]
+  test_scenarios:
+    - Complete workflow execution
+    - Service integration validation
+    - Dossier generation accuracy
+    - Performance benchmarking
+  deliverable: "test_complete_workflow.py"
+  estimated_time: "4 hours"
+
+4.2.5_deployment_validation:
+  description: "Validate platform ready for production"
+  dependencies: ["4.2.4_end_to_end_testing"]
+  validation_criteria:
+    - All mock functions replaced
+    - All services integrated
+    - All pages enhanced
+    - All workflows functional
+  deliverable: "Production readiness validation report"
+  estimated_time: "3 hours"
+```
+
+---
+
+## **📊 Progress Tracking & Validation**
+
+### **Weekly Milestones**
+
+```yaml
+Week_1_Milestone:
+  criteria:
+    - intelligent_guide_finder.py deployed
+    - ChopChop integration complete
+    - coordinate_handler.py connected
+    - result_interpreter.py enabled
+  validation: "All 4 core services operational"
+
+Week_2_Milestone:
+  criteria:
+    - guide_interpreter.py integrated
+    - experiment_advisor.py connected
+    - literature_analyzer.py deployed
+    - educational_context.py enabled
+  validation: "All enhancement services operational"
+
+Week_3_Milestone:
+  criteria:
+    - All 16 pages enhanced
+    - Mock data eliminated
+    - UI consistency achieved
+    - Arsenal components deployed
+  validation: "Complete UI transformation achieved"
+
+Week_4_Milestone:
+  criteria:
+    - 8-step protocol deployed
+    - End-to-end workflows operational
+    - Strategic dossier generation working
+    - Production readiness validated
+  validation: "Guardian Protocol fully operational"
+```
+
+### **Success Metrics**
+
+```yaml
+Technical_Metrics:
+  - Mock functions eliminated: 100%
+  - Service integration coverage: 100%
+  - UI consistency score: >95%
+  - Test coverage: >90%
+
+Performance_Metrics:
+  - Page load time improvement: >50%
+  - Service response time: <2 seconds
+  - Error rate: <1%
+  - User satisfaction: >90%
+
+Platform_Metrics:
+  - Arsenal tool utilization: >80%
+  - Workflow completion rate: >95%
+  - Strategic dossier accuracy: >90%
+  - Production stability: >99%
+```
+
+This comprehensive task breakdown provides detailed implementation steps, dependencies, and validation criteria for systematic arsenal deployment across the Guardian Protocol platform.
+description:
+globs:
+alwaysApply: false
+---

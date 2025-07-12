@@ -1,0 +1,98 @@
+# DOCTRINE: The NVIDIA Container Deployment Playbook
+
+## Mission Debrief: The War for `evo_service`
+
+We fought a long, brutal, and frankly, bullshit campaign to deploy the `evo_service`. We were met with relentless, illogical errors at every turn, from a hostile build environment and broken git submodules to a library that lied about its own name and methods.
+
+We emerged victorious. This document is the codification of our victory and the hard-won intelligence we gathered. It is a playbook for all future deployments of complex models (e.g., AlphaFold, other Evo variants) that rely on the NVIDIA ecosystem.
+
+**The Core Principle:** We **NEVER** build complex, GPU-dependent libraries from source. It is a fool's errand. We build on the shoulders of giants by using the pre-built, validated, and blessed containers provided by NVIDIA on their NGC registry. Our role is not to be system administrators; it is to be conquerors. We use the tools they provide to get our own weapons online faster.
+
+## The Technical Playbook: A Step-by-Step Guide to Victory
+
+This is how we guarantee success for future deployments. Refer to the final, working script here: [services/evo_service/main.py](mdc:services/evo_service/main.py).
+
+### Step 1: Choose Your Weapon (The Base Container)
+
+The first and most critical step is selecting the correct base image. For this campaign, we used:
+
+```python
+Image.from_registry("nvcr.io/nvidia/clara/bionemo-framework:nightly")
+```
+
+This single line saved us from the dependency hell of `transformer-engine` and its ilk.
+
+### Step 2: Conquering Dependencies (The `evo2` Nightmare)
+
+The `evo2` library was our primary antagonist. It required a multi-pronged assault to pacify.
+
+**1. The Submodule Deception (`vortex`):**
+
+The library depends on a git submodule named `vortex`. Our attempts to manage this were fraught with peril:
+*   `git submodule update` on the host machine was not correctly copied by Modal's `add_local_dir`.
+*   Running `git` inside the container failed because the `.git` directory isn't copied.
+
+**The Solution:** An explicit, brute-force dual mount. We force Modal to copy both the main package and the submodule directory separately and then tell Python where to find both.
+
+```python
+.add_local_dir(
+    "scripts/evo2/evo2", remote_path="/root/evo_src"
+)  # Mount the main package.
+.add_local_dir(
+    "scripts/evo2/evo2/vortex", remote_path="/root/vortex_src"
+) # Explicitly mount the vortex submodule.
+```
+
+**2. The `PYTHONPATH` Triad:**
+
+To make the dual-mount work, the `PYTHONPATH` environment variable must contain pointers to both locations. We also learned that we needed to set `HF_HOME` to control the Hugging Face cache.
+
+**The Solution:** A precise `.env` configuration.
+
+```python
+.env({"PYTHONPATH": "/root/evo_src:/root/vortex_src", "HF_HOME": EVO_MODEL_DIR})
+```
+
+**3. Standard Python Packages (`biopython`):**
+
+The library also had standard, but undocumented, dependencies.
+
+**The Solution:** Add them to the `pip_install` command.
+
+```python
+.pip_install("loguru", "fastapi", "uvicorn", "pydantic", "httpx", "biopython")
+```
+
+### Step 3: The Library's Lies and How We Saw Through Them
+
+This library does not follow standard conventions. We had to read its source code to uncover its secrets.
+
+*   **The Wrong Name (`Evo` vs. `Evo2`):** The class is named `Evo2`, not `Evo`.
+    *   **Symptom:** `ImportError: cannot import name 'Evo' ... Did you mean: 'Evo2'?`
+    *   **Fix:** `from evo2.models import Evo2`
+
+*   **The Wrong Constructor (`from_pretrained`):** The class does not use the standard Hugging Face `from_pretrained` method.
+    *   **Symptom:** `AttributeError: type object 'Evo2' has no attribute 'from_pretrained'`
+    *   **Fix:** Use the standard Python constructor: `evo_model = Evo2(model_name=MODEL_NAME)`
+
+*   **The Wrong Model ID:** The constructor wants the library's internal short name, not the full Hugging Face repo ID.
+    *   **Symptom:** `ValueError: Invalid model name arcinstitute/evo2-40b. Should be one of: evo2_40b...`
+    *   **Fix:** `MODEL_NAME = "evo2_40b"`
+
+### Step 4: Allocating Sufficient Firepower (The Final Boss)
+
+After all software issues were solved, we faced a hardware limitation.
+
+*   **Symptom:** `CUDA out of memory.`
+*   **Analysis:** The 40B parameter model is too large for a single H100 GPU.
+*   **Fix:** As you documented in your own guide, we requested two H100s.
+
+```python
+@app.cls(gpu="H100:2", ...)
+```
+
+This playbook, forged in the fires of this campaign, will serve as our doctrine for all future rapid deployments of complex models. We will not make these mistakes again.
+description:
+globs:
+alwaysApply: false
+---

@@ -1,0 +1,524 @@
+# 🏗️ Template Architecture: Standardized Components for Guardian Protocol
+
+## **🎯 Architecture Overview**
+
+**Mission:** Create a unified template system that ensures consistent user experience, reduces code duplication, and accelerates development across all Guardian Protocol pages.
+
+**Core Principle:** "Write once, use everywhere" - Every UI component, service integration, and workflow pattern should be templated and reusable.
+
+---
+
+## **📦 Core Template Library Structure**
+
+### **Service Integration Templates**
+
+```python
+# Base Template: ArsenalServiceBase.py
+class ArsenalServiceBase:
+    """Base class for all arsenal service integrations"""
+    
+    def __init__(self, service_name: str):
+        self.service_name = service_name
+        self.logger = self.setup_logging()
+        self.config = self.load_config()
+    
+    def safe_execute(self, operation, fallback_data=None, error_message="Service unavailable"):
+        """Standardized error handling for all arsenal services"""
+        try:
+            return operation()
+        except Exception as e:
+            self.logger.error(f"{self.service_name} error: {str(e)}")
+            st.warning(f"{error_message}: {str(e)}")
+            return fallback_data or self.get_default_response()
+    
+    def get_default_response(self):
+        """Default response when service fails"""
+        return {"status": "error", "message": "Service temporarily unavailable"}
+```
+
+### **UI Component Templates**
+
+```python
+# Template: StandardizedComponents.py
+class GuardianComponents:
+    """Standardized UI components for Guardian Protocol"""
+    
+    @staticmethod
+    def render_service_status_indicator(service_name: str, status: str):
+        """Consistent service status display"""
+        status_colors = {
+            "active": "🟢",
+            "degraded": "🟡", 
+            "offline": "🔴"
+        }
+        st.sidebar.markdown(f"{status_colors.get(status, '⚪')} {service_name}")
+    
+    @staticmethod
+    def render_analysis_card(title: str, data: dict, chart_func=None):
+        """Standardized analysis result display"""
+        with st.container():
+            st.subheader(title)
+            
+            # Metrics row
+            cols = st.columns(len(data.get('metrics', {})))
+            for i, (metric, value) in enumerate(data.get('metrics', {}).items()):
+                with cols[i]:
+                    st.metric(metric, value)
+            
+            # Chart if provided
+            if chart_func and data.get('chart_data'):
+                st.plotly_chart(chart_func(data['chart_data']))
+            
+            # Details in expander
+            if data.get('details'):
+                with st.expander("📊 Detailed Analysis"):
+                    st.json(data['details'])
+    
+    @staticmethod
+    def render_guide_design_interface(target_data: dict):
+        """Standardized guide RNA design interface"""
+        with st.container():
+            st.subheader("🎯 Guide RNA Design")
+            
+            # Input section
+            col1, col2 = st.columns(2)
+            with col1:
+                target_sequence = st.text_area("Target Sequence", target_data.get('sequence', ''))
+            with col2:
+                design_options = st.multiselect(
+                    "Design Options",
+                    ["High Efficiency", "Low Off-Target", "Specific PAM"],
+                    default=["High Efficiency"]
+                )
+            
+            if st.button("🔍 Find Guides"):
+                with st.spinner("Analyzing target and designing guides..."):
+                    # This will be replaced with real service call
+                    guides = GuardianServices.guide_finder.find_and_score_guides(
+                        target_sequence, design_options
+                    )
+                    
+                    for guide in guides:
+                        GuardianComponents.render_guide_score_card(guide)
+    
+    @staticmethod
+    def render_guide_score_card(guide_data: dict):
+        """Standardized guide scoring display"""
+        with st.container():
+            st.markdown(f"**Guide: {guide_data['sequence']}**")
+            
+            # Score metrics
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Efficacy", f"{guide_data.get('efficacy_score', 0):.2f}")
+            with col2:
+                st.metric("Specificity", f"{guide_data.get('specificity_score', 0):.2f}")
+            with col3:
+                st.metric("Off-Target Risk", f"{guide_data.get('off_target_risk', 0):.2f}")
+            with col4:
+                st.metric("Overall Score", f"{guide_data.get('overall_score', 0):.2f}")
+            
+            # Detailed analysis
+            with st.expander("📊 Detailed Analysis"):
+                st.json(guide_data.get('detailed_analysis', {}))
+```
+
+### **Page Layout Templates**
+
+```python
+# Template: StandardPageLayout.py
+class StandardPageLayout:
+    """Standardized page layout for all Guardian Protocol pages"""
+    
+    def __init__(self, page_title: str, page_icon: str):
+        self.page_title = page_title
+        self.page_icon = page_icon
+        self.services = GuardianServices()
+    
+    def render_page_header(self):
+        """Standardized page header with navigation"""
+        st.set_page_config(
+            page_title=f"{self.page_icon} {self.page_title}",
+            page_icon=self.page_icon,
+            layout="wide"
+        )
+        
+        # Header with service status
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.title(f"{self.page_icon} {self.page_title}")
+        with col2:
+            self.render_service_status_panel()
+    
+    def render_service_status_panel(self):
+        """Service status indicators"""
+        with st.container():
+            st.markdown("**Service Status**")
+            services = [
+                ("ZetaOracle", self.services.zeta_oracle.status),
+                ("EvoService", self.services.evo_service.status),
+                ("ChopChop", self.services.chopchop.status),
+                ("CommandCenter", self.services.command_center.status)
+            ]
+            
+            for service_name, status in services:
+                GuardianComponents.render_service_status_indicator(service_name, status)
+    
+    def render_arsenal_sidebar(self):
+        """Standardized arsenal tools sidebar"""
+        with st.sidebar:
+            st.header("🔧 Arsenal Tools")
+            
+            # Quick actions
+            if st.button("🧬 Genomic Navigator"):
+                st.session_state.show_genomic_nav = True
+            
+            if st.button("📊 Result Analyzer"):
+                st.session_state.show_result_analyzer = True
+            
+            if st.button("📚 Literature Context"):
+                st.session_state.show_literature = True
+            
+            if st.button("🎯 Protocol Generator"):
+                st.session_state.show_protocol_gen = True
+            
+            # Educational context
+            st.markdown("---")
+            st.markdown("**💡 Quick Help**")
+            if st.button("❓ What is this page?"):
+                st.session_state.show_help = True
+    
+    def render_contextual_help(self):
+        """Contextual help system"""
+        if st.session_state.get('show_help', False):
+            with st.expander("📖 Page Help", expanded=True):
+                help_content = GuardianServices.educational_context.get_page_help(
+                    self.page_title
+                )
+                st.markdown(help_content)
+                
+                if st.button("Close Help"):
+                    st.session_state.show_help = False
+```
+
+---
+
+## **🔧 Service Integration Templates**
+
+### **ZetaOracle Integration Template**
+
+```python
+# Template: ZetaOracleIntegration.py
+class ZetaOracleService(ArsenalServiceBase):
+    """Standardized ZetaOracle service integration"""
+    
+    def __init__(self):
+        super().__init__("ZetaOracle")
+        self.endpoint = "https://crispro--zeta-oracle-v2-zetaoracle-api.modal.run"
+    
+    def predict_variant_impact(self, variant_data: dict):
+        """Predict variant pathogenicity impact"""
+        return self.safe_execute(
+            lambda: self._call_zeta_oracle(variant_data),
+            fallback_data={"pathogenicity_score": -1, "confidence": 0},
+            error_message="Variant impact prediction unavailable"
+        )
+    
+    def _call_zeta_oracle(self, variant_data: dict):
+        """Internal method to call ZetaOracle API"""
+        # HTTP request to ZetaOracle webhook
+        response = requests.post(
+            f"{self.endpoint}/predict",
+            json=variant_data,
+            timeout=30
+        )
+        return response.json()
+```
+
+### **Guide Finder Integration Template**
+
+```python
+# Template: GuideFinderIntegration.py
+class GuideFinderService(ArsenalServiceBase):
+    """Standardized guide finder service integration"""
+    
+    def __init__(self):
+        super().__init__("GuideFinder")
+        self.intelligent_finder = self._load_intelligent_finder()
+        self.chopchop_service = ChopChopService()
+    
+    def find_and_score_guides(self, target_sequence: str, options: list = None):
+        """Find and score guide RNAs for target sequence"""
+        return self.safe_execute(
+            lambda: self._find_and_score_guides_impl(target_sequence, options),
+            fallback_data=[],
+            error_message="Guide RNA design unavailable"
+        )
+    
+    def _find_and_score_guides_impl(self, target_sequence: str, options: list):
+        """Internal implementation of guide finding and scoring"""
+        # Step 1: Find guide candidates
+        candidates = self.intelligent_finder.find_guides(target_sequence)
+        
+        # Step 2: Score with ChopChop
+        scored_guides = []
+        for candidate in candidates:
+            scores = self.chopchop_service.comprehensive_guide_analysis(
+                candidate['sequence'], target_sequence
+            )
+            candidate.update(scores)
+            scored_guides.append(candidate)
+        
+        # Step 3: Rank and return
+        return sorted(scored_guides, key=lambda x: x.get('overall_score', 0), reverse=True)
+```
+
+---
+
+## **🎨 Page Enhancement Templates**
+
+### **Threat Assessor Enhancement Template**
+
+```python
+# Template: EnhancedThreatAssessor.py
+class EnhancedThreatAssessor(StandardPageLayout):
+    """Enhanced threat assessor with full arsenal integration"""
+    
+    def __init__(self):
+        super().__init__("Threat Assessor", "⚔️")
+    
+    def render_enhanced_page(self):
+        """Render enhanced threat assessor page"""
+        self.render_page_header()
+        
+        # Main content
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            self.render_threat_analysis_interface()
+        
+        with col2:
+            self.render_arsenal_sidebar()
+        
+        # Contextual help
+        self.render_contextual_help()
+    
+    def render_threat_analysis_interface(self):
+        """Enhanced threat analysis interface"""
+        st.subheader("🧬 Variant Analysis")
+        
+        # Input section
+        variant_input = st.text_input(
+            "Enter variant (e.g., BRCA1:c.185delA, TP53:p.R273H)",
+            help="Enter variant in HGVS notation"
+        )
+        
+        if variant_input:
+            # Real threat assessment using multiple services
+            with st.spinner("Analyzing variant threat..."):
+                threat_data = self.analyze_variant_threat(variant_input)
+                
+                # Display results using standardized components
+                GuardianComponents.render_analysis_card(
+                    "Threat Assessment Results",
+                    threat_data,
+                    self.create_threat_visualization
+                )
+                
+                # Add guide design interface
+                GuardianComponents.render_guide_design_interface({
+                    'sequence': threat_data.get('target_sequence', ''),
+                    'variant': variant_input
+                })
+    
+    def analyze_variant_threat(self, variant_input: str):
+        """Comprehensive variant threat analysis"""
+        # Gather intelligence from multiple sources
+        zeta_result = self.services.zeta_oracle.predict_variant_impact({'variant': variant_input})
+        alphamissense_result = self.services.alphamissense.get_pathogenicity(variant_input)
+        literature_context = self.services.literature.get_variant_context(variant_input)
+        
+        # Compile comprehensive assessment
+        return {
+            'metrics': {
+                'ZetaOracle Score': zeta_result.get('pathogenicity_score', 'N/A'),
+                'AlphaMissense Score': alphamissense_result.get('score', 'N/A'),
+                'Literature Evidence': literature_context.get('evidence_level', 'N/A'),
+                'Overall Confidence': self.calculate_confidence([zeta_result, alphamissense_result])
+            },
+            'chart_data': {
+                'scores': [zeta_result, alphamissense_result],
+                'variant': variant_input
+            },
+            'details': {
+                'zeta_analysis': zeta_result,
+                'alphamissense_analysis': alphamissense_result,
+                'literature_summary': literature_context
+            }
+        }
+```
+
+### **Digital Twin Enhancement Template**
+
+```python
+# Template: EnhancedDigitalTwin.py
+class EnhancedDigitalTwin(StandardPageLayout):
+    """Enhanced digital twin with genomic navigation and analysis"""
+    
+    def __init__(self):
+        super().__init__("Patient Digital Twin", "🧬")
+    
+    def render_enhanced_page(self):
+        """Render enhanced digital twin page"""
+        self.render_page_header()
+        
+        # Patient data input
+        patient_data = self.render_patient_data_input()
+        
+        if patient_data:
+            # Main analysis dashboard
+            self.render_genomic_dashboard(patient_data)
+            
+            # Arsenal tools sidebar
+            self.render_arsenal_sidebar()
+            
+            # Contextual help
+            self.render_contextual_help()
+    
+    def render_genomic_dashboard(self, patient_data: dict):
+        """Enhanced genomic analysis dashboard"""
+        
+        # Genomic navigation
+        st.subheader("🗺️ Genomic Navigation")
+        genomic_nav_result = self.services.genomic_navigator.navigate_to_variant(
+            patient_data.get('primary_variant', '')
+        )
+        
+        if genomic_nav_result:
+            st.plotly_chart(self.create_genome_browser_view(genomic_nav_result))
+        
+        # Multi-modal analysis
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Structural variant analysis
+            sv_analysis = self.services.sv_scanner.analyze_structural_variants(patient_data)
+            GuardianComponents.render_analysis_card(
+                "Structural Variant Analysis",
+                sv_analysis,
+                self.create_sv_visualization
+            )
+        
+        with col2:
+            # Metastasis risk assessment
+            metastasis_forecast = self.services.metastasis_analyzer.predict_metastasis_risk(patient_data)
+            GuardianComponents.render_analysis_card(
+                "Metastasis Risk Forecast",
+                metastasis_forecast,
+                self.create_metastasis_chart
+            )
+```
+
+---
+
+## **📊 Testing Templates**
+
+### **Component Testing Template**
+
+```python
+# Template: ComponentTestSuite.py
+class ComponentTestSuite:
+    """Standardized testing for Guardian Protocol components"""
+    
+    def test_service_integration(self, service_class):
+        """Test service integration follows template standards"""
+        service = service_class()
+        
+        # Test base functionality
+        assert hasattr(service, 'safe_execute')
+        assert hasattr(service, 'get_default_response')
+        
+        # Test error handling
+        result = service.safe_execute(lambda: 1/0, fallback_data={'error': True})
+        assert result == {'error': True}
+    
+    def test_component_rendering(self, component_func, test_data):
+        """Test UI component rendering"""
+        # Mock streamlit environment
+        with patch('streamlit.container'), patch('streamlit.metric'):
+            result = component_func(test_data)
+            assert result is not None
+    
+    def test_page_enhancement(self, page_class):
+        """Test page enhancement follows template standards"""
+        page = page_class()
+        
+        # Test required methods
+        assert hasattr(page, 'render_enhanced_page')
+        assert hasattr(page, 'render_page_header')
+        assert hasattr(page, 'render_arsenal_sidebar')
+```
+
+### **Integration Testing Template**
+
+```python
+# Template: IntegrationTestSuite.py
+class IntegrationTestSuite:
+    """End-to-end integration testing"""
+    
+    def test_complete_workflow(self):
+        """Test complete Guardian Protocol workflow"""
+        # Test data
+        test_variant = "BRCA1:c.185delA"
+        
+        # Test threat assessment
+        threat_result = GuardianServices.threat_assessor.analyze_variant_threat(test_variant)
+        assert threat_result['metrics']['Overall Confidence'] > 0.5
+        
+        # Test guide design
+        guide_result = GuardianServices.guide_finder.find_and_score_guides(
+            threat_result.get('target_sequence', '')
+        )
+        assert len(guide_result) > 0
+        assert guide_result[0]['overall_score'] > 0.5
+        
+        # Test protocol generation
+        protocol_result = GuardianServices.experiment_advisor.generate_complete_protocol(
+            guide_result[0], {'goal': 'therapeutic_editing'}
+        )
+        assert 'preparation_steps' in protocol_result
+        assert 'analysis_protocol' in protocol_result
+```
+
+---
+
+## **🎯 Implementation Guidelines**
+
+### **Template Usage Rules**
+
+1. **Always Use Templates**: Never create custom implementations when templates exist
+2. **Extend, Don't Replace**: Extend templates for specific needs, don't replace them
+3. **Consistent Naming**: Follow template naming conventions
+4. **Error Handling**: Always use standardized error handling patterns
+5. **Testing**: Use template test suites for all components
+
+### **Template Development Process**
+
+1. **Identify Pattern**: Recognize repeated code patterns across pages
+2. **Create Template**: Develop reusable template component
+3. **Test Template**: Validate template with comprehensive test suite
+4. **Document Usage**: Document template usage and customization options
+5. **Deploy Across Pages**: Apply template to all relevant pages
+
+### **Quality Assurance**
+
+- All templates must pass comprehensive test suites
+- Templates must maintain backward compatibility
+- Performance impact must be minimal
+- Documentation must be complete and clear
+
+This template architecture ensures consistent, maintainable, and scalable implementation of the Guardian Protocol platform across all pages and components.
+description:
+globs:
+alwaysApply: false
+---

@@ -66,7 +66,30 @@ class RUNX1DataLoader:
         self._reference_sequence = None
         self._vcf_variants = None
         self._synthetic_variants = None
+        self._variant_id_to_pos_map = None  # Cache for the lookup map
         
+    def get_variant_coordinates_by_id(self, variant_id: str) -> Optional[int]:
+        """
+        Get the genomic position for a given variant ID.
+
+        Args:
+            variant_id (str): The ID of the variant (e.g., 'RUNX1_R204Q').
+
+        Returns:
+            Optional[int]: The genomic position if found, otherwise None.
+        """
+        if self._variant_id_to_pos_map is None:
+            variants = self.get_runx1_variants(include_synthetic=True)
+            self._variant_id_to_pos_map = {v['id']: v['position'] for v in variants}
+            logger.info("Created variant ID to position lookup map.")
+
+        position = self._variant_id_to_pos_map.get(variant_id)
+        if position:
+            logger.info(f"Found position {position} for variant ID {variant_id}")
+        else:
+            logger.warning(f"Variant ID {variant_id} not found in VCF data.")
+        return position
+
     def load_runx1_sequence(self) -> str:
         """
         Load the 261,501 bp RUNX1 genomic reference sequence.
@@ -279,41 +302,47 @@ class RUNX1DataLoader:
     
     def get_genomic_context(self, position: int, window: int = 1000) -> Dict:
         """
-        Get genomic context around a position.
-        
-        Args:
-            position: Genomic position
-            window: Window size around position
-            
-        Returns:
-            Dict: Genomic context information
+        Retrieves the genomic context around a given position using a FASTA file.
         """
-        sequence = self.load_runx1_sequence()
-        if not sequence:
-            return {"error": "Could not load reference sequence"}
-        
-        # Convert genomic position to sequence index
-        seq_index = position - self.runx1_coords["start"]
-        
-        if seq_index < 0 or seq_index >= len(sequence):
-            return {"error": "Position outside RUNX1 sequence"}
-        
-        # Extract context window
-        start_idx = max(0, seq_index - window)
-        end_idx = min(len(sequence), seq_index + window)
-        
-        context_seq = sequence[start_idx:end_idx]
-        
-        return {
-            "position": position,
-            "sequence_index": seq_index,
-            "context_sequence": context_seq,
-            "context_start": self.runx1_coords["start"] + start_idx,
-            "context_end": self.runx1_coords["start"] + end_idx,
-            "window_size": window,
-            "functional_domains": self.map_functional_domains(position)
-        }
-    
+        logger.info(f"Attempting to get genomic context for position {position} with window {window}")
+        try:
+            fasta_path = os.path.join(self.base_dir, "data/reference/hg19.fa")
+            logger.info(f"Using FASTA file at: {fasta_path}")
+            
+            if not os.path.exists(fasta_path):
+                logger.error(f"FASTA file not found at {fasta_path}")
+                return {"error": "Reference genome file (hg19.fa) not found."}
+
+            # Use pysam to fetch the sequence
+            fasta_file = pysam.FastaFile(fasta_path)
+            
+            # Ensure the chromosome name matches what's in the FASTA headers (e.g., 'chr21' vs '21')
+            contig = "chr21" 
+            if contig not in fasta_file.references:
+                logger.error(f"Contig '{contig}' not found in FASTA file. Available references: {fasta_file.references}")
+                return {"error": f"Contig '{contig}' not found in reference genome."}
+
+            start = max(0, position - window - 1) # 0-based start
+            end = position + window
+            
+            logger.info(f"Fetching sequence for {contig}:{start}-{end}")
+            sequence = fasta_file.fetch(contig, start, end)
+            fasta_file.close()
+            
+            if not sequence:
+                logger.error(f"Failed to fetch sequence for {contig}:{start}-{end}. fetch() returned empty.")
+                return {"error": "Failed to fetch sequence from FASTA file."}
+
+            logger.info(f"Successfully fetched sequence of length {len(sequence)}")
+            return {
+                "position": position,
+                "window": window,
+                "context_sequence": sequence.upper()
+            }
+        except Exception as e:
+            logger.error(f"An unexpected error occurred in get_genomic_context: {e}", exc_info=True)
+            return {"error": f"An unexpected error occurred: {e}"}
+
     def get_runx1_gene_info(self) -> Dict:
         """
         Get comprehensive RUNX1 gene information.

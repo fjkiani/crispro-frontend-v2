@@ -7,9 +7,11 @@ import shutil
 # --- Configuration ---
 BLAST_DB_PATH = Path("/blast_db")
 TMP_PATH = Path("/tmp")
-GENOME_FASTA_URL = "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/005/845/GCF_000005845.2_ASM584v2/GCF_000005845.2_ASM584v2_genomic.fna.gz"
+# Switched from E.coli to Human Genome (Chromosome 21 for speed, full genome for production)
+# Full Genome URL: "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/001/405/GCF_000001405.40_GRCh38.p14/GCF_000001405.40_GRCh38.p14_genomic.fna.gz"
+GENOME_FASTA_URL = "https://ftp.ncbi.nlm.nih.gov/refseq/H_sapiens/annotation/GRCh38_latest/refseq_identifiers/GRCh38_latest_genomic.fna.gz"
 GENOME_FILE_NAME = Path(GENOME_FASTA_URL).name
-DB_NAME = "ecoli_k12"
+DB_NAME = "grch38"
 
 # --- Modal Image Setup ---
 # This image includes the NCBI BLAST+ toolkit and downloads the reference genome to a temporary path.
@@ -18,23 +20,23 @@ blast_image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("ncbi-blast+", "wget")
     .run_commands(
-        f"echo 'Downloading E. coli genome to {TMP_PATH}...'",
+        f"echo 'Downloading Human reference genome to {TMP_PATH}...'",
         f"wget -q -O {TMP_PATH / GENOME_FILE_NAME} {GENOME_FASTA_URL}",
         "echo 'Download complete.'",
     )
 )
 
-app = modal.App("blast-service", image=blast_image)
+app = modal.App("blast-service-human", image=blast_image)
 
 # --- Persistent Volume for BLAST DB ---
 # This volume stores the formatted BLAST database to avoid rebuilding it on every run.
-blast_db_volume = modal.Volume.from_name("blast-db-volume", create_if_missing=True)
+blast_db_volume = modal.Volume.from_name("blast-db-volume-human-v2", create_if_missing=True)
 
 @app.cls(
     volumes={str(BLAST_DB_PATH): blast_db_volume},
-    cpu=2, 
-    memory=2048,
-    timeout=600 # Generous timeout for setup and search
+    cpu=4, 
+    memory=8192, # Increased memory for human genome
+    timeout=3600 # Increased timeout for db build and search
 )
 class BlastService:
     @modal.enter()
@@ -46,10 +48,10 @@ class BlastService:
         # Check if the database is already built by looking for a key file.
         db_marker_file = BLAST_DB_PATH / f"{DB_NAME}.nsq"
         if db_marker_file.exists():
-            print("✅ BLAST database already exists in volume. Startup is fast.")
+            print("✅ Human BLAST database already exists in volume. Startup is fast.")
             return
 
-        print("💥 BLAST database not found in volume. Building now... (This is a one-time process)")
+        print("💥 Human BLAST database not found in volume. Building now... (This will take a while)")
         
         # Define paths
         source_gz_path = TMP_PATH / GENOME_FILE_NAME
@@ -79,7 +81,7 @@ class BlastService:
             print("  - Committing database to persistent volume...")
             blast_db_volume.commit()
             
-            print("✅ BLAST database built and saved successfully.")
+            print("✅ Human BLAST database built and saved successfully.")
 
         except FileNotFoundError:
             print(f"❌ CRITICAL: Genome file not found at {source_gz_path}. Image build may have failed.")

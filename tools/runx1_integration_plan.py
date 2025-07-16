@@ -9,17 +9,75 @@ import streamlit as st
 from typing import Dict, List, Optional
 import logging
 import pandas as pd # Added missing import for pandas
+import time
+import requests
+import gosling as gos
 
 # Import all the RUNX1 components we've built
 from tools.runx1_data_loader import RUNX1DataLoader
 from tools.runx1_progression_modeler import RUNX1ProgressionModeler
-from tools.chopchop_integration import ChopChopIntegration
-from tools.intelligent_guide_finder import find_intelligent_guides
+# from tools.chopchop_integration import ChopChopIntegration # ARCHIVED: V3 workflow uses Evo service
+# from tools.intelligent_guide_finder import find_intelligent_guides # ARCHIVED
 from tools.experiment_advisor import generate_protocol, estimate_experiment_timeline, recommend_reagents
-from tools.command_center_client import formulate_battle_plan, get_all_patients, initiate_germline_correction
 from tools.ui_enhancements import AppleStyleResultsDisplay, LEAPGrantAligner
 
 logger = logging.getLogger(__name__)
+
+# This now points to our live V3 deployment, corrected from deployment logs.
+COMMAND_CENTER_URL = "https://crispro--crispr-assistant-command-center-v3-commandcenter-api.modal.run"
+
+
+def run_live_intervention_design(target_variant_data):
+    """
+    Calls the full V3 Command Center workflow and polls for results.
+    This is a blocking function to work with Streamlit's execution model.
+    """
+    try:
+        # Step 1: Formulate Battle Plan
+        st.info("🛰️ Contacting Command Center: Formulating Battle Plan...")
+        formulate_payload = {
+            "patient_identifier": target_variant_data.get("id", "runx1_digital_twin_v3"),
+            "gene": target_variant_data.get("gene", "RUNX1"),
+            "mutation_hgvs_p": target_variant_data.get("protein_change", "p.Arg135fs"),
+            # NOTE: Sequence is currently a placeholder, a future enhancement will be to fetch this dynamically.
+            "sequence_for_perplexity": "CCTGCCTGGGCTCCCCAGCCCCAGCAGCCCTGCAGCCCAGCTCTGGCCTGCCGGAGGCCACGCGC"
+        }
+        formulate_url = f"{COMMAND_CENTER_URL}/v3/workflow/formulate_battle_plan"
+        response = requests.post(formulate_url, json=formulate_payload, timeout=60)
+        response.raise_for_status()
+        plan_id = response.json()["plan_id"]
+        st.info(f"✅ Battle Plan {plan_id} created.")
+
+        # Step 2: Execute Guide Design
+        st.info(f"🚀 Executing Guide Design Campaign for Plan {plan_id}...")
+        execute_url = f"{COMMAND_CENTER_URL}/v3/workflow/execute_guide_design_campaign/{plan_id}"
+        response = requests.post(execute_url, timeout=60)
+        response.raise_for_status()
+        st.info("💥 Campaign initiated. Polling for results... (this may take several minutes)")
+
+        # Step 3: Poll for Results
+        status_url = f"{COMMAND_CENTER_URL}/v3/battle_plan/{plan_id}"
+        for i in range(20):  # Poll for ~10 minutes
+            time.sleep(30)
+            st.info(f"  ...checking status (attempt {i+1}/20)")
+            response = requests.get(status_url, timeout=60)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("status") == "interventions_designed":
+                    st.success("🎉 Intervention design complete!")
+                    return {"guides": data.get("results", {}).get("guides", [])}
+                elif data.get("status") == "design_failed":
+                    error_msg = data.get('results', {}).get('error', 'Unknown error')
+                    st.error(f"Intervention design failed: {error_msg}")
+                    return {"error": "Design process failed."}
+        
+        st.warning("Polling timed out. The process is taking longer than expected.")
+        return {"error": "Polling timed out."}
+
+    except requests.exceptions.RequestException as e:
+        st.error(f"API Error: Failed to connect to CommandCenter. Details: {e}")
+        return {"error": str(e)}
+
 
 class RUNX1DigitalTwinIntegrator:
     """
@@ -32,7 +90,7 @@ class RUNX1DigitalTwinIntegrator:
     def __init__(self):
         self.data_loader = RUNX1DataLoader()
         self.progression_modeler = RUNX1ProgressionModeler()
-        self.chopchop_integration = ChopChopIntegration()
+        # self.chopchop_integration = ChopChopIntegration() # ARCHIVED
         
         # Pre-load RUNX1 data
         self.runx1_sequence = self.data_loader.load_runx1_sequence()
@@ -102,130 +160,211 @@ class RUNX1DigitalTwinIntegrator:
             "next_steps": self._generate_next_steps(intervention_opportunities)
         }
     
-    def design_precision_intervention(self, target_variant: Dict, intervention_type: str = "crispr_correction") -> Dict:
-        """
-        Design precision intervention for identified target variant.
-        
-        This integrates guide design, safety analysis, and experimental protocols
-        into a complete therapeutic blueprint.
-        
-        Args:
-            target_variant: Target variant for intervention
-            intervention_type: Type of intervention (crispr_correction, base_editing, etc.)
-            
-        Returns:
-            Dict: Complete intervention design
-        """
-        logger.info(f"Designing precision intervention for {target_variant.get('id', 'unknown')}")
-        
-        # Step 1: Extract genomic locus for guide design
-        genomic_position = target_variant.get("position", 36207648)
-        locus = f"chr21:{genomic_position}"
-        
-        # Step 2: Design intelligent guides
-        guides = find_intelligent_guides(locus, "hg19", "NGG")
-        
-        if not guides:
-            return {"error": "No suitable guides found for target locus"}
-        
-        # Step 3: Score guides with ChopChop
+    def _start_guide_design_campaign(self, battle_plan_id: int) -> bool:
+        """Calls the command center to start the async guide design job."""
+        url = f"{COMMAND_CENTER_URL}/v3/workflow/execute_guide_design_campaign/{battle_plan_id}"
         try:
-            scored_guides_df = self.chopchop_integration.score_guides_for_runx1(guides)
-        except Exception as e:
-            logger.error(f"ChopChop scoring failed: {e}")
-            scored_guides_df = pd.DataFrame()
-        
-        # Step 4: Select top guide
-        if not scored_guides_df.empty:
-            top_guide = scored_guides_df.iloc[0].to_dict()
-        else:
-            top_guide = guides[0]  # Fallback to first guide
-        
-        # Step 5: Generate experimental protocol
-        protocol = generate_protocol(
-            experiment_type="knock-in" if intervention_type == "crispr_correction" else "knockout",
-            target_gene="RUNX1",
-            guide_info=top_guide,
-            cell_type="CD34+ HSCs"
-        )
-        
-        # Step 6: Safety assessment
-        try:
-            safety_assessment = self.chopchop_integration.validate_guide_safety(
-                top_guide.get("sequence", top_guide.get("seq", ""))
-            )
-        except Exception as e:
-            logger.error(f"Safety assessment failed: {e}")
-            safety_assessment = {"error": str(e)}
-        
-        # Step 7: Try to use Command Center for germline correction design
-        try:
-            if intervention_type == "crispr_correction":
-                # Get genomic context for the target
-                context = self.data_loader.get_genomic_context(genomic_position, window=2000)
-                corrected_sequence = context.get("context_sequence", "")
-                target_site_context = f"chr21:{genomic_position-2000}-{genomic_position+2000}"
+            response = requests.post(url, timeout=30)
+            response.raise_for_status()
+            logger.info(f"Successfully started guide design campaign for battle plan {battle_plan_id}")
+            return True
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to start guide design campaign for BP {battle_plan_id}: {e}")
+            return False
+
+    def _poll_for_results(self, battle_plan_id: int, timeout: int = 1800) -> Optional[Dict]:
+        """Polls the command center for the results of a guide design campaign."""
+        url = f"{COMMAND_CENTER_URL}/v3/battle_plan/{battle_plan_id}"
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            try:
+                response = requests.get(url, timeout=30)
+                response.raise_for_status()
+                data = response.json()
                 
-                # Call Command Center for germline correction
-                correction_blueprint = initiate_germline_correction(
-                    corrected_sequence, target_site_context, arm_length=500
-                )
-                
-                if correction_blueprint and len(correction_blueprint) == 2:
-                    guides_df, blueprint_data = correction_blueprint
-                    if not guides_df.empty:
-                        top_guide = guides_df.iloc[0].to_dict()
-        except Exception as e:
-            logger.error(f"Command Center integration failed: {e}")
+                status = data.get("status")
+                if status == "interventions_designed":
+                    logger.info(f"Guide design complete for battle plan {battle_plan_id}")
+                    return data.get("results")
+                elif status == "design_failed":
+                    logger.error(f"Guide design failed for battle plan {battle_plan_id}")
+                    return {"error": "The guide design process failed."}
+                else: # Still in progress
+                    logger.info(f"Guide design for BP {battle_plan_id} is '{status}'. Waiting...")
+                    time.sleep(10) # Wait for 10 seconds before polling again
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Polling failed for BP {battle_plan_id}: {e}")
+                time.sleep(15) # Wait longer on connection error
         
+        logger.error(f"Polling timed out for battle plan {battle_plan_id}")
+        return {"error": "Polling for results timed out."}
+
+
+    def design_precision_intervention(self, target_variant: Dict, patient_id: str, intervention_type: str = "crispr_correction") -> Dict:
+        """
+        Designs a precision intervention by orchestrating the AI General Command Center.
+        This is the new, refactored V3 workflow.
+        """
+        logger.info(f"V3 - Designing precision intervention for {target_variant.get('id', 'unknown')}")
+        
+        # Step 1: Get sequence context for the variant
+        variant_pos = target_variant.get("position", 36207648)
+        # Fetch a 200bp window around the variant for guide design
+        context_data = self.data_loader.get_genomic_context(variant_pos, window=100)
+        target_sequence = context_data.get("context_sequence")
+
+        if not target_sequence:
+            return {"error": "Could not retrieve target sequence for guide design."}
+
+        # Step 2: Formulate a Battle Plan via the Command Center
+        # The new endpoint is /v3/workflow/formulate_battle_plan
+        # Construct the data packet required by the endpoint
+        patient_data = {
+            "patient_identifier": patient_id,
+            "gene": target_variant.get("gene", "RUNX1"),
+            "mutation_hgvs_c": target_variant.get("hgvs_c", "unknown"),
+            "mutation_hgvs_p": target_variant.get("protein_change", "unknown"),
+            "transcript_id": self.runx1_gene_info.get("transcript_id", "ENST00000546xxx"),
+            "bam_file_path": "/path/to/patient/bam.bam", # This is a placeholder
+            "protein_sequence": "PROTEINSEQ", # Placeholder
+            "sequence_for_perplexity": target_sequence,
+        }
+        
+        st.info("🛰️ Contacting AI General Command Center to formulate battle plan...")
+        # This function needs to be updated or created to call the v3 endpoint
+        plan_response = self._formulate_battle_plan_v3(patient_data)
+        if not plan_response or "plan_id" not in plan_response:
+            st.error("❌ Failed to formulate battle plan with Command Center.")
+            return {"error": "Failed to formulate battle plan."}
+        
+        battle_plan_id = plan_response["plan_id"]
+        st.success(f"✅ Battle Plan #{battle_plan_id} formulated. Now designing guides...")
+
+        # Step 3: Start the asynchronous guide design campaign
+        campaign_started = self._start_guide_design_campaign(battle_plan_id)
+        if not campaign_started:
+            st.error("❌ Failed to start the guide design campaign.")
+            return {"error": "Failed to start guide design campaign."}
+
+        # Step 4: Poll for the results
+        with st.spinner(f"🔬 AI is designing and validating potential guides for Battle Plan #{battle_plan_id}... This may take several minutes."):
+            results = self._poll_for_results(battle_plan_id)
+
+        if not results or not results.get("guides"):
+            st.error("❌ Guide design process did not return valid results.")
+            return {"error": results.get("error", "Unknown error during guide design.")}
+
+        # Step 5: Format results to match the UI's expectations
+        st.success("🎉 Intervention design complete!")
+        guides = results.get("guides", [])
+        top_guide = guides[0] if guides else {}
+
         return {
             "target_variant": target_variant,
             "intervention_type": intervention_type,
             "guide_design": {
                 "top_guide": top_guide,
-                "all_guides": guides,
-                "chopchop_scores": scored_guides_df.to_dict('records') if not scored_guides_df.empty else []
+                "all_guides": guides
             },
-            "safety_assessment": safety_assessment,
-            "experimental_protocol": protocol,
-            "success_probability": self._calculate_success_probability(top_guide, safety_assessment),
-            "timeline_estimate": estimate_experiment_timeline("knock-in" if intervention_type == "crispr_correction" else "knockout"),
-            "resource_requirements": recommend_reagents("knock-in" if intervention_type == "crispr_correction" else "knockout", "CD34+ HSCs")
+            "safety_assessment": {"summary": f"{len(guides)} guides validated. Top guide off-target score: {top_guide.get('off_target_score', 'N/A')}"},
+            "experimental_protocol": generate_protocol(
+                experiment_type="knock-in",
+                target_gene=target_variant.get("gene", "RUNX1"),
+                guide_info=top_guide,
+                cell_type="CD34+ HSCs"
+            ),
         }
-    
-    def create_genomic_browser_data(self, variant_position: int, window: int = 5000) -> Dict:
+
+    def _formulate_battle_plan_v3(self, patient_data: dict) -> Optional[dict]:
+        """Calls the new V3 endpoint to formulate a battle plan."""
+        url = f"{COMMAND_CENTER_URL}/v3/workflow/formulate_battle_plan"
+        try:
+            response = requests.post(url, json=patient_data, headers={"Content-Type": "application/json"}, timeout=30)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to formulate V3 battle plan: {e}")
+            return None
+
+    def create_genomic_browser_data(self, variant_position: int, window: int = 5000, guides: list = None) -> Dict:
         """
-        Create data for interactive genomic browser visualization.
+        Create data for interactive genomic browser visualization using gosling.
+        """
+        logger.info(f"Creating gosling genomic browser for position {variant_position}")
         
-        Args:
-            variant_position: Genomic position to center on
-            window: Window size around position
-            
-        Returns:
-            Dict: Genomic browser data
-        """
-        # Get genomic context
+        # 1. Get sequence context and gene structure
         context = self.data_loader.get_genomic_context(variant_position, window)
+        gene_structure = self.data_loader.get_runx1_gene_info()
         
-        # Map functional domains
-        domain_mapping = self.data_loader.map_functional_domains(variant_position)
+        # 2. Prepare tracks for Gosling
         
-        # Get nearby variants
-        nearby_variants = []
-        for variant in self.runx1_variants:
-            if abs(variant["position"] - variant_position) <= window:
-                nearby_variants.append(variant)
+        # Track 1: Gene Annotations (Exons)
+        exons = [{
+            "start": start, "end": end, "name": f"Exon {i+1}", "strand": "+"
+        } for i, (start, end) in enumerate(gene_structure.get("exons", []))]
         
-        return {
-            "center_position": variant_position,
-            "window_size": window,
-            "sequence_context": context,
-            "functional_domains": domain_mapping,
-            "nearby_variants": nearby_variants,
-            "gene_structure": self._get_gene_structure_data(),
-            "conservation_scores": self._get_conservation_scores(variant_position, window)
-        }
-    
+        gene_track = gos.Track(
+            data=gos.Data(
+                values=exons,
+                type='json',
+                genomicFields=["start", "end"]
+            )
+        ).mark_rect().encode(
+            x=gos.X("start:G", axis="bottom"),
+            xe="end:G",
+            color=gos.Color("name:N", legend=True),
+            tooltip=[
+                gos.Tooltip(field="start", type="genomic", alt="Start Position"),
+                gos.Tooltip(field="end", type="genomic", alt="End Position"),
+                gos.Tooltip(field="name", type="nominal", alt="Annotation"),
+            ]
+        ).properties(title="RUNX1 Gene Structure")
+
+        # Track 2: Variant and Guide Positions
+        points_data = [{
+            "position": variant_position, "label": "Patient Mutation", "value": "Mutation", "size": 20
+        }]
+        if guides:
+            for guide in guides:
+                # Placeholder for guide position calculation
+                guide_seq = guide.get("guide_sequence", "")
+                if guide_seq in context.get("context_sequence", ""):
+                    guide_start = variant_position - (window // 2) + context.get("context_sequence", "").find(guide_seq)
+                    points_data.append({
+                        "position": guide_start,
+                        "label": f"Guide ({guide.get('assassin_score', 0):.2f})",
+                        "value": "Guide RNA",
+                        "size": 10
+                    })
+
+        points_track = gos.Track(
+            data=gos.Data(
+                values=points_data,
+                type='json',
+                genomicFields=["position"]
+            )
+        ).mark_point().encode(
+            x="position:G",
+            y=gos.Y("value:N"),
+            color=gos.Color("value:N", domain=["Mutation", "Guide RNA"], range=["red", "purple"]),
+            size="size:Q",
+            tooltip=[
+                gos.Tooltip(field="position", type="genomic", alt="Position"),
+                gos.Tooltip(field="label", type="nominal", alt="Label"),
+            ]
+        ).properties(title="Key Positions")
+
+        # Combine tracks into a final visualization spec
+        combined_view = gos.stack(gene_track, points_track).properties(
+            title="RUNX1 Genomic Browser",
+            centerRadius=0.8,
+            layout="linear",
+            spacing=0,
+            xDomain=gos.Domain(chromosome="chr21", interval=[variant_position - window, variant_position + window])
+        )
+
+        return combined_view.spec()
+
     def generate_clinical_report(self, analysis_results: Dict, patient_info: Dict = None) -> Dict:
         """
         Generate comprehensive clinical report for physicians.
@@ -577,33 +716,16 @@ def integrate_runx1_analysis(germline_variant: Dict, somatic_variant: Dict = Non
     integrator = RUNX1DigitalTwinIntegrator()
     return integrator.enhanced_two_hit_analysis(germline_variant, somatic_variant, patient_age)
 
-def design_runx1_intervention(target_variant: Dict, intervention_type: str = "crispr_correction") -> Dict:
-    """
-    Design precision intervention for RUNX1 variant.
-    
-    Args:
-        target_variant: Target variant
-        intervention_type: Intervention type
-        
-    Returns:
-        Dict: Intervention design
-    """
+# This is the new top-level function that should be called by the UI
+def design_runx1_intervention_v3(target_variant: Dict, patient_id: str) -> Dict:
+    """Entry point for the V3 RUNX1 intervention design workflow."""
     integrator = RUNX1DigitalTwinIntegrator()
-    return integrator.design_precision_intervention(target_variant, intervention_type)
+    return integrator.design_precision_intervention(target_variant, patient_id)
 
-def create_runx1_genomic_browser(variant_position: int, window: int = 5000) -> Dict:
-    """
-    Create genomic browser data for RUNX1 visualization.
-    
-    Args:
-        variant_position: Genomic position
-        window: Window size
-        
-    Returns:
-        Dict: Genomic browser data
-    """
+def create_runx1_genomic_browser(variant_position: int, window: int = 5000, guides: list = None) -> Dict:
+    """Helper function to call the integrator's browser data method."""
     integrator = RUNX1DigitalTwinIntegrator()
-    return integrator.create_genomic_browser_data(variant_position, window)
+    return integrator.create_genomic_browser_data(variant_position, window, guides)
 
 def generate_runx1_clinical_report(analysis_results: Dict, patient_info: Dict = None) -> Dict:
     """
@@ -647,7 +769,11 @@ if __name__ == "__main__":
         print(f"Analysis completed: {results['risk_stratification']['risk_tier']} risk")
         
         # Test intervention design
-        intervention = integrator.design_precision_intervention(test_germline)
+        # This part needs a patient_id for the new design_precision_intervention
+        # For now, we'll pass a placeholder or skip if not available
+        # Assuming a placeholder patient_id for testing
+        test_patient_id = "TEST_PT_001" 
+        intervention = design_runx1_intervention_v3(test_germline, test_patient_id)
         print(f"Intervention designed: {intervention['success_probability']:.3f} success probability")
         
         # Test clinical report

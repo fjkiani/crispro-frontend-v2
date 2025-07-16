@@ -1,242 +1,171 @@
 import modal
 import os
-import requests
-import re
-import xml.etree.ElementTree as ET
+import time
+import logging
+import asyncio
+import uuid
+import httpx
+
 from fastapi import FastAPI, BackgroundTasks, HTTPException, Depends
 from pydantic import BaseModel
-import time
-import random
-import pandas as pd
-import sqlite3
-from typing import Optional
-from fastapi.responses import JSONResponse
-from Bio import SeqIO
-import logging
-import httpx
-from modal import App, asgi_app, Image
 from sqlalchemy.orm import Session
 from contextlib import asynccontextmanager
 
-# The sys.path hack is removed. Imports will now be absolute.
+# Local application imports
+from services.command_center import database
+from services.command_center.models import BattlePlan as BattlePlanModel, Patient, Mutation
+from services.command_center.schemas import PatientDataPacket, BattlePlanResponse
+# Import our new, dedicated client
+from tools.command_center_client import CommandCenterClient
 
-from services.command_center.database import SessionLocal, engine, get_db
-from services.command_center.models import Base, BattlePlan as BattlePlanModel
-from services.command_center.schemas import BattlePlan, PatientDataPacket, BattlePlanResponse, GuideDesignResponse
-
-
-# Configure logging
+# --- App Setup ---
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --- Lifespan Manager & DB Setup ---
-# NOTE: The imports for models and db setup are now lazy-loaded inside the class
-# to avoid top-level import errors in Modal.
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # This context manager can be used for other startup/shutdown logic if needed,
-    # but the primary db setup is now handled in the class @modal.enter()
-    yield
-
 fastapi_app = FastAPI(
     title="CRISPR Assistant - AI General Command Center",
-    version="2.0",
-    description="The central nervous system for orchestrating genomic threat analysis and countermeasure design.",
-    lifespan=lifespan
+    version="3.0",
+    description="Central nervous system for orchestrating genomic threat analysis and countermeasure design (V3 Async Workflow)."
 )
 
-# Pydantic models remain the same...
-class BattlePlanRequest(BaseModel):
-    patient_identifier: str
-    mutation_hgvs_c: str
-    mutation_hgvs_p: str
-    gene: str
-    bam_file_path: str 
-    sequence_for_perplexity: str 
-    protein_sequence: str
-    transcript_id: str
+# --- Modal App Definition ---
+# NOTE: The app name here dictates the final deployment URL
+app = modal.App("crispr-assistant-command-center-v3") 
 
-class BattlePlanResponse(BaseModel):
-    plan_id: int
-    message: str
-
-class GuideDesignRequest(BaseModel):
-    battle_plan_id: int
-    target_sequence: str
-    num_guides: int = 5
-
-class GuideDesignResponse(BaseModel):
-    battle_plan_id: int
-    message: str
-    generated_guides: list
+# FORCE REBUILD v3.1: Added a comment to invalidate the cache and force a rebuild
+# with the latest version of the tools directory.
+image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .pip_install(
+        "fastapi", "uvicorn", "sqlalchemy", "pydantic", "requests", 
+        "biopython", "pandas", "httpx", "psycopg2-binary", "cowsay"
+    )
+    .add_local_dir("services/command_center", remote_path="/root/services/command_center")
+    # Add the tools directory so the new client can be imported
+    .add_local_dir("tools", remote_path="/root/tools")
+)
 
 # --- API Endpoints ---
-# Dependency placeholder, will be properly defined in the class
-def get_db():
-    pass 
 
-# The endpoint implementations are now defined at the top level,
-# not inside the class, to avoid the 'self' parameter issue.
+@fastapi_app.post("/v3/workflow/formulate_battle_plan", status_code=201, response_model=BattlePlanResponse)
+async def formulate_battle_plan_v3(data: PatientDataPacket, db: Session = Depends(database.get_db)):
+    logger.info(f"V3: Received battle plan formulation for patient {data.patient_identifier}")
 
-ZETA_ORACLE_URL = "https://crispro--zeta-oracle-v2-api.modal.run/invoke"
+    # 1. Find or create the Patient
+    patient = db.query(Patient).filter(Patient.patient_identifier == data.patient_identifier).first()
+    if not patient:
+        patient = Patient(patient_identifier=data.patient_identifier)
+        db.add(patient); db.commit(); db.refresh(patient)
 
+    # 2. Find or create the Mutation for this Patient
+    mutation = db.query(Mutation).filter(Mutation.hgvs_p == data.mutation_hgvs_p).first()
+    if not mutation:
+        mutation = Mutation(patient_id=patient.id, gene=data.gene, hgvs_p=data.mutation_hgvs_p)
+        db.add(mutation); db.commit(); db.refresh(mutation)
 
-@fastapi_app.post("/v2/workflow/formulate_battle_plan", status_code=201, response_model=BattlePlanResponse)
-async def formulate_battle_plan_v2(
-    data: PatientDataPacket, db: Session = Depends(get_db)
-):
-    """
-    Asynchronous endpoint to formulate a new battle plan.
-    This version integrates with the Zeta Oracle for live variant scoring.
-    """
-    logger.info(f"Received battle plan formulation request for patient {data.patient_identifier}")
-
-    # Use the existing synchronous logic but run it in a thread to keep the endpoint async
-    # This is a common pattern to reuse synchronous code in an async context.
-    
-    # Critical Change: We are replacing the generic HTTP client with Modal's client
-    # to correctly handle the service-to-service communication.
-    try:
-        # Step 1: Use HTTP client instead of Modal function lookup
-        oracle_url = "https://crispro--zeta-oracle-v2-zetaoracle-api.modal.run/invoke"
-        
-        # Step 2: Prepare the payload for the oracle
-        ref_sequence = data.sequence_for_perplexity # Using this field for reference seq
-        alt_sequence = data.protein_sequence      # Using this field for alternate seq
-        
-        oracle_payload = {
-            "action": "score",
-            "params": {
-                "reference_sequence": ref_sequence,
-                "alternate_sequence": alt_sequence,
-            },
-        }
-
-        # Step 3: Make HTTP request to the oracle
-        logger.info("🧬 Calling Zeta Oracle for variant impact score via HTTP...")
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(oracle_url, json=oracle_payload)
-            response.raise_for_status()
-            oracle_results = response.json()
-        
-        logger.info(f"✅ Zeta Oracle responded: {oracle_results}")
-
-        zeta_score = oracle_results.get("zeta_score", -999.0)
-        ensemble_scores = {"zeta_score": zeta_score} # Store the score
-
-    except Exception as e:
-        logger.error(f"💥 Failed to get variant score from Zeta Oracle: {e}")
-        # Fail gracefully if the oracle is down
-        zeta_score = -999.0
-        ensemble_scores = {"zeta_score": zeta_score, "error": str(e)}
-
-
-    # Create a new battle plan entry in the database
+    # 3. Create the Battle Plan and link it to the mutation
     db_battle_plan = BattlePlanModel(
-        patient_identifier=data.patient_identifier,
-        gene=data.gene,
-        mutation_hgvs_p=data.mutation_hgvs_p,
-        status="pending_review",
-        # We now store the live score from the oracle
-        ensemble_scores=ensemble_scores,
-        perplexity_score=zeta_score, # Using perplexity field to store the main score for now
-        # ... other fields
-        structural_variants={}, 
-        evidence_features={},
-        proposed_interventions={},
+        mutation_id=mutation.id,
+        status="pending_design",
+        target_sequence=data.sequence_for_perplexity
     )
-    db.add(db_battle_plan)
-    db.commit()
-    db.refresh(db_battle_plan)
+    db.add(db_battle_plan); db.commit(); db.refresh(db_battle_plan)
 
-    logger.info(f"Battle Plan {db_battle_plan.id} created and stored.")
+    logger.info(f"V3: Battle Plan {db_battle_plan.id} for Mutation {mutation.id} created.")
     return BattlePlanResponse(plan_id=str(db_battle_plan.id), message="Battle plan formulated successfully.")
 
-@fastapi_app.post("/v2/design/guide_rna", response_model=GuideDesignResponse)
-async def design_guide_rna(request: GuideDesignRequest, db: Session = Depends(get_db)):
-    """
-    Designs guide RNAs for a specific target sequence related to a battle plan.
-    """
-    logger.info(f"Received guide RNA design request for Battle Plan ID: {request.battle_plan_id}")
-    from services.command_center import models
-
-    # 1. Find the battle plan
-    battle_plan = db.query(models.BattlePlan).filter(models.BattlePlan.id == request.battle_plan_id).first()
+async def run_guide_design_campaign_background(battle_plan_id: int, db: Session):
+    logger.info(f"V3 BACKGROUND TASK: Started for Battle Plan ID: {battle_plan_id}")
+    
+    battle_plan = db.query(BattlePlanModel).filter(BattlePlanModel.id == battle_plan_id).first()
     if not battle_plan:
-        raise HTTPException(status_code=404, detail="Battle Plan not found")
+        logger.error(f"[BP {battle_plan_id}] Battle Plan not found.")
+        db.close(); return
 
-    # 2. Call the Evo2 service to generate guides
-    logger.info("Requesting guide RNA generation from Evo 2 service...")
-    evo_service_url = "https://crispro--evo2-perplexity-service-evo2service-web-app.modal.run/generate_guide_rna"
-    generated_guides = []
+    battle_plan.status = "design_in_progress"; db.commit()
+
+    client = CommandCenterClient()
     
-    async with httpx.AsyncClient(follow_redirects=True) as client:
-        try:
-            response = await client.post(
-                evo_service_url,
-                json={"target_sequence": request.target_sequence, "num_guides": request.num_guides},
-                timeout=300.0
-            )
-            response.raise_for_status()
-            generated_guides = response.json().get("generated_guides", [])
-        except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error calling Evo2 service for guide generation: {e.response.text}")
-            raise HTTPException(status_code=500, detail="Failed to generate guide RNAs from Evo2 service")
-        except httpx.RequestError as e:
-            logger.error(f"Request error calling Evo2 service for guide generation: {e}")
-            raise HTTPException(status_code=500, detail="Failed to connect to Evo2 service")
+    try:
+        # Step 1: Forge Candidates with ZetaForge (Live)
+        guides = await client.forge_guides(battle_plan.target_sequence)
+        if "error" in guides:
+            raise Exception(f"ZetaForge failed: {guides['details']}")
+        
+        if not guides:
+            raise Exception("ZetaForge returned no guide candidates.")
 
-    # 3. Store the generated guides in the battle plan
-    if generated_guides:
-        battle_plan.proposed_interventions = {"guides": generated_guides}
-        db.commit()
-        db.refresh(battle_plan)
-        logger.info(f"Stored {len(generated_guides)} generated guides in Battle Plan {request.battle_plan_id}")
+        # Step 2: Score and Validate (using a mix of live and mock clients)
+        # Note: We run these in parallel for efficiency
+        logger.info(f"[BP {battle_plan_id}] Running parallel validation for {len(guides)} candidates...")
+        oracle_task = client.score_guides_with_oracle(guides, battle_plan.target_sequence)
+        safety_task = client.check_off_targets_with_blast(guides)
+        immuno_task = client.check_immunogenicity(guides)
+
+        scored_guides, safety_data, immuno_data = await asyncio.gather(
+            oracle_task, safety_task, immuno_task
+        )
+        
+        # Step 3: Consolidate and Rank (mock ranking for now)
+        logger.info(f"[BP {battle_plan_id}] Consolidating results into guide dossiers...")
+        guide_dossiers = []
+        # Simple consolidation by matching guide sequence
+        for guide in guides:
+            dossier = {"guide_sequence": guide}
+            # Find corresponding data from other services
+            dossier.update(next((item for item in scored_guides if item["guide_sequence"] == guide), {}))
+            dossier.update(next((item for item in safety_data if item["guide_sequence"] == guide), {}))
+            dossier.update(next((item for item in immuno_data if item["guide_sequence"] == guide), {}))
+            
+            # Mock "Assassin Score" calculation
+            zeta_score = dossier.get("zeta_score", 0)
+            off_targets = dossier.get("off_target_count", 1) # avoid division by zero
+            immuno_score = dossier.get("immunogenicity_score", 1)
+            dossier["assassin_score"] = (zeta_score * 0.6) + ((1 - off_targets) * 0.3) + ((1 - immuno_score) * 0.1)
+            
+            guide_dossiers.append(dossier)
+
+        # Sort by the mock score
+        guide_dossiers.sort(key=lambda x: x["assassin_score"], reverse=True)
+
+        battle_plan.results = {"guides": guide_dossiers}
+        battle_plan.status = "interventions_designed"
+        logger.info(f"✅ Stored {len(guide_dossiers)} designs for Battle Plan {battle_plan_id}")
+
+    except Exception as e:
+        logger.error(f"💥 V3 guide design FAILED for BP {battle_plan_id}: {e}", exc_info=True)
+        battle_plan.status = "design_failed"
+        battle_plan.results = {"error": str(e)}
     
-    return GuideDesignResponse(
-        battle_plan_id=request.battle_plan_id,
-        message="Guide RNA design process completed.",
-        generated_guides=generated_guides
-    )
+    finally:
+        db.commit(); db.close()
 
-# --- Modal App Definition ---
-app = App("crispr-assistant-command-center-v2")
+@fastapi_app.post("/v3/workflow/execute_guide_design_campaign/{battle_plan_id}", status_code=202)
+async def execute_guide_design_campaign(battle_plan_id: int, background_tasks: BackgroundTasks, db: Session = Depends(database.get_db)):
+    battle_plan = db.query(BattlePlanModel).filter(BattlePlanModel.id == battle_plan_id).first()
+    if not (battle_plan and battle_plan.target_sequence):
+        raise HTTPException(status_code=404, detail="Battle Plan or target sequence not found")
 
-image = Image.debian_slim(python_version="3.11").pip_install(
-    "fastapi", "uvicorn", "sqlalchemy", "pydantic", "requests", "biopython", "pysam", "pandas", "httpx"
-).add_local_dir("tools", remote_path="/root/tools").add_local_dir("services", remote_path="/root/services").add_local_dir("data", remote_path="/root/data")
+    db_session_for_task = database.SessionLocal()
+    background_tasks.add_task(run_guide_design_campaign_background, battle_plan_id, db_session_for_task)
+    return {"message": "Guide design campaign started.", "battle_plan_id": battle_plan_id}
 
-@app.cls(image=image, timeout=1200)
+@fastapi_app.get("/v3/battle_plan/{battle_plan_id}")
+async def get_battle_plan_status_and_results(battle_plan_id: int, db: Session = Depends(database.get_db)):
+    battle_plan = db.query(BattlePlanModel).filter(BattlePlanModel.id == battle_plan_id).first()
+    if not battle_plan: raise HTTPException(status_code=404, detail="Battle Plan not found")
+    return {"battle_plan_id": battle_plan.id, "status": battle_plan.status, "results": battle_plan.results}
+
+# --- Modal Class Definition ---
+@app.cls(image=image, timeout=2000)
 class CommandCenter:
     @modal.enter()
     def setup(self):
-        """This runs once when the container starts."""
-        import sys
-        sys.path.append('/root')
-        
-        # Lazy import and initialize database components
-        global get_db_real, models
-        from services.command_center import models
-        from services.command_center import database
-        
-        # CRITICAL: Initialize the database first
+        logger.info("--- COMMAND CENTER DEPLOYMENT V3.2 (LIVE BLAST) ---")
         database.initialize_database()
-        
-        # Now access the initialized engine and SessionLocal from the module
-        models.Base.metadata.create_all(bind=database.engine)
-        
-        def get_db_real():
-            db = database.SessionLocal()
-            try:
-                yield db
-            finally:
-                db.close()
-        
-        # Override the placeholder dependency
-        fastapi_app.dependency_overrides[get_db] = get_db_real
-        logger.info("Database tables created and dependency overridden.")
 
     @modal.asgi_app()
-    def api(self):
-        return fastapi_app 
+    def api(self): return fastapi_app
+
+@fastapi_app.get("/")
+def read_root(): return {"message": "Command Center V3 is operational."} 

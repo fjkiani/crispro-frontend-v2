@@ -1,7 +1,15 @@
 import streamlit as st
 import requests
 import os
+import sys
 import json
+import time
+import streamlit_gosling as st_gos
+from typing import Dict
+
+# Add the project root to the Python path to allow for tool imports
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from tools.ui_enhancements import (
     DemoFlowManager, 
     ContextualExplainer, 
@@ -15,9 +23,9 @@ from tools.ui_enhancements import (
 # Import RUNX1 integration tools
 from tools.runx1_integration_plan import (
     integrate_runx1_analysis,
-    design_runx1_intervention,
     create_runx1_genomic_browser,
-    generate_runx1_clinical_report
+    generate_runx1_clinical_report,
+    run_live_intervention_design
 )
 
 st.set_page_config(
@@ -37,8 +45,8 @@ demo_manager.show_progress_indicator()
 
 # --- Environment & API Configuration ---
 def get_command_center_url():
-    """Retrieves the Command Center URL from environment variables."""
-    return "https://crispro--command-center-commandcenter-api.modal.run"
+    """Retrieves the Command Center URL from the live V3 deployment."""
+    return "https://crispro--crispr-assistant-command-center-v3-commandcenter-api.modal.run"
 
 COMMAND_CENTER_URL = get_command_center_url()
 ASSESS_THREAT_ENDPOINT = "/workflow/assess_threat"
@@ -125,6 +133,101 @@ def display_runx1_analysis_results(result, variant_type="germline"):
         st.markdown("**Genomic Context:**")
         st.markdown(f"- Position: {genomic_context.get('position', 'Unknown')}")
         st.markdown(f"- Context: {genomic_context.get('context_description', 'No description')}")
+
+
+def display_genomic_browser(browser_data: Dict):
+    """
+    Constructs and displays an interactive genomic browser using streamlit-gosling.
+    """
+    if not browser_data:
+        st.warning("No data available for genomic browser.")
+        return
+
+    st.subheader("🛰️ Genomic Browser: Target Locus")
+
+    # Extract data for visualization
+    center_pos = browser_data.get("center_position", 0)
+    window_size = browser_data.get("window_size", 5000)
+    domain = [center_pos - window_size, center_pos + window_size]
+    
+    # Prepare tracks for Gosling
+    # Track 1: Ideogram
+    ideogram_track = {
+        "data": {"type": "json", "values": [{"chromosome": "chr21"}]},
+        "mark": "rect",
+        "encoding": {
+            "x": {"field": "chromosome", "type": "nominal"},
+            "color": {"value": "lightgray"},
+            "stroke": {"value": "gray"},
+            "strokeWidth": {"value": 1}
+        },
+        "width": 800, "height": 30
+    }
+
+    # Track 2: Gene Structure
+    gene_track_data = []
+    gene_info = browser_data.get("gene_structure", {})
+    for exon in gene_info.get("exons", []):
+        gene_track_data.append({"start": exon[0], "end": exon[1], "type": "exon"})
+    
+    gene_track = {
+        "data": {"type": "json", "values": gene_track_data},
+        "mark": "rect",
+        "x": {"field": "start", "type": "genomic", "domain": domain},
+        "xe": {"field": "end", "type": "genomic"},
+        "color": {"value": "blue"},
+        "tooltip": [{"field": "type", "type": "nominal"}]
+    }
+
+    # Track 3: Variants and Guides
+    points_data = []
+    # Add patient variant
+    points_data.append({
+        "position": center_pos, 
+        "label": "Patient Mutation", 
+        "color": "red",
+        "size": 20
+    })
+    # Add designed guides
+    if 'intervention_design' in st.session_state:
+        guides = st.session_state.intervention_design.get("guide_design", {}).get("all_guides", [])
+        for guide in guides:
+            # We need to calculate the guide's position, this is a placeholder
+            # Assuming the guide sequence is found within the context sequence
+            context_seq = browser_data.get("sequence_context", {}).get("context_sequence", "")
+            guide_seq = guide.get("guide_sequence", "")
+            if guide_seq in context_seq:
+                guide_start = center_pos - 100 + context_seq.find(guide_seq)
+                points_data.append({
+                    "position": guide_start,
+                    "label": f"Guide: {guide.get('assassin_score', 0):.2f}",
+                    "color": "purple",
+                    "size": 10
+                })
+
+    points_track = {
+        "data": {"type": "json", "values": points_data},
+        "mark": "point",
+        "x": {"field": "position", "type": "genomic", "domain": domain},
+        "color": {"field": "color", "type": "nominal", "scale": {"range": ["red", "purple"]}},
+        "size": {"field": "size", "type": "quantitative"},
+        "tooltip": [{"field": "label", "type": "nominal"}]
+    }
+
+    # Combine tracks into a Gosling spec
+    spec = {
+      "title": "RUNX1 Locus",
+      "layout": "linear",
+      "arrangement": "vertical",
+      "centerRadius": 0.8,
+      "views": [
+        {"tracks": [ideogram_track]},
+        {"tracks": [gene_track, points_track]}
+      ]
+    }
+    
+    st_gos.from_json(spec=spec, height=400)
+
 
 # Demo mode introduction
 if demo_manager.demo_mode:
@@ -305,11 +408,52 @@ if 'runx1_somatic_result' in st.session_state and st.session_state.runx1_somatic
         if demo_manager.demo_mode:
             demo_manager.mark_step_complete("somatic_analysis")
 
-st.markdown("---")
+# --- Step 3: Intervention Design ---
+if 'runx1_germline_result' in st.session_state:
+    st.markdown("---")
+    st.subheader("🎯 Step 3: Design Precision Intervention")
+    
+    if demo_manager.demo_mode:
+        st.info("""
+        **💡 Enhanced AI Analysis:**
+        Leveraging our AI General Command Center, we will now design a precision
+        therapeutic intervention for the identified target variant.
+        - **Live AI Guide Design:** Using our Evo2-powered workflow.
+        - **Comprehensive Scoring:** Applying the "Assassin Score" to rank guides.
+        - **Safety & Efficacy:** Mocked BLAST and immunogenicity checks.
+        """)
 
-# Enhanced Digital Twin Summary
-if 'runx1_somatic_result' in st.session_state and st.session_state.runx1_somatic_result:
-    st.subheader("🎯 Digital Twin Complete: Enhanced Patient Model")
+    if st.button("🚀 Design Precision Intervention", key="design_intervention_germline"):
+        with st.spinner("Engaging AI General Command Center... Please wait."):
+            st.session_state.intervention_design = run_live_intervention_design(st.session_state.germline_variant)
+
+    # Display intervention design results
+    if "intervention_design" in st.session_state and st.session_state.intervention_design:
+        design = st.session_state.intervention_design
+        st.success("✅ **Precision Intervention Designed**")
+        
+        # Display results using Apple-style cards
+        results_display = AppleStyleResultsDisplay(design)
+        results_display.display()
+
+        # Display genomic browser
+        if "target_variant" in st.session_state:
+            variant = st.session_state.target_variant
+            guides = design.get("guides", [])
+            browser_data = create_runx1_genomic_browser(
+                variant_position=variant.get("position", 36207648),
+                window=10000,
+                guides=guides
+            )
+            display_genomic_browser(browser_data)
+
+# Clinical Decision Support
+if 'runx1_germline_result' in st.session_state:
+    with col2:
+        # Re-check to avoid creating empty space if analysis not done
+        if 'somatic_result' in st.session_state and st.session_state.somatic_result:
+            st.markdown("---")
+            st.subheader("Clinical Decision Support")
     
     # Get both results
     germline_result = st.session_state.runx1_germline_result
@@ -421,7 +565,7 @@ if 'runx1_somatic_result' in st.session_state and st.session_state.runx1_somatic
             with st.spinner("🧠 Designing CRISPR therapeutic intervention..."):
                 # Get the target variant (somatic for intervention)
                 target_variant = somatic_result.get("somatic_analysis", {}).get("variant", {})
-                intervention_result = design_runx1_intervention(target_variant, "crispr_correction")
+                intervention_result = run_live_intervention_design(target_variant) # Changed to run_live_intervention_design directly
                 
                 if intervention_result:
                     st.session_state.intervention_result = intervention_result

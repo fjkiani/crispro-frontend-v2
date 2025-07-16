@@ -1,14 +1,16 @@
-import datetime
 from sqlalchemy import (
     Column,
     Integer,
     String,
-    DateTime,
+    Float,
     ForeignKey,
+    DateTime,
     JSON,
-    Float
+    Text
 )
 from sqlalchemy.orm import relationship
+from datetime import datetime
+
 from .database import Base
 
 class Patient(Base):
@@ -22,8 +24,7 @@ class Mutation(Base):
     id = Column(Integer, primary_key=True, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"))
     gene = Column(String)
-    hgvs_c = Column(String)
-    hgvs_p = Column(String)
+    hgvs_p = Column(String, unique=True) # Assuming protein change is unique for simplicity
     
     patient = relationship("Patient", back_populates="mutations")
     battle_plans = relationship("BattlePlan", back_populates="mutation")
@@ -31,23 +32,13 @@ class Mutation(Base):
 class BattlePlan(Base):
     __tablename__ = "battle_plans"
     id = Column(Integer, primary_key=True, index=True)
-    mutation_id = Column(Integer, ForeignKey("mutations.id"), nullable=True)  # Make optional for now
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    mutation_id = Column(Integer, ForeignKey("mutations.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    status = Column(String, default="pending_design")
+    target_sequence = Column(Text, nullable=True)
+    results = Column(JSON, default={})
+    
+    mutation = relationship("Mutation", back_populates="battle_plans")
 
-    # Flattened fields for direct API usage
-    patient_identifier = Column(String, index=True)
-    gene = Column(String)
-    mutation_hgvs_p = Column(String)
-    status = Column(String, default="pending_review")
-
-    # Legacy field for general data
-    plan_data = Column(JSON)
-
-    # New fields for Guardian Protocol v2
-    structural_variants = Column(JSON)
-    ensemble_scores = Column(JSON)
-    perplexity_score = Column(Float)
-    evidence_features = Column(JSON)
-    proposed_interventions = Column(JSON) # To store generated guide RNAs
-
-    mutation = relationship("Mutation", back_populates="battle_plans") 
+    def __repr__(self):
+        return f"<BattlePlan(id={self.id}, mutation_id='{self.mutation_id}', status='{self.status}')>" 

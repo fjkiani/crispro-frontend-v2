@@ -1,3 +1,12 @@
+import pandas as pd
+import os
+import sys
+
+# Add project root to the Python path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 import logging
 from typing import List, Dict, Any
 from tools.digital_twin_framework import DigitalTwinBase
@@ -7,7 +16,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # --- Gene Sets for Myeloma Drug Response Analysis ---
-RAS_MAPK_PATHWAY_GENES = ["KRAS", "NRAS", "BRAF"]
+RAS_MAPK_PATHWAY_GENES = ["KRAS", "NRAS", "BRAF", "MAP2K1", "MAPK1"]
 TP53_GENE = ["TP53"]
 
 class MyelomaDigitalTwin(DigitalTwinBase):
@@ -55,16 +64,16 @@ def predict_myeloma_drug_response(patient_mutations: List[Dict[str, Any]]) -> Di
     """
     logger.info("Initializing Myeloma Digital Twin analysis...")
     myeloma_twin = MyelomaDigitalTwin()
-    results = myeloma_twin.analyze_patient_mutations(patient_mutations)
+    results = myeloma_twin.run_analysis(patient_mutations)
     
     # Adapt the core analysis output to the format expected by the Streamlit page
     # This keeps the UI decoupled from the core framework's data structure
     final_output = {
         "prediction": results["prediction"],
-        "detailed_analysis": results["detailed_analysis"],
+        "detailed_analysis": results["variant_analysis"],
     }
     # Add the pathway scores to the top level of the dictionary
-    final_output.update(results["pathway_impact_scores"])
+    final_output.update(results["pathway_scores"])
 
     logger.info(f"Final prediction generated: {final_output['prediction']}")
     

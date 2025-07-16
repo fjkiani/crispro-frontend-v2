@@ -1,20 +1,20 @@
 import streamlit as st
 import sys
 import os
+import pandas as pd
 
-# Add the tools directory to the path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'tools'))
+# --- 🚀 UPGRADE: Add project root to path for robust imports ---
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, project_root)
 
-try:
-    from runx1_integration_plan import RUNX1IntegrationPlan
-    from runx1_data_loader import RUNX1DataLoader
-    from runx1_progression_modeler import RUNX1ProgressionModeler
-    from runx1_genomic_browser import RUNX1GenomicBrowser
-    from runx1_demo_scenarios import RUNX1DemoScenarios
-    RUNX1_AVAILABLE = True
-except ImportError as e:
-    st.error(f"RUNX1 components not available: {e}")
-    RUNX1_AVAILABLE = False
+# --- 🚀 UPGRADE: Import real arsenal tools ---
+from tools.runx1_integration_plan import RUNX1IntegrationPlan
+from tools.runx1_data_loader import RUNX1DataLoader
+from tools.runx1_progression_modeler import RUNX1ProgressionModeler
+from tools.runx1_genomic_browser import RUNX1GenomicBrowser
+from tools.runx1_demo_scenarios import RUNX1DemoScenarios
+from tools.intelligent_guide_finder import find_intelligent_guides
+from tools.chopchop_integration import ChopChopIntegration
 
 st.set_page_config(
     page_title="RUNX1-FPD Platform",
@@ -24,6 +24,12 @@ st.set_page_config(
 
 st.title("🧬 RUNX1-FPD Precision Medicine Platform")
 st.markdown("### AI-Powered Clinical Decision Support for RUNX1 Familial Platelet Disorder")
+
+try:
+    RUNX1_AVAILABLE = True
+except ImportError as e:
+    st.error(f"RUNX1 components not available: {e}")
+    RUNX1_AVAILABLE = False
 
 if not RUNX1_AVAILABLE:
     st.error("RUNX1 platform components are not available. Please check the installation.")
@@ -40,6 +46,10 @@ if 'runx1_genomic_browser' not in st.session_state:
     st.session_state.runx1_genomic_browser = RUNX1GenomicBrowser()
 if 'runx1_demo_scenarios' not in st.session_state:
     st.session_state.runx1_demo_scenarios = RUNX1DemoScenarios()
+# --- 🚀 UPGRADE: Add ChopChop Scorer to session state ---
+if 'chopchop_scorer' not in st.session_state:
+    st.session_state.chopchop_scorer = ChopChopIntegration()
+
 
 # Sidebar for navigation
 st.sidebar.title("🧬 RUNX1 Platform")
@@ -51,9 +61,9 @@ mode = st.sidebar.selectbox(
 if mode == "Patient Analysis":
     st.header("🔬 Patient Analysis Workflow")
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
+            col1, col2 = st.columns(2)
+            
+            with col1:
         st.subheader("Patient Information")
         patient_id = st.text_input("Patient ID", "RUNX1_001")
         patient_age = st.number_input("Age", min_value=0, max_value=120, value=45)
@@ -84,11 +94,38 @@ if mode == "Patient Analysis":
                         'integration': integration_result
                     }
                     
+                    # --- 🚀 UPGRADE: Execute real therapeutic design pipeline ---
+                    st.write("### 🔬 Designing Therapeutic Interventions...")
+                    
+                    # --- 🚀 UPGRADE: DYNAMIC TARGET ACQUISITION ---
+                    st.write(f"🧬 Acquiring target coordinates for **{germline_variant}**...")
+                    variant_position = st.session_state.runx1_data_loader.get_variant_coordinates_by_id(germline_variant)
+                    
+                    if not variant_position:
+                        st.error(f"🚨 **Targeting Failed:** Could not find genomic coordinates for variant ID '{germline_variant}'. Please check the ID and VCF data.")
+                        st.stop()
+
+                    st.success(f"✅ Target acquired at genomic position: **{variant_position}**")
+                    locus = f"chr21:{variant_position}-{variant_position + 1}"
+
+                    st.write(f"🔥 Launching intelligent guide finder for locus: **{locus}**")
+                    guides = find_intelligent_guides(locus, "hg19", "NGG")
+
+                    if guides is not None and not guides.empty:
+                        st.write(f"✅ Found {len(guides)} potential guides. Scoring with ChopChop...")
+                        # Assuming guides is a DataFrame with a 'guide_sequence' column
+                        guide_list = guides['guide_sequence'].tolist()
+                        scored_guides = st.session_state.chopchop_scorer.score_guides(guide_list, target_gene="RUNX1")
+                        st.session_state.analysis_results['designed_guides'] = scored_guides.to_dict('records')
+                    else:
+                        st.session_state.analysis_results['designed_guides'] = []
+                        st.warning("Could not find any guides using the intelligent guide finder.")
+                    
                     st.success("✅ Analysis complete!")
                     
                 except Exception as e:
                     st.error(f"Analysis failed: {str(e)}")
-    
+        
     with col2:
         st.subheader("Analysis Results")
         if 'analysis_results' in st.session_state:
@@ -106,17 +143,46 @@ if mode == "Patient Analysis":
                     for event in prog['timeline']:
                         st.write(f"**{event['stage']}**: {event['description']}")
             
-            # Display integration results
-            if 'integration' in results:
-                integ = results['integration']
-                st.subheader("AI Analysis Summary")
-                st.write(integ.get('summary', 'No summary available'))
+            # --- 🚀 UPGRADE: Display real, scored guide candidates instead of mock data ---
+            if 'designed_guides' in results and results['designed_guides']:
+                st.subheader("🎯 Therapeutic Guide Candidates")
                 
-                # Display interventions
-                if 'interventions' in integ:
-                    st.subheader("Recommended Interventions")
-                    for intervention in integ['interventions']:
-                        st.write(f"• {intervention}")
+                # Create a DataFrame for better display
+                guides_df = pd.DataFrame(results['designed_guides'])
+                
+                # Display top guides in a structured way
+                for index, guide in guides_df.head().iterrows():
+                    # Use a consistent score, fallback if a specific score isn't there.
+                    score = guide.get('Overall Score', guide.get('Efficacy', 0))
+                    with st.expander(f"**Guide: `{guide['Sequence']}`** | Score: {score:.2f}"):
+                        col1, col2, col3 = st.columns(3)
+                        col1.metric("On-Target Efficacy", f"{guide.get('Efficacy', 'N/A')}")
+                        col2.metric("Specificity", f"{guide.get('Specificity', 'N/A')}")
+                        col3.metric("GC Content", f"{guide.get('GC', 'N/A'):.1%}")
+                        
+                        st.write("**Full Scoring Details:**")
+                        st.json(guide)
+                
+                with st.expander("Show all candidates"):
+                    st.dataframe(guides_df)
+
+            elif 'integration' in results and 'interventions' in results['integration']:
+                # Fallback to old mock data if new design fails
+                st.subheader("Recommended Interventions (Mock Fallback)")
+                for intervention in results['integration']['interventions']:
+                    st.write(f"• {intervention}")
+            
+# Display integration results - This part is now superseded by the detailed guide display
+# if 'integration' in results:
+# integ = results['integration']
+# st.subheader("AI Analysis Summary")
+# st.write(integ.get('summary', 'No summary available'))
+                
+# Display interventions - This is the mock section we are replacing
+# if 'interventions' in integ:
+# st.subheader("Recommended Interventions")
+# for intervention in integ['interventions']:
+# st.write(f"• {intervention}")
 
 elif mode == "Demo Scenarios":
     st.header("🎭 Demo Scenarios")
@@ -136,9 +202,9 @@ elif mode == "Demo Scenarios":
     if 'current_scenario' in st.session_state:
         scenario = st.session_state.current_scenario
         
-        col1, col2 = st.columns(2)
-        
-        with col1:
+    col1, col2 = st.columns(2)
+    
+    with col1:
             st.subheader("Patient Profile")
             st.write(f"**Name**: {scenario.get('patient_name', 'Unknown')}")
             st.write(f"**Age**: {scenario.get('age', 'Unknown')}")
@@ -149,8 +215,8 @@ elif mode == "Demo Scenarios":
                 genetic = scenario['genetic_profile']
                 st.write(f"**Germline**: {genetic.get('germline_variant', 'Unknown')}")
                 st.write(f"**Somatic**: {', '.join(genetic.get('somatic_variants', []))}")
-        
-        with col2:
+    
+    with col2:
             st.subheader("Clinical Analysis")
             if 'analysis_results' in scenario:
                 analysis = scenario['analysis_results']
@@ -182,7 +248,7 @@ elif mode == "Genomic Browser":
                     st.success("✅ Region loaded!")
                 except Exception as e:
                     st.error(f"Failed to load region: {str(e)}")
-    
+        
     with col2:
         st.subheader("Genomic View")
         if 'current_region' in st.session_state:
@@ -197,7 +263,7 @@ elif mode == "Genomic Browser":
                 st.subheader("Genomic Features")
                 for feature in region['features']:
                     st.write(f"• **{feature['type']}**: {feature['name']} ({feature['start']}-{feature['end']})")
-            
+                
             # Display variants
             if 'variants' in region:
                 st.subheader("Variants in Region")

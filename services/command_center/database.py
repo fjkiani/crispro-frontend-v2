@@ -38,7 +38,9 @@ def initialize_database(db_url: str = SQLALCHEMY_DATABASE_URL):
     )
     
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    # The Base is already declared, so we don't need to return it.
+    
+    # Create all tables in the database
+    Base.metadata.create_all(bind=engine)
 
 # --- Utility Functions ---
 async def run_in_threadpool(sync_func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:

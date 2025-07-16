@@ -1,169 +1,181 @@
-"""
-CRISPR Assistant - Command Center Client
-
-This module provides a client interface for interacting with the AI General Command Center.
-It handles battle plan formulation, patient data management, and guide RNA design.
-"""
 import os
 import httpx
 import json
-import random
+import asyncio
+import logging
+import modal
+from xml.etree import ElementTree as ET
 
-# Import shared schemas from the service
-from services.command_center.schemas import PatientDataPacket, BattlePlan, BattlePlanResponse, GuideDesignResponse
+# --- App Setup ---
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# --- CRUCIAL: The CommandCenter URL should be managed via environment variables ---
-# This allows us to switch between local testing and live deployment without code changes.
-# For local development, you might set this to "http://127.0.0.1:8000"
-COMMAND_CENTER_URL = os.environ.get("COMMAND_CENTER_URL", "https://crispro--command-center-commandcenter-api.modal.run")
+# --- Service URLs ---
+# These should match your live Modal deployments.
+COMMAND_CENTER_URL = os.environ.get("COMMAND_CENTER_URL", "https://crispro--crispr-assistant-command-center-v3-commandcenter-api.modal.run")
+ZETA_FORGE_URL = "https://crispro--evo-service-evoservice-api.modal.run" # Corrected from deployment logs
+ZETA_ORACLE_URL = "https://crispro--zetascorer-api.modal.run" # Placeholder - Needs to be deployed
+BLAST_SERVICE_URL = "blast-service-human" # This is the Modal app name for direct calls
+IMMUNOGENICITY_SERVICE_URL = "mock" # Placeholder
 
-def initiate_germline_correction(corrected_sequence: str, target_site_context: str, arm_length: int = 500, log_callback=None):
+class CommandCenterClient:
     """
-    Calls the CommandCenter's germline correction blueprint workflow.
-
-    Args:
-        corrected_sequence (str): The healthy/reference DNA sequence for the target region.
-        target_site_context (str): The genomic coordinates for the broader context, e.g., a ~4kb region.
-        arm_length (int, optional): The desired length of the homology arms. Defaults to 500.
-        log_callback (function, optional): A function to stream log messages to.
-
-    Returns:
-        pandas.DataFrame: A DataFrame containing the prioritized list of guide RNA candidates,
-                          enriched with placeholder scores for the UI.
+    An asynchronous client to orchestrate guide design campaigns 
+    through the CRISPR Assistant's microservices.
     """
-    endpoint = f"{COMMAND_CENTER_URL}/workflow/design_germline_correction"
-    
-    payload = {
-        "corrected_sequence": corrected_sequence,
-        "target_site_context": target_site_context,
-        "arm_length": arm_length,
-    }
 
-    if log_callback:
-        log_callback("Connecting to CommandCenter...")
-        log_callback(f"  Endpoint: {endpoint}")
-        payload_summary = payload.copy()
-        payload_summary['corrected_sequence'] = f"{payload_summary['corrected_sequence'][:30]}..."
-        log_callback(f"  Payload: {json.dumps(payload_summary, indent=2)}")
+    async def _make_request(self, client, method, url, **kwargs):
+        """A helper to make async HTTP requests with error handling."""
+        try:
+            response = await client.request(method, url, **kwargs)
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP error for {e.request.url}: {e.response.status_code} - {e.response.text}")
+            return {"error": f"HTTP {e.response.status_code}", "details": e.response.text}
+        except httpx.RequestError as e:
+            logger.error(f"Request error for {e.request.url}: {e}")
+            return {"error": "Request failed", "details": str(e)}
 
-    try:
-        response = requests.post(endpoint, json=payload, timeout=300, verify=False)
-        response.raise_for_status()
-        blueprint = response.json()
+    async def forge_guides(self, target_sequence: str, num_guides: int = 10):
+        """
+        Calls ZetaForge (evo-service) to generate guide RNA candidates.
+        """
+        async with httpx.AsyncClient(timeout=600.0) as client:
+            logger.info(f"Calling ZetaForge to generate {num_guides} guides for sequence.")
+            
+            # Step 1: Start the generation job
+            start_payload = {"target_sequence": target_sequence, "num_guides": num_guides}
+            start_url = f"{ZETA_FORGE_URL}/generate"
+            start_response = await self._make_request(client, "POST", start_url, json=start_payload)
+            
+            if "error" in start_response:
+                return start_response
+            
+            job_id = start_response.get("job_id")
+            if not job_id:
+                return {"error": "Failed to get job_id from ZetaForge"}
 
-        if log_callback:
-            log_callback("✅ Success! Received response from CommandCenter.")
-            raw_response_str = json.dumps(blueprint, indent=2)
-            log_callback(f"--- Raw CommandCenter Response ---\n{raw_response_str}")
+            logger.info(f"ZetaForge job initiated with ID: {job_id}. Polling for results...")
+
+            # Step 2: Poll for the results
+            status_url = f"{ZETA_FORGE_URL}/status/{job_id}"
+            for _ in range(20): # Poll for up to 10 minutes
+                await asyncio.sleep(30)
+                status_response = await self._make_request(client, "GET", status_url)
+                if "error" in status_response:
+                    # Log the polling error but continue, as it might be transient
+                    logger.warning(f"Polling ZetaForge status failed: {status_response}. Retrying...")
+                    continue
+                
+                status = status_response.get("status")
+                logger.info(f"Polling ZetaForge... current status: '{status}'")
+                
+                if status == "completed":
+                    logger.info("ZetaForge job complete.")
+                    return status_response.get("guides", [])
+                elif status == "failed":
+                    logger.error(f"ZetaForge job failed: {status_response.get('error')}")
+                    return {"error": "ZetaForge generation failed", "details": status_response.get('error')}
+            
+            return {"error": "ZetaForge polling timed out."}
+
+    async def score_guides_with_oracle(self, guides: list[str], context_sequence: str):
+        """
+        Calls ZetaOracle to score guides for on-target efficacy.
+        (Placeholder - returns mock scores)
+        """
+        logger.warning("ZetaOracle client is a placeholder. Returning mock scores.")
+        await asyncio.sleep(1) # Simulate network latency
+        mock_scores = []
+        for i, guide in enumerate(guides):
+            mock_scores.append({
+                "guide_sequence": guide,
+                "zeta_score": 0.85 + (i * 0.01), # Mock score
+                "confidence": 0.95
+            })
+        return mock_scores
+
+    def _parse_blast_xml(self, xml_string: str, query_len: int, mismatch_threshold: int = 2) -> int:
+        """
+        Parses BLAST XML output to count significant off-target hits.
+        A 'significant' hit is one that is not the query itself and has few mismatches.
+        """
+        if not xml_string:
+            return 999 # Return a high number if BLAST fails
         
-        # --- Pass-through: Return the raw scored guides ---
-        scored_guides_data = blueprint.get("scored_guides", [])
-        if not scored_guides_data:
-            if log_callback: log_callback("NOTE: Blueprint received, but no guide candidates could be scored.")
-            return pd.DataFrame(), {}
-
-        # Also return the full blueprint for the UI to use
-        return pd.DataFrame(scored_guides_data), blueprint
-
-    except requests.exceptions.RequestException as e:
-        if log_callback:
-            log_callback(f"--- CommandCenter API Error ---")
-            log_callback(f"Failed to connect to {endpoint}. Is the service running?")
-            log_callback(f"Error details: {e}")
-        return pd.DataFrame(), {}
-    except Exception as e:
-        if log_callback:
-            log_callback(f"--- UNEXPECTED ERROR ---")
-            log_callback(f"An error occurred while processing the API response: {e}")
-        return pd.DataFrame(), {} 
-
-import requests
-import json
-import os
-
-# To run this client, you must have the CommandCenter service running.
-# You can deploy it with `modal deploy services/command_center/main.py`
-# The URL will be provided upon deployment.
-
-BASE_URL = "https://crispro--crispr-assistant-command-center-v2-commandcenter-api.modal.run"
-
-def formulate_battle_plan(patient_data):
-    """
-    Sends a request to the CommandCenter to formulate a battle plan.
-    """
-    url = f"{BASE_URL}/v2/workflow/formulate_battle_plan"
-    headers = {"Content-Type": "application/json"}
-    
-    try:
-        response = requests.post(url, data=json.dumps(patient_data), headers=headers)
-        response.raise_for_status()  # Raises an HTTPError for bad responses (4xx or 5xx)
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        print(f"An error occurred: {e}")
-        return None
-
-def get_all_patients():
-    """
-    Retrieves a list of all patients from the Command Center database.
-    """
-    url = f"{BASE_URL}/v2/data/patients"
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        print(f"An error occurred while fetching patients: {e}")
-        return []
-
-def get_latest_battle_plan_for_patient(patient_identifier: str):
-    """
-    Retrieves the most recent battle plan for a specific patient.
-    """
-    url = f"{BASE_URL}/v2/data/battle_plan/{patient_identifier}"
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        print(f"An error occurred while fetching battle plan for {patient_identifier}: {e}")
-        return None
-
-
-if __name__ == '__main__':
-    # Example Usage
-    print("Fetching all patients...")
-    patients = get_all_patients()
-    if patients:
-        print("Available patients:", patients)
+        root = ET.fromstring(xml_string)
+        off_target_count = 0
         
-        # Fetch the latest battle plan for the first patient
-        if patients:
-            patient_id_to_test = patients[0]['patient_identifier']
-            print(f"\nFetching latest battle plan for patient: {patient_id_to_test}")
-            battle_plan = get_latest_battle_plan_for_patient(patient_id_to_test)
-            if battle_plan:
-                print("Battle Plan Details:")
-                print(json.dumps(battle_plan, indent=2))
-            else:
-                print("Could not retrieve battle plan.")
+        # We look for 'Hit' elements in the XML
+        for hit in root.findall('.//Hit'):
+            # Each hit has one or more 'Hsp' (High-scoring Pair)
+            for hsp in hit.findall('.//Hsp'):
+                # We are interested in the number of mismatches
+                mismatches = int(hsp.find('Hsp_mismatch').text)
+                identity = int(hsp.find('Hsp_identity').text)
+                
+                # The on-target hit will have perfect identity and 0 mismatches
+                if identity == query_len and mismatches == 0:
+                    continue # This is the on-target sequence, ignore it
+                
+                if mismatches <= mismatch_threshold:
+                    off_target_count += 1
+                    
+        return off_target_count
 
-    else:
-        print("No patients found. Formulating a new battle plan as an example...")
-        # This is a mock patient data packet. 
-        # In a real scenario, this would come from a trusted source.
-        mock_patient_data = {
-            "patient_identifier": "DEMO_PATIENT_001",
-            "mutation_hgvs_c": "c.1907G>A",
-            "mutation_hgvs_p": "p.Arg636His",
-            "gene": "BRCA1",
-            "bam_file_path": "/data/synthetic_brca1.bam",  # This path must be accessible within the Modal container
-            "sequence_for_perplexity": "ATGC...",  # A sufficiently long sequence for the model
-            "protein_sequence": "MDLSAL...",  # The full protein sequence
-            "transcript_id": "ENST00000357654"
-        }
+    async def check_off_targets_with_blast(self, guides: list[str]):
+        """
+        Calls the live BLAST service to check for potential off-targets.
+        """
+        logger.info(f"Connecting to live BLAST service '{BLAST_SERVICE_URL}'...")
+        try:
+            # Corrected: .lookup() is a synchronous call, not awaited.
+            blast_service = modal.Cls.lookup(BLAST_SERVICE_URL)
+        except Exception as e:
+            logger.error(f"Failed to lookup Modal Cls '{BLAST_SERVICE_URL}': {e}")
+            # Return a failure state for all guides if we can't connect
+            return [{"guide_sequence": g, "off_target_count": 999} for g in guides]
+
+        async def run_search(guide):
+            logger.info(f"  BLASTing guide: {guide}")
+            try:
+                # Direct remote call to our Modal service
+                result = await blast_service.search.remote.aio(query_sequence=guide)
+                if "error" in result:
+                    logger.error(f"BLAST search for {guide} failed: {result['error']}")
+                    off_targets = 999
+                else:
+                    # Parse the XML to get a clean count
+                    off_targets = self._parse_blast_xml(result.get("raw_blast_xml", ""), len(guide))
+                
+                return {
+                    "guide_sequence": guide,
+                    "off_target_count": off_targets,
+                    "confidence": 0.99
+                }
+            except Exception as e:
+                logger.error(f"Exception during BLAST call for {guide}: {e}")
+                return {"guide_sequence": guide, "off_target_count": 999}
+
+        tasks = [run_search(guide) for guide in guides]
+        safety_data = await asyncio.gather(*tasks)
         
-        new_plan = formulate_battle_plan(mock_patient_data)
-        
-        if new_plan:
-            print("\nSuccessfully formulated new battle plan:")
-            print(json.dumps(new_plan, indent=2)) 
+        logger.info("BLAST off-target analysis complete.")
+        return safety_data
+
+    async def check_immunogenicity(self, guides: list[str]):
+        """
+        Calls the Immunogenicity service to predict immune response.
+        (Placeholder - returns mock data)
+        """
+        logger.warning("Immunogenicity client is a placeholder. Returning mock immunogenicity data.")
+        await asyncio.sleep(1) # Simulate network latency
+        mock_immuno_data = []
+        for guide in guides:
+            mock_immuno_data.append({
+                "guide_sequence": guide,
+                "immunogenicity_score": 0.05, # Low is good
+                "confidence": 0.90
+            })
+        return mock_immuno_data 

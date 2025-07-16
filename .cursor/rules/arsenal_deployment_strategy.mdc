@@ -1,4 +1,67 @@
-# 🚀 Arsenal Deployment Strategy: From Hidden Tools to Production Platform
+Project Plan: CrisPRO Studio - Unified Module Integration
+
+1.0 Mission Objective
+To implement the full suite of analysis and therapeutic design capabilities as a unified, seamless module within the CrisPRO Studio. This plan supersedes all previous fragmented, tool-based approaches. All logic will be centralized in the CommandCenter and exposed via a clean, powerful API.
+
+2.0 Doctrinal Imperative: No Rogue Agents
+Let me be crystal fucking clear. There will be no more local scripts. There will be no tools/chopchop_integration.py or tools/runx1_progression_modeler.py. All computational and analytical logic detailed below will be implemented as new workflows within our existing CommandCenter service. The Streamlit UI will be a "thin client" that does nothing but issue API calls and render the results. This is the only way to ensure scalability, security, and operational discipline.
+
+3.0 Phase I: Fortify the CommandCenter (Backend)
+Objective: To forge the new API endpoints that will power our RUNX1 module and obsolete the need for any local tools.
+
+[ ] Task 1.1: Forge the "Guide Design & Validation" Workflow.
+
+Endpoint: POST /workflow/design_and_validate_guides
+
+Action: This single, powerful endpoint will replace both the intelligent_guide_finder and chopchop_integration. It will orchestrate the entire kill chain:
+
+It receives a genomic locus.
+
+It calls the Zeta Forge to generate candidate gRNAs.
+
+It calls the Zeta Oracle to score each guide's efficacy.
+
+It calls the BLAST Service to run an off-target safety analysis.
+
+It returns a single, rank-ordered list of fully validated therapeutic candidates.
+
+[ ] Task 1.2: Forge the "Progression Modeler" Workflow.
+
+Endpoint: POST /workflow/model_progression
+
+Action: This endpoint will contain the logic for modeling clonal evolution. It will take a patient's germline and somatic mutations and execute our "second hit" simulation and analysis protocols, returning a "Probabilistic Map of Malignant Evolution."
+
+[ ] Task 1.3: Forge the "Risk Stratification" Workflow.
+
+Endpoint: POST /workflow/stratify_risk
+
+Action: This endpoint will take a patient's full data profile (genomic, clinical, family history) and return a quantitative 10-year leukemia transformation risk score, along with a recommended surveillance protocol.
+
+4.0 Phase II: Construct the Command Deck (Frontend)
+Objective: To build the intuitive user interface within CrisPRO Studio that allows a commander to wield the new CommandCenter workflows.
+
+[ ] Task 2.1: Build the "Interception Design Studio" UI.
+
+Action: Create a new page/module in our Streamlit application. This will be the UI for the /workflow/design_and_validate_guides endpoint.
+
+Note for Zo: It will have a single input for the target locus and a single "Design & Validate" button. The results will be displayed in a rich, interactive table showing the guide sequence, the "Assassin Score," and links to detailed efficacy and safety reports.
+
+[ ] Task 2.2: Build the "Progression Modeler" UI.
+
+Action: Create the UI for the /workflow/model_progression endpoint.
+
+Note for Zo: The output of this workflow—the "Probabilistic Map"—must be visualized as a dynamic, interactive graph (using a library like D3.js or Recharts), not a fucking static table.
+
+[ ] Task 2.3: Build the "Clinical Decision Support" UI.
+
+Action: Create the UI for the /workflow/stratify_risk endpoint.
+
+Note for Zo: The UI will display the risk score on a clear visual gauge (Low, Medium, High, Extreme) and output the recommended surveillance protocol in a clean, readable format that can be directly added to a patient's record.
+
+This is the plan. It is disciplined, scalable, and doctrinally sound. It ensures we build one, unified, unassailable platform, not a collection of vulnerable outposts. Execute. 🚀
+
+
+<!-- # 🚀 Arsenal Deployment Strategy: From Hidden Tools to Production Platform
 
 ## **🎯 Strategic Overview**
 
@@ -635,4 +698,4 @@ This arsenal deployment strategy transforms the Guardian Protocol from a collect
 description:
 globs:
 alwaysApply: false
----
+--- -->

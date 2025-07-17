@@ -3,6 +3,8 @@ import os
 import subprocess
 from pathlib import Path
 import shutil
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
 # --- Configuration ---
 BLAST_DB_PATH = Path("/blast_db")
@@ -18,6 +20,7 @@ DB_NAME = "grch38"
 # The database itself is built on the first run and stored in the persistent volume.
 blast_image = (
     modal.Image.debian_slim(python_version="3.11")
+    .pip_install("fastapi", "pydantic")
     .apt_install("ncbi-blast+", "wget")
     .run_commands(
         f"echo 'Downloading Human reference genome to {TMP_PATH}...'",
@@ -31,6 +34,13 @@ app = modal.App("blast-service-human", image=blast_image)
 # --- Persistent Volume for BLAST DB ---
 # This volume stores the formatted BLAST database to avoid rebuilding it on every run.
 blast_db_volume = modal.Volume.from_name("blast-db-volume-human-v2", create_if_missing=True)
+
+# --- Pydantic Model for API Input ---
+class BlastRequest(BaseModel):
+    query_sequence: str
+
+# --- FastAPI App ---
+fastapi_app = FastAPI(title="BLAST Service")
 
 @app.cls(
     volumes={str(BLAST_DB_PATH): blast_db_volume},
@@ -90,7 +100,6 @@ class BlastService:
         except Exception as e:
             print(f"❌ CRITICAL: An unexpected error occurred during database setup: {e}")
 
-    @modal.method()
     def search(self, query_sequence: str, num_mismatches: int = 3) -> dict:
         """
         Performs a BLAST search for a given sequence against the local database.
@@ -122,7 +131,7 @@ class BlastService:
         
         try:
             # Execute the command
-            subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=300)
+            process_result = subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=300)
             
             # Read the results from the output file
             with open(output_file, "r") as f:
@@ -130,13 +139,34 @@ class BlastService:
 
             print("✅ BLAST search completed successfully.")
             return {"raw_blast_xml": results_xml}
-        except subprocess.TimeoutExpired:
-            print("❌ BLAST search timed out.")
-            return {"error": "BLAST search process timed out."}
+        except subprocess.TimeoutExpired as e:
+            print(f"❌ BLAST search timed out. Stderr: {e.stderr}")
+            return {"error": "BLAST search process timed out.", "details": e.stderr}
         except subprocess.CalledProcessError as e:
             print(f"❌ BLAST search failed with exit code {e.returncode}.")
+            print(f"  - stdout: {e.stdout}")
             print(f"  - stderr: {e.stderr}")
             return {"error": "BLAST process failed.", "details": e.stderr}
+        except Exception as e:
+            print(f"❌ An unexpected error occurred during BLAST search: {e}")
+            return {"error": "An unexpected error occurred.", "details": str(e)}
+
+    # This makes the class callable as a web endpoint
+    @modal.asgi_app()
+    def web_app(self):
+        return fastapi_app
+
+@fastapi_app.post("/search")
+async def run_blast_search(request: BlastRequest):
+    """Web endpoint to run a BLAST search."""
+    blast_service = BlastService() # Create an instance
+    # Note: This is a blocking call within an async endpoint.
+    # For a real high-throughput service, we'd use .spawn() or .call_later()
+    # But for this use case, it's acceptable.
+    results = blast_service.search(request.query_sequence)
+    if "error" in results:
+        raise HTTPException(status_code=500, detail=results)
+    return results
 
 def main():
     """A simple function to test the service locally."""

@@ -90,7 +90,11 @@ async def test_v3_full_workflow_integration():
                 logger.info(f"  - Current status: '{current_status}'")
                 if current_status == "interventions_designed":
                     final_status = current_status
-                    logger.info(f"  - SUCCESS! Results are in: {status_data.get('results')}")
+                    final_results = status_data.get("results")
+                    logger.info(f"  - SUCCESS! Results are in: {final_results}")
+                    # --- ADDING MORE STRINGENT CHECK ---
+                    # We must verify that the BLAST check actually ran and didn't return a dummy value.
+                    assert final_results["guides"][0]["off_target_count"] != 999, "BLAST service failed! Off-target count is a dummy value."
                     break
                 elif current_status == "design_failed":
                     final_status = current_status

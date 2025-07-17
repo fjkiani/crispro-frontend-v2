@@ -1,8 +1,12 @@
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.orm import sessionmaker, declarative_base, Session
 import os
 import asyncio
 from typing import Callable, Any
+from . import models
+from . import schemas
+from .models import BattlePlan, Patient, Mutation
+
 
 # --- Database Configuration ---
 # This path is relative to the container's root when running in Modal.
@@ -31,6 +35,9 @@ def initialize_database(db_url: str = SQLALCHEMY_DATABASE_URL):
     """Initializes the database engine and session."""
     global engine, SessionLocal
     
+    # Import Base here to avoid circular dependencies at the module level.
+    from .models import Base
+    
     engine = create_engine(
         db_url,
         connect_args={"check_same_thread": False}, # Needed for SQLite
@@ -39,8 +46,41 @@ def initialize_database(db_url: str = SQLALCHEMY_DATABASE_URL):
     
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     
-    # Create all tables in the database
+    # Create all tables in the database using the correct Base from models
     Base.metadata.create_all(bind=engine)
+
+# --- Data Access Functions ---
+
+def create_full_battle_plan(data: schemas.PatientDataPacket, db: Session):
+    """
+    Handles the full logic of finding/creating patient, mutation, and battle plan.
+    """
+    # 1. Find or create the Patient
+    patient = db.query(Patient).filter(Patient.patient_identifier == data.patient_identifier).first()
+    if not patient:
+        patient = Patient(patient_identifier=data.patient_identifier)
+        db.add(patient)
+        db.commit()
+        db.refresh(patient)
+
+    # 2. Find or create the Mutation for this Patient
+    mutation = db.query(Mutation).filter(Mutation.hgvs_p == data.mutation_hgvs_p).first()
+    if not mutation:
+        mutation = Mutation(patient_id=patient.id, gene=data.gene, hgvs_p=data.mutation_hgvs_p)
+        db.add(mutation)
+        db.commit()
+        db.refresh(mutation)
+
+    # 3. Create the Battle Plan and link it to the mutation
+    db_battle_plan = BattlePlan(
+        mutation_id=mutation.id,
+        status="pending_design",
+        target_sequence=data.sequence_for_perplexity
+    )
+    db.add(db_battle_plan)
+    db.commit()
+    db.refresh(db_battle_plan)
+    return db_battle_plan
 
 # --- Utility Functions ---
 async def run_in_threadpool(sync_func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:

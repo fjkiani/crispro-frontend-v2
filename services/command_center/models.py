@@ -9,9 +9,10 @@ from sqlalchemy import (
     Text
 )
 from sqlalchemy.orm import relationship
+from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
 
-from .database import Base
+Base = declarative_base()
 
 class Patient(Base):
     __tablename__ = "patients"

@@ -89,7 +89,7 @@ class RUNX1DataLoader:
         else:
             logger.warning(f"Variant ID {variant_id} not found in VCF data.")
         return position
-
+        
     def load_runx1_sequence(self) -> str:
         """
         Load the 261,501 bp RUNX1 genomic reference sequence.
@@ -334,15 +334,15 @@ class RUNX1DataLoader:
                 return {"error": "Failed to fetch sequence from FASTA file."}
 
             logger.info(f"Successfully fetched sequence of length {len(sequence)}")
-            return {
-                "position": position,
+        return {
+            "position": position,
                 "window": window,
                 "context_sequence": sequence.upper()
             }
         except Exception as e:
             logger.error(f"An unexpected error occurred in get_genomic_context: {e}", exc_info=True)
             return {"error": f"An unexpected error occurred: {e}"}
-
+    
     def get_runx1_gene_info(self) -> Dict:
         """
         Get comprehensive RUNX1 gene information.

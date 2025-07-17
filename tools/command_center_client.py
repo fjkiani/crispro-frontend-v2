@@ -1,3 +1,4 @@
+# THIS IS THE V9 CLIENT. IF YOU SEE THE OLD LOGS, THE CACHE IS FUCKED.
 import os
 import httpx
 import json
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 COMMAND_CENTER_URL = os.environ.get("COMMAND_CENTER_URL", "https://crispro--crispr-assistant-command-center-v3-commandcenter-api.modal.run")
 ZETA_FORGE_URL = "https://crispro--evo-service-evoservice-api.modal.run" # Corrected from deployment logs
 ZETA_ORACLE_URL = "https://crispro--zetascorer-api.modal.run" # Placeholder - Needs to be deployed
-BLAST_SERVICE_URL = "blast-service-human" # This is the Modal app name for direct calls
+BLAST_SERVICE_URL = "https://crispro--blast-service-human-blastservice-web-app.modal.run" # Corrected to use the live web endpoint
 IMMUNOGENICITY_SERVICE_URL = "mock" # Placeholder
 
 class CommandCenterClient:
@@ -41,7 +42,7 @@ class CommandCenterClient:
         """
         Calls ZetaForge (evo-service) to generate guide RNA candidates.
         """
-        async with httpx.AsyncClient(timeout=600.0) as client:
+        async with httpx.AsyncClient(timeout=600.0, follow_redirects=True) as client:
             logger.info(f"Calling ZetaForge to generate {num_guides} guides for sequence.")
             
             # Step 1: Start the generation job
@@ -112,8 +113,11 @@ class CommandCenterClient:
             # Each hit has one or more 'Hsp' (High-scoring Pair)
             for hsp in hit.findall('.//Hsp'):
                 # We are interested in the number of mismatches
-                mismatches = int(hsp.find('Hsp_mismatch').text)
-                identity = int(hsp.find('Hsp_identity').text)
+                mismatch_node = hsp.find('Hsp_mismatch')
+                mismatches = int(mismatch_node.text) if mismatch_node is not None else 0
+                
+                identity_node = hsp.find('Hsp_identity')
+                identity = int(identity_node.text) if identity_node is not None else 0
                 
                 # The on-target hit will have perfect identity and 0 mismatches
                 if identity == query_len and mismatches == 0:
@@ -126,40 +130,35 @@ class CommandCenterClient:
 
     async def check_off_targets_with_blast(self, guides: list[str]):
         """
-        Calls the live BLAST service to check for potential off-targets.
+        Calls the live BLAST service via its web endpoint to check for potential off-targets.
         """
-        logger.info(f"Connecting to live BLAST service '{BLAST_SERVICE_URL}'...")
-        try:
-            # Corrected: .lookup() is a synchronous call, not awaited.
-            blast_service = modal.Cls.lookup(BLAST_SERVICE_URL)
-        except Exception as e:
-            logger.error(f"Failed to lookup Modal Cls '{BLAST_SERVICE_URL}': {e}")
-            # Return a failure state for all guides if we can't connect
-            return [{"guide_sequence": g, "off_target_count": 999} for g in guides]
+        logger.info(f"Connecting via HTTP to BLAST service at: {BLAST_SERVICE_URL}")
 
-        async def run_search(guide):
-            logger.info(f"  BLASTing guide: {guide}")
-            try:
-                # Direct remote call to our Modal service
-                result = await blast_service.search.remote.aio(query_sequence=guide)
-                if "error" in result:
-                    logger.error(f"BLAST search for {guide} failed: {result['error']}")
-                    off_targets = 999
-                else:
-                    # Parse the XML to get a clean count
-                    off_targets = self._parse_blast_xml(result.get("raw_blast_xml", ""), len(guide))
-                
-                return {
-                    "guide_sequence": guide,
-                    "off_target_count": off_targets,
-                    "confidence": 0.99
-                }
-            except Exception as e:
-                logger.error(f"Exception during BLAST call for {guide}: {e}")
-                return {"guide_sequence": guide, "off_target_count": 999}
+        async def run_search(client, guide):
+            logger.info(f"  BLASTing guide (V9 HTTP METHOD): {guide}")
+            payload = {"query_sequence": guide}
+            blast_url = f"{BLAST_SERVICE_URL}/search"
+            logger.info(f"    -> Calling BLAST URL: {blast_url}")
+            
+            # Use the existing helper for the HTTP request
+            result = await self._make_request(client, "POST", blast_url, json=payload, timeout=300.0)
+            
+            if "error" in result:
+                logger.error(f"BLAST search for {guide} failed: {result.get('details', result['error'])}")
+                off_targets = 999
+            else:
+                off_targets = self._parse_blast_xml(result.get("raw_blast_xml", ""), len(guide))
+            
+            return {
+                "guide_sequence": guide,
+                "off_target_count": off_targets,
+                "confidence": 0.99 # High confidence as it's from a direct BLAST query
+            }
 
-        tasks = [run_search(guide) for guide in guides]
-        safety_data = await asyncio.gather(*tasks)
+        # Create a single client for all requests
+        async with httpx.AsyncClient(follow_redirects=True) as client:
+            tasks = [run_search(client, guide) for guide in guides]
+            safety_data = await asyncio.gather(*tasks)
         
         logger.info("BLAST off-target analysis complete.")
         return safety_data

@@ -410,7 +410,7 @@ if 'runx1_somatic_result' in st.session_state and st.session_state.runx1_somatic
 
 # --- Step 3: Intervention Design ---
 if 'runx1_germline_result' in st.session_state:
-    st.markdown("---")
+st.markdown("---")
     st.subheader("🎯 Step 3: Design Precision Intervention")
     
     if demo_manager.demo_mode:

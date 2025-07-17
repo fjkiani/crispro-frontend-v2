@@ -5,11 +5,11 @@ import httpx
 from abc import ABC, abstractmethod
 import re
 import os
+import streamlit as st
 
 # --- Service URLs ---
-# Corrected to use the Zeta Oracle service, not the Evo service
-# The URL must include the class name as per this project's convention.
-ZETA_ORACLE_URL = "https://crispro--zeta-oracle-v2-zetaoracle-api.modal.run"
+# The URL is now read from Streamlit's secrets manager
+ZETA_ORACLE_URL = st.secrets["ZETA_ORACLE_URL"]
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

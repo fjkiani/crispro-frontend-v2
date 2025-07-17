@@ -18,17 +18,39 @@ This is not a new initiative. It is the logical and necessary evolution of our e
 - **Task 1.1: Archive `tools/intelligent_guide_finder.py`**. 
   - **Status: COMPLETE.** Tool was already deprecated and removed from the arsenal.
 
-### ✅ Phase II: Forge the RUNX1 Arsenal (COMPLETE)
+### ✅ Phase II: Forge the RUNX1 Arsenal (COMPLETE - DEBUGGING)
 **Objective:** To build the core, AI-powered guide design workflow within the `CommandCenter`.
 
 - **Task 2.1: Implement the `/v3/workflow/execute_guide_design_campaign` Endpoint**
-  - **Status: COMPLETE.** The `command_center` V3 service, including this endpoint and the full background workflow, has been implemented, debugged, and successfully tested end-to-end.
+  - **Status: COMPLETE, PENDING VALIDATION.** The `command_center` V3 service has been implemented. However, end-to-end integration testing has revealed a critical failure in the Kill Chain's `VALIDATE` phase. The `command_center_client` cannot communicate with the `blast-service` due to an `asyncio` conflict. A patch has been developed and is pending deployment and re-testing.
+  - **Action:** We will implement this new endpoint in `services/command_center/
+  main.py`. This is the core of the new system, orchestrating the entire guide 
+  design process. It adapts the logic from our `guide_design_module.mdc` 
+  technical plan.
+  - **Input:** `{ "battle_plan_id": int }`
+  - **Workflow Logic:**
+    1.  Load the `BattlePlanModel` for the specific RUNX1-FPD patient.
+    2.  Call the `evo-service` (`ZetaForge`) to generate guide RNA candidates 
+    for the target locus (e.g., `RUNX1`).
+    3.  Perform parallel validation for efficacy (`ZetaOracle`), safety 
+    (`BlastService`), and immunogenicity.
+    4.  Calculate the "Assassin Score" for each guide.
+    5.  Persist the results back into the `BattlePlanModel` in the database.
+    6.  Update the battle plan's status to `interventions_designed`.
 
-### ✅ Phase III: Integrate with the Patient Digital Twin (COMPLETE)
+### ✅ Phase III: Integrate with the Patient Digital Twin (COMPLETE - PENDING BACKEND FIX)
 **Objective:** To connect the new backend workflow to the frontline user interface.
 
 - **Task 3.1: Refactor `pages/1_🧬_Patient_Digital_Twin.py`**
-  - **Status: COMPLETE.** The "Design Precision Intervention" button has been successfully rewired to call the live, operational `/v3` workflow. The UI is now connected to our live-fire backend.
+  - **Status: COMPLETE, PENDING BACKEND FIX.** The "Design Precision Intervention" button is correctly wired to the `/v3` workflow. The UI is operationally ready but is blocked by the backend `blast-service` integration failure. Full functionality awaits the successful patch and redeployment of the `command_center`.
+  *Action:** The "Design Precision Intervention" button will be rewired.
+  - **New UI Logic:**
+    1. On click, the UI will first call the existing endpoint to create a 
+    `BattlePlan` for the patient.
+    2. It will then immediately call our new `/v3/workflow/
+    execute_guide_design_campaign` endpoint, passing the new `battle_plan_id`.
+    3. The UI will then poll for the updated `BattlePlanModel` and display the 
+    ranked list of guide candidates once the status is `interventions_designed`
 
 ### ➡️ Phase IV: Advanced Genomic Visualization (NEXT OBJECTIVE)
 **Objective:** To provide powerful, intuitive visualizations for the newly designed guides.
@@ -103,3 +125,4 @@ description:
 globs:
 alwaysApply: false
 ---
+ 

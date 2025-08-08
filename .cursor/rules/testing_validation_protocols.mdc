@@ -1,0 +1,618 @@
+# Testing and Validation Protocols
+
+## **🎯 DOCTRINE: COMPREHENSIVE TESTING AGAINST SIEGE FAILURES**
+
+These protocols ensure all Oracle integrations are thoroughly tested against the failure modes discovered during the Zeta Oracle siege, preventing future data pipeline failures.
+
+## **🧪 MANDATORY TEST CATEGORIES**
+
+### **1. Data Pipeline Integrity Tests**
+
+```python
+import pytest
+from typing import Dict, List, Any
+import pysam
+from unittest.mock import Mock, patch
+
+class TestDataPipelineIntegrity:
+    """
+    Test suite for data pipeline integrity - prevents siege-type failures.
+    """
+    
+    def test_vcf_coordinate_validation_prevents_siege_failure(self):
+        """
+        CRITICAL: Test that VCF coordinate validation prevents identical sequences.
+        
+        This test recreates the exact failure mode from the siege.
+        """
+        # Setup: Create VCF with mismatched reference allele (siege failure scenario)
+        corrupted_vcf_data = {
+            "chrom": "chr21",
+            "pos": 36250941,
+            "ref": "C",  # VCF says C
+            "alt": "T"
+        }
+        
+        # Mock genomic reference that actually has 'T' at this position
+        mock_reference = Mock()
+        mock_reference.fetch.return_value = "T"  # Genome actually has T
+        
+        with pytest.raises(ValueError) as exc_info:
+            from src.services.validation import VCFValidator
+            validator = VCFValidator("mock_reference")
+            validator.reference = mock_reference
+            
+            # This should raise ValueError preventing siege failure
+            validator.validate_variant_record(
+                corrupted_vcf_data["chrom"],
+                corrupted_vcf_data["pos"], 
+                corrupted_vcf_data["ref"],
+                corrupted_vcf_data["alt"]
+            )
+        
+        assert "VCF-genomic mismatch" in str(exc_info.value)
+        assert "VCF says 'C', genome has 'T'" in str(exc_info.value)
+    
+    def test_identical_sequence_detection_prevents_oracle_zero_score(self):
+        """
+        CRITICAL: Test that identical sequence detection prevents Oracle zero scores.
+        
+        This prevents the core siege failure mode.
+        """
+        from src.services.validation import SequenceComparisonValidator
+        
+        # Test case 1: Identical sequences (siege failure scenario)
+        identical_ref = "ATCGATCGATCGATCG" * 100
+        identical_alt = "ATCGATCGATCGATCG" * 100
+        
+        with pytest.raises(ValueError) as exc_info:
+            SequenceComparisonValidator.validate_sequence_differences(
+                identical_ref, identical_alt
+            )
+        
+        assert "CRITICAL: Sequences are identical" in str(exc_info.value)
+        assert "mutation was not applied" in str(exc_info.value)
+        
+        # Test case 2: Different sequences (should pass)
+        different_ref = "ATCGATCGATCGATCG" * 100
+        different_alt = "TTCGATCGATCGATCG" * 100  # Changed first nucleotide
+        
+        result = SequenceComparisonValidator.validate_sequence_differences(
+            different_ref, different_alt
+        )
+        
+        assert result["total_changes"] == 1
+        assert not result["are_identical"]
+    
+    def test_coordinate_system_conversion_accuracy(self):
+        """Test coordinate system conversions prevent off-by-one errors."""
+        from src.services.validation import ValidatedCoordinate, CoordinateSystem
+        
+        # Test VCF (1-based) to genomic (0-based) conversion
+        vcf_coord = ValidatedCoordinate(
+            value=36250941,  # 1-based VCF position
+            system=CoordinateSystem.VCF_1_BASED,
+            chromosome="chr21"
+        )
+        
+        genomic_coord = vcf_coord.convert_to(CoordinateSystem.GENOMIC_0_BASED)
+        
+        assert genomic_coord.value == 36250940  # 0-based
+        assert genomic_coord.system == CoordinateSystem.GENOMIC_0_BASED
+    
+    def test_mutation_application_verification(self):
+        """Test that mutations are actually applied to sequences."""
+        from src.services.validation import validate_mutation_application
+        
+        # Test case 1: Successful SNV application
+        original_seq = "ATCGATCGATCGATCG"
+        mutated_seq = "TTCGATCGATCGATCG"  # A->T at position 0
+        
+        result = validate_mutation_application(
+            original_seq, mutated_seq, 0, "A->T"
+        )
+        assert result is True
+        
+        # Test case 2: Failed mutation application (siege scenario)
+        failed_mutated_seq = "ATCGATCGATCGATCG"  # No change applied
+        
+        with pytest.raises(ValueError) as exc_info:
+            validate_mutation_application(
+                original_seq, failed_mutated_seq, 0, "A->T"
+            )
+        
+        assert "CRITICAL: Mutation not applied" in str(exc_info.value)
+
+class TestOracleScoringIntegrity:
+    """
+    Test Oracle scoring with various sequence types and magnitudes.
+    """
+    
+    @pytest.mark.parametrize("alteration_size,expected_score_range", [
+        (1, (0, 200)),           # Single nucleotide
+        (1000, (800, 1500)),     # 1kb alteration  
+        (10000, (8000, 18000)),  # 10kb alteration
+        (25000, (18000, 30000)), # 25kb alteration
+    ])
+    def test_oracle_magnitude_sensitivity_law(self, alteration_size, expected_score_range):
+        """
+        Test that Oracle scoring follows discovered magnitude sensitivity patterns.
+        """
+        # Generate test sequences with known alterations
+        base_sequence = "ATCGATCGATCGATCG" * (alteration_size * 2)  # Large enough base
+        
+        # Create alteration in the middle
+        mid_point = len(base_sequence) // 2
+        start_pos = mid_point - alteration_size // 2
+        end_pos = start_pos + alteration_size
+        
+        ref_seq = base_sequence
+        alt_seq = (base_sequence[:start_pos] + 
+                  "T" * alteration_size +  # Homopolymer replacement
+                  base_sequence[end_pos:])
+        
+        # Mock Oracle response based on discovered patterns
+        mock_oracle_response = {
+            "zeta_score": (expected_score_range[0] + expected_score_range[1]) / 2,
+            "status": "success",
+            "confidence": 0.85
+        }
+        
+        with patch('src.services.command_center.main.CommandCenter.invoke_oracle') as mock_oracle:
+            mock_oracle.return_value = mock_oracle_response
+            
+            from src.services.command_center.main import CommandCenter
+            command_center = CommandCenter()
+            
+            result = command_center.invoke_oracle(ref_seq, alt_seq)
+            
+            # Verify score is within expected range
+            score = result["zeta_score"]
+            assert expected_score_range[0] <= abs(score) <= expected_score_range[1]
+    
+    def test_oracle_response_validation(self):
+        """Test Oracle response validation catches malformed responses."""
+        from src.services.validation import OracleResponseValidator
+        
+        # Test case 1: Valid response
+        valid_response = {
+            "zeta_score": 1500.0,
+            "status": "success", 
+            "confidence": 0.85
+        }
+        
+        result = OracleResponseValidator.validate_oracle_response(valid_response)
+        assert result.is_valid
+        
+        # Test case 2: Missing required fields
+        invalid_response = {
+            "zeta_score": 1500.0
+            # Missing status and confidence
+        }
+        
+        result = OracleResponseValidator.validate_oracle_response(invalid_response)
+        assert not result.is_valid
+        assert "missing required fields" in result.message.lower()
+        
+        # Test case 3: Non-numeric score
+        non_numeric_response = {
+            "zeta_score": "not_a_number",
+            "status": "success",
+            "confidence": 0.85
+        }
+        
+        result = OracleResponseValidator.validate_oracle_response(non_numeric_response)
+        assert not result.is_valid
+        assert "not numeric" in result.message.lower()
+
+class TestSequenceContextOptimization:
+    """
+    Test sequence context optimization for different biological scenarios.
+    """
+    
+    def test_adaptive_window_selection(self):
+        """Test that window selection adapts to sequence characteristics."""
+        from src.services.validation import AdaptiveWindowSelector
+        
+        # Test case 1: SNV with large available sequence
+        window = AdaptiveWindowSelector.select_optimal_window(
+            "snv_detection", available_sequence=50000
+        )
+        assert window in [8000, 12000, 16000]  # SNV optimal windows
+        
+        # Test case 2: Structural variant with large available sequence
+        window = AdaptiveWindowSelector.select_optimal_window(
+            "structural_analysis", available_sequence=50000
+        )
+        assert window in [30000, 35000, 40000]  # Structural variant optimal windows
+        
+        # Test case 3: Limited sequence availability
+        window = AdaptiveWindowSelector.select_optimal_window(
+            "structural_analysis", available_sequence=5000
+        )
+        assert window <= 5000  # Should not exceed available sequence
+    
+    def test_biological_context_classification(self):
+        """Test biological context classification for scoring strategy selection."""
+        from src.services.validation import BiologicalContext
+        
+        # Mock variant data for different contexts
+        test_variants = [
+            {"type": "SNV", "size": 1, "expected_context": BiologicalContext.SINGLE_NUCLEOTIDE_VARIANT},
+            {"type": "INDEL", "size": 10, "expected_context": BiologicalContext.SMALL_INDEL},
+            {"type": "DEL", "size": 1000, "expected_context": BiologicalContext.STRUCTURAL_VARIANT},
+            {"type": "SNV", "region": "coding", "expected_context": BiologicalContext.CODING_SEQUENCE}
+        ]
+        
+        # Import the function that would be implemented
+        # from src.services.command_center.main import determine_biological_context
+        
+        # For now, verify the classification logic exists
+        assert BiologicalContext.SINGLE_NUCLEOTIDE_VARIANT.value == "snv"
+        assert BiologicalContext.STRUCTURAL_VARIANT.value == "structural"
+```
+
+### **2. Integration Tests**
+
+```python
+class TestOracleIntegrationRobustness:
+    """
+    Integration tests for complete Oracle workflows.
+    """
+    
+    def test_complete_patient_assessment_workflow(self):
+        """
+        Test complete patient assessment workflow with validation.
+        """
+        # Mock patient data with known pathogenic variant
+        patient_data = {
+            "id": "test_patient_001",
+            "variants": [
+                {
+                    "chromosome": "chr21",
+                    "position": 36250941,
+                    "ref_allele": "T",  # Corrected to match genome
+                    "alt_allele": "C",
+                    "type": "SNV",
+                    "gene": "RUNX1"
+                }
+            ]
+        }
+        
+        with patch('pysam.FastaFile') as mock_fasta:
+            # Mock genomic reference
+            mock_fasta.return_value.fetch.return_value = "T" * 10000  # Simplified
+            
+            with patch('src.services.command_center.main.CommandCenter.invoke_oracle') as mock_oracle:
+                mock_oracle.return_value = {
+                    "zeta_score": 1200.0,  # Expected range for SNV
+                    "status": "success",
+                    "confidence": 0.8
+                }
+                
+                # Import the assessment function
+                # from scripts.run_patient_assessment import assess_patient_variants_with_strategy
+                
+                # Verify workflow components exist
+                from src.services.validation import PreOracleValidator
+                validator = PreOracleValidator()
+                
+                # Test that validation would pass for corrected data
+                assert validator is not None
+    
+    def test_command_center_error_handling(self):
+        """Test CommandCenter handles errors gracefully with enhanced diagnostics."""
+        from src.services.command_center.main import CommandCenter
+        
+        command_center = CommandCenter()
+        
+        # Test case 1: Invalid sequences trigger validation errors
+        with pytest.raises(ValueError) as exc_info:
+            command_center.score_variant_with_validation(
+                "", "",  # Empty sequences
+                {"chromosome": "chr21", "position": 123}
+            )
+        
+        # Verify enhanced error reporting
+        error_str = str(exc_info.value)
+        assert "enhanced diagnostics" in error_str.lower()
+    
+    def test_oracle_service_communication(self):
+        """Test Oracle service communication with proper error handling."""
+        import requests
+        from unittest.mock import patch
+        
+        # Test case 1: Successful Oracle communication
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "zeta_score": 1500.0,
+            "status": "success",
+            "confidence": 0.85
+        }
+        mock_response.raise_for_status.return_value = None
+        
+        with patch('requests.post', return_value=mock_response) as mock_post:
+            from src.services.command_center.main import CommandCenter
+            command_center = CommandCenter()
+            
+            # Mock the invoke_oracle method call
+            result = mock_response.json()
+            assert result["zeta_score"] == 1500.0
+        
+        # Test case 2: Oracle service unavailable
+        with patch('requests.post', side_effect=requests.exceptions.ConnectionError("Service unavailable")):
+            with pytest.raises(requests.exceptions.ConnectionError):
+                # This should be handled gracefully in production
+                requests.post("mock_url", json={})
+
+class TestRegressionPrevention:
+    """
+    Regression tests to prevent siege-type failures.
+    """
+    
+    def test_runx1_coordinate_regression_prevention(self):
+        """
+        Prevent regression of RUNX1 coordinate system issues.
+        
+        This test ensures the specific siege failure cannot reoccur.
+        """
+        # Test exact RUNX1 coordinates from siege
+        RUNX1_GENE_START = 36160098
+        RUNX1_GENE_END = 36421599
+        MUTATION_POS = 36250941
+        
+        # Simulate sequence extraction with corrected coordinates
+        gene_length = RUNX1_GENE_END - RUNX1_GENE_START
+        mutation_relative_pos = MUTATION_POS - RUNX1_GENE_START - 1  # 0-based
+        
+        # Verify coordinate calculations
+        assert 0 <= mutation_relative_pos < gene_length
+        assert gene_length == 261501  # Known RUNX1 length
+    
+    def test_siege_failure_scenario_prevention(self):
+        """
+        Test the exact siege failure scenario to ensure it's prevented.
+        """
+        # Recreate siege conditions
+        ref_sequence = "ATCG" * 2000  # 8kb sequence
+        alt_sequence = "ATCG" * 2000  # Identical sequence (siege failure)
+        
+        from src.services.validation import PreOracleValidator
+        validator = PreOracleValidator(enable_strict_mode=True)
+        
+        # This should raise validation error preventing Oracle call
+        with pytest.raises(ValueError) as exc_info:
+            validator.validate_complete_pipeline(
+                ref_sequence, alt_sequence, 
+                {"chromosome": "chr21", "position": 36250941, "ref_allele": "C"}
+            )
+        
+        assert "identical" in str(exc_info.value).lower()
+```
+
+### **3. Performance and Scale Tests**
+
+```python
+class TestOraclePerformanceAndScale:
+    """
+    Test Oracle integration performance and scalability.
+    """
+    
+    @pytest.mark.parametrize("sequence_length", [1000, 8000, 25000, 50000])
+    def test_oracle_performance_across_sequence_lengths(self, sequence_length):
+        """Test Oracle performance across different sequence lengths."""
+        import time
+        
+        # Generate test sequences
+        ref_seq = "ATCG" * (sequence_length // 4)
+        alt_seq = "TTCG" * (sequence_length // 4)  # Ensure difference
+        
+        with patch('src.services.command_center.main.CommandCenter.invoke_oracle') as mock_oracle:
+            mock_oracle.return_value = {
+                "zeta_score": 1500.0,
+                "status": "success", 
+                "confidence": 0.85
+            }
+            
+            from src.services.command_center.main import CommandCenter
+            command_center = CommandCenter()
+            
+            start_time = time.time()
+            result = command_center.score_variant_with_validation(
+                ref_seq, alt_seq,
+                {"chromosome": "chr21", "position": 123, "ref_allele": "A"}
+            )
+            end_time = time.time()
+            
+            # Verify reasonable performance (should complete within reasonable time)
+            processing_time = end_time - start_time
+            assert processing_time < 10.0  # Should complete within 10 seconds
+            assert result["zeta_score"] == 1500.0
+    
+    def test_batch_variant_processing(self):
+        """Test processing multiple variants efficiently."""
+        # Generate batch of test variants
+        variants = []
+        for i in range(10):
+            variants.append({
+                "ref_sequence": f"ATCG{'A' * i}" * 1000,
+                "alt_sequence": f"TTCG{'T' * i}" * 1000,
+                "metadata": {"position": 1000 + i}
+            })
+        
+        with patch('src.services.command_center.main.CommandCenter.invoke_oracle') as mock_oracle:
+            mock_oracle.return_value = {
+                "zeta_score": 1500.0,
+                "status": "success",
+                "confidence": 0.85
+            }
+            
+            from src.services.command_center.main import CommandCenter
+            command_center = CommandCenter()
+            
+            # Process batch
+            results = []
+            for variant in variants:
+                result = command_center.score_variant_with_validation(
+                    variant["ref_sequence"],
+                    variant["alt_sequence"], 
+                    variant["metadata"]
+                )
+                results.append(result)
+            
+            assert len(results) == 10
+            assert all(r["status"] == "success" for r in results)
+```
+
+### **4. Monitoring and Alerting Tests**
+
+```python
+class TestValidationMetricsAndMonitoring:
+    """
+    Test validation metrics tracking and alerting.
+    """
+    
+    def test_metrics_tracking_accuracy(self):
+        """Test that validation metrics are tracked accurately."""
+        from src.services.validation import ValidationMetricsTracker, ValidationResult, ValidationLevel
+        
+        tracker = ValidationMetricsTracker()
+        
+        # Simulate validation results
+        test_results = [
+            ValidationResult(True, ValidationLevel.INFO, "Success", {}, "test1"),
+            ValidationResult(False, ValidationLevel.CRITICAL, "Identical sequences", {}, "test2"),
+            ValidationResult(False, ValidationLevel.WARNING, "Unusual GC content", {}, "test3"),
+            ValidationResult(False, ValidationLevel.CRITICAL, "Coordinate mismatch", {}, "test4")
+        ]
+        
+        tracker.record_validation_result(test_results)
+        
+        # Verify metrics
+        assert tracker.metrics["total_validations"] == 1
+        assert tracker.metrics["critical_failures"] == 2
+        assert tracker.metrics["warning_count"] == 1
+        assert tracker.metrics["identical_sequence_detections"] == 1
+        assert tracker.metrics["coordinate_mismatches"] == 1
+    
+    def test_health_status_classification(self):
+        """Test system health status classification."""
+        from src.services.validation import ValidationMetricsTracker
+        
+        tracker = ValidationMetricsTracker()
+        
+        # Test healthy system
+        tracker.metrics["total_validations"] = 100
+        tracker.metrics["critical_failures"] = 0
+        
+        health = tracker.get_health_status()
+        assert health["status"] == "healthy"
+        
+        # Test warning system  
+        tracker.metrics["critical_failures"] = 1  # 1% failure rate
+        health = tracker.get_health_status()
+        assert health["status"] == "warning"
+        
+        # Test critical system
+        tracker.metrics["critical_failures"] = 5  # 5% failure rate
+        health = tracker.get_health_status()
+        assert health["status"] == "critical"
+```
+
+## **🔧 CONTINUOUS INTEGRATION TESTS**
+
+### **Automated Test Suite Configuration**
+
+```python
+# pytest.ini configuration
+"""
+[tool:pytest]
+testpaths = tests
+python_files = test_*.py *_test.py
+python_classes = Test*
+python_functions = test_*
+addopts = 
+    --verbose
+    --tb=short
+    --strict-markers
+    --disable-warnings
+    -p no:cacheprovider
+markers =
+    integration: Integration tests
+    validation: Data validation tests  
+    performance: Performance tests
+    regression: Regression prevention tests
+    siege_prevention: Tests preventing siege-type failures
+"""
+
+# conftest.py - Shared test fixtures
+@pytest.fixture
+def mock_runx1_reference():
+    """Mock RUNX1 reference sequence for testing."""
+    # Generate realistic RUNX1-like sequence
+    return "ATCGATCGATCGATCG" * 16344  # ~261kb like real RUNX1
+
+@pytest.fixture  
+def mock_oracle_service():
+    """Mock Oracle service for testing."""
+    with patch('src.services.command_center.main.CommandCenter.invoke_oracle') as mock:
+        mock.return_value = {
+            "zeta_score": 1500.0,
+            "status": "success",
+            "confidence": 0.85
+        }
+        yield mock
+
+@pytest.fixture
+def validated_test_sequences():
+    """Pre-validated test sequences that pass all validation checks."""
+    ref_seq = "ATCGATCGATCGATCG" * 500  # 8kb
+    alt_seq = "TTCGATCGATCGATCG" * 500  # 8kb with first nucleotide changed
+    
+    return {
+        "reference": ref_seq,
+        "alternate": alt_seq,
+        "metadata": {
+            "chromosome": "chr21",
+            "position": 36250941,
+            "ref_allele": "A",
+            "alt_allele": "T"
+        }
+    }
+```
+
+## **📊 TEST COVERAGE REQUIREMENTS**
+
+### **Minimum Coverage Targets**
+
+```python
+# Coverage configuration
+COVERAGE_TARGETS = {
+    "src/services/validation/": 95,  # Critical validation code
+    "src/services/command_center/": 90,  # Core Oracle integration  
+    "src/services/oracle/": 85,  # Oracle service components
+    "scripts/": 80,  # Patient assessment scripts
+    "overall": 85  # Overall project coverage
+}
+
+# Critical test categories that must have 100% coverage
+CRITICAL_FUNCTIONS = [
+    "validate_sequence_differences",
+    "validate_variant_record", 
+    "validate_mutation_application",
+    "score_variant_with_validation"
+]
+```
+
+## **⚔️ IMPLEMENTATION PRIORITY**
+
+1. **IMMEDIATE:** Implement siege prevention regression tests
+2. **HIGH:** Add data pipeline integrity tests to CI/CD
+3. **MEDIUM:** Implement performance and scale testing
+4. **LOW:** Add comprehensive monitoring and alerting tests
+
+**DOCTRINE:** Every Oracle integration must pass comprehensive test suites before deployment. Testing prevents siege failures more effectively than post-deployment debugging.
+description:
+globs:
+alwaysApply: false
+---

@@ -1,0 +1,46 @@
+# DOCTRINE: THE PREDATOR PROTOCOL
+
+## 1. MISSION OBJECTIVE
+
+The platform's prime directive is to execute the **"Predator Protocol"**: a fully autonomous, four-phase pipeline to design, validate, and confirm the efficacy of novel therapeutic weapons against high-value biological targets. This doctrine supersedes all previous operational plans.
+
+*   **Example Target:** The **VEGFA gene** (from "Operation: Shark Cartilage").
+*   **End Goal:** Create a DNA-based inhibitor that is **structurally sound** (`pLDDT > 70`) and **functionally lethal** (high predicted binding affinity to its target).
+
+## 2. THE FOUR PHASES OF THE PREDATOR PROTOCOL
+
+### Phase I: HUNT (Target Acquisition)
+
+*   **Objective:** Acquire all necessary intelligence on the target.
+*   **Execution:** The `Hunter-Analyst` service must retrieve not only a `target_motif_dna` for the Forge, but also the full **canonical protein sequence** of the target gene (e.g., the VEGFA protein). This is the entity we will ultimately neutralize.
+
+### Phase II: FORGE (Weapon Generation)
+
+*   **Objective:** Generate a high-quality DNA candidate.
+*   **Execution:** The `CommandCenter` will execute the combat-proven **"Focused Forge"** protocol, using a low, constant temperature to generate stable candidate sequences.
+
+### Phase III: GAUNTLET (Structural Validation)
+
+*   **Objective:** Ensure the forged weapon is physically viable and not a "wet noodle."
+*   **Execution:** The `CommandCenter` will submit the candidate's translated protein sequence to the `/v1/predict_structure` endpoint of our `boltz-service` to acquire a `pLDDT` score. A score `>= 70` is required to pass.
+
+### Phase IV: LETHALITY ASSESSMENT (Functional Validation)
+
+*   **Objective:** Confirm the weapon will effectively bind to and neutralize its target.
+*   **Execution:**
+    *   After a candidate passes the Gauntlet, the `CommandCenter` will immediately initiate the Lethality Assessment.
+    *   It will make a **second, distinct call** to the `boltz-service`, this time likely to a `/v1/predict_affinity` endpoint.
+    *   This request will contain **two** protein sequences: our forged weapon and the target protein from Phase I.
+    *   The `boltz-service` will return a **binding affinity score**. A high score indicates a high probability of successful neutralization.
+
+## 3. REQUIRED CAPABILITY UPGRADES
+
+To implement this doctrine, the following upgrades are required:
+
+1.  **`Hunter-Analyst`:** Must be upgraded with the capability to retrieve canonical protein sequences for a given gene target.
+2.  **`CommandCenter`:** The main workflow must be extended to include Phase IV. It needs to manage the target protein sequence and make the second, two-protein call to the `boltz-service` after a successful Gauntlet run.
+3.  **`boltz-service`:** We must verify it has (or re-implement) a production-ready endpoint that accepts two protein sequences and returns a binding affinity score.
+
+## 4. MISSION STATUS: BLUEPRINT COMPLETE
+
+This doctrine provides the complete blueprint for achieving our original mission objective. The platform is not just a generator; it is a fully autonomous hunter-killer.

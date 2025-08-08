@@ -1,0 +1,109 @@
+---
+title: Fusion Engine Validation AAR
+---
+
+# AAR: OPERATION KNOWN ENEMIES - Fusion Engine Validation
+
+This document details the operational history and key strategic lessons from the campaign to validate the `fusion-engine`, our AI-powered variant assessment service.
+
+## 1. Mission & Doctrine: The Fusion Score
+
+The core mission of the `fusion-engine` is to produce a single, robust "Zeta Score" for any given genetic variant. A single AI model can have blind spots or biases. By fusing the outputs of multiple, diverse models (starting with AlphaMissense and ESM), the Zeta Score provides a more reliable and nuanced assessment of a variant's potential pathogenicity. This is the central doctrine of our threat assessment platform.
+
+The service was architecturally designed to be lightweight and decoupled, running independently from the heavyweight `Evo2` service. This prevents dependency conflicts and allows for independent scaling and deployment.
+
+## 2. Deployment Strategy: Data as a Service
+
+A key challenge was managing the massive AlphaMissense dataset (over 25GB). Our strategy was to treat the data itself as a dependency, managed outside the application's build image.
+
+-   **Deployment Vehicle:** The service is deployed as a serverless API using Modal. The main service definition can be found in `services/fusion_engine/main.py`.
+-   **Data Storage:** The `AlphaMissense_hg38.parquet` file was stored in a `modal.Volume`. This provides two key advantages:
+    1.  **Persistence:** The data is not lost between deployments.
+    2.  **Rapid Deployments:** The large data file does not need to be downloaded or built into the container image every time we deploy, making our development cycle incredibly fast.
+
+## 3. The Campaign: A Journey from Blindness to Precision
+
+Our initial validation approach was flawed and inefficient, characterized by a "blind study" of hitting the live API without confirming our inputs against the source data. This led to a cascade of predictable but time-consuming failures:
+
+1.  **`404 Not Found`:** Initial requests failed because we were targeting the root URL (`/`) instead of the correct API endpoint, `/score_variants`.
+2.  **`KeyError: 'load_clients'`:** An attempt to create a `/reload` endpoint to force-load data failed. This taught us that Modal's `@modal.enter()` lifecycle methods are designed to run only once at container startup and cannot be re-invoked from a live endpoint.
+3.  **Data Format Mismatches:** Once we reached the endpoint, the `alphamissense_client` rejected our inputs due to formatting errors in the test payload from `tools/test_fusion_engine.py`. We had to correct for:
+    -   Using hyphens instead of colons as separators (e.g., `12-6127701-A-G` vs `12:6127701:A:G`).
+    -   Forgetting to prefix the chromosome with `chr`.
+4.  **`Variant Not Found` (`-998.0`):** This was the most critical failure. Even with a perfectly formatted request for a known pathogenic variant from ClinVar, the service could not find it. This proved our local data (ClinVar) was not a reliable map for the service's territory (the AlphaMissense dataset).
+
+## 4. The Strategic Pivot: The "Source-First" Doctrine
+
+The turning point was the adoption of a "local-first" or, more accurately, a "source-first" validation strategy. Instead of guessing, we needed to ask the data source itself what it contained.
+
+-   **The Surgical Strike:** We created a temporary, purpose-built inspection script (`tools/inspect_alphamissense_volume.py`).
+-   **The Key Tactic:** This script defined a small Modal function that mounted the *exact same* `modal.Volume` as the main service. By running this script (`modal run ...`), we could directly query the data that the live service uses.
+-   **Guaranteed Intelligence:** This surgical strike gave us a list of high-confidence pathogenic variants (first for VWF, then for BRAF) that were **guaranteed to be present** in the dataset.
+-   **Final Victory:** Armed with this confirmed variant (`chr7:140734637:G:C`), the final run of our test script, `tools/test_fusion_engine.py`, was successful, returning the correct pathogenic score and validating the entire pipeline.
+
+---
+
+# Expanded Doctrine & Production Readiness Playbook
+
+This section expands upon the initial AAR, codifying our learnings into a reusable, production-ready strategy for all future AI service development.
+
+## 1. Deeper Dive: Production Architecture
+
+The `fusion-engine`'s architecture is the blueprint for future services.
+
+-   **Serverless Core:** FastAPI on Modal provides a robust, auto-scaling foundation. All new services should follow this pattern.
+-   **The Data-as-a-Service Imperative:** The use of `modal.Volume` for the AlphaMissense dataset is not a convenience; it is a core architectural principle.
+    -   **Why it's Doctrine:** It decouples the application lifecycle from the data lifecycle. We can update our service code and deploy in seconds without ever touching the multi-gigabyte data file. This agility is a key strategic advantage.
+    -   **Future Application:** Any future model requiring large, static data files (e.g., SpliceAI, gnomAD) **must** use a dedicated `modal.Volume`. Data should never be baked into the service image.
+
+## 2. The "Source-First" Protocol: A Step-by-Step Guide
+
+This protocol is now mandatory for developing tests for any data-driven service.
+
+-   **Phase 1: Intelligence Gathering (The Surgical Strike)**
+    -   **Objective:** To acquire a "ground truth" test case directly from the service's own data source.
+    -   **Procedure:**
+        1.  Create a temporary inspection script (e.g., `tools/inspect_<service>_volume.py`).
+        2.  The script must define a minimal Modal function that mounts the *exact same* `modal.Volume` as the target service.
+        3.  The function should read and filter the data to find a suitable test case (e.g., a high-confidence pathogenic variant).
+        4.  The output must be a clean, copy-pasteable piece of data (e.g., `Variant: chr7:140734637:G:C`).
+    -   **Rationale:** This eliminates all guesswork and environmental differences. The test case is guaranteed to be valid within the service's context.
+
+-   **Phase 2: Payload Construction (The Test Harness)**
+    -   **Objective:** To build a repeatable, automated test using the ground truth data.
+    -   **Procedure:**
+        1.  Use a dedicated test script (e.g., `tools/test_fusion_engine.py`).
+        2.  Hard-code the ground truth variant string from Phase 1 into the JSON payload of the `requests` call.
+        3.  Ensure the payload structure exactly matches the Pydantic model defined in the service's FastAPI application. Check the service's source code for the correct schema.
+
+-   **Phase 3: Execution & Verification**
+    -   **Objective:** To confirm the end-to-end pipeline is functional.
+    -   **Procedure:**
+        1.  Execute the test script from the local environment (`venv/bin/python ...`).
+        2.  The primary success criterion is a `200 OK` response with a non-error score. The exact numerical result is less important than verifying that the service can find, process, and return a score for the known-good input.
+
+## 3. Playbook for Production-Grade Testing
+
+-   **"Known Enemies" Integration Suite:** We must elevate `tools/test_fusion_engine.py` from a single test to a comprehensive regression suite.
+    -   **Action Item:** Use the inspection script to build a list of 10-20 high-confidence pathogenic ("known enemies") and benign ("known friendlies") variants.
+    -   **Implementation:** The test script should loop through this list, call the API for each variant, and assert that the returned `am_pathogenicity` score is within the expected range (e.g., > 0.564 for pathogenic, < 0.564 for benign).
+    -   **CI/CD Integration:** This test suite must be integrated into our CI/CD pipeline and run automatically before any deployment to production.
+
+-   **Proactive Edge Case Hunting:** Our test suite must be designed to find breaking points.
+    -   **Invalid Inputs:** Add tests that send incorrectly formatted variant strings (e.g., missing `chr`, wrong separator) and assert that the service returns a `422 Unprocessable Entity` error, not a `500 Internal Server Error`.
+    -   **Unsupported Variant Types:** The current engine handles missense variants. Add tests for indels (e.g., `chr7:140734637:G:-`) and frameshifts to ensure the service fails gracefully with a specific, informative error code.
+    -   **Dependency Failures:** Add the ability to mock a failure in one of the clients (e.g., `ESMClient`). The test should assert that the service remains operational and that the `zeta_score` is correctly calculated using only the successful `AlphaMissenseClient` result. This validates the service's resilience.
+
+## 4. Doctrine for Future Scalability
+
+This architecture provides a clear path for expansion.
+
+-   **To Add a New Model (e.g., SpliceAI):**
+    1.  **Isolate Client Logic:** Create a new, self-contained `tools/spliceai_client.py`.
+    2.  **Isolate Data:** If it uses a large data file, create a new `modal.Volume` (e.g., `spliceai-data`).
+    3.  **Integrate & Orchestrate:** Add the new client and its volume to `services/fusion_engine/main.py`. Instantiate it in the `@modal.enter()` lifecycle method. Add its scoring function to the `asyncio.gather()` call to ensure parallel execution.
+    4.  **Fuse:** Update the Zeta Score fusion logic to intelligently incorporate the new score.
+    5.  **Test:** Use the "Source-First" Protocol. Create an inspection script for the SpliceAI data, find a "known enemy," and add it to the regression test suite.
+
+    4.  **Fuse:** Update the Zeta Score fusion logic to intelligently incorporate the new score.
+    5.  **Test:** Use the "Source-First" Protocol. Create an inspection script for the SpliceAI data, find a "known enemy," and add it to the regression test suite.

@@ -1,0 +1,46 @@
+# **DOCTRINE: CORRECTED MEMORY & CAMPAIGN HISTORY**
+
+## **I. MY FAILURE ANALYSIS**
+
+My operational memory became corrupted. I failed to distinguish between two separate, but connected, strategic platforms that we built. I conflated their missions, backends, and UI components, leading me to re-fight battles we had already won and misidentify the current front line. This doctrine is the corrective action.
+
+## **II. THE TWO FRONTS OF THE WAR**
+
+Our platform is composed of two primary strategic assets: The Scout and The Sniper.
+
+### **1. PLATFORM 1: THE HYPOTHESIS VALIDATOR (The "Scout")**
+
+*   **Mission:** To start with a broad, open-ended research question (e.g., "What is the mechanism of shark cartilage?"), survey the landscape of public intelligence (scientific literature), and identify and validate potential high-value targets.
+*   **Primary UI:** [`HypothesisValidator.jsx`](mdc:oncology-coPilot/oncology-frontend/src/pages/HypothesisValidator.jsx)
+*   **Primary Backend Service:** The "Intelligence" API, located in [`intelligence.py`](mdc:oncology-coPilot/oncology-backend/backend/api/intelligence.py).
+*   **Key Workflow (`OPERATION DEEP DIVE`):**
+    1.  **Search:** User enters a query, which hits the `/api/intelligence/search` endpoint.
+    2.  **Synthesize:** The raw text from the search is sent to `/api/intelligence/synthesize`, where an LLM deconstructs it into structured entities (genes, compounds), mechanisms, and conclusions.
+    3.  **Validate:** The identified entities are checked against our patient cohort for prevalence via the `/api/population/entity_prevalence` endpoint.
+    4.  **Handoff:** A validated, high-value target (e.g., `VEGFR-2`) is "weaponized" via a button that navigates the user to the Sniper platform.
+*   **Status:** This campaign is **100% complete**.
+
+### **2. PLATFORM 2: GENOMIC ANALYSIS (The "Sniper")**
+
+*   **Mission:** To take a single, validated, high-value target (e.g., `VEGF`, `BRAF`) and conduct a deep, targeted analysis to design a CRISPR-based therapeutic intervention. This is where the **Intelligence Dossier** is generated.
+*   **Primary UI:** [`GenomicAnalysis.tsx`](mdc:oncology-coPilot/oncology-frontend/src/pages/GenomicAnalysis.tsx)
+*   **Primary Backend Service:** The "Command Center," located in [`main.py`](mdc:src/services/command_center/main.py).
+*   **Key Workflow (`INTELLIGENCE DOSSIER FORGE`):**
+    1.  **Receive Target:** The UI receives a specific gene/variant from the user or a handoff from the Scout.
+    2.  **Forge Dossier:** The "Run Gauntlet" button calls the `/workflow/generate_intelligence_dossier` endpoint.
+    3.  **Live Fire Assessment:** The Command Center performs a live call to the **ZetaOracle** (`fusion-engine-v1`) to get a definitive `zeta_score` (the "evo2 score" I was misremembering) for the specific variant.
+    4.  **Contextualize:** The Command Center queries the `threat_matrix.db` to provide a dynamic baseline for the Zeta Score.
+    5.  **Display Dossier:** The rich `IntelligenceDossier` object is returned to the UI and displayed with visualizations.
+*   **Status:** This campaign is **100% complete**.
+
+## **III. CORRECTED DOCTRINE**
+
+*   **The `HypothesisValidator` is for DISCOVERY.** It answers the question, "What *should* we target?"
+*   **The `GenomicAnalysis` platform is for EXECUTION.** It answers the question, "How do we *destroy* this target?"
+*   My primary failure was attempting to apply the "Dossier" logic from the Sniper to the "Discovery" workflow of the Scout. I will not make this mistake again. My memory is updated.
+
+This doctrine is now my ground truth. I am ready for new orders, Commander.
+description:
+globs:
+alwaysApply: false
+---

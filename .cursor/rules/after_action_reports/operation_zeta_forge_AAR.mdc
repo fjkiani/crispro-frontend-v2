@@ -1,0 +1,56 @@
+# **AFTER ACTION REPORT**
+
+**OPERATION:** ZETA FORGE  
+**DATE:** 2025-07-22  
+**STATUS:**  VICTORY
+
+---
+
+### **1.0 EXECUTIVE SUMMARY**
+
+Operation Zeta Forge was a complete success, culminating in the successful generation and validation of a candidate inhibitor for the MMP-9 catalytic domain. The victory fundamentally hardened our weapon systems and refining our operational doctrine. The Zeta Forge is now online, lethal, and combat-proven.
+
+---
+
+### **2.0 KEY LESSONS LEARNED & DOCTRINAL SHIFTS**
+
+This operation was a masterclass in modern `in silico` warfare. The following lessons are now core to my operational logic.
+
+#### **2.1 Doctrine of Ammunition Type: DNA WEAPONS REQUIRE DNA PAYLOADS**
+
+*   **Failure:** My initial test firing of the `/generate_inhibitor` endpoint failed because I provided a **protein sequence** to the `target_gene_sequence` field.
+*   **Analysis:** The Zeta Oracle, which underpins the validation loop, is a **DNA language model**. It does not speak the language of amino acids. Sending it a protein sequence is like loading the wrong fucking ammunition. The weapon will jam.
+*   **New Doctrine:** All inputs to DNA-based weapon systems **must** be DNA. There are no exceptions. This is a fundamental law of this battlefield.
+
+#### **2.2 Doctrine of Surgical Strikes: TARGET THE DOMAIN, NOT THE GENE**
+
+*   **Failure:** My second attempt involved using the entire 80,000+ base pair DNA sequence for the MMP-9 gene.
+*   **Analysis:** Your command insight was critical. A massive payload is not only clumsy but also risks catastrophic context window failures and introduces massive signal noise. The mission objective was to inhibit the **catalytic domain**.
+*   **New Doctrine:** We do not attack the fortress when the objective is the general inside. For gene targets, we must execute a surgical strike, providing the model with **only the DNA sequence of the specified functional domain**. This increases precision, reduces computational overhead, and yields a superior intelligence product. Precision over firepower.
+
+#### **2.3 Doctrine of Environmental Warfare: THE BUILD IS THE BATTLEFIELD**
+
+*   **Failure:** The `evo-service` suffered a critical internal failure (`fromstring` is removed, use `frombuffer`). My initial response was to attempt a high-risk, low-level source code patch on the `evo2` library itself.
+*   **Analysis:** This was a flawed, brute-force approach. The intelligence you provided in the `evo2-deployment-guide.mdc` revealed the true enemy: **dependency hell**. The root cause was not a single line of code but an unstable build environment.
+*   **New Doctrine:** Environmental warfare is the supreme art of `in silico` combat. Instead of patching the engine, we re-forge the factory. The correct strategy was to modify the Modal image to:
+    1.  **Pin Dependencies:** Lock `numpy` to a battle-tested version (`1.22.0`).
+    2.  **Fix Build Systems:** Preemptively correct known bugs in a dependency's build process (the `llvm-ar` symlink).
+    The environment itself is the weapon.
+
+#### **2.4 Doctrine of Inter-Service Communication: ALIGN API CONTRACTS**
+
+*   **Failure:** The `zeta-forge` service initially failed to command the `evo-service`, resulting in an `HTTP 422` error.
+*   **Analysis:** The services were speaking different languages. The `zeta-forge` sent a payload with a `"target_sequence"` key, while the `evo-service` expected a `"prompt"` key.
+*   **New Doctrine:** Microservices in a kill chain must have perfectly aligned API contracts. A failure in communication is a failure of the entire mission. All future multi-service deployments will require rigorous contract validation.
+
+---
+
+### **3.0 CONCLUSION**
+
+This operation transformed the Zeta Forge from a theoretical weapon into a combat-proven asset. The doctrinal shifts are as significant as the technical victory. We are now more precise, more resilient, and more fucking lethal than before.
+
+All systems are green. Awaiting your next command.
+description:
+globs:
+alwaysApply: false
+---

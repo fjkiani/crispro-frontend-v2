@@ -1,0 +1,75 @@
+# ⚔️ **After-Action Report: Oncology Co-Pilot Reconnaissance** ⚔️
+
+**Campaign:** OPERATION UNIFICATION
+**Date:** 2024-07-17
+
+---
+
+### **Summary of Operations:**
+
+This document serves as the canonical log for the systematic reconnaissance of the `oncology-coPilot` mothership application.
+
+---
+
+### **PHASE 1: Backend Reconnaissance**
+
+**[2024-07-17 22:15] Task 1.1.1: Initial Directory Listing**
+*   **Action:** Executed `ls -lF oncology-coPilot/oncology-backend/`.
+*   **Intelligence Gained:**
+    *   **Tech Stack:** Confirmed Python application (`requirements.txt`, `main.py`).
+    *   **Entrypoint:** Identified `main.py` as the primary application entrypoint.
+    *   **Key Directories:**
+        *   `backend/`: Likely contains core application logic (e.g., API routes).
+        *   `agents/`: Suggests an agentic architecture (e.g., LangChain).
+        *   `db/` & `chroma_db/`: Indicates a hybrid data storage model, likely relational (SQLite/Postgres) and vector (ChromaDB).
+        *   `websocket/`: Confirms real-time communication capabilities.
+    *   **Next Action:** The `README.md` is the next logical target for high-level intelligence gathering.
+
+**[2024-07-17 22:20] Task 1.1.2: Analyze README.md**
+*   **Action:** Read `oncology-coPilot/oncology-backend/README.md`.
+*   **Intelligence Gained:**
+    *   **Purpose:** Confirmed the application is an AI CoPilot for oncologists using an agent-based architecture to reduce administrative tasks.
+    *   **Tech Stack:**
+        *   **Backend:** FastAPI.
+        *   **Frontend:** React (Vite) & TailwindCSS.
+        *   **AI/Agents:** LangChain/AutoGen, Google Gemini.
+        *   **Blockchain POC:** Hardhat, Web3.py for a local Ethereum testnet.
+    *   **Key Concepts:** A central orchestrator dispatches tasks to specialized agents based on clinical roles, with a strong emphasis on "Human-in-the-Loop" for safety.
+    *   **Project Structure Insights:** The README confirms that core logic resides in `backend/` and `core/`.
+    *   **Next Action:** The `requirements.txt` file is the next logical target for a detailed dependency analysis.
+
+**[2024-07-17 22:25] Task 1.1.3: Analyze Dependencies**
+*   **Action:** Read `oncology-coPilot/oncology-backend/requirements.txt`.
+*   **Intelligence Gained:**
+    *   **Core Framework:** Confirmed `fastapi` and `uvicorn`.
+    *   **LLM & Agent Framework:** Confirmed `google-generativeai` and `langchain-google-genai`.
+    *   **Primary Database:** Identified **DataStax Astra DB** (`astrapy`), a significant architectural finding indicating a scalable NoSQL backend.
+    *   **Supporting Libraries:** Confirmed `web3` for the blockchain POC and `biopython` for handling biological data.
+    *   **Next Action:** The `main.py` entrypoint is the next logical target to understand how these dependencies are assembled and configured.
+
+**[2024-07-17 22:30] Task 1.1.4: Analyze Entrypoint (main.py)**
+*   **Action:** Read `oncology-coPilot/oncology-backend/main.py`.
+*   **Intelligence Gained:**
+    *   **Dual Orchestrator Model:** Discovered a key architectural pattern involving two `AgentOrchestrator` instances, one for prompt handling (`core`) and one for activity tracking (`agents`).
+    *   **Hybrid Data Strategy:** Confirmed a hybrid data model using an in-memory dictionary for primary patient data and a separate SQLite database for mutation information. Noted a discrepancy with the README's mention of Astra DB.
+    *   **Extensive API Surface:** Mapped numerous endpoints, revealing capabilities for patient data retrieval, agentic prompting, real-time WebSocket communication, and a sophisticated multi-step clinical trial eligibility workflow.
+    *   **Complex Agentic Workflows:** The code confirms the system manages complex, asynchronous agent interactions, likely orchestrated via the WebSocket.
+    *   **Next Action:** The next reconnaissance target is `backend/core/orchestrator.py` to understand the "brain" of the agent system.
+
+**[2024-07-17 22:35] Task 1.1.5: Analyze Core Orchestrator**
+*   **Action:** Read `oncology-coPilot/oncology-backend/backend/core/orchestrator.py`.
+*   **Intelligence Gained:**
+    *   **Intent-Driven Architecture:** Confirmed the system uses an LLM (Gemini) to parse user prompts into a predefined set of intents (e.g., `FIND_TRIALS`, `ANALYZE_GENOMIC_PROFILE`). This is the primary control flow.
+    *   **Agent Roster Mapped:** Identified a clear roster of specialized agents, including the highly relevant `GenomicAnalystAgent`.
+    *   **Routing Logic Understood:** The `handle_prompt` method uses a straightforward `if/elif` block to route parsed intents to the correct agent.
+    *   **Key Integration Point Identified:** The `ANALYZE_GENOMIC_PROFILE` intent and its corresponding `GenomicAnalystAgent` provide the perfect entry point for integrating our `genesis-engine`.
+    *   **Next Action:** The next reconnaissance target is `backend/agents/genomic_analyst_agent.py` to understand its current capabilities before planning its replacement.
+
+**[2024-07-17 22:40] Task 1.1.6: Analyze Genomic Analyst Agent**
+*   **Action:** Read `oncology-coPilot/oncology-backend/backend/agents/genomic_analyst_agent.py`.
+*   **Intelligence Gained:**
+    *   **Sophisticated Mock:** Confirmed the agent is a highly sophisticated mock. It uses complex internal logic (regex, dictionaries) to simulate variant classification and does **not** call any real external services.
+    *   **Evo2 is Simulated:** The agent's `evo2_prediction` capabilities are entirely simulated via a mock API call. This is our entry point.
+    *   **Clear Integration Path:** The `_classify_variant_simulated` function is the specific target for replacement. Our `genesis-engine` will replace its internal logic, and we will map the `genesis-engine`'s output back to the Pydantic models the agent uses. This provides a clear, low-disruption path for our First Light Integration.
+
+**Conclusion:** Backend reconnaissance is complete. We have a sufficient understanding to formulate a detailed integration plan.

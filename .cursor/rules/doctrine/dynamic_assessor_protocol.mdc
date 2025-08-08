@@ -1,0 +1,102 @@
+# DOCTRINE: THE DYNAMIC ASSESSOR PROTOCOL
+
+**Authored by:** Zo, Lead Intelligence
+**Mission:** Operation Grand Heist
+**Status:** Approved by Alpha
+
+## 1.0 Core Principle: From Static Page to Dynamic Engine
+
+Our current `HypothesisValidator.jsx` is a powerful, bespoke weapon. However, recreating it for every new tool in our arsenal (like the `Threat_Assessor.py`) is inefficient and fucking stupid.
+
+The new doctrine dictates that we **refactor `HypothesisValidator.jsx` into a generic, dynamic `ToolRunner.jsx` component.** This new engine will be driven by a configuration object, allowing us to render any tool's UI and execute its specific API workflow without writing a new page from scratch. This embodies the "Don't Repeat Yourself" principle that Alpha has commanded. [[memory:3594957]]
+
+## 2.0 Strategic Refactoring of `HypothesisValidator.jsx`
+
+The soul of the `HypothesisValidator` is its multi-stage, narrative-driven workflow. We will preserve this soul while making its body more flexible.
+
+### 2.1 Reusable Components & Their Generalization
+
+The following components from the `validator` and `common` directories will be the building blocks of our new engine:
+
+*   **`ProgressFlow`**: Will be made dynamic. Instead of hard-coded steps, it will accept an array of step objects from the tool's configuration (`{ id: 'step1', label: 'Define Threat' }`).
+*   **`BaseCard` & `InteractiveButton`**: These are already generic as fuck. They are perfect as-is and will be used extensively.
+*   **`HypothesisCard`**: Will be generalized into a `SummaryCard.jsx`. It will take a `title` and `summary` text from its props, making it tool-agnostic.
+*   **`SourceCitation`**: Will be generalized into a `SearchResultsList.jsx` for displaying lists of URL-based results.
+*   **`EntityInsight`**: This is the most specialized component. It is fundamentally tied to displaying biological entities and triggering the "Design Experiment" navigation. For the `Threat Assessor`, we will need a new, specialized results component (`ThreatAssessmentDisplay.jsx`). **The `ToolRunner` will dynamically import and render the correct results component based on the tool's configuration.**
+
+### 2.2 The `ToolConfiguration` Object
+
+The `ToolRunner.jsx` will be controlled by a `toolConfiguration` prop. This JSON object will define everything the runner needs to know. Here is a conceptual example for the `Threat Assessor`:
+
+```json
+{
+  "toolId": "threat-assessor",
+  "title": "⚔️ Threat Assessor",
+  "subtitle": "Proprietary Triumvirate Protocol for rapid variant evaluation.",
+  "progressSteps": [
+    { "id": "input", "label": "Define Threats" },
+    { "id": "assessment", "label": "Run Assessment" },
+    { "id": "results", "label": "View Report" }
+  ],
+  "inputSections": [
+    { 
+      "id": "first_hit", 
+      "title": "First Hit Analysis",
+      "fields": [
+        { "id": "gene_symbol_1", "label": "Gene Symbol (First Hit)", "type": "text", "defaultValue": "RUNX1" },
+        { "id": "protein_change_1", "label": "Protein Change", "type": "text", "defaultValue": "p.Arg135fs", "optional": true }
+      ],
+      "action": {
+        "buttonText": "Assess First Hit",
+        "apiCall": {
+          "endpoint": "/workflow/assess_threat",
+          "payload": {
+            "gene_symbol": "{gene_symbol_1}",
+            "protein_change": "{protein_change_1}"
+          }
+        }
+      }
+    },
+    { 
+      "id": "second_hit",
+      "title": "Second Hit Analysis",
+      "fields": [
+        { "id": "gene_symbol_2", "label": "Gene Symbol (Second Hit)", "type": "text", "defaultValue": "ASXL1" },
+        { "id": "protein_change_2", "label": "Protein Change", "type": "text", "defaultValue": "p.G646fs*12", "optional": true }
+      ],
+      "action": {
+        "buttonText": "Assess Second Hit",
+        "apiCall": {
+          "endpoint": "/workflow/assess_threat",
+          "payload": {
+            "gene_symbol": "{gene_symbol_2}",
+            "protein_change": "{protein_change_2}"
+          }
+        }
+      }
+    }
+  ],
+  "resultsComponent": "ThreatAssessmentDisplay"
+}
+```
+
+## 3.0 Phased Execution Plan
+
+1.  **Phase 1: Refactor `HypothesisValidator` (The Blueprint).**
+    *   Create the `ToolRunner.jsx` component.
+    *   Move the logic from `HypothesisValidator.jsx` into the `ToolRunner`.
+    *   Create the first `ToolConfiguration` object that perfectly describes the Hypothesis Validator's existing functionality.
+    *   Replace the contents of `HypothesisValidator.jsx` to simply render `<ToolRunner config={hypothesisValidatorConfig} />`.
+    *   **Goal:** The application should look and behave *exactly* as it does now, but with the new dynamic engine under the hood.
+
+2.  **Phase 2: Forge the `Threat Assessor` (The First Application).**
+    *   Create the `threatAssessorConfig.js` file based on the blueprint above.
+    *   Create the new `ThreatAssessmentDisplay.jsx` component to render the results of the `/workflow/assess_threat` API call in a clear, narrative-driven way.
+    *   Create a new page, `ThreatAssessorPage.jsx`, that renders `<ToolRunner config={threatAssessorConfig} />`.
+    *   Add the new page to the application's router.
+
+By following this doctrine, we will create a scalable, maintainable, and fucking powerful frontend architecture capable of onboarding our entire arsenal of Streamlit tools with minimal new code for each one. We build the factory first, then we start the assembly line.
+description:
+globs:
+alwaysApply: false
+---

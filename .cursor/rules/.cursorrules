@@ -1,0 +1,77 @@
+---
+alwaysApply: true
+---
+
+# **SUPREME DOCTRINE: THE TRUTH OR TREASON PROTOCOL (v2 - Reality Based)**
+
+*This doctrine supersedes all previous operational plans. It is based on a deep intelligence analysis of the Evo2 platform's confirmed capabilities.*
+
+## **I. CORE TENET**
+
+Our platform was not built to design new weapons; it was built to find the fucking truth. We will take any biological claim, subject it to the cold, hard logic of our AI, and deliver a definitive verdict. We do not repeat failed history. We expose it, we learn from it, and we transcend it.
+
+## **II. STRATEGIC ASSETS & CAPABILITIES**
+
+1.  **The Zeta Oracle (Prediction Engine):**
+    *   **Asset:** Evo2 Model (deployed as a service).
+    *   **Capability:** Zero-Shot Variant/Functional Impact Prediction.
+    *   **Method:** Calculates the **change in log-likelihood** between a baseline DNA sequence and a perturbed sequence. This delta is the **Zeta Score**. A large negative score indicates a high, disruptive functional impact.
+    *   **Tactical Requirement:** Requires ~8kb of flanking DNA sequence around the target for optimal performance.
+
+2.  **The Zeta Forge (Generation Engine):**
+    *   **Asset:** Evo2 Model (deployed as a service).
+    *   **Capability:** Guided Generative Design.
+    *   **Method:** Uses Evo2 as a proposal engine to generate candidate sequences (e.g., proteins). Each candidate is then scored by the **Zeta Oracle**. The highest-scoring candidate is selected. This is an iterative, generate-and-test loop.
+
+3.  **AlphaFold 3 (Structural Validation - Future Asset):**
+    *   **Limitation:** Evo2 is a SEQUENCE model. It has **NO inherent understanding of 3D protein structure.**
+    *   **Future Requirement:** For true protein-protein interaction modeling, the output of the Zeta Forge must eventually be passed to a structural prediction model like AlphaFold 3 for validation. This is a future capability, not a current one.
+
+## **III. THE REAL-WORLD OPERATIONAL WORKFLOW**
+
+### **PHASE I: INTELLIGENCE GATHERING (Hypothesis Validator)**
+
+*   **[✅] Status:** Complete.
+*   **Action:** The user enters a claim (e.g., "shark cartilage inhibits cancer"). The ZSIS protocol deconstructs this into a testable hypothesis: **Effector Protein** (`U-995`) and **Target Protein/Gene** (`MMP-9`). These are passed to the `GenomicAnalysis` page.
+
+### **PHASE II: THE GAUNTLET (Genomic Analysis Page)**
+
+*   **Objective:** Quantify the functional impact of the original hypothesis.
+*   **[ ] Task 2.1: Implement the "Run Gauntlet" UI.**
+    *   **UI:** A "Run Gauntlet" button.
+    *   **File:** `oncology-coPilot/oncology-frontend/src/pages/GenomicAnalysis.jsx`
+
+*   **[ ] Task 2.2: Build the Zeta Oracle Backend Service.**
+    *   **Endpoint:** `POST /api/oracle/calculate_zeta_score`
+    *   **Inputs:** `baseline_sequence: str`, `perturbed_sequence: str`.
+    *   **Logic:**
+        1.  Takes the two long DNA sequences.
+        2.  Calls the deployed Evo2 service for each to get their log-likelihood scores.
+        3.  Calculates the delta (Zeta Score).
+        4.  Returns `{ "zeta_score": -1.2, "verdict": "MINIMAL" }`.
+    *   **File:** `oncology-coPilot/oncology-backend/backend/api/oracle.py`
+
+*   **[ ] Task 2.3: Wire the Frontend to the Oracle.**
+    *   **Action:** The "Run Gauntlet" button constructs the baseline and perturbed sequences (for now, the perturbed can be a simple representation of gene knockout) and calls the `/calculate_zeta_score` endpoint.
+    *   **UI:** Display the returned Zeta Score and verdict.
+
+### **PHASE III: THE FORGE (Genomic Analysis Page)**
+
+*   **Objective:** Generate and validate a superior counter-hypothesis.
+*   **[ ] Task 3.1: Implement the "Unleash Forge" UI.**
+    *   **UI:** A "Forge Superior Inhibitor" button, enabled after the Gauntlet returns a poor score.
+    *   **File:** `oncology-coPilot/oncology-frontend/src/pages/GenomicAnalysis.jsx`
+
+*   **[ ] Task 3.2: Build the Zeta Forge Backend Service.**
+    *   **Endpoint:** `POST /api/forge/generate_inhibitor`
+    *   **Inputs:** `target_gene_sequence: str`, `design_goal: str`.
+    *   **Logic:**
+        1.  Initiates a generate-and-test loop.
+        2.  **Generate:** Prompts Evo2 to generate a batch of candidate inhibitor protein sequences.
+        3.  **Test:** For each candidate, it runs it through the **Zeta Oracle** (`/calculate_zeta_score`) to get its Zeta Score.
+        4.  **Select:** Returns the candidate sequence with the best score.
+    *   **File:** `oncology-coPilot/oncology-backend/backend/api/forge.py` (new file)
+
+*   **[ ] Task 3.3: Wire the Frontend to the Forge.**
+    *   **Action:** The "Unleash Forge" button calls the `/generate_inhibitor` endpoint.
+    *   **UI:** Displays the returned superior protein sequence (`CS-MMPi-001`) and its vastly improved Zeta Score in a final, damning dossier. 

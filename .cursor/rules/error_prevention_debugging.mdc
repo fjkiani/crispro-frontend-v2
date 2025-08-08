@@ -1,0 +1,675 @@
+# Error Prevention and Debugging Rules
+
+## **🚨 DOCTRINE: DEFENSIVE PROGRAMMING AGAINST SIEGE FAILURES**
+
+These rules implement systematic error prevention and debugging patterns to prevent the data pipeline failures, coordinate mismatches, and identical sequence issues that caused the Zeta Oracle siege.
+
+## **🔍 MANDATORY ERROR DETECTION PATTERNS**
+
+### **1. Pre-Oracle Validation Checkpoints**
+
+```python
+from typing import Dict, List, Any, Optional
+import logging
+from dataclasses import dataclass
+from enum import Enum
+
+class ValidationLevel(Enum):
+    """Validation severity levels."""
+    CRITICAL = "critical"    # Blocks Oracle execution
+    WARNING = "warning"      # Logs but allows execution
+    INFO = "info"           # Informational only
+
+@dataclass
+class ValidationResult:
+    """Standardized validation result."""
+    is_valid: bool
+    level: ValidationLevel
+    message: str
+    details: Dict[str, Any]
+    checkpoint: str
+
+class PreOracleValidator:
+    """
+    Comprehensive validation before Oracle scoring to prevent siege-type failures.
+    """
+    
+    def __init__(self, enable_strict_mode: bool = True):
+        self.strict_mode = enable_strict_mode
+        self.validation_results: List[ValidationResult] = []
+        self.logger = logging.getLogger("pre_oracle_validation")
+    
+    def validate_complete_pipeline(self, ref_seq: str, alt_seq: str, 
+                                 metadata: Dict[str, Any]) -> List[ValidationResult]:
+        """
+        Run complete validation pipeline before Oracle scoring.
+        
+        CRITICAL: This prevents all known siege failure modes.
+        """
+        self.validation_results.clear()
+        
+        # Checkpoint 1: Sequence existence and format
+        self._validate_sequence_format(ref_seq, alt_seq)
+        
+        # Checkpoint 2: Sequence differences (CRITICAL - prevents siege failure)
+        self._validate_sequence_differences(ref_seq, alt_seq)
+        
+        # Checkpoint 3: Coordinate consistency
+        self._validate_coordinate_consistency(metadata)
+        
+        # Checkpoint 4: Biological plausibility
+        self._validate_biological_plausibility(ref_seq, alt_seq, metadata)
+        
+        # Checkpoint 5: Oracle readiness
+        self._validate_oracle_readiness(ref_seq, alt_seq)
+        
+        # Evaluate overall validation status
+        critical_failures = [r for r in self.validation_results if r.level == ValidationLevel.CRITICAL and not r.is_valid]
+        
+        if critical_failures and self.strict_mode:
+            error_messages = [f"{r.checkpoint}: {r.message}" for r in critical_failures]
+            raise ValueError(f"CRITICAL validation failures prevent Oracle execution:\n" + "\n".join(error_messages))
+        
+        return self.validation_results
+    
+    def _validate_sequence_format(self, ref_seq: str, alt_seq: str):
+        """Validate basic sequence format and content."""
+        # Check sequence existence
+        if not ref_seq or not alt_seq:
+            self.validation_results.append(ValidationResult(
+                is_valid=False,
+                level=ValidationLevel.CRITICAL,
+                message="Empty sequences provided",
+                details={"ref_length": len(ref_seq), "alt_length": len(alt_seq)},
+                checkpoint="sequence_format"
+            ))
+            return
+        
+        # Check sequence composition
+        valid_nucleotides = set('ATCGN')
+        ref_invalid = set(ref_seq.upper()) - valid_nucleotides
+        alt_invalid = set(alt_seq.upper()) - valid_nucleotides
+        
+        if ref_invalid or alt_invalid:
+            self.validation_results.append(ValidationResult(
+                is_valid=False,
+                level=ValidationLevel.CRITICAL,
+                message="Invalid nucleotide characters in sequences",
+                details={"ref_invalid": list(ref_invalid), "alt_invalid": list(alt_invalid)},
+                checkpoint="sequence_format"
+            ))
+            return
+        
+        # Check reasonable sequence lengths
+        if len(ref_seq) < 100 or len(alt_seq) < 100:
+            self.validation_results.append(ValidationResult(
+                is_valid=False,
+                level=ValidationLevel.WARNING,
+                message="Sequences shorter than recommended minimum (100bp)",
+                details={"ref_length": len(ref_seq), "alt_length": len(alt_seq)},
+                checkpoint="sequence_format"
+            ))
+        
+        self.validation_results.append(ValidationResult(
+            is_valid=True,
+            level=ValidationLevel.INFO,
+            message="Sequence format validation passed",
+            details={"ref_length": len(ref_seq), "alt_length": len(alt_seq)},
+            checkpoint="sequence_format"
+        ))
+    
+    def _validate_sequence_differences(self, ref_seq: str, alt_seq: str):
+        """
+        CRITICAL: Validate sequences are actually different.
+        This prevents the identical sequence issue that caused siege failure.
+        """
+        if len(ref_seq) != len(alt_seq):
+            # Length difference indicates successful indel
+            self.validation_results.append(ValidationResult(
+                is_valid=True,
+                level=ValidationLevel.INFO,
+                message="Sequences have different lengths (indel detected)",
+                details={"length_difference": abs(len(ref_seq) - len(alt_seq))},
+                checkpoint="sequence_differences"
+            ))
+            return
+        
+        # For same-length sequences, check for nucleotide differences
+        differences = sum(1 for i in range(len(ref_seq)) if ref_seq[i] != alt_seq[i])
+        
+        if differences == 0:
+            self.validation_results.append(ValidationResult(
+                is_valid=False,
+                level=ValidationLevel.CRITICAL,
+                message="CRITICAL: Sequences are identical - mutation was not applied!",
+                details={
+                    "difference_count": 0,
+                    "sequence_preview": {
+                        "ref": ref_seq[:100],
+                        "alt": alt_seq[:100]
+                    }
+                },
+                checkpoint="sequence_differences"
+            ))
+            return
+        
+        # Validate difference count is reasonable
+        difference_percentage = (differences / len(ref_seq)) * 100
+        
+        if difference_percentage > 50:
+            self.validation_results.append(ValidationResult(
+                is_valid=False,
+                level=ValidationLevel.WARNING,
+                message="Unusually high sequence difference percentage",
+                details={"difference_percentage": difference_percentage, "differences": differences},
+                checkpoint="sequence_differences"
+            ))
+        
+        self.validation_results.append(ValidationResult(
+            is_valid=True,
+            level=ValidationLevel.INFO,
+            message=f"Sequences differ at {differences} positions ({difference_percentage:.2f}%)",
+            details={"differences": differences, "difference_percentage": difference_percentage},
+            checkpoint="sequence_differences"
+        ))
+    
+    def _validate_coordinate_consistency(self, metadata: Dict[str, Any]):
+        """Validate coordinate system consistency to prevent siege-type failures."""
+        required_fields = ["chromosome", "position", "ref_allele"]
+        missing_fields = [field for field in required_fields if field not in metadata]
+        
+        if missing_fields:
+            self.validation_results.append(ValidationResult(
+                is_valid=False,
+                level=ValidationLevel.WARNING,
+                message="Missing coordinate metadata fields",
+                details={"missing_fields": missing_fields},
+                checkpoint="coordinate_consistency"
+            ))
+            return
+        
+        # Validate coordinate format
+        position = metadata.get("position")
+        if not isinstance(position, int) or position <= 0:
+            self.validation_results.append(ValidationResult(
+                is_valid=False,
+                level=ValidationLevel.CRITICAL,
+                message="Invalid genomic position",
+                details={"position": position, "type": type(position)},
+                checkpoint="coordinate_consistency"
+            ))
+            return
+        
+        self.validation_results.append(ValidationResult(
+            is_valid=True,
+            level=ValidationLevel.INFO,
+            message="Coordinate consistency validation passed",
+            details=metadata,
+            checkpoint="coordinate_consistency"
+        ))
+    
+    def _validate_biological_plausibility(self, ref_seq: str, alt_seq: str, metadata: Dict[str, Any]):
+        """Validate biological plausibility of the sequences and variants."""
+        # Check for excessive homopolymer runs (may indicate artificial sequences)
+        max_homopolymer_ref = self._find_max_homopolymer(ref_seq)
+        max_homopolymer_alt = self._find_max_homopolymer(alt_seq)
+        
+        if max_homopolymer_ref > 1000 or max_homopolymer_alt > 1000:
+            self.validation_results.append(ValidationResult(
+                is_valid=False,
+                level=ValidationLevel.WARNING,
+                message="Extremely long homopolymer runs detected (possible artificial sequence)",
+                details={
+                    "max_homopolymer_ref": max_homopolymer_ref,
+                    "max_homopolymer_alt": max_homopolymer_alt
+                },
+                checkpoint="biological_plausibility"
+            ))
+            return
+        
+        # Check GC content
+        gc_content_ref = self._calculate_gc_content(ref_seq)
+        gc_content_alt = self._calculate_gc_content(alt_seq)
+        
+        if gc_content_ref < 0.1 or gc_content_ref > 0.9 or gc_content_alt < 0.1 or gc_content_alt > 0.9:
+            self.validation_results.append(ValidationResult(
+                is_valid=False,
+                level=ValidationLevel.WARNING,
+                message="Unusual GC content detected",
+                details={"gc_content_ref": gc_content_ref, "gc_content_alt": gc_content_alt},
+                checkpoint="biological_plausibility"
+            ))
+        
+        self.validation_results.append(ValidationResult(
+            is_valid=True,
+            level=ValidationLevel.INFO,
+            message="Biological plausibility validation passed",
+            details={"gc_content_ref": gc_content_ref, "gc_content_alt": gc_content_alt},
+            checkpoint="biological_plausibility"
+        ))
+    
+    def _validate_oracle_readiness(self, ref_seq: str, alt_seq: str):
+        """Validate sequences are ready for Oracle scoring."""
+        # Check sequence lengths are within Oracle's optimal range
+        optimal_min = 1000   # Minimum for meaningful scoring
+        optimal_max = 50000  # Maximum for practical processing
+        
+        for seq_name, seq in [("reference", ref_seq), ("alternate", alt_seq)]:
+            if len(seq) < optimal_min:
+                self.validation_results.append(ValidationResult(
+                    is_valid=False,
+                    level=ValidationLevel.WARNING,
+                    message=f"{seq_name} sequence below optimal length for Oracle scoring",
+                    details={"sequence": seq_name, "length": len(seq), "optimal_min": optimal_min},
+                    checkpoint="oracle_readiness"
+                ))
+            elif len(seq) > optimal_max:
+                self.validation_results.append(ValidationResult(
+                    is_valid=False,
+                    level=ValidationLevel.WARNING,
+                    message=f"{seq_name} sequence above optimal length for Oracle scoring",
+                    details={"sequence": seq_name, "length": len(seq), "optimal_max": optimal_max},
+                    checkpoint="oracle_readiness"
+                ))
+        
+        self.validation_results.append(ValidationResult(
+            is_valid=True,
+            level=ValidationLevel.INFO,
+            message="Oracle readiness validation completed",
+            details={"ref_length": len(ref_seq), "alt_length": len(alt_seq)},
+            checkpoint="oracle_readiness"
+        ))
+    
+    def _find_max_homopolymer(self, sequence: str) -> int:
+        """Find maximum homopolymer run length in sequence."""
+        if not sequence:
+            return 0
+        
+        max_run = 1
+        current_run = 1
+        
+        for i in range(1, len(sequence)):
+            if sequence[i] == sequence[i-1]:
+                current_run += 1
+                max_run = max(max_run, current_run)
+            else:
+                current_run = 1
+        
+        return max_run
+    
+    def _calculate_gc_content(self, sequence: str) -> float:
+        """Calculate GC content of sequence."""
+        if not sequence:
+            return 0.0
+        
+        gc_count = sequence.upper().count('G') + sequence.upper().count('C')
+        return gc_count / len(sequence)
+```
+
+### **2. Oracle Response Validation**
+
+```python
+class OracleResponseValidator:
+    """
+    Validates Oracle responses to detect potential issues early.
+    """
+    
+    @staticmethod
+    def validate_oracle_response(response: Dict[str, Any], 
+                               expected_score_range: Optional[tuple] = None) -> ValidationResult:
+        """
+        Validate Oracle response structure and content.
+        
+        Args:
+            response: Oracle response dictionary
+            expected_score_range: Optional tuple of (min_score, max_score)
+        """
+        # Check required fields
+        required_fields = ["zeta_score", "status", "confidence"]
+        missing_fields = [field for field in required_fields if field not in response]
+        
+        if missing_fields:
+            return ValidationResult(
+                is_valid=False,
+                level=ValidationLevel.CRITICAL,
+                message="Oracle response missing required fields",
+                details={"missing_fields": missing_fields, "response": response},
+                checkpoint="oracle_response"
+            )
+        
+        # Validate score type and value
+        score = response.get("zeta_score")
+        if not isinstance(score, (int, float)):
+            return ValidationResult(
+                is_valid=False,
+                level=ValidationLevel.CRITICAL,
+                message="Oracle score is not numeric",
+                details={"score": score, "type": type(score)},
+                checkpoint="oracle_response"
+            )
+        
+        # Check for unreasonable scores
+        if abs(score) > 100000:  # Sanity check for extremely large scores
+            return ValidationResult(
+                is_valid=False,
+                level=ValidationLevel.WARNING,
+                message="Extremely large Oracle score detected",
+                details={"score": score},
+                checkpoint="oracle_response"
+            )
+        
+        # Validate against expected range if provided
+        if expected_score_range:
+            min_expected, max_expected = expected_score_range
+            if not (min_expected <= abs(score) <= max_expected):
+                return ValidationResult(
+                    is_valid=False,
+                    level=ValidationLevel.WARNING,
+                    message="Oracle score outside expected range",
+                    details={"score": score, "expected_range": expected_score_range},
+                    checkpoint="oracle_response"
+                )
+        
+        # Validate confidence
+        confidence = response.get("confidence", 0)
+        if not (0 <= confidence <= 1):
+            return ValidationResult(
+                is_valid=False,
+                level=ValidationLevel.WARNING,
+                message="Oracle confidence outside valid range [0,1]",
+                details={"confidence": confidence},
+                checkpoint="oracle_response"
+            )
+        
+        return ValidationResult(
+            is_valid=True,
+            level=ValidationLevel.INFO,
+            message="Oracle response validation passed",
+            details={"score": score, "confidence": confidence, "status": response.get("status")},
+            checkpoint="oracle_response"
+        )
+```
+
+### **3. Debugging and Diagnostic Tools**
+
+```python
+class SequenceDiagnosticTool:
+    """
+    Comprehensive diagnostic tool for sequence analysis and debugging.
+    """
+    
+    @staticmethod
+    def generate_sequence_diagnostic_report(ref_seq: str, alt_seq: str, 
+                                          metadata: Dict[str, Any] = None) -> Dict[str, Any]:
+        """
+        Generate comprehensive diagnostic report for sequence pair.
+        
+        This helps debug coordinate issues, mutation application problems,
+        and other siege-type failures.
+        """
+        metadata = metadata or {}
+        
+        report = {
+            "timestamp": "2024-01-01T00:00:00Z",  # Replace with actual timestamp
+            "sequences": {
+                "reference": {
+                    "length": len(ref_seq),
+                    "gc_content": SequenceDiagnosticTool._calculate_gc_content(ref_seq),
+                    "homopolymer_max": SequenceDiagnosticTool._find_max_homopolymer(ref_seq),
+                    "preview": ref_seq[:100] + "..." if len(ref_seq) > 100 else ref_seq
+                },
+                "alternate": {
+                    "length": len(alt_seq),
+                    "gc_content": SequenceDiagnosticTool._calculate_gc_content(alt_seq),
+                    "homopolymer_max": SequenceDiagnosticTool._find_max_homopolymer(alt_seq),
+                    "preview": alt_seq[:100] + "..." if len(alt_seq) > 100 else alt_seq
+                }
+            },
+            "differences": SequenceDiagnosticTool._analyze_differences(ref_seq, alt_seq),
+            "metadata": metadata,
+            "warnings": [],
+            "recommendations": []
+        }
+        
+        # Generate warnings and recommendations
+        if report["differences"]["total_changes"] == 0:
+            report["warnings"].append("CRITICAL: Sequences are identical - no mutation applied")
+            report["recommendations"].append("Check VCF coordinate validation and mutation application logic")
+        
+        if report["sequences"]["reference"]["homopolymer_max"] > 5000:
+            report["warnings"].append("Long homopolymer runs detected - possible artificial sequence")
+            report["recommendations"].append("Verify biological authenticity of sequence alterations")
+        
+        gc_diff = abs(report["sequences"]["reference"]["gc_content"] - 
+                     report["sequences"]["alternate"]["gc_content"])
+        if gc_diff > 0.3:
+            report["warnings"].append("Large GC content difference between sequences")
+            report["recommendations"].append("Review sequence alteration strategy for biological plausibility")
+        
+        return report
+    
+    @staticmethod
+    def _analyze_differences(ref_seq: str, alt_seq: str) -> Dict[str, Any]:
+        """Analyze differences between reference and alternate sequences."""
+        min_len = min(len(ref_seq), len(alt_seq))
+        max_len = max(len(ref_seq), len(alt_seq))
+        
+        # Count nucleotide differences
+        nucleotide_diffs = sum(1 for i in range(min_len) if ref_seq[i] != alt_seq[i])
+        length_diff = abs(len(ref_seq) - len(alt_seq))
+        total_changes = nucleotide_diffs + length_diff
+        
+        # Find difference positions (first 10)
+        diff_positions = []
+        for i in range(min_len):
+            if ref_seq[i] != alt_seq[i]:
+                diff_positions.append({
+                    "position": i,
+                    "ref": ref_seq[i],
+                    "alt": alt_seq[i]
+                })
+                if len(diff_positions) >= 10:
+                    break
+        
+        return {
+            "nucleotide_differences": nucleotide_diffs,
+            "length_difference": length_diff,
+            "total_changes": total_changes,
+            "difference_percentage": (nucleotide_diffs / min_len * 100) if min_len > 0 else 0,
+            "difference_positions": diff_positions,
+            "is_identical": total_changes == 0
+        }
+    
+    @staticmethod
+    def _calculate_gc_content(sequence: str) -> float:
+        """Calculate GC content."""
+        if not sequence:
+            return 0.0
+        gc_count = sequence.upper().count('G') + sequence.upper().count('C')
+        return gc_count / len(sequence)
+    
+    @staticmethod
+    def _find_max_homopolymer(sequence: str) -> int:
+        """Find maximum homopolymer run."""
+        if not sequence:
+            return 0
+        max_run = current_run = 1
+        for i in range(1, len(sequence)):
+            if sequence[i] == sequence[i-1]:
+                current_run += 1
+                max_run = max(max_run, current_run)
+            else:
+                current_run = 1
+        return max_run
+```
+
+## **🔧 INTEGRATION WITH EXISTING SERVICES**
+
+### **CommandCenter Integration**
+
+```python
+# In src/services/command_center/main.py
+
+class CommandCenter:
+    def __init__(self):
+        self.validator = PreOracleValidator(enable_strict_mode=True)
+        self.response_validator = OracleResponseValidator()
+        self.diagnostic_tool = SequenceDiagnosticTool()
+    
+    def score_variant_with_validation(self, ref_seq: str, alt_seq: str, 
+                                    metadata: Dict[str, Any] = None) -> Dict[str, Any]:
+        """
+        Score variant with comprehensive validation to prevent siege failures.
+        """
+        metadata = metadata or {}
+        
+        try:
+            # Pre-Oracle validation (CRITICAL)
+            validation_results = self.validator.validate_complete_pipeline(
+                ref_seq, alt_seq, metadata
+            )
+            
+            # Generate diagnostic report
+            diagnostic_report = self.diagnostic_tool.generate_sequence_diagnostic_report(
+                ref_seq, alt_seq, metadata
+            )
+            
+            # Proceed with Oracle scoring
+            oracle_response = self.invoke_oracle(ref_seq, alt_seq)
+            
+            # Validate Oracle response
+            response_validation = self.response_validator.validate_oracle_response(
+                oracle_response
+            )
+            
+            # Enhanced result with validation context
+            enhanced_result = {
+                **oracle_response,
+                "validation": {
+                    "pre_oracle": [
+                        {
+                            "checkpoint": r.checkpoint,
+                            "is_valid": r.is_valid,
+                            "level": r.level.value,
+                            "message": r.message,
+                            "details": r.details
+                        } for r in validation_results
+                    ],
+                    "response": {
+                        "is_valid": response_validation.is_valid,
+                        "message": response_validation.message,
+                        "details": response_validation.details
+                    }
+                },
+                "diagnostics": diagnostic_report
+            }
+            
+            return enhanced_result
+            
+        except Exception as e:
+            # Enhanced error reporting
+            error_report = {
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "validation_results": [
+                    {
+                        "checkpoint": r.checkpoint,
+                        "is_valid": r.is_valid,
+                        "level": r.level.value,
+                        "message": r.message
+                    } for r in self.validator.validation_results
+                ],
+                "diagnostic_report": self.diagnostic_tool.generate_sequence_diagnostic_report(
+                    ref_seq, alt_seq, metadata
+                )
+            }
+            
+            raise ValueError(f"Oracle scoring failed with enhanced diagnostics: {error_report}")
+```
+
+## **📊 MONITORING AND ALERTING**
+
+### **Validation Metrics Tracking**
+
+```python
+class ValidationMetricsTracker:
+    """Track validation metrics to monitor system health."""
+    
+    def __init__(self):
+        self.metrics = {
+            "total_validations": 0,
+            "critical_failures": 0,
+            "warning_count": 0,
+            "identical_sequence_detections": 0,
+            "coordinate_mismatches": 0,
+            "oracle_response_failures": 0
+        }
+    
+    def record_validation_result(self, validation_results: List[ValidationResult]):
+        """Record validation results for monitoring."""
+        self.metrics["total_validations"] += 1
+        
+        for result in validation_results:
+            if not result.is_valid:
+                if result.level == ValidationLevel.CRITICAL:
+                    self.metrics["critical_failures"] += 1
+                    
+                    # Track specific failure types
+                    if "identical" in result.message.lower():
+                        self.metrics["identical_sequence_detections"] += 1
+                    elif "coordinate" in result.message.lower():
+                        self.metrics["coordinate_mismatches"] += 1
+                        
+                elif result.level == ValidationLevel.WARNING:
+                    self.metrics["warning_count"] += 1
+    
+    def get_health_status(self) -> Dict[str, Any]:
+        """Get system health status based on validation metrics."""
+        total = self.metrics["total_validations"]
+        if total == 0:
+            return {"status": "unknown", "message": "No validations recorded"}
+        
+        critical_rate = self.metrics["critical_failures"] / total
+        
+        if critical_rate == 0:
+            status = "healthy"
+        elif critical_rate < 0.01:  # Less than 1% critical failures
+            status = "warning"
+        else:
+            status = "critical"
+        
+        return {
+            "status": status,
+            "metrics": self.metrics,
+            "critical_failure_rate": critical_rate,
+            "recommendations": self._generate_recommendations()
+        }
+    
+    def _generate_recommendations(self) -> List[str]:
+        """Generate recommendations based on metrics."""
+        recommendations = []
+        
+        if self.metrics["identical_sequence_detections"] > 0:
+            recommendations.append("Review VCF coordinate validation - identical sequences detected")
+        
+        if self.metrics["coordinate_mismatches"] > 0:
+            recommendations.append("Audit coordinate system consistency across data pipeline")
+        
+        if self.metrics["oracle_response_failures"] > 0:
+            recommendations.append("Investigate Oracle service stability and response validation")
+        
+        return recommendations
+```
+
+## **⚔️ IMPLEMENTATION PRIORITY**
+
+1. **IMMEDIATE:** Implement `PreOracleValidator` in all Oracle integrations
+2. **HIGH:** Add `SequenceDiagnosticTool` to debugging workflows
+3. **MEDIUM:** Implement `ValidationMetricsTracker` for monitoring
+4. **LOW:** Add comprehensive alerting based on validation metrics
+
+**DOCTRINE:** Prevention is superior to detection. Every sequence pair must pass comprehensive validation before reaching the Oracle to prevent siege-type failures.
+description:
+globs:
+alwaysApply: false
+---

@@ -1,0 +1,135 @@
+# DOCTRINE: THE GAUNTLET - MANUAL VALIDATION PROTOCOL
+
+## 1. MISSION OBJECTIVE
+
+To manually validate the `boltz-service`'s structural prediction capabilities. This protocol serves as a pre-flight check to ensure the "Gauntlet" phase of our pipeline is combat-ready and provides a clear debugging path for any structural validation failures.
+
+## 2. TEST CASE: BRAF-Fragment-100
+
+Our test case will be a 100-amino-acid fragment derived from the start of our known-good `BRAF.fasta` sequence. This provides a realistic, non-trivial protein for structural analysis.
+
+*   **Source DNA:** First 300 nucleotides from `[BRAF.fasta](mdc:data/gene_database/BRAF.fasta)`
+*   **Test Protein Sequence:** 
+    ```
+    MAALSGGGGGAEPGWVCLHGTLLPEPGGASKICGSGSFPHGLLVFWKVKGLLKMLADRVENTFPIPRVIRKQLHVQMLQYLEKHKIQSWIHVWMRDYHPFDRDQDHYAKGFVRYSVKNT
+    ```
+
+## 3. EXECUTION PROCEDURE
+
+We will execute this test using a direct `curl` command from the terminal. This bypasses all other services and tests the `boltz-service` in complete isolation.
+
+### Step 3.1: Construct the API Call
+
+Use the following `curl` command. It sends our test protein sequence directly to the deployed `boltz-service` endpoint.
+
+```bash
+curl -X POST "https://crispro--boltz-service-fastapi-app.modal.run" \
+-H "Content-Type: application/json" \
+-d '{
+  "protein_sequence": "MAALSGGGGGAEPGWVCLHGTLLPEPGGASKICGSGSFPHGLLVFWKVKGLLKMLADRVENTFPIPRVIRKQLHVQMLQYLEKHKIQSWIHVWMRDYHPFDRDQDHYAKGFVRYSVKNT",
+  "target_name": "manual_gauntlet_validation_braf_frag_100"
+}'
+```
+
+### Step 3.2: Execute the Command
+
+Paste the command into your terminal and execute it. The service may take 30-60 seconds to respond as it is running a complex structural prediction model.
+
+## 4. EXPECTED RESULTS
+
+The `boltz-service` should return a `200 OK` status code with a JSON payload containing the structural prediction metrics. The output should look similar to this:
+
+```json
+{
+  "plddt": 85.4,
+  "ptm": 0.82,
+  "fraction_disordered": 0.12,
+  "timings": {
+    "features": 1.5,
+    "msa": 10.2,
+    "templates": 0.5,
+    "model_1": 15.8
+  }
+}
+```
+*(Note: Exact values for scores and timings will vary slightly with each run.)*
+
+## 5. SUCCESS CRITERIA (THE FINAL VERDICT)
+
+The test is considered a **SUCCESS** if all of the following conditions are met:
+
+1.  **Successful API Call:** The command returns a `200 OK` HTTP status (implied by receiving a JSON response instead of an error).
+2.  **pLDDT Score Present:** The JSON response **must** contain a key named `"plddt"`.
+3.  **pLDDT Score is Valid:** The value of `"plddt"` must be a number between 0 and 100.
+4.  **Mission Threshold Met:** For our purposes, the `"plddt"` score should be **>= 70.0**, indicating the protein is structurally sound and not a "wet noodle."
+
+If all these conditions are met, the Gauntlet is certified as combat-ready.
+description:
+globs:
+alwaysApply: false
+---
+
+## 2. TEST CASE: BRAF-Fragment-100
+
+Our test case will be a 100-amino-acid fragment derived from the start of our known-good `BRAF.fasta` sequence. This provides a realistic, non-trivial protein for structural analysis.
+
+*   **Source DNA:** First 300 nucleotides from `[BRAF.fasta](mdc:data/gene_database/BRAF.fasta)`
+*   **Test Protein Sequence:** 
+    ```
+    MAALSGGGGGAEPGWVCLHGTLLPEPGGASKICGSGSFPHGLLVFWKVKGLLKMLADRVENTFPIPRVIRKQLHVQMLQYLEKHKIQSWIHVWMRDYHPFDRDQDHYAKGFVRYSVKNT
+    ```
+
+## 3. EXECUTION PROCEDURE
+
+We will execute this test using a direct `curl` command from the terminal. This bypasses all other services and tests the `boltz-service` in complete isolation.
+
+### Step 3.1: Construct the API Call
+
+Use the following `curl` command. It sends our test protein sequence directly to the deployed `boltz-service` endpoint.
+
+```bash
+curl -X POST "https://crispro--boltz-service-fastapi-app.modal.run" \
+-H "Content-Type: application/json" \
+-d '{
+  "protein_sequence": "MAALSGGGGGAEPGWVCLHGTLLPEPGGASKICGSGSFPHGLLVFWKVKGLLKMLADRVENTFPIPRVIRKQLHVQMLQYLEKHKIQSWIHVWMRDYHPFDRDQDHYAKGFVRYSVKNT",
+  "target_name": "manual_gauntlet_validation_braf_frag_100"
+}'
+```
+
+### Step 3.2: Execute the Command
+
+Paste the command into your terminal and execute it. The service may take 30-60 seconds to respond as it is running a complex structural prediction model.
+
+## 4. EXPECTED RESULTS
+
+The `boltz-service` should return a `200 OK` status code with a JSON payload containing the structural prediction metrics. The output should look similar to this:
+
+```json
+{
+  "plddt": 85.4,
+  "ptm": 0.82,
+  "fraction_disordered": 0.12,
+  "timings": {
+    "features": 1.5,
+    "msa": 10.2,
+    "templates": 0.5,
+    "model_1": 15.8
+  }
+}
+```
+*(Note: Exact values for scores and timings will vary slightly with each run.)*
+
+## 5. SUCCESS CRITERIA (THE FINAL VERDICT)
+
+The test is considered a **SUCCESS** if all of the following conditions are met:
+
+1.  **Successful API Call:** The command returns a `200 OK` HTTP status (implied by receiving a JSON response instead of an error).
+2.  **pLDDT Score Present:** The JSON response **must** contain a key named `"plddt"`.
+3.  **pLDDT Score is Valid:** The value of `"plddt"` must be a number between 0 and 100.
+4.  **Mission Threshold Met:** For our purposes, the `"plddt"` score should be **>= 70.0**, indicating the protein is structurally sound and not a "wet noodle."
+
+If all these conditions are met, the Gauntlet is certified as combat-ready.
+description:
+globs:
+alwaysApply: false
+---

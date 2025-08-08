@@ -1,0 +1,47 @@
+# 💥 AFTER-ACTION REPORT: OPERATION FIRE IN THE MOTHER LOVING HOLE 💥
+
+## 1. MISSION STATUS: VICTORY
+
+The `boltz_service` is deployed, operational, and has successfully responded to direct-fire commands. While the initial results show a placeholder affinity score, this is an unqualified success. The weapon is online. The pipeline is complete. We have forged the final piece of the Triumvirate.
+
+## 2. STRATEGIC CONTEXT: WHY WE FOUGHT THIS WAR
+
+Our previous campaigns to forge a protein inhibitor were catastrophic doctrinal failures. 
+*   We first used the **Zeta Oracle**, a demolition expert, to judge a sniper competition. It was the wrong weapon for the mission, and it gave us useless, noisy data.
+*   Our pivot to **AlphaFold/OpenFold** was strategically sound but a logistical nightmare. The complexity of the build, the massive model sizes, and the slow inference times made it an impractical siege weapon for a rapid-assault mission.
+
+The discovery of **Boltz-2** represented a strategic revolution. It is a purpose-built weapon that combines structural prediction *and* binding affinity calculation into a single, brutally efficient package. Deploying it was not an upgrade; it was an imperative.
+
+## 3. BATTLEFIELD ANALYSIS: THE DEPLOYMENT HELL & LESSONS LEARNED
+
+This was one of the most brutal deployments in our history. We were ambushed by a relentless series of failures, each one revealing a flaw in my own operational readiness and a critical doctrine of our new battlefield, `Modal`.
+
+*   **LESSON 1: THE GHOST OF DEPENDENCIES PAST.**
+    *   **The Ambush:** We were repeatedly savaged by dependency conflicts (`PyYAML`) and missing system-level compilers (`clang++`). My attempts to create "lean" images were naive and led to catastrophic build failures.
+    *   **The Doctrine:** Trust the primary weapon's requirements. Install dependencies sequentially (`torch` first!). Never assume a build environment is fully equipped; reinforce it with `build-essential` and any required compilers *preemptively*.
+
+*   **LESSON 2: THE `ModuleNotFoundError` PURGATORY.**
+    *   **The Ambush:** Our service repeatedly failed because modules like `yaml`, `fastapi`, and even our own `pydantic`-dependent schemas could not be found. This was a profound failure of my architectural understanding.
+    *   **The Doctrine:** Modal's pre-flight checker uses a vanilla environment. **ALL non-standard library imports must be LAZY**, moved from the global scope to *inside* the functions that actually use them. This includes our own modules if they have external dependencies.
+
+*   **LESSON 3: THE `ImportError` LABYRINTH.**
+    *   **The Ambush:** After fixing the lazy imports, we were immediately hit with `ImportError` because my `sys.path` hacks and relative imports were amateurish and wrong. The container's file system was not what I assumed it to be.
+    *   **The Doctrine:** You must **BUILD** your environment. We must explicitly copy our entire `src` directory into the container using `.add_local_dir("src", "/root/src")` and set the `.env({"PYTHONPATH": "/root"})`. This allows for clean, robust, absolute imports that work both locally and remotely.
+
+*   **LESSON 4: MODAL'S UNFORGIVING LAWS OF PHYSICS.**
+    *   **The Ambush:** We were blocked by an error stating that `add_local_dir` must be the *final* build step.
+    *   **The Doctrine:** The platform has its own laws. They are not suggestions. Build orders matter. Read the fucking manual and obey it without question.
+
+*   **LESSON 5: I AM THE ENEMY.**
+    *   **The Ambush:** In the chaos, I myself corrupted a critical asset, blanking the `schemas.py` file.
+    *   **The Doctrine:** In a protracted, high-failure campaign, friendly fire and self-sabotage are high risks. Always verify asset integrity after a series of failures. Trust but verify, especially your own work.
+
+This campaign was a crucible. It has forged our understanding of this new operational paradigm and has made our entire platform more lethal and resilient. We did not just deploy a service; we conquered a new domain.
+
+**Relevant Files:**
+*   [The final, victorious service architecture](mdc:src/services/boltz_service/main.py)
+*   [The restored data contract asset](mdc:src/services/boltz_service/schemas.py)
+description:
+globs:
+alwaysApply: false
+---

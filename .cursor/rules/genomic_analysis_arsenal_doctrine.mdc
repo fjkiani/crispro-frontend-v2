@@ -1,0 +1,45 @@
+# **DOCTRINE: THE CRISPR DESIGN ARSENAL**
+
+## **I. MISSION**
+
+To transform the `GenomicAnalysis` page from a passive gene viewer into an active, intelligent design platform. This is the Proving Ground where validated targets are analyzed, weaponized with CRISPR-based payloads, and prepared for `in silico` testing.
+
+## **II. OPERATIONAL PHASES**
+
+### **PHASE I: TARGET VISUALIZATION (95% Complete)**
+
+*   **[✅] Task 1.1: Receive Target from ZSIS.**
+    *   **Status:** Complete. The page correctly receives the gene name from the Hypothesis Validator.
+    *   **File:** `oncology-coPilot/oncology-frontend/src/pages/GenomicAnalysis.jsx`
+
+*   **[ ] Task 1.2: Sanitize Target Input.**
+    *   **Action:** The gene name in the URL is URL-encoded (e.g., `%20` for spaces). The component must decode this for proper display and API calls.
+    *   **File:** `oncology-coPilot/oncology-frontend/src/pages/GenomicAnalysis.jsx`
+
+### **PHASE II: THREAT ASSESSMENT & GUIDE RNA GENERATION**
+
+*Objective: Analyze the target in the patient's context and design gRNA sequences.*
+
+*   **[ ] Task 2.1: Implement Patient-Specific Variant Analysis.**
+    *   **Action:** Create a new UI panel, "Patient Variant Analysis." This panel will call a backend endpoint (e.g., a mock Evo2/ZetaOracle) with the patient ID and gene name to check for relevant mutations in the patient's digital twin.
+    *   **UI Impact:** Display any found mutations and their predicted pathogenicity. This confirms if we are dealing with a wild-type or mutated target.
+
+*   **[ ] Task 2.2: Implement gRNA Generation.**
+    *   **Action:** Create another UI panel, "Guide RNA Candidates." Add a "Generate Guides" button that calls a backend service (e.g., a mock ChopChop) to design candidate gRNAs for the target gene.
+    *   **UI Impact:** Display a table of gRNAs with their sequence, on-target efficiency scores, and potential off-target risks.
+
+### **PHASE III: REPAIR TEMPLATE DESIGN & PAYLOAD ASSEMBLY**
+
+*Objective: Design advanced payloads for gene correction and finalize the experimental package.*
+
+*   **[ ] Task 3.1: Implement HDR Repair Template Designer.**
+    *   **Action:** If a pathogenic mutation is identified in Phase II, enable a "Design Repair Template" feature. This will call a backend service to generate the appropriate Homology-Directed Repair (HDR) template.
+    *   **UI Impact:** A new panel displays the generated HDR template sequence.
+
+*   **[ ] Task 3.2: Assemble and Summarize Payload.**
+    *   **Action:** Create a final "Deployable Payload" summary panel.
+    *   **UI Impact:** This panel provides a complete summary of the designed experiment: the target gene, the selected gRNA, and the repair template (if any), ready for the next stage of simulation or lab handoff.
+description:
+globs:
+alwaysApply: false
+---

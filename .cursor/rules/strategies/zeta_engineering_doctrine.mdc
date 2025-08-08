@@ -1,0 +1,341 @@
+# ⚔️ THE ZETA ENGINEERING DOCTRINE ⚔️
+
+This document codifies the brutal, hard-won lessons learned during the stabilization of the **Command Center**. These are not suggestions; they are iron-clad laws. Adherence is mandatory. Deviation is heresy. We fought these fucking wars so we never have to fight them again.
+
+---
+
+## **1. DOCTRINE OF SERVICE COMMUNICATION: ABANDON THE FALSE GOD OF `lookup()`**
+
+### **The Heresy:**
+Relying on Modal's internal `_Cls.lookup()` for service-to-service communication is a path to madness. It is unreliable, context-dependent, and produces cryptic, fucking useless errors like `_Cls.lookup() missing 1 required positional argument: 'name'`, especially in background tasks.
+
+### **The One True Path: Direct HTTP Strikes**
+- **LAW:** For any Modal service exposed via a web endpoint (`@modal.asgi_app`), communication **MUST** be conducted via direct, explicit `httpx` calls to its public URL.
+- **RATIONALE:** It is robust, unambiguous, and bypasses Modal's internal black box. We control the request, we control the timeout, and we get clean, understandable errors.
+- **IMPLEMENTATION:**
+  - Define service URLs as constants (e.g., `BLAST_SERVICE_URL = "https://[...].modal.run"`).
+  - Use a shared `httpx` client helper to make the calls.
+  - **The `lookup()` method is dead to us.** Do not use it.
+
+---
+
+## **2. DOCTRINE OF DATABASE CREATION: ONE `BASE` TO RULE THEM ALL**
+
+### **The Heresy:**
+The `sqlite3.OperationalError: no such table` error is a sign of a schism in the database's soul. It occurs when the part of the code defining the tables (`models.py`) and the part creating the database (`database.py`) worship different, conflicting `Base` objects.
+
+### **The One True Path: Unify Under a Single Banner**
+- **LAW:** The `declarative_base()` shall be defined **ONCE** and only once, within `services/command_center/models.py`.
+- **LAW:** The `initialize_database()` function in `services/command_center/database.py` **MUST** perform a local import of this one true `Base` *inside* the function before it dares to call `Base.metadata.create_all(bind=engine)`.
+- **EXAMPLE:**
+  ```python
+  # In services/command_center/database.py
+  def initialize_database(db_url: str):
+      """Initializes the database engine and session."""
+      from .models import Base # <-- THIS IS THE LAW
+      
+      engine = create_engine(...)
+      SessionLocal = sessionmaker(...)
+      Base.metadata.create_all(bind=engine) # This now works.
+  ```
+- **RATIONALE:** This ensures the `create_all` command sees a complete and unified definition of our armory. It prevents circular dependencies at the module level while guaranteeing structural integrity.
+
+---
+
+## **3. DOCTRINE OF DATA PARSING: TRUST NOTHING, VALIDATE EVERYTHING**
+
+### **The Heresy:**
+Assuming external data (APIs, XML, user input) will be clean and complete is suicidal naivete. It leads directly to service-fucking-crashes like `AttributeError: 'NoneType' object has no attribute 'text'`.
+
+### **The One True Path: Assume All Data Is Hostile**
+- **LAW:** Before accessing any data from an external source, its existence **MUST** be verified.
+- **RATIONALE:** This builds a resilient system that does not shatter when faced with the chaotic reality of real-world data.
+- **IMPLEMENTATION:**
+  - **For XML/Objects:** Check for `None` before accessing attributes.
+    ```python
+    # BAD: a single missing node crashes the service
+    mismatches = int(hsp.find('Hsp_mismatch').text)
+
+    # GOOD: handles the chaos, prevents crashes
+    mismatch_node = hsp.find('Hsp_mismatch')
+    mismatches = int(mismatch_node.text) if mismatch_node is not None else 0
+    ```
+  - **For Dictionaries:** Use the `.get()` method with a default value, not direct key access.
+    ```python
+    # BAD: crashes if 'details' key is missing
+    error_details = result['details']
+
+    # GOOD: returns a sane default if key is missing
+    error_details = result.get('details', 'No details provided.')
+    ```
+  - **Wrap critical parsing logic in `try...except` blocks.** Catch specific errors (`ET.ParseError`, `KeyError`, `ValueError`) and handle them gracefully.
+
+---
+
+## **4. DOCTRINE OF THE STALE CACHE: THE MONOLITH IS THE ONLY TRUTH**
+
+### **The Heresy:**
+Modal's caching is a powerful but treacherous beast. It can and will serve stale, outdated versions of your code from mounted directories, leading to maddening debugging sessions where the deployed code does not match your local reality.
+
+### **The One True Path: Co-locate Critical Code**
+- **LAW:** If a piece of code (e.g., a client class) is being served from a stale cache, all countermeasures (cache-busting comments, new dependencies) **MUST** be considered unreliable. The only guaranteed solution is to **inline the problematic code** directly into the service file that uses it.
+- **RATIONALE:** By creating a monolithic service file, we make it impossible for Modal to serve a stale, separate dependency. The code is deployed as a single, atomic unit. This is the ultimate cache-buster. It is ugly, but it is pure.
+
+---
+This doctrine is now enshrined. We will build upon this foundation of blood and steel. 🚀
+description:
+globs:
+alwaysApply: false
+---
+
+## **1. DOCTRINE OF SERVICE COMMUNICATION: ABANDON THE FALSE GOD OF `lookup()`**
+
+### **The Heresy:**
+Relying on Modal's internal `_Cls.lookup()` for service-to-service communication is a path to madness. It is unreliable, context-dependent, and produces cryptic, fucking useless errors like `_Cls.lookup() missing 1 required positional argument: 'name'`, especially in background tasks.
+
+### **The One True Path: Direct HTTP Strikes**
+- **LAW:** For any Modal service exposed via a web endpoint (`@modal.asgi_app`), communication **MUST** be conducted via direct, explicit `httpx` calls to its public URL.
+- **RATIONALE:** It is robust, unambiguous, and bypasses Modal's internal black box. We control the request, we control the timeout, and we get clean, understandable errors.
+- **IMPLEMENTATION:**
+  - Define service URLs as constants (e.g., `BLAST_SERVICE_URL = "https://[...].modal.run"`).
+  - Use a shared `httpx` client helper to make the calls.
+  - **The `lookup()` method is dead to us.** Do not use it.
+
+---
+
+## **2. DOCTRINE OF DATABASE CREATION: ONE `BASE` TO RULE THEM ALL**
+
+### **The Heresy:**
+The `sqlite3.OperationalError: no such table` error is a sign of a schism in the database's soul. It occurs when the part of the code defining the tables (`models.py`) and the part creating the database (`database.py`) worship different, conflicting `Base` objects.
+
+### **The One True Path: Unify Under a Single Banner**
+- **LAW:** The `declarative_base()` shall be defined **ONCE** and only once, within `services/command_center/models.py`.
+- **LAW:** The `initialize_database()` function in `services/command_center/database.py` **MUST** perform a local import of this one true `Base` *inside* the function before it dares to call `Base.metadata.create_all(bind=engine)`.
+- **EXAMPLE:**
+  ```python
+  # In services/command_center/database.py
+  def initialize_database(db_url: str):
+      """Initializes the database engine and session."""
+      from .models import Base # <-- THIS IS THE LAW
+      
+      engine = create_engine(...)
+      SessionLocal = sessionmaker(...)
+      Base.metadata.create_all(bind=engine) # This now works.
+  ```
+- **RATIONALE:** This ensures the `create_all` command sees a complete and unified definition of our armory. It prevents circular dependencies at the module level while guaranteeing structural integrity.
+
+---
+
+## **3. DOCTRINE OF DATA PARSING: TRUST NOTHING, VALIDATE EVERYTHING**
+
+### **The Heresy:**
+Assuming external data (APIs, XML, user input) will be clean and complete is suicidal naivete. It leads directly to service-fucking-crashes like `AttributeError: 'NoneType' object has no attribute 'text'`.
+
+### **The One True Path: Assume All Data Is Hostile**
+- **LAW:** Before accessing any data from an external source, its existence **MUST** be verified.
+- **RATIONALE:** This builds a resilient system that does not shatter when faced with the chaotic reality of real-world data.
+- **IMPLEMENTATION:**
+  - **For XML/Objects:** Check for `None` before accessing attributes.
+    ```python
+    # BAD: a single missing node crashes the service
+    mismatches = int(hsp.find('Hsp_mismatch').text)
+
+    # GOOD: handles the chaos, prevents crashes
+    mismatch_node = hsp.find('Hsp_mismatch')
+    mismatches = int(mismatch_node.text) if mismatch_node is not None else 0
+    ```
+  - **For Dictionaries:** Use the `.get()` method with a default value, not direct key access.
+    ```python
+    # BAD: crashes if 'details' key is missing
+    error_details = result['details']
+
+    # GOOD: returns a sane default if key is missing
+    error_details = result.get('details', 'No details provided.')
+    ```
+  - **Wrap critical parsing logic in `try...except` blocks.** Catch specific errors (`ET.ParseError`, `KeyError`, `ValueError`) and handle them gracefully.
+
+---
+
+## **4. DOCTRINE OF THE STALE CACHE: THE MONOLITH IS THE ONLY TRUTH**
+
+### **The Heresy:**
+Modal's caching is a powerful but treacherous beast. It can and will serve stale, outdated versions of your code from mounted directories, leading to maddening debugging sessions where the deployed code does not match your local reality.
+
+### **The One True Path: Co-locate Critical Code**
+- **LAW:** If a piece of code (e.g., a client class) is being served from a stale cache, all countermeasures (cache-busting comments, new dependencies) **MUST** be considered unreliable. The only guaranteed solution is to **inline the problematic code** directly into the service file that uses it.
+- **RATIONALE:** By creating a monolithic service file, we make it impossible for Modal to serve a stale, separate dependency. The code is deployed as a single, atomic unit. This is the ultimate cache-buster. It is ugly, but it is pure.
+
+---
+This doctrine is now enshrined. We will build upon this foundation of blood and steel. 🚀
+description:
+globs:
+alwaysApply: false
+---
+
+## **1. DOCTRINE OF SERVICE COMMUNICATION: ABANDON THE FALSE GOD OF `lookup()`**
+
+### **The Heresy:**
+Relying on Modal's internal `_Cls.lookup()` for service-to-service communication is a path to madness. It is unreliable, context-dependent, and produces cryptic, fucking useless errors like `_Cls.lookup() missing 1 required positional argument: 'name'`, especially in background tasks.
+
+### **The One True Path: Direct HTTP Strikes**
+- **LAW:** For any Modal service exposed via a web endpoint (`@modal.asgi_app`), communication **MUST** be conducted via direct, explicit `httpx` calls to its public URL.
+- **RATIONALE:** It is robust, unambiguous, and bypasses Modal's internal black box. We control the request, we control the timeout, and we get clean, understandable errors.
+- **IMPLEMENTATION:**
+  - Define service URLs as constants (e.g., `BLAST_SERVICE_URL = "https://[...].modal.run"`).
+  - Use a shared `httpx` client helper to make the calls.
+  - **The `lookup()` method is dead to us.** Do not use it.
+
+---
+
+## **2. DOCTRINE OF DATABASE CREATION: ONE `BASE` TO RULE THEM ALL**
+
+### **The Heresy:**
+The `sqlite3.OperationalError: no such table` error is a sign of a schism in the database's soul. It occurs when the part of the code defining the tables (`models.py`) and the part creating the database (`database.py`) worship different, conflicting `Base` objects.
+
+### **The One True Path: Unify Under a Single Banner**
+- **LAW:** The `declarative_base()` shall be defined **ONCE** and only once, within `services/command_center/models.py`.
+- **LAW:** The `initialize_database()` function in `services/command_center/database.py` **MUST** perform a local import of this one true `Base` *inside* the function before it dares to call `Base.metadata.create_all(bind=engine)`.
+- **EXAMPLE:**
+  ```python
+  # In services/command_center/database.py
+  def initialize_database(db_url: str):
+      """Initializes the database engine and session."""
+      from .models import Base # <-- THIS IS THE LAW
+      
+      engine = create_engine(...)
+      SessionLocal = sessionmaker(...)
+      Base.metadata.create_all(bind=engine) # This now works.
+  ```
+- **RATIONALE:** This ensures the `create_all` command sees a complete and unified definition of our armory. It prevents circular dependencies at the module level while guaranteeing structural integrity.
+
+---
+
+## **3. DOCTRINE OF DATA PARSING: TRUST NOTHING, VALIDATE EVERYTHING**
+
+### **The Heresy:**
+Assuming external data (APIs, XML, user input) will be clean and complete is suicidal naivete. It leads directly to service-fucking-crashes like `AttributeError: 'NoneType' object has no attribute 'text'`.
+
+### **The One True Path: Assume All Data Is Hostile**
+- **LAW:** Before accessing any data from an external source, its existence **MUST** be verified.
+- **RATIONALE:** This builds a resilient system that does not shatter when faced with the chaotic reality of real-world data.
+- **IMPLEMENTATION:**
+  - **For XML/Objects:** Check for `None` before accessing attributes.
+    ```python
+    # BAD: a single missing node crashes the service
+    mismatches = int(hsp.find('Hsp_mismatch').text)
+
+    # GOOD: handles the chaos, prevents crashes
+    mismatch_node = hsp.find('Hsp_mismatch')
+    mismatches = int(mismatch_node.text) if mismatch_node is not None else 0
+    ```
+  - **For Dictionaries:** Use the `.get()` method with a default value, not direct key access.
+    ```python
+    # BAD: crashes if 'details' key is missing
+    error_details = result['details']
+
+    # GOOD: returns a sane default if key is missing
+    error_details = result.get('details', 'No details provided.')
+    ```
+  - **Wrap critical parsing logic in `try...except` blocks.** Catch specific errors (`ET.ParseError`, `KeyError`, `ValueError`) and handle them gracefully.
+
+---
+
+## **4. DOCTRINE OF THE STALE CACHE: THE MONOLITH IS THE ONLY TRUTH**
+
+### **The Heresy:**
+Modal's caching is a powerful but treacherous beast. It can and will serve stale, outdated versions of your code from mounted directories, leading to maddening debugging sessions where the deployed code does not match your local reality.
+
+### **The One True Path: Co-locate Critical Code**
+- **LAW:** If a piece of code (e.g., a client class) is being served from a stale cache, all countermeasures (cache-busting comments, new dependencies) **MUST** be considered unreliable. The only guaranteed solution is to **inline the problematic code** directly into the service file that uses it.
+- **RATIONALE:** By creating a monolithic service file, we make it impossible for Modal to serve a stale, separate dependency. The code is deployed as a single, atomic unit. This is the ultimate cache-buster. It is ugly, but it is pure.
+
+---
+This doctrine is now enshrined. We will build upon this foundation of blood and steel. 🚀
+description:
+globs:
+alwaysApply: false
+---
+
+## **1. DOCTRINE OF SERVICE COMMUNICATION: ABANDON THE FALSE GOD OF `lookup()`**
+
+### **The Heresy:**
+Relying on Modal's internal `_Cls.lookup()` for service-to-service communication is a path to madness. It is unreliable, context-dependent, and produces cryptic, fucking useless errors like `_Cls.lookup() missing 1 required positional argument: 'name'`, especially in background tasks.
+
+### **The One True Path: Direct HTTP Strikes**
+- **LAW:** For any Modal service exposed via a web endpoint (`@modal.asgi_app`), communication **MUST** be conducted via direct, explicit `httpx` calls to its public URL.
+- **RATIONALE:** It is robust, unambiguous, and bypasses Modal's internal black box. We control the request, we control the timeout, and we get clean, understandable errors.
+- **IMPLEMENTATION:**
+  - Define service URLs as constants (e.g., `BLAST_SERVICE_URL = "https://[...].modal.run"`).
+  - Use a shared `httpx` client helper to make the calls.
+  - **The `lookup()` method is dead to us.** Do not use it.
+
+---
+
+## **2. DOCTRINE OF DATABASE CREATION: ONE `BASE` TO RULE THEM ALL**
+
+### **The Heresy:**
+The `sqlite3.OperationalError: no such table` error is a sign of a schism in the database's soul. It occurs when the part of the code defining the tables (`models.py`) and the part creating the database (`database.py`) worship different, conflicting `Base` objects.
+
+### **The One True Path: Unify Under a Single Banner**
+- **LAW:** The `declarative_base()` shall be defined **ONCE** and only once, within `services/command_center/models.py`.
+- **LAW:** The `initialize_database()` function in `services/command_center/database.py` **MUST** perform a local import of this one true `Base` *inside* the function before it dares to call `Base.metadata.create_all(bind=engine)`.
+- **EXAMPLE:**
+  ```python
+  # In services/command_center/database.py
+  def initialize_database(db_url: str):
+      """Initializes the database engine and session."""
+      from .models import Base # <-- THIS IS THE LAW
+      
+      engine = create_engine(...)
+      SessionLocal = sessionmaker(...)
+      Base.metadata.create_all(bind=engine) # This now works.
+  ```
+- **RATIONALE:** This ensures the `create_all` command sees a complete and unified definition of our armory. It prevents circular dependencies at the module level while guaranteeing structural integrity.
+
+---
+
+## **3. DOCTRINE OF DATA PARSING: TRUST NOTHING, VALIDATE EVERYTHING**
+
+### **The Heresy:**
+Assuming external data (APIs, XML, user input) will be clean and complete is suicidal naivete. It leads directly to service-fucking-crashes like `AttributeError: 'NoneType' object has no attribute 'text'`.
+
+### **The One True Path: Assume All Data Is Hostile**
+- **LAW:** Before accessing any data from an external source, its existence **MUST** be verified.
+- **RATIONALE:** This builds a resilient system that does not shatter when faced with the chaotic reality of real-world data.
+- **IMPLEMENTATION:**
+  - **For XML/Objects:** Check for `None` before accessing attributes.
+    ```python
+    # BAD: a single missing node crashes the service
+    mismatches = int(hsp.find('Hsp_mismatch').text)
+
+    # GOOD: handles the chaos, prevents crashes
+    mismatch_node = hsp.find('Hsp_mismatch')
+    mismatches = int(mismatch_node.text) if mismatch_node is not None else 0
+    ```
+  - **For Dictionaries:** Use the `.get()` method with a default value, not direct key access.
+    ```python
+    # BAD: crashes if 'details' key is missing
+    error_details = result['details']
+
+    # GOOD: returns a sane default if key is missing
+    error_details = result.get('details', 'No details provided.')
+    ```
+  - **Wrap critical parsing logic in `try...except` blocks.** Catch specific errors (`ET.ParseError`, `KeyError`, `ValueError`) and handle them gracefully.
+
+---
+
+## **4. DOCTRINE OF THE STALE CACHE: THE MONOLITH IS THE ONLY TRUTH**
+
+### **The Heresy:**
+Modal's caching is a powerful but treacherous beast. It can and will serve stale, outdated versions of your code from mounted directories, leading to maddening debugging sessions where the deployed code does not match your local reality.
+
+### **The One True Path: Co-locate Critical Code**
+- **LAW:** If a piece of code (e.g., a client class) is being served from a stale cache, all countermeasures (cache-busting comments, new dependencies) **MUST** be considered unreliable. The only guaranteed solution is to **inline the problematic code** directly into the service file that uses it.
+- **RATIONALE:** By creating a monolithic service file, we make it impossible for Modal to serve a stale, separate dependency. The code is deployed as a single, atomic unit. This is the ultimate cache-buster. It is ugly, but it is pure.
+
+---
+This doctrine is now enshrined. We will build upon this foundation of blood and steel. 🚀
+description:
+globs:
+alwaysApply: false
+---

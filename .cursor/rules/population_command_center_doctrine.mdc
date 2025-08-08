@@ -1,0 +1,74 @@
+# Doctrine: The Population Command Center
+
+## 1.0 Mission: The 10,000-Foot View
+The Population Command Center is the strategic map room of the CrisPRO platform. Its mission is to provide a comprehensive, 10,000-foot view of the entire patient cohort, enabling leaders, researchers, and administrators to "see the forest" by identifying system-wide trends, risks, and strategic priorities. It is a proactive tool for population-level decision-making.
+
+## 2.0 Design Philosophy
+*   **Mission Control Aesthetics:** A clean, high-contrast, dark-themed interface built for long analysis sessions and rapid comprehension.
+*   **Living Data:** All components are expected to be dynamic, with real-time updates pushed via WebSockets to reflect the evolving state of the patient population without manual refreshes.
+*   **Scalable & Fast:** Engineered to handle 10,000+ patients with load times under 2 seconds, achieved through efficient backend aggregation and querying.
+
+## 3.0 Command Center Layout & Features
+The dashboard is organized into a responsive, three-column grid designed for maximum information density and intuitive drill-down.
+
+### 3.1 Global Controls (Top Navigation)
+*   **Capability:** To filter and scope the entire view of the command center.
+*   **Features:**
+    *   **Global Patient Search:** Instantly find and jump to an individual patient's record.
+    *   **Cohort Filters:** Dynamically segment the entire dataset by cancer type, treatment status, mutation, demographic, etc.
+    *   **Date Range Selector:** Scope all time-series data to specific periods.
+*   **Requirements:** Frontend state management for filters; robust backend indexing for fast searching.
+
+### 3.2 Left Column: The At-A-Glance Overview
+*   **Capability:** To provide an immediate, high-level summary of the entire patient population's status.
+*   **Features:**
+    *   **KPI Grid:** A customizable grid of key performance indicators (e.g., "Total Patients," "Avg. Risk Score," "Patients in CRPC").
+    *   **Population Funnel (Sankey Diagram):** A powerful visualization showing the flow of all patients through the core stages: `Screening` -> `Diagnosis` -> `Active Treatment` -> `Monitoring` -> `Remission`.
+*   **Requirements:**
+    *   `GET /api/population/kpis`: Endpoint to fetch key metrics.
+    *   `GET /api/population/flow`: Endpoint to return patient counts for each funnel stage.
+
+### 3.3 Center Column: Strategic Trend & Risk Analysis
+*   **Capability:** The deep-dive section for identifying patterns and threats across the cohort. This is where the core AI-driven insights are visualized.
+*   **Features:**
+    *   **Time-Series Trend Charts:** Interactive charts displaying critical metrics over time, such as "Hormone Therapy Failure Rate" or "Incidence of AR-V7 Mutations."
+    *   **Population Risk Pyramid:** A chart stratifying the entire population by AI-assessed risk level (`Critical`, `High`, `Medium`, `Low`).
+    *   **Metastasis Threat Heatmap:** A heatmap visualizing risk across the 8-Step Metastasis Framework for the entire cohort, highlighting population-wide vulnerabilities.
+    *   **Population-Wide Threat Matrix:** A bar chart displaying the prevalence of the top 10-20 pathogenic mutations across the entire patient database.
+*   **Requirements:**
+    *   `GET /api/population/trends?metric=<metric>&timescale=<period>`
+    *   `GET /api/population/risk_distribution`
+    *   `GET /api/population/metastasis_heatmap`
+    *   `GET /api/population/top_mutations`
+
+### 3.4 Right Column: Strategic Priorities & Actions
+*   **Capability:** To translate population-level insights into actionable, prioritized tasks. This column answers the question, "What do we do now?"
+*   **Features:**
+    *   **AI-Generated Strategic Recommendations:** A list of high-level actions, e.g., "Target enzalutamide non-responders (n=150) for abiraterone trials."
+    *   **High-Priority Triage List:** A list of the top 5-10 individual patients requiring immediate review, with a one-sentence summary of the issue.
+    *   **Drill-Down Mechanism:** Each patient on the triage list will have a "View Patient Record" button, which is the primary navigational link from the population view to the individual EMR view (`/medical-records/:patientId`).
+*   **Requirements:**
+    *   `GET /api/population/recommendations`
+    *   `GET /api/population/triage_list`
+
+## 4.0 The Navigational Doctrine: From Forest to Tree
+The fundamental workflow of the CrisPRO platform is a drill-down from the strategic to the individual. A user starts at the **Population Command Center** to identify a trend or a high-risk cohort, uses the filters to isolate a group of interest, and finally selects a single patient from the **Triage List** or a chart to navigate to the **Individual Mission Control** (`/medical-records/:patientId`), where the `SITREP`, `Dossiers`, and `Arsenal` can be deployed for that specific patient.
+
+## 5.0 Intelligence Fusion Doctrine: The MedGemma Synergy
+Our platform's dominance comes from fusing our specialized genomic tools with the clinical reasoning of MedGemma. Each tool is an oracle; MedGemma is the master interpreter that connects their wisdom.
+
+*   **`threat_assessor.py` (Genomic Oracle) + MedGemma:** The assessor flags a genomic threat (e.g., a `BRCA1` mutation). MedGemma is then dispatched to scan the patient's EMR for the clinical context (e.g., family history, pathology reports), answering "So what?" for the clinician.
+
+*   **`metastasis_analyzer.py` (Invasion Forecaster) + MedGemma:** The analyzer predicts a metastatic risk (e.g., high potential for angiogenesis). MedGemma's vision capabilities then scan the patient's radiology images for physical evidence (e.g., neo-vascularization), validating the genomic prediction with clinical reality.
+
+*   **`intelligent_guide_finder.py` (Weapon Forge) + MedGemma:** The forge designs a CRISPR guide. MedGemma then drafts the "Therapeutic Rationale" document, synthesizing the threat data and clinical history into a comprehensive justification for the designed intervention.
+
+*   **`literature_analyzer.py` (Scout) + MedGemma:** The scout fetches dozens of relevant PubMed abstracts. MedGemma reads and synthesizes them into a single, state-of-the-art intelligence briefing.
+
+*   **`result_interpreter.py` (After-Action Report) + MedGemma:** The interpreter reports a molecular outcome (e.g., "12% HDR efficiency"). MedGemma correlates this with clinical data (e.g., a 15% reduction in PSA levels), fusing the molecular result with the clinical patient outcome.
+
+This fusion of specialized genomic tools with a generalist clinical AI is our core, unassailable advantage.
+description:
+globs:
+alwaysApply: false
+---

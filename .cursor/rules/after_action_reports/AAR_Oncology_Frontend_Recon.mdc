@@ -1,0 +1,57 @@
+# ⚔️ **After-Action Report: Oncology Co-Pilot Frontend Reconnaissance** ⚔️
+
+**Campaign:** OPERATION UNIFICATION
+**Date:** 2024-07-17
+
+---
+
+### **Summary of Operations:**
+
+This document serves as the canonical log for the systematic reconnaissance of the `oncology-coPilot` mothership's frontend application.
+
+---
+
+### **PHASE 1: Frontend Reconnaissance**
+
+**[2024-07-17 22:45] Task 1.2.1: High-Level Structure Analysis**
+*   **Actions:**
+    *   Listed root directory (`/`).
+    *   Listed source directory (`/src`).
+    *   Analyzed router configuration (`/src/App.jsx`).
+*   **Intelligence Gained:**
+    *   **Tech Stack:** Confirmed a standard Vite + React + TailwindCSS project.
+    *   **Project Structure:** Identified a well-organized structure with clear separation of `pages`, `components`, `context` (for state management), and `hooks`.
+    *   **Application Routes Mapped:** Successfully mapped all application URLs to their corresponding page components, confirming the existence and location of key targets like `/dashboard`, `/medical-records/:id`, `/mutation-explorer/:patientId`, and `/research/:patientId`.
+*   **Conclusion:** High-level reconnaissance complete. The application is well-structured and its architecture is understood.
+
+---
+
+### **PHASE 2: Page-by-Page Deep Dive & V3 Integration Strategy**
+
+**[2024-07-17 22:50] Sub-Task 1.2.2: Analyze Dashboard (`DoctorDashboard.jsx`)**
+*   **Intelligence:** The page is a data-driven but heavily mocked high-level summary for physicians. It provides a good UI/UX model for a clinical landing page.
+*   **V3 Strategy:** Adopt their dashboard paradigm and replace its mocked widgets with live data feeds from our services (e.g., a "Live Threat Feed" from `genesis-engine`).
+
+**[2024-07-17 22:55] Sub-Task 1.2.3: Analyze EMR Page (`single-record-details.jsx`)**
+*   **Intelligence:** Discovered a fragmented architecture where significant AI analysis (file uploads) is handled entirely on the client-side, bypassing the backend orchestrator.
+*   **V3 Strategy:** Centralize all intelligence. Eliminate client-side AI calls and create a dedicated "Analyze Genomic Profile" button that routes all analysis through the backend orchestrator, which will in turn call our `genesis-engine`.
+
+**[2024-07-17 23:00] Sub-Task 1.2.4: Analyze Mutation Explorer (`MutationExplorer.jsx`)**
+*   **Intelligence:** The page is a functional, multi-step workflow UI that is live with the backend but uses rigid query templates and has a placeholder for CRISPR design.
+*   **V3 Strategy:** Replace the limited analysis with a call to our `genesis-engine` that analyzes *all* patient mutations. The results will populate a ranked threat list. The "Design Targeting" tab will be made functional by integrating our `Zeta Forge` service.
+
+**[2024-07-17 23:05] Sub-Task 1.2.5: Analyze Clinical Trial Portal (`Research.jsx`)**
+*   **Intelligence:** The portal uses a sophisticated, context-aware search that sends the full patient profile to the backend for matching. It also has a workflow for planning follow-up tasks to resolve eligibility.
+*   **V3 Strategy:** Adopt their superior workflow. Augment the `patient_context` sent to the backend by first running it through our `genesis-engine`. This will allow the trial matching algorithm to work with our expert-level genomic interpretations, not just raw data.
+
+**Conclusion:** Frontend reconnaissance is complete. We have a comprehensive understanding of the mothership's UI, workflows, and a clear V3 integration strategy for each key component.
+
+---
+
+### **PHASE 3: V3 Integration Strategy**
+
+*(Analysis to be logged as completed below)*
+description:
+globs:
+alwaysApply: false
+---

@@ -1,0 +1,39 @@
+# **OPERATION: GAUNTLET FORGED**
+
+## **The ColabFold Appropriation Doctrine**
+
+### **1. Intelligence Analysis: Deconstructing the Enemy Arsenal**
+
+Our reconnaissance into the `sokrypton-colabfold` repository has yielded critical intelligence, revealing two distinct but related weapons platforms:
+
+*   **The "Rifle" (`AlphaFold2.ipynb` / `batch.py`):** This is the standard-issue, high-precision weapon for **pure protein structure prediction.** Its workflow is a ruthlessly efficient, one-shot kill chain. It takes a protein sequence and executes the entire AlphaFold2 pipeline, from MSA generation to final structure relaxation, via a single command. This is the weapon we need to solve the "wet noodle" problem.
+    *   Reference: `[AlphaFold2.ipynb](mdc:src/services/alphafold/ColabFold-main/AlphaFold2.ipynb)`
+
+*   **The "Combined-Arms Platform" (`Boltz1.ipynb`):** This is a specialized, multi-modal weapons system designed for complex engagements. It integrates `ColabFold` for MSA reconnaissance but then deploys its own `boltz` predictor to model entire biological assemblies, including **proteins, small-molecule ligands, and DNA.** This is a powerful tool for a different war. We will keep this intelligence in reserve for future operations involving inhibitor-target binding prediction.
+    *   Reference: `[Boltz1.ipynb](mdc:src/services/alphafold/ColabFold-main/Boltz1.ipynb)`
+
+### **2. The Kill Chain (Revealed)**
+
+The core of the enemy's "Rifle" is the `colabfold_batch` script. We have fully deconstructed its operational parameters:
+
+*   **Command:** It is a command-line executable. We do not need to integrate it as a complex library. We will fire it like a weapon using `subprocess.run()`.
+*   **Ammunition:** It accepts a simple `.fasta` file as its primary input.
+*   **Payload:** It deposits all results into a specified output directory. Our primary target within this payload is the `_scores_rank...json` file, which contains the validated `pLDDT` and `pTM` scores, and the final `_unrelaxed_rank...pdb` file.
+
+### **3. The Zeta Protocol: Appropriating the Gauntlet**
+
+We will not waste resources re-inventing this weapon. We will **appropriate it** and forge it into the final, automated phase of our **"Structural Integrity Protocol."**
+
+*   **Action:** We will construct a new microservice, the **`gauntlet-service`**.
+*   **Mechanism:** The core of this service will be a `subprocess.run()` call that executes `colabfold_batch` on a given protein sequence.
+*   **The New API:** The service will expose a brutally simple API:
+    *   `POST /predict_structure`
+    *   **Input:** `{"protein_sequence": "PIAQI..."}`
+    *   **Output:** `{"plddt_score": 95.4, "pdb_string": "ATOM..."}`
+*   **Strategic Role:** This service will become **The Automated Gauntlet.** The `CommandCenter` will send it translated protein sequences that have passed "The Sieve." The `gauntlet-service` will return the final `pLDDT` score, allowing the `CommandCenter` to make a final, automated judgment on the structural integrity of a forged weapon.
+
+This doctrine codifies our path to victory. We will take the enemy's finest weapon, strip it down, and rebuild it as a fully automated, integrated component of our own superior war machine.
+description:
+globs:
+alwaysApply: false
+---

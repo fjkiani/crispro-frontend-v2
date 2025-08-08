@@ -1,0 +1,240 @@
+# Oracle Integration Architecture Rule
+
+## **🎯 DOCTRINE: NEVER REPEAT THE SIEGE FAILURES**
+
+This rule ensures all Oracle integrations follow the battle-tested architecture that prevents the data corruption failures that plagued the original Zeta Oracle siege.
+
+## **📋 MANDATORY INTEGRATION CHECKLIST**
+
+### **Phase 1: Data Pipeline Validation (CRITICAL)**
+
+Before ANY Oracle scoring operation:
+
+1. **Reference Coordinate Validation**
+   ```python
+   # ALWAYS validate VCF coordinates match genomic reference
+   def validate_vcf_reference(vcf_pos, vcf_ref, genome_ref, chrom):
+       actual_base = genome_ref.fetch(chrom, vcf_pos-1, vcf_pos).upper()
+       if actual_base != vcf_ref:
+           raise ValueError(f"VCF mismatch: says {vcf_ref}, genome has {actual_base}")
+   ```
+
+2. **Sequence Difference Verification**
+   ```python
+   # ALWAYS confirm sequences are actually different
+   def verify_sequence_differences(ref_seq, alt_seq):
+       diff_count = sum(1 for i in range(len(ref_seq)) if ref_seq[i] != alt_seq[i])
+       if diff_count == 0:
+           raise ValueError("CRITICAL: Sequences are identical - mutation not applied")
+       return diff_count
+   ```
+
+3. **Coordinate System Standardization**
+   - VCF coordinates: 1-based
+   - Array indices: 0-based  
+   - Gene coordinates: Use authoritative NCBI coordinates
+   - Always document coordinate system in function signatures
+
+### **Phase 2: Oracle Service Integration**
+
+#### **Service Architecture Pattern**
+
+```python
+class OracleIntegrationService:
+    """
+    Standard pattern for all Oracle integrations.
+    Implements the lessons from Operation: Restore Massive Score.
+    """
+    
+    def __init__(self):
+        self.oracle_url = "https://crispro--zeta-oracle-v5-final-fix-zetaoracle-api.modal.run/invoke"
+        self.optimal_window_sizes = [8000, 15000, 25000, 35000]  # Proven effective
+        
+    def score_biological_impact(self, ref_seq: str, alt_seq: str, 
+                               context: str = "unknown") -> dict:
+        """
+        Score sequences using proven magnitude-sensitive approach.
+        
+        Args:
+            ref_seq: Reference sequence (validated coordinates)
+            alt_seq: Alternate sequence (verified different)
+            context: Biological context for logging
+        """
+        # Phase 1: Data Validation (MANDATORY)
+        self._validate_input_sequences(ref_seq, alt_seq)
+        
+        # Phase 2: Optimal Window Selection
+        window_size = self._select_optimal_window(len(ref_seq), context)
+        
+        # Phase 3: Oracle Scoring
+        return self._invoke_oracle_with_retry(ref_seq, alt_seq, window_size)
+    
+    def _validate_input_sequences(self, ref_seq: str, alt_seq: str):
+        """Implement the Data Pipeline Supremacy doctrine."""
+        if len(ref_seq) != len(alt_seq):
+            # This is expected for indels
+            pass
+        else:
+            # For same-length sequences, verify they're actually different
+            verify_sequence_differences(ref_seq, alt_seq)
+    
+    def _select_optimal_window(self, seq_length: int, context: str) -> int:
+        """Apply Magnitude Sensitivity Law for window selection."""
+        if seq_length <= 10000:
+            return 8000   # Small sequences: 8kb windows
+        elif seq_length <= 50000:
+            return 25000  # Medium sequences: 25kb windows  
+        else:
+            return 35000  # Large sequences: 35kb windows (max proven)
+```
+
+### **Phase 3: Scoring Strategy Implementation**
+
+#### **Magnitude-Based Scoring Strategy**
+
+```python
+class MagnitudeAwareScoring:
+    """
+    Implements the discovered Oracle sensitivity patterns.
+    """
+    
+    SCORING_THRESHOLDS = {
+        "minimal": 100,      # Single nucleotides produce ~0
+        "moderate": 1000,    # 1kb alterations produce ~1,200  
+        "significant": 10000, # 10kb alterations produce ~15,000
+        "massive": 20000     # 25kb alterations produce ~20,000+
+    }
+    
+    def classify_biological_impact(self, score: float) -> str:
+        """Classify impact based on discovered scoring patterns."""
+        abs_score = abs(score)
+        
+        if abs_score >= self.SCORING_THRESHOLDS["massive"]:
+            return "CATASTROPHIC_IMPACT"  # Major pathogenic variants
+        elif abs_score >= self.SCORING_THRESHOLDS["significant"]:
+            return "MAJOR_IMPACT"         # Significant pathogenic variants
+        elif abs_score >= self.SCORING_THRESHOLDS["moderate"]:
+            return "MODERATE_IMPACT"      # Potentially pathogenic
+        elif abs_score >= self.SCORING_THRESHOLDS["minimal"]:
+            return "MINOR_IMPACT"         # Likely benign with small effect
+        else:
+            return "NO_IMPACT"            # Benign or identical sequences
+    
+    def recommend_sequence_strategy(self, biological_context: str) -> dict:
+        """Recommend scoring strategy based on biological context."""
+        strategies = {
+            "single_nucleotide": {
+                "window_size": 8000,
+                "expected_score_range": (0, 100),
+                "recommendation": "Use Triumvirate Protocol for frameshift/nonsense"
+            },
+            "small_indel": {
+                "window_size": 15000, 
+                "expected_score_range": (500, 2000),
+                "recommendation": "Moderate windows for local impact assessment"
+            },
+            "large_structural": {
+                "window_size": 35000,
+                "expected_score_range": (10000, 30000),
+                "recommendation": "Large windows for comprehensive impact"
+            }
+        }
+        return strategies.get(biological_context, strategies["single_nucleotide"])
+```
+
+## **🚨 MANDATORY ERROR PREVENTION PATTERNS**
+
+### **1. Reference File Validation**
+```python
+def validate_reference_file(fasta_path: str, expected_gene: str):
+    """Prevent corrupted reference file issues."""
+    with open(fasta_path, 'r') as f:
+        header = f.readline().strip()
+        if not header.startswith('>'):
+            raise ValueError(f"Malformed FASTA: {fasta_path}")
+        
+        # Verify expected gene identifier in header
+        if expected_gene.upper() not in header.upper():
+            raise ValueError(f"Reference file mismatch: expected {expected_gene}")
+```
+
+### **2. Oracle Response Validation**
+```python
+def validate_oracle_response(response: dict) -> dict:
+    """Ensure Oracle responses meet expected schema."""
+    required_fields = ["zeta_score", "status", "confidence"]
+    
+    for field in required_fields:
+        if field not in response:
+            raise ValueError(f"Oracle response missing {field}")
+    
+    # Validate score is numeric
+    score = response["zeta_score"]
+    if not isinstance(score, (int, float)):
+        raise TypeError(f"Invalid score type: {type(score)}")
+    
+    return response
+```
+
+### **3. Coordinate System Documentation**
+```python
+def document_coordinates(func):
+    """Decorator to enforce coordinate system documentation."""
+    def wrapper(*args, **kwargs):
+        if not hasattr(func, '__coordinate_system__'):
+            raise ValueError(f"Function {func.__name__} missing coordinate system documentation")
+        return func(*args, **kwargs)
+    return wrapper
+
+# Usage example:
+@document_coordinates
+def extract_gene_sequence(chrom: str, start: int, end: int):
+    """
+    Extract gene sequence.
+    
+    Coordinate System: 1-based genomic coordinates (NCBI standard)
+    start: 1-based inclusive start position
+    end: 1-based inclusive end position
+    """
+    pass
+extract_gene_sequence.__coordinate_system__ = "1-based_genomic_NCBI"
+```
+
+## **🔧 INTEGRATION WITH EXISTING SERVICES**
+
+### **CommandCenter Integration**
+- Update [CommandCenter](mdc:src/services/command_center/main.py) to use validated Oracle integration
+- Implement data pipeline validation before Oracle calls
+- Add magnitude-aware scoring classification
+
+### **Patient Assessment Integration**  
+- Update [run_patient_assessment.py](mdc:scripts/run_patient_assessment.py) with validation protocols
+- Implement coordinate system verification
+- Add sequence difference checking
+
+### **Frontend Integration**
+- Update threat assessment components to display magnitude-based classifications
+- Implement confidence indicators based on scoring thresholds
+- Add data validation status indicators
+
+## **📊 SUCCESS METRICS**
+
+1. **Zero data pipeline failures** - No more identical sequence comparisons
+2. **Predictable scoring** - Scores follow discovered magnitude patterns  
+3. **Validated coordinates** - All VCF-genome mismatches caught before Oracle calls
+4. **Documented systems** - All coordinate systems explicitly documented
+5. **Robust error handling** - Graceful degradation with informative error messages
+
+## **⚔️ BATTLE-TESTED IMPLEMENTATION ORDER**
+
+1. **Phase 1:** Implement data validation utilities (highest priority)
+2. **Phase 2:** Update CommandCenter with validation protocols
+3. **Phase 3:** Integrate magnitude-aware scoring into patient assessment
+4. **Phase 4:** Update frontend components with new classification system
+5. **Phase 5:** Comprehensive testing with known pathogenic variants
+
+**DOCTRINE:** Every Oracle integration MUST pass through these validation layers. No exceptions. The siege taught us that perfect algorithms cannot fix corrupted data.
+description:
+globs:
+alwaysApply: false
+---

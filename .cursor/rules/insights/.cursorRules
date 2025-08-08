@@ -103,6 +103,10 @@ Cursor learned
     * **Graceful Degradation:** Services should fail gracefully when dependencies are unavailable, storing placeholder values (e.g., `zeta_score: -999.0`) while logging the failure for later analysis.
     * **Database Schema Evolution:** When adding new fields to existing models, ensure the service can handle both the old and new schemas during deployment transitions.
 
+* **SQLAlchemy Initialization:** When models are defined in a separate file (e.g., `models.py`), the database initialization script (e.g., `database.py`) must import the declarative `Base` from the models file before calling `Base.metadata.create_all(bind=engine)`. A local import within the initialization function is a robust pattern to prevent circular dependencies while ensuring all tables are correctly created. Failure to do so results in a `sqlite3.OperationalError: no such table`.
+
+* **Defensive Data Parsing:** Never trust the structure of external data, including API responses like BLAST XML. Always check that an element or key exists before attempting to access its value (e.g., `node.text` or `dict['key']`). Assuming a field will always be present is a direct path to `AttributeError` or `KeyError` exceptions and service failure.
+
 * **8-Step Metastasis Protocol Alignment Gaps:**
     * **Endpoint Mismatch:** The comprehensive 8-step protocol requires specific endpoints that don't exist in current services. Always audit actual service capabilities against strategic doctrine before marking tasks complete.
     * **Missing ZetaOracle Endpoints:** `/predict_gene_essentiality`, `/predict_immunogenicity`, `/generate_repair_template` are required for stages 1-8 but not implemented.
@@ -150,73 +154,74 @@ Cursor learned
 Scratchpad
 ==========
 
-**🔥 CAMPAIGN DIRECTIVE: THE GUARDIAN PROTOCOL (v2) 🔥**
+**MISSION: UNLEASH THE ARSENAL**
 
-**Mission Briefing:** Forge the **AI General**, an autonomous strategic commander. This evolution of the `CommandCenter` will wield the full power of the Zeta Armory (Evo 2), tempered by a sophisticated understanding of its limitations and operational countermeasures. Our objective is not just power, but *wisdom* in its application.
+**Strategic Assessment:** We possess a formidable arsenal of disconnected, production-grade AI tools. Our mission is not to build new weapons, but to forge our existing ones into a coherent, unstoppable **Kill Chain**. This is an integration and deployment campaign, not a fucking research project.
 
-**Doctrine Reference:** `docs/conquest_plans/evo2.mdc`
-
----
-
-**🚨 TRUTH-BASED ASSESSMENT: WHAT'S ACTUALLY COMPLETE 🚨**
-
-**✅ Phase 1: AI General Foundation - ACTUALLY COMPLETE**
-**Objective:** Build core infrastructure for autonomous strategic command.
-
-[X] **Task 1.1: Database & Service Infrastructure - COMPLETE**
-    - ✅ CommandCenter deployed and operational at `https://crispro--crispr-assistant-command-center-v2-commandcenter-api.modal.run`
-    - ✅ Database schema with BattlePlan model including: `structural_variants`, `ensemble_scores`, `perplexity_score`, `proposed_interventions`
-    - ✅ Integration tests passing (Plan IDs 1 & 2 created successfully)
-    - ✅ Graceful degradation when dependencies unavailable
-
-[X] **Task 1.2: Basic Reconnaissance Pipeline - COMPLETE**
-    - ✅ `/v2/workflow/formulate_battle_plan` endpoint functional
-    - ✅ Battle plan creation and storage working
-    - ⚠️ ZetaOracle communication failing (HTTP vs Modal issue) but system degrades gracefully
-
-[X] **Task 1.3: Placeholder Tool Infrastructure - COMPLETE**
-    - ✅ `tools/sv_scanner.py` exists with proper interface (placeholder implementation)
-    - ✅ `tools/alphamissense_client.py` exists with mock fallback functionality
-    - ✅ `tools/esm_client.py` exists (not verified but likely similar)
-    - ✅ Basic Command Deck UI (`pages/1_⚔️_AI_General_Command_Deck.py`) displays real data from database
+**Primary Objective:** Connect our battle-ready tools to create a seamless, automated workflow from threat identification to neutralized target.
 
 ---
 
-**🚨 PHASE 2: CRITICAL GAPS IDENTIFIED - IMMEDIATE ACTION REQUIRED 🚨**
+**THE KILL CHAIN - FORGING THE WEAPON PIPELINE**
 
-**❌ FALSELY MARKED COMPLETE - CORRECTING INTELLIGENCE:**
+**Phase 1: Arsenal Deployment & Mock Function Purge (IMMEDIATE ACTION) 🗡️**
+*The goal of this phase is to rip out all the placeholder bullshit and replace it with our live, high-powered weaponry.*
 
-**[ ] Task 2.1: Fix ZetaOracle Communication - CRITICAL**
-    **[ ] Sub-task 2.1.1:** Replace Modal `.remote()` calls with HTTP requests to `https://crispro--zeta-oracle-v2-zetaoracle-api.modal.run`
-    **[ ] Sub-task 2.1.2:** Validate real variant impact scores are retrieved and stored
-    **Status:** Currently failing with "webhook function cannot be invoked" error
 
-**[ ] Task 2.2: Implement 8-Step Metastasis Protocol - MAJOR GAP**
-    **Current Status:** Doctrine exists in multiple `.cursor/rules/` files but ZERO implementation in CommandCenter
-    **Evidence:** `tools/metastasis_analyzer.py` exists but has only placeholder logic for 7 of 8 steps
-    **Evidence:** Command Deck shows "mock data" for metastasis forecast
-    **[ ] Sub-task 2.2.1:** Build actual workflow orchestration for 8-step cascade analysis
-    **[ ] Sub-task 2.2.2:** Integrate each step with appropriate AI endpoints
-    **[ ] Sub-task 2.2.3:** Store comprehensive metastasis forecast in battle plans
-    **Critical Gap:** Command Deck shows mock data, not real 8-step analysis
+*Phase 1: Arsenal Deployment & Mock Function Purge (IMMEDIATE ACTION) 🗡️**
+*The goal of this phase is to rip out all the placeholder bullshit and replace it with our live, high-powered weaponry.*
 
-**[ ] Task 2.3: Complete Intelligence Visualization Layers - PARTIALLY MISSING**
-    **What Actually Exists:**
-    - ✅ Basic Command Deck UI (`pages/1_⚔️_AI_General_Command_Deck.py`)
-    - ✅ Patient Digital Twin (`pages/1_🧬_Patient_Digital_Twin.py`) - FUNCTIONAL
-    - ✅ Real battle plan data display (confidence scores, structural variants JSON)
-    - ❌ Real ensemble assessment table (currently shows single Zeta score, not Zeta/AlphaMissense/ESM comparison)
-    - ❌ Actual structural variant visualization (currently shows empty JSON)
-    - ❌ Live 8-step metastasis forecast (currently shows placeholder data)
-    - ❌ SAE evidence features visualization (not implemented)
+*
 
-**[ ] Task 2.4: Complete Weapon Forging Pipeline - EXISTS BUT NOT INTEGRATED**
-    **[ ] Sub-task 2.4.1:** Connect `/v2/design/guide_rna` endpoint to live `evo_service`
-    **[ ] Sub-task 2.4.2:** Implement "Proposer-Discriminator" model using `chopchop` for guide scoring
-    **[ ] Sub-task 2.4.3:** Store scored, ranked guides in `proposed_interventions` field
-    **Status:** Endpoint exists, calls evo_service, but no chopchop scoring integration
+**Phase 2: Intelligence & Context Integration (ENHANCE THE KILL CHAIN) 🧠**
+*Once the weapons are connected, we make them smarter.*
+
+*   **[ ] Task 2.1: Integrate `guide_interpreter.py`:** Provide LLM-powered, human-readable explanations for *why* specific guides were chosen, adding a layer of lethal intelligence to our designs.
+*   **[ ] Task 2.2: Deploy `experiment_advisor.py`:** Generate complete, downloadable experimental protocols for validating the forged weapons in a wet lab.
+*   **[ ] Task 2.3: Connect `literature_analyzer.py`:** Provide real-time scientific literature context for every variant and target, ensuring our attacks are informed by the latest global intelligence.
+
+**Phase 3: Full-Spectrum Dominance (UI & WORKFLOW ORCHESTRATION) 👑**
+*The final step is to put the fully-loaded weapon in your hands, Alpha.*
+
+*   **[ ] Task 3.1: Enhance UIs with Live Firepower:** Systematically replace every piece of mock data in the `AI General Command Deck` and `Patient Digital Twin` with live data from the newly integrated tools.
+*   **[ ] Task 3.2: Deploy the Real 8-Step Metastasis Protocol:** Wire up the `metastasis_analyzer.py` with its dependencies (`tissue_profiler.py`, `stress_simulator.py`) to provide a live, predictive metastasis forecast.
+*   **[ ] Task 3.3: Final Integration & Validation:** Conduct an end-to-end test of the complete kill chain, from patient data input to a fully validated and explained set of therapeutic interventions, proving our absolute superiority.
 
 ---
+
+This is the plan. This is the only plan. Let's get to fucking work.
+
+
+## for later
+
+
+
+
+
+*   **[ ] Task 1.1: Deploy `intelligent_guide_finder.py`:** Purge the 1,415 lines of mock guide generation functions in the `CommandCenter` and replace them with live calls to this superior tool.
+*   **[ ] Task 1.2: Integrate `chopchop/` suite:** Connect the `CommandCenter`'s guide validation step to the complete `chopchop` scoring and analysis pipeline for professional-grade off-target analysis. No more fucking mock safety scores.
+*   **[ ] Task 1.3: Connect Genomic Navigation:** Integrate `coordinate_handler.py` and `domain_mapper.py` directly into the Patient Digital Twin UI to provide real-time, accurate genomic visualization and navigation.
+*   **[ ] Task 1.4: Enable `result_interpreter.py`:** Connect `CRISPResso2` outputs to this tool to provide automated, intelligent analysis of sequencing data, making our quality assessment pipeline live.
+
+**Phase 2: Intelligence & Context Integration (ENHANCE THE KILL CHAIN) 🧠**
+*Once the weapons are connected, we make them smarter.*
+
+*   **[ ] Task 2.1: Integrate `guide_interpreter.py`:** Provide LLM-powered, human-readable explanations for *why* specific guides were chosen, adding a layer of lethal intelligence to our designs.
+*   **[ ] Task 2.2: Deploy `experiment_advisor.py`:** Generate complete, downloadable experimental protocols for validating the forged weapons in a wet lab.
+*   **[ ] Task 2.3: Connect `literature_analyzer.py`:** Provide real-time scientific literature context for every variant and target, ensuring our attacks are informed by the latest global intelligence.
+
+**Phase 3: Full-Spectrum Dominance (UI & WORKFLOW ORCHESTRATION) 👑**
+*The final step is to put the fully-loaded weapon in your hands, Alpha.*
+
+*   **[ ] Task 3.1: Enhance UIs with Live Firepower:** Systematically replace every piece of mock data in the `AI General Command Deck` and `Patient Digital Twin` with live data from the newly integrated tools.
+*   **[ ] Task 3.2: Deploy the Real 8-Step Metastasis Protocol:** Wire up the `metastasis_analyzer.py` with its dependencies (`tissue_profiler.py`, `stress_simulator.py`) to provide a live, predictive metastasis forecast.
+*   **[ ] Task 3.3: Final Integration & Validation:** Conduct an end-to-end test of the complete kill chain, from patient data input to a fully validated and explained set of therapeutic interventions, proving our absolute superiority.
+
+---
+
+This is the plan. This is the only plan. Let's get to fucking work.
+
+
 
 **🚨 PHASE 2.5: MISSING ENDPOINT IMPLEMENTATION - CRITICAL BLOCKER 🚨**
 
@@ -309,192 +314,3 @@ Scratchpad
         - Stage 8: Dormancy Control (forced hibernation with epigenetic design)
 
 ---
-
-**🎯 PHASE 3: GUARDIAN PROTOCOL IMPLEMENTATION - FUTURE TARGET**
-**Objective:** Build autonomous strategic commander capabilities.
-
-**[ ] Task 3.1: Autonomous Workflow Orchestration**
-    **[ ] Sub-task 3.1.1:** High-level Guardian Protocol endpoint
-    **[ ] Sub-task 3.1.2:** Multi-modal attack planning logic
-    **[ ] Sub-task 3.1.3:** Strategic Dossier generation
-
-**[ ] Task 3.2: Complete Digital Twin Integration**
-    **[ ] Sub-task 3.2.1:** Connect Patient Digital Twin to Command Center battle plans
-    **[ ] Sub-task 3.2.2:** Real-time 8-step cascade analysis
-    **[ ] Sub-task 3.2.3:** End-to-end validation workflow
-
----
-
-**🚨 IMMEDIATE TACTICAL PRIORITIES 🚨**
-
-**Priority 1:** Fix ZetaOracle HTTP communication (30-min tactical win)
-**Priority 2:** Implement missing ZetaOracle endpoints (6 critical endpoints: gene_essentiality, immunogenicity, generate_repair_template, protein_functionality_change, chromatin_accessibility, crispr_spacer_efficacy)
-**Priority 3:** Implement missing Evo Service endpoints (5 critical endpoints: generate_optimized_guide_rna, generate_therapeutic_protein_coding_sequence, generate_epigenome_optimized_sequence, generate_optimized_regulatory_element, optimize_codon_usage)
-**Priority 4:** Implement AlphaFold 3 integration for structural validation
-**Priority 5:** Build multi-modal validation workflows and generate-score-optimize loops
-**Priority 6:** Refactor CommandCenter for complete 8-step protocol integration
-
-**TRUTH-BASED ASSESSMENT:** We have solid infrastructure but are missing 90% of specialized weapons required for complete 8-step protocol execution. Our alignment score dropped from 25% to 10% after discovering the full scope of missing capabilities. We need a massive arsenal expansion campaign.
-
----
-
-**🚨 PARADIGM SHIFT: THE ARSENAL DISCOVERY REVELATION 🚨**
-
-**CRITICAL INTELLIGENCE UPDATE:** Comprehensive analysis of `/tools` directory and Evo2 notebooks has revealed a **FUNDAMENTAL MISASSESSMENT** of our capabilities. We are not missing 90% of capabilities - we are missing 90% of **CONNECTIONS**.
-
-**The Arsenal Reality:**
-- **47+ production-ready AI tools** exist in `/tools` directory
-- **Only 15% are integrated** into user-facing interfaces
-- **1,415 lines of mock functions** exist when real implementations are available
-- **Clinical-grade capabilities** demonstrated in Evo2 notebooks (0.73 AUROC BRCA1 assessment)
-- **Complete weapon forging pipeline** exists but is disconnected from UI
-
-**Revised Strategic Assessment:**
-- **Previous:** 10% alignment, 90% missing capabilities
-- **Arsenal-Aware:** 70% alignment, 30% integration work
-- **Post-Integration Target:** 90% comprehensive AI platform
-
-**The Real Blockers:**
-1. **Not missing capabilities - missing connections**
-2. **Not missing tools - missing integration**
-3. **Not missing intelligence - missing deployment**
-4. **Not missing weapons - missing orchestration**
-
-**Evidence-Based Capability Inventory:**
-- ✅ **Variant Assessment:** `threat_assessor.py` (653 lines) + Evo2 notebooks (0.73 AUROC)
-- ✅ **Guide Design:** `intelligent_guide_finder.py` (429 lines) + `chopchop/` complete suite
-- ✅ **Protein Design:** `experiment_advisor.py` (757 lines) + Evo2 generation patterns
-- ✅ **Quality Assessment:** `result_interpreter.py` (1,139 lines) + CRISPResso2 integration
-- ✅ **Genomic Analysis:** `coordinate_handler.py` (819 lines) + `domain_mapper.py`
-- ✅ **Literature Intelligence:** `literature_analyzer.py` + `educational_context.py` (651 lines)
-- ✅ **Metastasis Modeling:** `metastasis_analyzer.py` + `tissue_profiler.py` + `stress_simulator.py`
-
-**Strategic Reframing:**
-- **From:** "Build missing capabilities from scratch"
-- **To:** "Deploy hidden arsenal that already exists"
-- **From:** "Months of development"
-- **To:** "Weeks of intelligent integration"
-- **From:** "Missing 90% of weapons"
-- **To:** "Missing 90% of weapon deployment"
-
-**Immediate Arsenal Deployment Opportunities:**
-1. **Replace Mock Functions:** Deploy `intelligent_guide_finder.py` → eliminate 1,415 lines of technical debt
-2. **Integrate ChopChop:** Connect complete guide scoring suite → professional weapon validation
-3. **Deploy Evo2 Patterns:** Use notebook implementations → clinical-grade variant assessment
-4. **Connect Genomic Tools:** Integrate `coordinate_handler.py` → professional genomic navigation
-5. **Enable Quality Pipelines:** Deploy `result_interpreter.py` → comprehensive validation
-
-**Revised Task Priorities:**
-- **Priority 1:** Arsenal deployment (not endpoint development)
-- **Priority 2:** Tool integration (not capability building)
-- **Priority 3:** UI enhancement (not UI creation)
-- **Priority 4:** Workflow orchestration (not workflow development)
-
-**Development Velocity Acceleration:**
-- **Week 1:** Deploy existing tools → eliminate mock functions
-- **Week 2:** Integrate weapon forging → connect chopchop + intelligent guide finder
-- **Week 3:** Enhance UIs → add arsenal capabilities to existing excellent interfaces
-- **Week 4:** Orchestrate workflows → complete 8-step protocol integration
-
-**The Arsenal Advantage:**
-We possess the most sophisticated CRISPR AI toolkit ever assembled. The Guardian Protocol isn't a development project - it's a **deployment and integration project**.
-
----
-
-**🚨 REVISED TACTICAL PRIORITIES (ARSENAL-AWARE) 🚨**
-
-**Priority 1:** **Arsenal Deployment** (Week 1 - Immediate Impact)
-- Deploy `intelligent_guide_finder.py` → eliminate 1,415 lines of mock functions
-- Integrate `chopchop/` complete suite → professional guide scoring
-- Connect `coordinate_handler.py` → genomic navigation for Digital Twin
-- Enable `result_interpreter.py` → comprehensive validation pipeline
-
-**Priority 2:** **Tool Integration** (Week 2 - High-Impact Connections)
-- Integrate `guide_interpreter.py` → LLM-powered explanations
-- Connect `experiment_advisor.py` → complete experimental protocols
-- Deploy `literature_analyzer.py` → scientific context intelligence
-- Enable `educational_context.py` → contextual help overlays
-
-**Priority 3:** **UI Enhancement** (Week 3 - Arsenal-Powered Interfaces)
-- Enhance existing excellent UIs with arsenal capabilities
-- Add real tool integration to AI General Command Deck
-- Connect arsenal to Patient Digital Twin genomic features
-- Replace mock data with real tool outputs
-
-**Priority 4:** **Workflow Orchestration** (Week 4 - Complete Integration)
-- Deploy `metastasis_analyzer.py` → real 8-step protocol
-- Connect `tissue_profiler.py` + `stress_simulator.py` → tissue modeling
-- Integrate Evo2 notebook patterns → clinical-grade assessment
-- Complete end-to-end Guardian Protocol workflows
-
-**Development Velocity Comparison:**
-- **Old Approach:** 6 months of endpoint development
-- **Arsenal Approach:** 4 weeks of intelligent integration
-- **Capability Gap:** From 10% → 90% alignment
-- **Technical Debt:** Eliminate 1,415 lines of mock functions
-
-**The Integration Advantage:**
-We're not building a platform - we're **unleashing a platform** that already exists!
-
----
-
-**🎯 DEVELOPMENT PHILOSOPHY - INTELLIGENCE-DRIVEN APPROACH 🎯**
-
-**Core Principle:** Every development decision must be grounded in evidence-based analysis of actual platform capabilities, not theoretical requirements.
-
-**Architecture Consolidation Doctrine:**
-* **Eliminate Redundancy:** 16 pages with 90% overlap is architectural chaos. Consolidate to 6 unified interfaces.
-* **Leverage Existing Excellence:** Don't rebuild what's already production-ready (Next.js frontend, Command Deck architecture).
-* **Focus on Integration:** Connect existing sophisticated components rather than creating new ones.
-* **Evidence-Based Prioritization:** Evo2 capabilities (60-70% alignment) drive implementation strategy, not wishful thinking.
-
-**Development Priorities Framework:**
-1. **Immediate Wins (30-min fixes):** ZetaOracle HTTP communication, API endpoint alignment
-2. **High-Confidence Enhancements:** Frontend-backend integration, ensemble scoring display
-3. **Moderate Complexity:** Weapon forging modules, metastasis visualization
-4. **Advanced Capabilities:** Multi-modal validation, structural integration
-
-**Page Consolidation Strategy:**
-* **Universal Digital Twin:** One configurable interface for all disease/gene combinations (not separate TP53/BRCA1 pages)
-* **Threat Assessment Hub:** Unified variant analysis replacing 4 different threat assessors
-* **Weapon Forging Center:** Single interface for guide RNA design and repair templates
-* **Strategic Command:** Enhanced AI General Command Deck as primary orchestration interface
-
-**Business Strategy Alignment:**
-* **Evidence-Based Capabilities:** Market positioning based on actual deployed services (CommandCenter, ZetaOracle, Evo2)
-* **Competitive Advantages:** Multi-modal AI integration, professional frontend, intelligence fusion
-* **Target Markets:** Research institutions, clinical decision support, pharmaceutical R&D
-* **Revenue Streams:** SaaS subscriptions, API access, custom deployment, consulting services
-
-**Technical Debt Management:**
-* **Immediate Elimination:** Delete 1,415-line mock functions, consolidate duplicate threat assessors
-* **Graceful Migration:** Preserve excellent architectures while eliminating redundancy
-* **Code Quality Standards:** All new code must match the quality of AI General Command Deck and Patient Digital Twin
-
-**Quality Assessment Framework:**
-* **5-Star Production Ready:** AI General Command Deck, Patient Digital Twin, Next.js frontend
-* **4-Star Good Foundation:** BRCA1 Threat Assessor, UI enhancement patterns
-* **3-Star Needs Refactoring:** RadOnc Co-Pilot, Seed & Soil Analysis
-* **2-Star Technical Debt:** Mock Therapy Design, Trial Conquest
-* **1-Star Delete Candidates:** Duplicate threat assessors, broken mock functions
-
-**Integration Philosophy:**
-* **Frontend-First:** Leverage existing Next.js application as primary user interface
-* **Backend Enhancement:** Extend Modal services to support frontend requirements
-* **API Alignment:** Connect sophisticated frontend to CommandCenter instead of external APIs
-* **User Experience:** Maintain professional UI/UX standards while adding Guardian Protocol capabilities
-
-**Development Velocity Optimization:**
-* **Parallel Development:** Frontend and backend teams can work simultaneously on aligned interfaces
-* **Component Reusability:** Extend existing components rather than building new ones
-* **Incremental Enhancement:** Add Guardian Protocol features to existing pages rather than creating new ones
-* **Evidence-Based Testing:** Validate against actual deployed services, not theoretical requirements
-
-**Strategic Success Metrics:**
-* **Alignment Score:** Target 80% Guardian Protocol alignment (up from current 75%)
-* **Page Consolidation:** Reduce from 16 to 6 unified interfaces
-* **Technical Debt:** Eliminate 1,415 lines of mock functions
-* **User Experience:** Maintain 5-star UI/UX quality while adding capabilities
-* **Integration Confidence:** High confidence in frontend-backend integration success
-
-This intelligence-driven approach ensures every development decision is grounded in reality, leverages existing strengths, and focuses on high-impact integration rather than speculative development.

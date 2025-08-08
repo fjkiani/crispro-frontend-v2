@@ -1,0 +1,59 @@
+# DOCTRINE: The Evo2 Zero-Shot VEP Protocol
+
+This document codifies the exact methodology from the reference notebook [brca1_zero_shot_vep.ipynb](mdc:scripts/evo2/evo2/notebooks/brca1/brca1_zero_shot_vep.ipynb). All VEP operations will adhere to this protocol.
+
+## Phase 1: Target Acquisition & Preparation (Cells 7-9)
+
+1.  **Acquire Ground Truth Data:** The operation must begin with a high-quality dataset of variants with known functional outcomes. The source for this is an external, experimentally validated dataset (e.g., the Findlay et al., 2018 dataset for BRCA1). This dataset MUST contain:
+    *   Genomic coordinates (chromosome, position).
+    *   Reference and alternate alleles.
+    *   A classification of pathogenicity (e.g., "loss-of-function" vs. "functional").
+
+2.  **Data Normalization:** The raw data must be cleaned and normalized.
+    *   Columns must be renamed to a standard schema: `chrom`, `pos`, `ref`, `alt`, `class`.
+    *   Classifications must be simplified into a binary system for clear analysis (e.g., `LOF` vs. `FUNC/INT`). This creates a clear distinction between "enemy" (pathogenic) and "civilian" (benign) targets.
+
+## Phase 2: Sequence Slicing & Payload Generation (Cells 10-11)
+
+1.  **The 8kb Window Protocol is Doctrine:** For every target variant, a **symmetrical 8,192 base pair window** of genomic context must be extracted.
+    *   The window is centered on the single nucleotide variant (SNV) position.
+    *   This requires having the appropriate reference genome FASTA file locally available (e.g., `GRCh37.p13_chr17.fna.gz`).
+
+2.  **Dual-Sequence Generation:** For each target, two sequences must be generated:
+    *   **`ref_seq`:** The pristine 8,192bp slice from the reference genome.
+    *   **`var_seq`:** A copy of the `ref_seq` where the single base at the center is replaced with the alternate allele.
+
+3.  **Integrity Checks:** Sanity checks are mandatory. Before proceeding, the code MUST assert that:
+    *   `len(var_seq) == len(ref_seq)`.
+    *   The central allele in `ref_seq` matches the expected `ref` allele from the input data.
+    *   The central allele in `var_seq` matches the `alt` allele.
+
+## Phase 3: Oracle Invocation & Scoring (Cells 12-14)
+
+1.  **Batch Processing:** The protocol is designed for efficiency. Do not score variants one-by-one.
+    *   First, create a list of all **unique** `ref_seq` slices.
+    *   Score all unique `ref_seq` slices in a single batch call to `model.score_sequences()`.
+    *   Then, score all `var_seq` slices in a second batch call. This minimizes redundant computations.
+
+2.  **Model Selection:** While smaller models (`evo2_1b_base`) can be used for rapid testing, the doctrine strongly recommends using the largest available models (`evo2_7b`, `evo2_40b`) for maximum accuracy in production runs.
+
+## Phase 4: Delta Score Calculation (Cells 15-16)
+
+1.  **The Delta is the Signal:** The absolute likelihood score of a single sequence is meaningless in isolation. The only metric that matters is the **delta log-likelihood score (`delta_score`)**.
+2.  **Calculation:** The `delta_score` is calculated for each variant with the formula:
+    \[ \text{delta\_score} = \text{log\_likelihood}(\text{var\_seq}) - \text{log\_likelihood}(\text{ref\_seq}) \]
+3.  **Interpretation:** A more negative `delta_score` indicates that the variant is less likely under the model than the reference, suggesting a higher probability of being disruptive and pathogenic (Loss-of-Function).
+
+## Phase 5: Statistical Validation & Interpretation (Cells 17-20)
+
+1.  **Distribution Analysis:** A single `delta_score` is not proof. The final step is to prove the model's predictive power by comparing the **distributions** of `delta_score`s between the two classes (`LOF` vs. `FUNC/INT`).
+    *   A clear separation in the distributions, with the `LOF` class having consistently lower (more negative) scores, validates the model's performance. This should be visualized (e.g., with a stripplot).
+
+2.  **Quantitative Validation (AUROC):** The ultimate measure of success is the Area Under the Receiver Operating Characteristic (AUROC). This calculation provides a single, objective score of the model's ability to distinguish between pathogenic and benign variants.
+    *   The `y_true` labels are the ground-truth classes from the input data.
+    *   The prediction scores are the negative `delta_score`s (since lower scores are more pathogenic).
+    *   An AUROC significantly greater than 0.5 demonstrates a successful VEP operation. The BRCA1 notebook achieved **0.73**. This is the benchmark.
+description:
+globs:
+alwaysApply: false
+---

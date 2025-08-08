@@ -24,3 +24,4 @@ async def test_direct_blast_call():
     assert results is not None
     assert len(results) == 1
     assert results[0]["off_target_count"] != 999, "Direct BLAST call failed and returned a dummy value." 
+ 

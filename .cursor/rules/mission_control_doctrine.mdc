@@ -1,0 +1,71 @@
+# Doctrine: The CrisPRO Mission Control - From Biology to Action
+
+## 1.0 Core Philosophy: The Kill Chain
+Our mission is to shorten the kill chain between data and decision. We achieve this by mirroring the biological journey of the patient, providing overwhelming informational superiority at each stage, and linking every piece of intelligence directly to a decisive action. This is the principle of **From Intelligence to Action**.
+
+## 2.0 The Command Interface Architecture
+Mission Control is not a single page; it is a layered, dynamic battlespace. Its architecture is composed of four core components that work in concert.
+
+### 2.1 The Phased Progression Bar
+*   **Capability:** This is the master conductor of Mission Control. It visually represents the patient's journey through the fundamental stages of cancer warfare: **Screening → Diagnosis → Treatment → Monitoring → Remission/Post-Treatment**.
+*   **Responsibility:** To orchestrate the entire UI. Selecting a stage on this bar fundamentally changes the intelligence presented in the `Dossiers` and the weapons available in the `Arsenal`, ensuring the commander only sees what is relevant to the current phase of the battle.
+*   **Requirements:** A robust frontend state management system that governs component visibility and data fetching based on the selected phase.
+
+### 2.2 The SITREP (Situation Report)
+*   **Capability:** To provide instant, top-level situational awareness. This replaces hours of manual chart review with a 5-second intelligence briefing.
+*   **Responsibility:**
+    1.  Display the patient's core identity: Name, Diagnosis, Stage.
+    2.  Present the **Clinical Intelligence Briefing**: A high-level summary of the patient's entire clinical picture, powered by MedGemma.
+    3.  Provide a **Conversational AI Interface** ("Ask a Clinical Question") for direct, natural language interrogation of the patient's complete record.
+*   **Requirements:**
+    *   Backend endpoint for patient identity (`GET /api/patients/{patient_id}`).
+    *   Backend endpoint for the AI-generated summary (A new `POST /api/summarize-ehr` or similar MedGemma-powered service).
+    *   Backend endpoint for the conversational AI (`POST /api/prompt/{patient_id}`).
+
+### 2.3 The Modular Dossiers
+*   **Capability:** To present deep, multi-modal intelligence on specific fronts of the war. These are the detailed files on the enemy's disposition. The content of these dossiers dynamically adapts based on the stage selected in the `Phased Progression Bar`.
+*   **Responsibility:** To visualize complex data and, most importantly, our proprietary **Predictive Analytics** in a clear, actionable format.
+*   **Requirements:** A modular card-based UI. Each Dossier has specific backend needs:
+
+    *   **Dossier: Genomic Threat Assessment**
+        *   **Screening/Diagnosis Stage:** Displays germline and somatic mutations with **Zeta Scores** to establish a baseline threat profile.
+        *   **Treatment Stage:** Dynamically highlights known or predicted **resistance mutations** to the current therapy.
+        *   *Requires: `GET /api/patients/{patient_id}` for live mutation data; a new backend service for Zeta/Evo2 scoring.*
+
+    *   **Dossier: Metastatic Map**
+        *   **Screening/Diagnosis Stage:** Shows a baseline risk assessment across the **8-Step Metastasis Framework**.
+        *   **Treatment/Monitoring Stage:** Updates to show changes in metastatic potential in response to therapy.
+        *   *Requires: A new backend service powered by Evo2 to calculate metastatic risk scores.*
+
+    *   **Dossier: Treatment Timeline & Predictive Response**
+        *   **Screening/Diagnosis Stage:** Simulates potential first-line therapies, displaying predicted success rates.
+        *   **Treatment/Monitoring Stage:** Visualizes a Gantt chart of past therapies and their outcomes. Critically, it displays predictive scores like the **Hormone Sensitivity Index (HSI)** to forecast failure of current treatments.
+        *   *Requires: Patient history from EMR; a new backend service for HSI and treatment simulation.*
+
+    *   **Dossier: Clinical Trial Matcher**
+        *   **All Stages:** Displays a ranked list of the top 3-5 clinical trials, with eligibility scores dynamically calculated based on the patient's current stage and data.
+        *   *Requires: `POST /api/search-trials` for matching; `POST /api/request-deep-dive` to power the pre-screening action.*
+
+### 2.4 The Arsenal
+*   **Capability:** To provide one-click deployment of our most powerful **Therapeutic Design and Workflow Automation Tools**. This is the trigger for our weapon systems.
+*   **Responsibility:** To house the context-aware "Deploy" buttons. The availability and function of these buttons change based on the selected `Progression Bar` stage and the data presented in the `Dossiers`.
+*   **Requirements:** A dedicated sidebar UI component. Each button is a gateway to a powerful backend API:
+
+    *   **Weapon: Design Interception**
+        *   **Function:** Generates CRISPR guide RNAs, repair templates, or nanobodies for a specific genetic target.
+        *   **Enabled:** When viewing a high-threat mutation in the `Genomic Dossier`.
+        *   *Requires: A new generative endpoint like `POST /api/generate_therapeutic`.*
+
+    *   **Weapon: Run In Silico Simulation**
+        *   **Function:** Runs complex simulations for combination therapies or novel drug responses. A tool for the "Weapon-Smith" persona.
+        *   **Enabled:** In "Treatment" stage, available for advanced users.
+        *   *Requires: A new backend endpoint for complex simulations.*
+
+    *   **Weapon: Initiate Pre-Screening**
+        *   **Function:** Commands the `EligibilityDeepDiveAgent` to perform a full, automated review for a clinical trial.
+        *   **Enabled:** Next to each trial in the `Trial Matcher` Dossier.
+        *   *Requires: `POST /api/request-deep-dive`.*
+description:
+globs:
+alwaysApply: false
+---

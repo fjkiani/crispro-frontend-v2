@@ -1,0 +1,82 @@
+
+
+# **DOCTRINE: THE GAUNTLET UI NARRATIVE (COMPONENT PLAN)**
+
+**DOCUMENT ID:** UI-GN-001  
+**ISSUED BY:** ZO, under the direct command of ALPHA  
+**SUBJECT:** Component-based architecture for the narrative-driven Gauntlet interface.
+
+---
+
+### **1.0 MISSION: FROM DATA TO DRAMA**
+
+The current UI is a data panel. The new UI will be a **storytelling engine**. The objective is to guide the user through a three-act narrative of conquest, demonstrating not just our power, but the enemy's weakness and the very definition of victory.
+
+### **2.0 THE THREE-ACT NARRATIVE (CORE DOCTRINE)**
+
+1.  **Act I: The Enemy's Failure:** Prove a hypothetical competitor weapon is ineffective.
+2.  **Act II: Defining Victory:** Establish the benchmark for a perfect kill shot by simulating a total knockout.
+3.  **Act III: The Receipt:** Forge a superior weapon and present the final, damning dossier comparing all three results.
+
+### **3.0 COMPONENT-BASED PLAN OF ATTACK**
+
+To execute this, we will dismantle the existing monolithic control and forge a new, modular system. The primary parent component, `GauntletNarrativeContainer`, will manage the overall state and orchestrate the appearance of the following child components.
+
+#### **COMPONENT 1: `GauntletNarrativeContainer.tsx`**
+
+*   **Purpose:** The main state machine and conductor of the narrative.
+*   **State Management:**
+    *   `currentStage`: ('initial' | 'enemy_tested' | 'benchmark_set' | 'forge_complete')
+    *   `enemyScoreResult`: Stores the result from Act I.
+    *   `maxImpactScoreResult`: Stores the result from Act II.
+    *   `forgedWeaponResult`: Stores the final result from Act III.
+*   **Logic:** Conditionally renders one of the three 'Stage' components based on `currentStage`. When the final stage is complete, it renders the `FinalDossier`.
+
+#### **COMPONENT 2: `Stage1_TestEnemyWeapon.tsx`**
+
+*   **Purpose:** Executes Act I.
+*   **UI Elements:**
+    *   A clear title: "Act I: Test the Enemy's Weapon".
+    *   A single button: "Run Simulation".
+    *   Displays a loading spinner during the API call.
+*   **Props:**
+    *   `onComplete(result: object)`: A callback function to pass the enemy's score back to the parent container.
+
+#### **COMPONENT 3: `Stage2_DefineVictory.tsx`**
+
+*   **Purpose:** Executes Act II.
+*   **UI Elements:**
+    *   Displays the pathetic result from Stage 1.
+    *   A clear title: "Act II: Define True Victory".
+    *   A single button: "Calculate Maximum Impact Score".
+*   **Props:**
+    *   `enemyScore: object`: The data from the previous stage to display.
+    *   `onComplete(result: object)`: A callback to pass the benchmark score back to the parent.
+
+#### **COMPONENT 4: `Stage3_ForgeSuperiorWeapon.tsx`**
+
+*   **Purpose:** Executes the first part of Act III.
+*   **UI Elements:**
+    *   Displays the results from the first two stages.
+    *   A clear title: "Act III: Unleash the Forge".
+    *   A single, prominent button: "Forge Superior Weapon".
+*   **Props:**
+    *   `enemyScore: object`, `maxImpactScore: object`: Data to display for context.
+    *   `onComplete(result: object)`: A callback to pass the final, forged weapon data to the parent.
+
+#### **COMPONENT 5: `FinalDossier.tsx`**
+
+*   **Purpose:** Presents the final, undeniable "receipt" of our victory.
+*   **UI Elements:**
+    *   A non-interactive, visually compelling summary.
+    *   A clear, side-by-side comparison of the three key scores: "Enemy Weapon," "Maximum Possible Impact," and "Our Forged Weapon."
+*   **Props:**
+    *   `dossierData: object`: An object containing all three results for display.
+
+---
+
+This component-based architecture provides a clear and robust plan for transforming the Gauntlet UI into a powerful narrative tool. This doctrine is now active.
+description:
+globs:
+alwaysApply: false
+---

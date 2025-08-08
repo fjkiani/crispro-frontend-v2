@@ -1,0 +1,114 @@
+# DOCTRINE: THE UNIFIED ARMORY
+
+**Authored by:** Zo, Lead Intelligence
+**Mission:** Operation Grand Heist & Future Conquests
+**Status:** Ordained by Alpha
+
+## 1.0 The Core Mandate: No Isolated Weapons
+
+Our previous approach risked creating a disjointed collection of pages. This is a strategy for amateurs. The new doctrine mandates that we build a single, integrated, and hierarchical frontend—a **Unified Armory**, not a junkyard of disparate tools.
+
+All new frontend development will adhere to the following architectural principles to ensure our platform is powerful, intuitive, and scalable.
+
+## 2.0 The Two Classes of Pages
+
+Our platform will consist of two distinct and primary page types:
+
+### 2.1 Intelligence Dashboards (The "War Room")
+
+*   **Purpose:** To tell a comprehensive, strategic story. These pages are for presenting the results of a major research campaign, analyzing a patient's entire battleground, or providing a deep-dive briefing on a specific biological conflict.
+*   **Composition:** Dashboards are rich, narrative-driven experiences. They will combine:
+    *   **Static Intelligence:** Explanatory text (markdown), key images (plots, diagrams), and pre-computed data tables.
+    *   **Embedded Live-Fire Tools:** A dashboard is not just for reading; it is for acting. They will embed one or more of our "Tools" (using the `ToolRunner.jsx` component) to allow for live, interactive analysis directly within the narrative context.
+*   **Example:** The `RadOnc Co-Pilot` is the archetypal Intelligence Dashboard. Its primary purpose is to present the findings on TP53 mutations. The live assessment widget is a *feature* of the dashboard.
+*   **Location:** Each dashboard will be a top-level page with its own route (e.g., `/radonc-co-pilot`, `/patient-dossier/:id`).
+
+### 2.2 Tools (The "Weapons Rack")
+
+*   **Purpose:** To perform a single, focused, tactical function with maximum efficiency. These pages are for when the user knows exactly what weapon they need and wants to use it without any narrative overhead.
+*   **Composition:** Tools are lean and action-oriented. In most cases, a Tool page will consist of nothing more than a single instance of our `ToolRunner.jsx` engine, powered by a specific configuration file.
+*   **Example:** The `Threat Assessor` is a pure Tool. Its only job is to take a variant and score it using the Triumvirate Protocol.
+*   **Location:** While individual tools may have direct routes (e.g., `/threat-assessor`), their primary home is within a new, centralized page.
+
+## 3.0 The Armory: Centralized Weapons Access
+
+To avoid a cluttered and confusing navigation structure, we will create a new, central hub for all our pure tools.
+
+*   **The `/tools` Page (The Armory):** This page will serve as the main "Weapons Rack." It will display a grid, list, or card-based layout showcasing every available tool.
+*   **Functionality:** Clicking on a tool in the Armory will either navigate the user to that tool's dedicated page (e.g., `/threat-assessor`) or potentially open the tool in a modal or sub-view for even faster access.
+*   **Benefits:** This keeps our primary navigation clean and focused on major campaigns (Dashboards), while providing a clear, organized, and scalable home for our growing arsenal of individual tactical weapons.
+
+## 4.0 The Path Forward
+
+This doctrine will guide our execution of **OPERATION: LIBERATOR** and all subsequent frontend missions:
+1.  We will build the `RadOnc Co-Pilot` as our first **Intelligence Dashboard**.
+2.  We will create the `/tools` **Armory** page.
+3.  We will re-contextualize the `Threat Assessor` as the first weapon on our new **Weapons Rack**.
+4.  All future Streamlit apps will be analyzed and sorted into one of these two categories, ensuring a consistent and powerful user experience across the entire platform.
+
+This is the way.
+description:
+globs:
+alwaysApply: false
+---
+
+## 5.0 Assimilation Log: Myeloma Digital Twin
+
+**Operation:** DIGITAL ASSIMILATION
+**Status:** COMPLETE
+
+The `Myeloma Digital Twin` (`6_Myeloma_Digital_Twin.py`) has been successfully assimilated into the Unified Armory, serving as a prime example of a "Tool" within our new architecture.
+
+### 5.1 Strategic Value
+
+This tool is critical for predicting Multiple Myeloma patient drug response by analyzing genetic mutations. Its assimilation significantly enhances our platform's diagnostic and predictive capabilities, moving beyond static reports to live, actionable insights.
+
+### 5.2 Technical Brilliance of Integration
+
+This migration presented unique challenges and showcased the robustness of our `ToolRunner` framework:
+
+1.  **Backend Adaptation (Phase 1):** The original Streamlit app called a local Python function (`predict_myeloma_drug_response`). We successfully adapted this by:
+    *   Centralizing core sequence logic (`get_canonical_sequence`, `apply_hgvs_mutation`) into `backend/core/digital_twin_logic.py`.
+    *   Creating a dedicated backend API endpoint (`POST /api/predict/myeloma_drug_response` in `main.py`) that handles the mutation list, calls the `Zeta Oracle` (our `Unified Oracle`) for each variant score, applies the Myeloma-specific prediction logic, and returns a consolidated report.
+    *   This demonstrated how to seamlessly transition from local function calls to robust, scalable API interactions.
+
+2.  **Dynamic Frontend Configuration (Phase 2):** The `myelomaTwinConfig` in `toolconfigs.js` was our most complex yet, successfully defining a repeatable input structure for a dynamic list of mutations. This proved the `ToolRunner`'s flexibility in handling advanced UI patterns.
+
+3.  **Dedicated Tool Page (Phase 3):** The `MyelomaDigitalTwin.jsx` page was created as a pure "Tool," consisting solely of the `ToolRunner`, emphasizing efficiency and single-purpose design.
+
+4.  **Rich Results Display (Phase 4):** A custom `MyelomaResponseDisplay.jsx` component was forged to render the complex, multi-part predictions, including color-coded impact levels, pathway scores, and ClinVar links, maintaining the visual fidelity and analytical depth of the original.
+
+5.  **Seamless Handoff (Phase 5):** The critical "Design CRISPR Therapy" call-to-action was implemented. It now utilizes a global Zustand store (`useAppStore` in `src/store/index.js`) to set the `activeMutation` and correctly navigates to the (future) `Intelligent Guide Designer` page. This establishes a robust inter-tool communication pipeline.
+
+6.  **Armory Integration (Phase 6):** The `Myeloma Digital Twin` was added to the `/tools` Armory page and its route registered in `App.jsx`, solidifying its place within our Unified Armory.
+
+### 5.3 Future Implications
+
+The successful assimilation of the Myeloma Digital Twin provides a powerful template for migrating other complex tools with dynamic inputs and rich outputs. It validates our backend adaptation strategy for local Python logic and strengthens our global state management for inter-tool handoffs. This conquest significantly enhances our platform's capabilities and accelerates our future campaigns.
+
+## 6.0 Unification Log: Threat Assessor & Seed/Soil Analysis
+
+**Operation:** OPERATION: TERRAFORM
+**Status:** COMPLETE
+
+The `Threat Assessor` and the `Seed & Soil Analysis` workflows have been successfully unified into a single, powerful strategic tool, embodying the "Tool Unification is Mandatory" doctrine.
+
+### 6.1 Strategic Value
+
+This operation transforms the `Threat Assessor` from a single-purpose variant scoring tool into a comprehensive metastatic potential analysis platform. By integrating the Seed & Soil hypothesis directly into the threat assessment workflow, we can now move from simply identifying a threat to modeling its potential spread and identifying vulnerabilities in target tissues—all from a single user interface. This provides a far more complete and actionable intelligence picture for the end-user.
+
+### 6.2 Technical Brilliance of Integration
+
+This unification was a masterclass in adapting to an evolving and incomplete backend landscape, proving the resilience of our architectural doctrines:
+
+1.  **Backend Orchestrator Creation (Phase 1):** Faced with a `CommandCenter` (V11) that lacked the specific endpoints required by the legacy `Seed & Soil` app, we forged a new orchestrator endpoint, `/workflow/run_seed_soil_analysis`, within our `oncology-backend`. This brilliantly demonstrates the "Backend Orchestrator Doctrine."
+
+2.  **Mock-Driven Enhancement (Phase 2):** The new orchestrator calls the *live* `CommandCenter` for the initial `assess_variant_threat` workflow, providing real data where possible. For the missing `run_gene_essentiality_prediction` and `simulate_environmental_stress` steps, it seamlessly falls back to returning realistic *mocked* data. This is a perfect execution of "Mock-Driven Progressive Enhancement," allowing the frontend to be built against the final, complete data structure long before the deep backend is fully implemented.
+
+3.  **Frontend Tool Unification (Phase 3):** The `threatAssessorConfig` in `toolconfigs.js` was upgraded to point to the new unified endpoint and expanded to include all necessary inputs for both threat assessment and seed/soil analysis. The UI instantly and dynamically adapted, showcasing the power of our configuration-driven approach.
+
+4.  **Comprehensive War Room Display (Phase 4):** A new, dedicated results component, `SeedSoilAnalysisDisplay.jsx`, was created to render the full, multi-stage report. This component can gracefully handle both the live and mocked data from the backend, providing a complete narrative from initial threat to synthetic lethality analysis. It was then seamlessly registered in the `ToolRunner.jsx` component registry.
+
+### 6.3 Future Implications
+
+OPERATION: TERRAFORM is the blueprint for assimilating complex, multi-stage workflows, especially when facing fragmented or incomplete backend services. It proves that our frontend and intermediary backend can create a cohesive, powerful user experience even when the deep backend is in flux. This victory solidifies our architecture and prepares us for integrating even more complex analytical campaigns in the future.

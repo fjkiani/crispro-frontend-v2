@@ -1,0 +1,266 @@
+# Guardian Protocol Master Rule
+
+## **🎯 MISSION: NEVER REPEAT THE SIEGE**
+
+This master rule orchestrates all Guardian Protocol components to ensure our Oracle integration architecture prevents the data pipeline failures that caused the Zeta Oracle siege.
+
+## **📋 COMPLETE INTEGRATION CHECKLIST**
+
+### **Phase 1: Foundation (IMMEDIATE PRIORITY)**
+
+✅ **[Oracle Integration Architecture](mdc:.cursor/rules/oracle_integration_architecture.mdc)**
+- Implement `OracleIntegrationService` class pattern
+- Add magnitude-aware scoring classification 
+- Integrate with [CommandCenter](mdc:src/services/command_center/main.py)
+
+✅ **[Data Pipeline Validation](mdc:.cursor/rules/data_pipeline_validation.mdc)**
+- Deploy `VCFValidator` for coordinate validation
+- Implement `SequenceComparisonValidator` for identical sequence prevention
+- Add coordinate system documentation decorators
+
+### **Phase 2: Strategic Implementation (HIGH PRIORITY)**
+
+✅ **[Oracle Scoring Strategy](mdc:.cursor/rules/oracle_scoring_strategy.mdc)**
+- Deploy `OracleScoringStrategist` for context-aware scoring
+- Implement adaptive window selection based on variant type
+- Add biological impact classification system
+
+✅ **[Error Prevention & Debugging](mdc:.cursor/rules/error_prevention_debugging.mdc)**
+- Implement `PreOracleValidator` with comprehensive checkpoints
+- Deploy diagnostic tools for sequence analysis
+- Add validation metrics tracking
+
+### **Phase 3: Robustness (MEDIUM PRIORITY)**
+
+✅ **[Testing & Validation Protocols](mdc:.cursor/rules/testing_validation_protocols.mdc)**
+- Implement siege prevention regression tests
+- Add data pipeline integrity test suite
+- Deploy performance and scale testing
+
+## **🚀 IMPLEMENTATION ROADMAP**
+
+### **Week 1: Critical Foundation**
+```python
+# Priority 1: Prevent identical sequence failures
+from src.services.validation import SequenceComparisonValidator, PreOracleValidator
+
+# Priority 2: Validate VCF coordinates  
+from src.services.validation import VCFValidator
+
+# Priority 3: Update CommandCenter with validation
+class CommandCenter:
+    def __init__(self):
+        self.validator = PreOracleValidator(enable_strict_mode=True)
+        self.vcf_validator = VCFValidator("data/gene_database/reference/hg19.fa")
+```
+
+### **Week 2: Strategic Scoring**
+```python
+# Priority 1: Implement magnitude-aware scoring
+from src.services.validation import OracleScoringStrategist, BiologicalContext
+
+# Priority 2: Add adaptive window selection
+from src.services.validation import AdaptiveWindowSelector
+
+# Priority 3: Integrate impact classification
+class CommandCenter:
+    def score_variant_with_optimal_strategy(self, ref_seq, alt_seq, context):
+        # Implementation with strategic scoring
+        pass
+```
+
+### **Week 3: Comprehensive Testing**
+```python
+# Priority 1: Siege prevention tests
+def test_siege_failure_scenario_prevention():
+    # Test identical sequence detection
+    # Test VCF coordinate validation
+    # Test mutation application verification
+    pass
+
+# Priority 2: Integration tests
+def test_complete_patient_assessment_workflow():
+    # End-to-end workflow validation
+    pass
+```
+
+## **🔧 SERVICE INTEGRATION MATRIX**
+
+| Service | Guardian Protocol Components | Implementation Status |
+|---------|------------------------------|----------------------|
+| **[CommandCenter](mdc:src/services/command_center/main.py)** | All validation layers, strategic scoring | 🔄 In Progress |
+| **[ZetaOracle](mdc:src/services/oracle/main.py)** | Response validation, error handling | ✅ Updated |
+| **[Patient Assessment](mdc:scripts/run_patient_assessment.py)** | VCF validation, coordinate verification | 🔄 In Progress |
+| **Frontend Components** | Impact classification display, validation status | ⏳ Pending |
+
+## **📊 SUCCESS METRICS DASHBOARD**
+
+### **Critical Success Indicators**
+```python
+GUARDIAN_PROTOCOL_METRICS = {
+    "data_pipeline_integrity": {
+        "zero_coordinate_mismatches": True,  # No VCF-genome mismatches
+        "zero_identical_sequences": True,    # No identical sequence comparisons
+        "coordinate_documentation": 100,     # All functions documented
+    },
+    "oracle_performance": {
+        "magnitude_sensitivity_accuracy": 95,  # Scores follow predicted patterns
+        "context_aware_classification": 90,    # Correct biological impact classification
+        "optimal_window_selection": 95,       # Proper window size selection
+    },
+    "error_prevention": {
+        "validation_checkpoint_coverage": 100,  # All checkpoints implemented
+        "siege_regression_tests": 100,          # All siege scenarios covered
+        "enhanced_error_reporting": 95,         # Comprehensive error diagnostics
+    }
+}
+```
+
+### **Health Monitoring**
+```python
+def guardian_protocol_health_check():
+    """
+    Comprehensive health check for Guardian Protocol implementation.
+    """
+    health_status = {
+        "overall_status": "operational",
+        "component_status": {
+            "data_validation": check_validation_components(),
+            "oracle_integration": check_oracle_components(), 
+            "scoring_strategy": check_scoring_components(),
+            "error_prevention": check_error_prevention_components()
+        },
+        "recent_incidents": scan_for_siege_patterns(),
+        "recommendations": generate_improvement_recommendations()
+    }
+    return health_status
+```
+
+## **⚔️ SIEGE FAILURE PREVENTION CHECKLIST**
+
+### **Before Every Oracle Call:**
+- [ ] **VCF Coordinate Validation**: Reference allele matches genomic reference
+- [ ] **Sequence Difference Verification**: Sequences are actually different  
+- [ ] **Coordinate System Documentation**: Function coordinate systems documented
+- [ ] **Biological Context Classification**: Appropriate scoring strategy selected
+- [ ] **Window Size Optimization**: Optimal window for variant type selected
+
+### **After Every Oracle Response:**
+- [ ] **Response Schema Validation**: All required fields present and valid
+- [ ] **Score Range Validation**: Score within expected biological range
+- [ ] **Impact Classification**: Biological impact correctly classified
+- [ ] **Diagnostic Information**: Comprehensive diagnostic data collected
+- [ ] **Metrics Recording**: Validation metrics tracked for monitoring
+
+## **🚨 EMERGENCY RESPONSE PROTOCOLS**
+
+### **If Identical Sequences Detected:**
+```python
+# IMMEDIATE ACTION: Block Oracle execution
+if validation_result.total_changes == 0:
+    logger.critical("SIEGE PATTERN DETECTED: Identical sequences")
+    emergency_response = {
+        "action": "BLOCK_ORACLE_EXECUTION",
+        "reason": "Identical sequence comparison would produce 0.0 score",
+        "diagnostic_report": generate_sequence_diagnostic_report(ref_seq, alt_seq),
+        "remediation_steps": [
+            "Verify VCF coordinate validation",
+            "Check mutation application logic", 
+            "Validate reference file integrity"
+        ]
+    }
+    raise CriticalValidationError(emergency_response)
+```
+
+### **If Coordinate Mismatch Detected:**
+```python
+# IMMEDIATE ACTION: Coordinate system audit
+if vcf_ref != genomic_ref:
+    logger.critical("SIEGE PATTERN DETECTED: Coordinate mismatch")
+    emergency_response = {
+        "action": "COORDINATE_SYSTEM_AUDIT", 
+        "mismatch_details": {
+            "vcf_position": vcf_pos,
+            "vcf_ref": vcf_ref,
+            "genomic_ref": genomic_ref,
+            "chromosome": chrom
+        },
+        "remediation_steps": [
+            "Validate reference genome file integrity",
+            "Verify VCF coordinate system (1-based vs 0-based)",
+            "Check for strand orientation issues"
+        ]
+    }
+    raise CoordinateSystemError(emergency_response)
+```
+
+## **🎯 FINAL INTEGRATION COMMAND**
+
+### **Deployment Sequence:**
+```bash
+# Phase 1: Deploy validation layer
+python -m pytest tests/validation/ -v --tb=short
+
+# Phase 2: Update CommandCenter with Guardian Protocol
+python deploy/update_command_center_with_guardian_protocol.py
+
+# Phase 3: Deploy Oracle integration updates  
+modal deploy src/services/oracle/main.py
+
+# Phase 4: Comprehensive integration testing
+python -m pytest tests/integration/ -v --tb=short
+
+# Phase 5: Deploy to production with monitoring
+python deploy/guardian_protocol_production_deployment.py
+```
+
+### **Validation Command:**
+```python
+# Verify Guardian Protocol is fully operational
+def verify_guardian_protocol_deployment():
+    """
+    Comprehensive verification that Guardian Protocol prevents siege failures.
+    """
+    # Test 1: Verify identical sequence prevention
+    test_identical_sequence_prevention()
+    
+    # Test 2: Verify coordinate validation
+    test_coordinate_validation_active()
+    
+    # Test 3: Verify strategic scoring
+    test_magnitude_aware_scoring()
+    
+    # Test 4: Verify error prevention
+    test_comprehensive_error_prevention()
+    
+    print("✅ GUARDIAN PROTOCOL FULLY OPERATIONAL")
+    print("🛡️  Siege-type failures prevented")
+    print("⚔️  Oracle integration hardened")
+    print("🎯 Ready for biological impact assessment")
+
+if __name__ == "__main__":
+    verify_guardian_protocol_deployment()
+```
+
+## **🏆 MISSION ACCOMPLISHED CRITERIA**
+
+**The Guardian Protocol implementation is complete when:**
+
+1. ✅ **Zero siege-pattern failures** in production
+2. ✅ **100% validation checkpoint coverage** for all Oracle calls  
+3. ✅ **Predictable Oracle scoring** following magnitude sensitivity law
+4. ✅ **Comprehensive error prevention** with enhanced diagnostics
+5. ✅ **Complete test coverage** of all siege failure scenarios
+6. ✅ **Continuous monitoring** of data pipeline integrity
+7. ✅ **Documentation and training** for all development team members
+
+**FINAL DOCTRINE:** The Guardian Protocol transforms the lessons of the siege into an unbreachable defense. Never again will data corruption cause Oracle failures. The platform stands ready for biological discovery. 🚀
+
+---
+
+**STATUS: GUARDIAN PROTOCOL ARCHITECTURE COMPLETE**  
+**READY FOR IMPLEMENTATION ACROSS ALL ORACLE INTEGRATIONS**
+description:
+globs:
+alwaysApply: false
+---

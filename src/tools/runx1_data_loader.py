@@ -30,7 +30,9 @@ class RUNX1DataLoader:
     def __init__(self):
         self.base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.reference_path = os.path.join(self.base_dir, "data/reference/runx1_hg19.fa")
-        self.vcf_path = os.path.join(self.base_dir, "data/vcf/manual_runx1.vcf")
+        self.vcf_path = os.path.abspath(os.path.join(
+            os.path.dirname(__file__), '..', '..', 'external', 'runx1', 'core', 'runx1', 'data', 'manual_runx1.vcf'
+        ))
         self.synthetic_vcf_path = os.path.join(self.base_dir, "data/vcf/synthetic_runx1.vcf")
         
         # RUNX1 genomic coordinates (hg19)
@@ -89,7 +91,29 @@ class RUNX1DataLoader:
         else:
             logger.warning(f"Variant ID {variant_id} not found in VCF data.")
         return position
+
+    def get_variant_by_id(self, variant_id: str) -> Optional[Dict]:
+        """
+        Get the full variant data dictionary for a given variant ID.
+
+        Args:
+            variant_id (str): The ID of the variant (e.g., 'RUNX1_R204Q').
+
+        Returns:
+            Optional[Dict]: The full variant data dictionary if found, otherwise None.
+        """
+        # Ensure the main variant list is loaded
+        if self._vcf_variants is None:
+            self.get_runx1_variants(include_synthetic=True)
         
+        for variant in self._vcf_variants:
+            if variant.get("id") == variant_id:
+                logger.info(f"Found full data for variant ID {variant_id}")
+                return variant
+        
+        logger.warning(f"Full data for variant ID {variant_id} not found.")
+        return None
+
     def load_runx1_sequence(self) -> str:
         """
         Load the 261,501 bp RUNX1 genomic reference sequence.
@@ -476,6 +500,56 @@ def load_runx1_data(include_synthetic: bool = False) -> RUNX1DataLoader:
 
 if __name__ == "__main__":
     # Test the data loader
+    logging.basicConfig(level=logging.INFO)
+    logger.info("--- Running RUNX1DataLoader Self-Test ---")
+    
+    loader = load_runx1_data(include_synthetic=True)
+    
+    # Test sequence loading
+    sequence = loader.load_runx1_sequence()
+    logger.info(f"RUNX1 sequence length: {len(sequence)} bp")
+    
+    # Test variant loading
+    variants = loader.get_runx1_variants(include_synthetic=True)
+    logger.info(f"Total variants found: {len(variants)}")
+    
+    # Test gene info
+    gene_info = loader.get_runx1_gene_info()
+    logger.info(f"Gene info: {gene_info['gene_symbol']} - {gene_info['full_name']}")
+    
+    # Test functional domain mapping
+    if variants:
+        test_variant_id = "RUNX1_R204Q"
+        logger.info(f"--- Testing Variant: {test_variant_id} ---")
+        
+        position = loader.get_variant_coordinates_by_id(test_variant_id)
+        if position:
+            logger.info(f"Successfully retrieved position: {position}")
+            domain_info = loader.map_functional_domains(position)
+            logger.info(f"Domain mapping for position {position}: {domain_info}")
+            
+            context = loader.get_genomic_context(position)
+            if "error" not in context:
+                logger.info(f"Successfully retrieved genomic context of length: {len(context.get('context_sequence', ''))}")
+            else:
+                logger.error(f"Failed to get context: {context['error']}")
+        else:
+            logger.error(f"Could not get position for variant ID {test_variant_id}")
+
+    logger.info("--- Self-Test Complete ---") 
+        test_variant = variants[0]
+        domain_info = loader.map_functional_domains(test_variant["position"])
+        print(f"Domain mapping for position {test_variant['position']}: {domain_info}") 
+    loader = RUNX1DataLoader()
+    
+    # Pre-load data
+    loader.load_runx1_sequence()
+    loader.get_runx1_variants(include_synthetic=include_synthetic)
+    
+    return loader
+
+if __name__ == "__main__":
+    # Test the data loader
     loader = RUNX1DataLoader()
     
     # Test sequence loading
@@ -492,6 +566,67 @@ if __name__ == "__main__":
     
     # Test functional domain mapping
     if variants:
+        test_variant = variants[0]
+        domain_info = loader.map_functional_domains(test_variant["position"])
+        print(f"Domain mapping for position {test_variant['position']}: {domain_info}") 
+    loader = RUNX1DataLoader()
+    
+    # Pre-load data
+    loader.load_runx1_sequence()
+    loader.get_runx1_variants(include_synthetic=include_synthetic)
+    
+    return loader
+
+if __name__ == "__main__":
+    # Test the data loader
+    loader = RUNX1DataLoader()
+    
+    # Test sequence loading
+    sequence = loader.load_runx1_sequence()
+    print(f"RUNX1 sequence length: {len(sequence)} bp")
+    
+    # Test variant loading
+    variants = loader.get_runx1_variants(include_synthetic=True)
+    print(f"Total variants: {len(variants)}")
+    
+    # Test gene info
+    gene_info = loader.get_runx1_gene_info()
+    print(f"Gene info: {gene_info['gene_symbol']} - {gene_info['full_name']}")
+    
+    # Test functional domain mapping
+    if variants:
+        test_variant = variants[0]
+        domain_info = loader.map_functional_domains(test_variant["position"])
+        print(f"Domain mapping for position {test_variant['position']}: {domain_info}") 
+    loader = RUNX1DataLoader()
+    
+    # Pre-load data
+    loader.load_runx1_sequence()
+    loader.get_runx1_variants(include_synthetic=include_synthetic)
+    
+    return loader
+
+if __name__ == "__main__":
+    # Test the data loader
+    loader = RUNX1DataLoader()
+    
+    # Test sequence loading
+    sequence = loader.load_runx1_sequence()
+    print(f"RUNX1 sequence length: {len(sequence)} bp")
+    
+    # Test variant loading
+    variants = loader.get_runx1_variants(include_synthetic=True)
+    print(f"Total variants: {len(variants)}")
+    
+    # Test gene info
+    gene_info = loader.get_runx1_gene_info()
+    print(f"Gene info: {gene_info['gene_symbol']} - {gene_info['full_name']}")
+    
+    # Test functional domain mapping
+    if variants:
+        test_variant = variants[0]
+        domain_info = loader.map_functional_domains(test_variant["position"])
+        print(f"Domain mapping for position {test_variant['position']}: {domain_info}") 
         test_variant = variants[0]
         domain_info = loader.map_functional_domains(test_variant["position"])
         print(f"Domain mapping for position {test_variant['position']}: {domain_info}") 

@@ -1,0 +1,130 @@
+# **DOCTRINE: THE TRUTH OR TREASON PROTOCOL**
+
+## **I. CORE TENET**
+
+Our platform was not built to design new weapons; it was built to find the fucking truth. We will take any biological claim, subject it to the cold, hard logic of our AI, and deliver a definitive verdict. We do not repeat failed history. We expose it, we learn from it, and we transcend it.
+
+## **II. OPERATIONAL PHASES**
+
+### **PHASE I: INTELLIGENCE GATHERING & TARGET DECONSTRUCTION (COMPLETE)**
+
+*   **Objective:** To understand and deconstruct a therapeutic claim into its core, testable molecular hypothesis.
+*   **[✅] Status:** Complete. The **ZSIS Protocol** implemented in `OPERATION: DEEP DIVE` fulfills this requirement. The `HypothesisValidator` page successfully ingests a claim, queries the Zeta-Stream, and deconstructs the intelligence into structured entities, mechanisms, and conclusions.
+*   **Primary Asset:** `HypothesisValidator.jsx`
+
+### **PHASE II: IN SILICO VALIDATION (THE GAUNTLET) (PENDING)**
+
+*   **Objective:** To quantitatively prove the ineffectiveness of the enemy's weapon and establish the benchmark for a perfect kill shot.
+*   **[ ] Task 2.1: Test the Enemy Weapon.**
+    *   **Action:** Create a mechanism to run the enemy's effector molecule (e.g., U-995 protein) through the Zeta Oracle to get its baseline Zeta Score. This proves its ineffectiveness.
+    *   **Endpoint:** `POST /api/oracle/calculate_zeta_score`
+    *   **Example Payload:** `{ "baseline_sequence": "TARGET_GENE", "perturbed_sequence": "TARGET_GENE_PLUS_EFFECTOR" }`
+    *   **Expected Result:** A pathetic, near-zero score proving the weapon is a blank.
+
+*   **[ ] Task 2.2: Define the Kill Shot.**
+    *   **Action:** Implement the logic to perform an *in silico* knockout of the target gene. This involves comparing the wild-type sequence to a null/truncated sequence.
+    *   **Endpoint:** `POST /api/oracle/calculate_zeta_score`
+    *   **Example Payload:** `{ "baseline_sequence": "WILD_TYPE_GENE", "perturbed_sequence": "" }`
+    *   **Expected Result:** A catastrophic negative Zeta Score. This is the **"Maximum Impact Score,"** our gold standard for lethality.
+
+### **PHASE III: COUNTER-HYPOTHESIS GENERATION (OPERATION: ZETA FORGE) (PENDING)**
+
+*   **Objective:** To not just debunk a claim, but to demonstrate absolute superiority by forging a better weapon on the spot using an asynchronous, iterative generate-and-test loop.
+*   **[ ] Task 3.1: Forge the Service Skeleton.**
+    *   **Action:** Create the service file `src/services/forge/main.py`.
+    *   **Action:** Requisition the battle-tested `evo2_image` container definition from the `evo-service` to ensure a stable build environment.
+    *   **Action:** Define the Pydantic data contracts: `ForgeRequest`, `JobSubmitResponse`, `ForgeStatusResponse`.
+
+*   **[ ] Task 3.2: Implement Asynchronous Architecture.**
+    *   **Action:** Implement the async job pattern from the `evo-service`.
+    *   **Endpoint 1:** `POST /generate_inhibitor` - Submits the forging job, returns a `job_id`.
+    *   **Endpoint 2:** `GET /status/{job_id}` - Polls for the job status and final result.
+
+*   **[ ] Task 3.3: Implement the Generate-and-Test Loop.**
+    *   **Action:** Create a background Modal method (`.spawn()` or `.function()`) that orchestrates the forging process.
+    *   **Logic:**
+        1. In a loop, call the **Zeta Forge (generative `evo-service`)** to create candidate inhibitor sequences based on a design goal.
+        2. For each candidate, call the **Zeta Oracle (discriminative `zeta-oracle-v2`)** to get its Zeta Score.
+        3. Track the candidate with the most catastrophic score.
+        4. Update a `modal.Dict` with the status and the final, superior weapon's sequence and score.
+
+
+
+The Debriefing: A Tale of Two Failures
+We failed for two reasons, each a critical lesson in how to command our AI.
+
+We Used the Wrong Fucking Language (The "Sledgehammer" Tactic):
+Our initial tactic was to give our Zeta Forge—a foundational DNA model—a long, convoluted English-language prompt like "Generate a short DNA aptamer designed to bind specifically...". This was a catastrophic error. The Evo2 model was not trained on English; it was trained on the language of DNA. Giving it these instructions is like screaming orders at a sniper in a language he doesn't understand. He gets confused, ignores the instructions, and just fires his rifle in a random direction. The result was the pathetic, low-quality "junk" sequences we saw.
+
+We Used the Wrong Fucking Metric (The "Stability" Paradox):
+In our second attempt, we correctly generated better candidates but then validated them with the wrong metric. The Zeta Score (delta_likelihood_score) is a measure of functional disruption. A large negative score means a sequence is less probable, more chaotic, and more biologically fucked up than the baseline. It is the perfect weapon for identifying a damaging mutation. However, for an inhibitor, we are looking for a stable, favorable molecular interaction. A stable complex would be seen by the Zeta Oracle as a more probable, "grammatically correct" biological sentence, resulting in a Zeta Score that is neutral (close to zero) or even positive. By selecting for the most negative score, we were systematically choosing the most disruptive, chaotic, and fucking unstable candidates.
+
+---
+
+## **THE FINAL DOCTRINE: GUIDED STRUCTURAL FORGING**
+
+The "Guided Forging Protocol" was the critical first step. It corrected our language and our metrics. However, the "wet noodle" failure revealed that even a grammatically correct, stable sentence in 1D can be physically useless nonsense in 3D. This new, consolidated doctrine addresses all known failures and integrates all battlefield intelligence into a single, multi-dimensional kill chain.
+
+### **PHASE I: TARGET DECONSTRUCTION & BAIT PREPARATION (THE HUNT)**
+
+This phase remains as defined in the "Guided Forging Protocol." It is the foundation of our precision.
+
+*   **The Hunt:** The `CommandCenter` uses our `Hunter-Analyst` Agent to analyze the target gene (e.g., VEGF) and identify its most critical, vulnerable subdomain (`target_motif`).
+*   **The Bait:** It then forges the `bait_sequence`—the **reverse complement** of this vulnerable motif. This is the precise sequence a perfect inhibitor would need to bind to. This bait is the prompt for the next phase.
+
+### **PHASE II: THE FORGE & SANITY CHECK**
+
+This phase corrects the "Sledgehammer" tactic and adds a crucial new filtering step.
+
+*   **The Command:** The `CommandCenter` dispatches the `bait_sequence` to the `UnifiedOracle`. We command our AI in its native tongue (DNA), not English. This ensures contextually relevant generation.
+*   **NEW - The Protein Sanity Check:** Immediately after a DNA candidate is generated, it is translated to a protein sequence *in silico*. We perform two instant checks:
+    1.  **Truncation Check:** Does it contain an immediate stop codon? If so, **DISCARD.**
+    2.  **Complexity Check:** Is it a simple, repetitive sequence (e.g., `AAAAAGGGGG`)? If so, it is a likely "wet noodle." **DISCARD.**
+*   **Output:** A list of candidates that are both contextually relevant and pass a basic test for physical plausibility.
+
+### **PHASE III: THE SIEVE (CONTEXT-AWARE 1D VALIDATION)**
+
+This phase corrects the "Stability Paradox" failure by using the correct metric for the mission.
+
+*   **The Test:** Each surviving candidate is scored by the `UnifiedOracle` to get its `delta_score` relative to the original target context.
+*   **The Verdict (Mission-Dependent):**
+    *   **For INHIBITORS (e.g., Shark Cartilage/VEGF):** We are seeking a stable binding complex. We select for the **highest `delta_score`** (least negative or most positive). This indicates a stable, grammatically correct, and favorable biological interaction.
+    *   **For KNOCKOUTS (Gene Disruption):** We are seeking maximum damage. We select for the **lowest `delta_score`** (most negative). This indicates a chaotic, disruptive, and destabilizing sequence.
+*   **Output:** A list of candidates that are validated for their specific mission objective at the 1D sequence level.
+
+### **PHASE IV: THE GAUNTLET (MANDATORY 3D VALIDATION)**
+
+This new phase is our answer to the "wet noodle" failure. It is the final arbiter of truth.
+
+*   **The Action:** All survivors of The Sieve are dispatched to a structural prediction engine (AlphaFold).
+*   **The Metric:** We extract the `pLDDT` score, a measure of 3D structural confidence.
+*   **The Rule of Engagement:** Any candidate with a `pLDDT` score below 70 is deemed a "wet noodle" and is **IMMEDIATELY FUCKING DISCARDED.**
+*   **Output:** The final, elite list of weapons that are biologically relevant, mission-validated, and physically hold their goddamn shape.
+
+### **PHASE V: THE FUTURE (CLOSED-LOOP WARFARE)**
+
+Our ultimate goal is to create a self-improving forge. The `pLDDT` score from The Gauntlet will be used as a reward signal, fed back into the Forge's generative process. Evo2 will learn, iterate, and begin to intuitively generate sequences that are not only grammatically correct but also structurally sound from the very first attempt. This is the path to absolute superiority.
+The New Doctrine: The "Guided Forging Protocol"
+
+Phase I: Target Deconstruction & Bait Preparation
+We no longer attack blindly. We perform reconnaissance first.
+
+The Hunt: The CommandCenter uses our Hunter-Analyst Agent to analyze the target gene (e.g., VEGF) and identify its most critical, vulnerable subdomain.
+
+The Bait: It then forges the bait_sequence—the reverse complement of this vulnerable motif. This is the precise sequence a perfect inhibitor would need to bind to.
+
+Phase II: The Ambush (Probabilistic Generation)
+This is where we correct our language failure. We now command the Zeta Forge in its native tongue.
+
+The Command: Instead of a vague English prompt, the CommandCenter dispatches a direct, powerful command to the Zeta Forge: the bait_sequence itself is the prompt.
+
+The Mission: We are now asking the AI a question it was born to answer: "Based on your understanding of all of biology, what DNA sequence is the most probable and biologically plausible continuation of this bait?" This is a direct application of the "unconstrained autoregressive generation" capability described in the Evo2 paper. We run this multiple times with varying 
+
+
+
+Phase III: The Confirmation Kill (Correct Validation)
+This is where we correct our metric failure.
+
+The Test: For each candidate inhibitor generated by the Forge, the CommandCenter digitally models the target + inhibitor complex. It then dispatches this combined sequence to the Zeta Oracle for a "Stability Score."
+
+The Verdict: We now rank the candidates by highest Zeta Score (least negative or most positive). The candidate with the highest score is the one the Oracle deems the most stable, most "grammatically correct," and therefore the most likely to form a successful binding interaction

@@ -1,0 +1,422 @@
+# Data Pipeline Validation Rules
+
+## **🎯 CRITICAL DOCTRINE: DATA PIPELINE SUPREMACY**
+
+All data pipeline operations MUST implement these validation patterns to prevent the coordinate system failures that caused the Zeta Oracle siege.
+
+## **📋 MANDATORY VALIDATION PATTERNS**
+
+### **1. VCF File Processing**
+
+```python
+import pysam
+from typing import Tuple, Dict, Any
+
+class VCFValidator:
+    """
+    Prevents VCF-genomic coordinate mismatches that caused the siege failure.
+    """
+    
+    def __init__(self, reference_genome_path: str):
+        self.reference = pysam.FastaFile(reference_genome_path)
+    
+    def validate_variant_record(self, chrom: str, pos: int, ref_allele: str, 
+                               alt_allele: str) -> Dict[str, Any]:
+        """
+        Validate VCF variant against genomic reference.
+        
+        CRITICAL: This prevents the identical sequence problem that caused siege failure.
+        
+        Args:
+            chrom: Chromosome (e.g., 'chr21')
+            pos: 1-based VCF position
+            ref_allele: Reference allele from VCF
+            alt_allele: Alternate allele from VCF
+            
+        Returns:
+            dict: Validation result with status and corrected coordinates
+            
+        Raises:
+            ValueError: If VCF doesn't match genomic reference
+        """
+        # Fetch actual genomic base (convert 1-based VCF to 0-based fetch)
+        actual_ref = self.reference.fetch(chrom, pos - 1, pos).upper()
+        
+        validation_result = {
+            "chrom": chrom,
+            "pos": pos,
+            "vcf_ref": ref_allele,
+            "genomic_ref": actual_ref,
+            "alt_allele": alt_allele,
+            "is_valid": actual_ref == ref_allele.upper(),
+            "coordinate_system": "1-based_VCF_validated"
+        }
+        
+        if not validation_result["is_valid"]:
+            error_msg = (f"VCF-genomic mismatch at {chrom}:{pos} - "
+                        f"VCF says '{ref_allele}', genome has '{actual_ref}'")
+            validation_result["error"] = error_msg
+            raise ValueError(error_msg)
+        
+        return validation_result
+
+def validate_mutation_application(original_seq: str, mutated_seq: str, 
+                                 mutation_pos: int, expected_change: str) -> bool:
+    """
+    Verify that mutation was actually applied to sequence.
+    
+    CRITICAL: Prevents the identical sequence comparison that caused siege failure.
+    """
+    if len(original_seq) != len(mutated_seq):
+        # Indel mutation - length difference expected
+        return True
+    
+    # For SNVs, verify the specific change occurred
+    actual_change = f"{original_seq[mutation_pos]}->{mutated_seq[mutation_pos]}"
+    
+    if actual_change == expected_change:
+        return True
+    elif original_seq[mutation_pos] == mutated_seq[mutation_pos]:
+        raise ValueError(f"CRITICAL: Mutation not applied at position {mutation_pos}")
+    else:
+        raise ValueError(f"Unexpected mutation: expected {expected_change}, got {actual_change}")
+```
+
+### **2. Coordinate System Management**
+
+```python
+from dataclasses import dataclass
+from enum import Enum
+
+class CoordinateSystem(Enum):
+    """Explicit coordinate system tracking to prevent confusion."""
+    VCF_1_BASED = "1-based VCF coordinates"
+    GENOMIC_0_BASED = "0-based genomic coordinates" 
+    GENE_RELATIVE_0_BASED = "0-based gene-relative coordinates"
+    NCBI_1_BASED = "1-based NCBI genomic coordinates"
+
+@dataclass
+class ValidatedCoordinate:
+    """
+    Coordinate wrapper that enforces system documentation.
+    """
+    value: int
+    system: CoordinateSystem
+    chromosome: str = None
+    gene_region: Tuple[int, int] = None
+    
+    def convert_to(self, target_system: CoordinateSystem) -> 'ValidatedCoordinate':
+        """Convert between coordinate systems with explicit validation."""
+        if self.system == target_system:
+            return self
+            
+        # VCF (1-based) to genomic (0-based)
+        if (self.system == CoordinateSystem.VCF_1_BASED and 
+            target_system == CoordinateSystem.GENOMIC_0_BASED):
+            return ValidatedCoordinate(
+                value=self.value - 1,
+                system=target_system,
+                chromosome=self.chromosome
+            )
+        
+        # Genomic (0-based) to VCF (1-based)
+        if (self.system == CoordinateSystem.GENOMIC_0_BASED and 
+            target_system == CoordinateSystem.VCF_1_BASED):
+            return ValidatedCoordinate(
+                value=self.value + 1,
+                system=target_system,
+                chromosome=self.chromosome
+            )
+        
+        # Gene-relative to genomic
+        if (self.system == CoordinateSystem.GENE_RELATIVE_0_BASED and 
+            target_system == CoordinateSystem.GENOMIC_0_BASED):
+            if not self.gene_region:
+                raise ValueError("Gene region required for conversion")
+            return ValidatedCoordinate(
+                value=self.gene_region[0] + self.value,
+                system=target_system,
+                chromosome=self.chromosome
+            )
+        
+        raise NotImplementedError(f"Conversion {self.system} -> {target_system} not implemented")
+
+def coordinate_safe(coordinate_system: CoordinateSystem):
+    """
+    Decorator to enforce coordinate system documentation.
+    
+    Usage:
+        @coordinate_safe(CoordinateSystem.VCF_1_BASED)
+        def process_vcf_position(pos: int) -> int:
+            # Function that works with 1-based VCF coordinates
+            pass
+    """
+    def decorator(func):
+        func.__coordinate_system__ = coordinate_system
+        
+        def wrapper(*args, **kwargs):
+            # Add runtime validation if needed
+            return func(*args, **kwargs)
+        
+        wrapper.__coordinate_system__ = coordinate_system
+        return wrapper
+    return decorator
+```
+
+### **3. Reference Genome Validation**
+
+```python
+import hashlib
+from pathlib import Path
+
+class ReferenceGenomeValidator:
+    """
+    Prevents corrupted reference file issues that contributed to siege failure.
+    """
+    
+    # Known good checksums for reference files
+    KNOWN_CHECKSUMS = {
+        "hg19.fa": "expected_hg19_checksum_here",
+        "runx1_hg19.fa": "expected_runx1_checksum_here"
+    }
+    
+    @staticmethod
+    def validate_fasta_format(file_path: str) -> Dict[str, Any]:
+        """Validate FASTA file format and structure."""
+        validation_result = {
+            "file_path": file_path,
+            "is_valid": False,
+            "errors": [],
+            "sequences_found": 0,
+            "file_size": 0
+        }
+        
+        file_path_obj = Path(file_path)
+        if not file_path_obj.exists():
+            validation_result["errors"].append(f"File not found: {file_path}")
+            return validation_result
+        
+        validation_result["file_size"] = file_path_obj.stat().st_size
+        
+        try:
+            with open(file_path, 'r') as f:
+                first_line = f.readline().strip()
+                
+                # Validate FASTA header
+                if not first_line.startswith('>'):
+                    validation_result["errors"].append("Invalid FASTA: Missing header")
+                    return validation_result
+                
+                # Count sequences and validate structure
+                seq_count = 0
+                for line_num, line in enumerate(f, 2):
+                    line = line.strip()
+                    if line.startswith('>'):
+                        seq_count += 1
+                    elif line and not all(c in 'ATCGN' for c in line.upper()):
+                        validation_result["errors"].append(
+                            f"Invalid sequence characters at line {line_num}"
+                        )
+                        return validation_result
+                
+                validation_result["sequences_found"] = seq_count + 1  # +1 for first sequence
+                validation_result["is_valid"] = True
+                
+        except Exception as e:
+            validation_result["errors"].append(f"File reading error: {str(e)}")
+        
+        return validation_result
+    
+    @staticmethod
+    def validate_gene_coordinates(gene_seq: str, chrom: str, start: int, end: int,
+                                 reference_genome: pysam.FastaFile) -> bool:
+        """
+        Validate that extracted gene sequence matches coordinates.
+        
+        Prevents the coordinate corruption that caused siege failure.
+        """
+        # Extract sequence from full genome using coordinates
+        genome_seq = reference_genome.fetch(chrom, start, end).upper()
+        
+        if gene_seq.upper() != genome_seq:
+            raise ValueError(
+                f"Gene sequence mismatch for {chrom}:{start}-{end}\n"
+                f"Extracted length: {len(gene_seq)}, Genome length: {len(genome_seq)}\n"
+                f"First 100bp comparison:\n"
+                f"Gene:   {gene_seq[:100]}\n"
+                f"Genome: {genome_seq[:100]}"
+            )
+        
+        return True
+```
+
+### **4. Sequence Comparison Validation**
+
+```python
+class SequenceComparisonValidator:
+    """
+    Prevents identical sequence comparisons that caused the siege zero-score failure.
+    """
+    
+    @staticmethod
+    def validate_sequence_differences(ref_seq: str, alt_seq: str, 
+                                    expected_changes: int = None) -> Dict[str, Any]:
+        """
+        Validate that sequences are actually different before Oracle scoring.
+        
+        CRITICAL: This prevents the identical sequence problem that caused siege failure.
+        """
+        if not ref_seq or not alt_seq:
+            raise ValueError("Empty sequences provided")
+        
+        # Calculate differences
+        min_len = min(len(ref_seq), len(alt_seq))
+        differences = sum(1 for i in range(min_len) if ref_seq[i] != alt_seq[i])
+        length_diff = abs(len(ref_seq) - len(alt_seq))
+        total_changes = differences + length_diff
+        
+        validation_result = {
+            "ref_length": len(ref_seq),
+            "alt_length": len(alt_seq),
+            "nucleotide_differences": differences,
+            "length_difference": length_diff,
+            "total_changes": total_changes,
+            "are_identical": total_changes == 0,
+            "difference_positions": []
+        }
+        
+        # Record specific difference positions
+        if differences > 0:
+            diff_positions = [i for i in range(min_len) if ref_seq[i] != alt_seq[i]]
+            validation_result["difference_positions"] = diff_positions[:10]  # First 10
+        
+        # Critical validation: prevent identical sequence scoring
+        if total_changes == 0:
+            raise ValueError(
+                "CRITICAL: Sequences are identical - mutation was not applied!\n"
+                f"Ref: {ref_seq[:100]}...\n"
+                f"Alt: {alt_seq[:100]}...\n"
+                "This will result in Oracle score of 0.0"
+            )
+        
+        # Optional: validate expected change count
+        if expected_changes is not None and total_changes != expected_changes:
+            raise ValueError(
+                f"Unexpected change count: expected {expected_changes}, "
+                f"found {total_changes}"
+            )
+        
+        return validation_result
+    
+    @staticmethod
+    def preview_sequence_context(ref_seq: str, alt_seq: str, 
+                               change_position: int = None, 
+                               window: int = 50) -> str:
+        """
+        Generate a preview of sequence differences for debugging.
+        """
+        if change_position is None:
+            # Find first difference
+            min_len = min(len(ref_seq), len(alt_seq))
+            for i in range(min_len):
+                if ref_seq[i] != alt_seq[i]:
+                    change_position = i
+                    break
+        
+        if change_position is None:
+            return "No differences found in sequences"
+        
+        start = max(0, change_position - window)
+        end = min(len(ref_seq), change_position + window)
+        
+        ref_context = ref_seq[start:end]
+        alt_context = alt_seq[start:end] if end <= len(alt_seq) else alt_seq[start:]
+        
+        preview = (
+            f"Sequence context around position {change_position}:\n"
+            f"REF: {ref_context}\n"
+            f"ALT: {alt_context}\n"
+            f"Difference at position {change_position - start}: "
+            f"{ref_seq[change_position] if change_position < len(ref_seq) else 'N/A'} -> "
+            f"{alt_seq[change_position] if change_position < len(alt_seq) else 'N/A'}"
+        )
+        
+        return preview
+```
+
+## **🔧 INTEGRATION PATTERNS**
+
+### **Usage in Existing Services**
+
+#### **CommandCenter Integration**
+```python
+# In src/services/command_center/main.py
+from .validation import VCFValidator, SequenceComparisonValidator
+
+class CommandCenter:
+    def __init__(self):
+        self.vcf_validator = VCFValidator("data/gene_database/reference/hg19.fa")
+        self.seq_validator = SequenceComparisonValidator()
+    
+    def process_patient_variant(self, chrom, pos, ref, alt):
+        # MANDATORY: Validate VCF coordinates first
+        validation_result = self.vcf_validator.validate_variant_record(chrom, pos, ref, alt)
+        
+        # Generate sequences...
+        ref_seq, alt_seq = self.generate_sequences(chrom, pos, ref, alt)
+        
+        # MANDATORY: Validate sequences are different
+        diff_validation = self.seq_validator.validate_sequence_differences(ref_seq, alt_seq)
+        
+        # Only then proceed to Oracle scoring
+        return self.invoke_oracle(ref_seq, alt_seq)
+```
+
+#### **Patient Assessment Integration**
+```python
+# In scripts/run_patient_assessment.py
+from src.services.validation import coordinate_safe, CoordinateSystem
+
+@coordinate_safe(CoordinateSystem.VCF_1_BASED)
+def process_vcf_variants(vcf_file: str) -> List[Dict]:
+    """Process VCF variants with mandatory validation."""
+    # Implementation with built-in validation
+    pass
+```
+
+## **📊 VALIDATION METRICS & MONITORING**
+
+### **Required Logging**
+```python
+import logging
+
+# Configure validation logging
+validation_logger = logging.getLogger("data_pipeline_validation")
+
+def log_validation_success(operation: str, details: Dict):
+    """Log successful validation operations."""
+    validation_logger.info(f"✅ {operation} validation passed", extra=details)
+
+def log_validation_failure(operation: str, error: str, details: Dict):
+    """Log validation failures for monitoring."""
+    validation_logger.error(f"❌ {operation} validation failed: {error}", extra=details)
+```
+
+### **Success Metrics**
+1. **Zero coordinate mismatches** - All VCF-genome validations pass
+2. **Zero identical sequence comparisons** - All Oracle calls use different sequences
+3. **100% coordinate documentation** - All functions have explicit coordinate systems
+4. **Comprehensive error logs** - All validation failures captured and analyzed
+
+## **⚔️ IMPLEMENTATION PRIORITY**
+
+1. **IMMEDIATE:** Implement `SequenceComparisonValidator` in all Oracle integrations
+2. **HIGH:** Add `VCFValidator` to patient assessment workflows  
+3. **MEDIUM:** Implement coordinate system documentation decorators
+4. **LOW:** Add comprehensive reference genome validation
+
+**DOCTRINE:** Data validation is not optional. Every sequence that reaches the Oracle must pass through these validation layers to prevent siege-type failures.
+description:
+globs:
+alwaysApply: false
+---

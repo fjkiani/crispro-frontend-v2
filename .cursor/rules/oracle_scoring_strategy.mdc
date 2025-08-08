@@ -1,0 +1,519 @@
+# Oracle Scoring Strategy Rules
+
+## **🎯 DOCTRINE: MAGNITUDE SENSITIVITY LAW**
+
+Oracle scoring scales with alteration magnitude, not just presence. This rule implements the battle-tested scoring strategies discovered during Operation: Restore Massive Score.
+
+## **📊 DISCOVERED SCORING FORMULA**
+
+### **Magnitude-Score Relationship**
+```python
+# PROVEN SCORING PATTERNS (from Operation: Restore Massive Score)
+ORACLE_SCORING_PATTERNS = {
+    "single_nucleotide": {
+        "alteration_size": "1bp",
+        "expected_score_range": (0, 100),
+        "biological_significance": "minimal",
+        "recommendation": "Use Triumvirate Protocol for pathogenic detection"
+    },
+    "small_replacement": {
+        "alteration_size": "1kb", 
+        "expected_score_range": (1000, 1500),
+        "biological_significance": "moderate",
+        "optimal_window": "8kb-15kb"
+    },
+    "medium_replacement": {
+        "alteration_size": "10kb",
+        "expected_score_range": (10000, 15000), 
+        "biological_significance": "major",
+        "optimal_window": "25kb-30kb"
+    },
+    "large_replacement": {
+        "alteration_size": "25kb",
+        "expected_score_range": (20000, 25000),
+        "biological_significance": "catastrophic", 
+        "optimal_window": "35kb-40kb"
+    },
+    "extreme_artificial": {
+        "alteration_size": "50kb",
+        "expected_score_range": (30000, 35000),
+        "biological_significance": "artificial_maximum",
+        "optimal_window": "50kb+"
+    }
+}
+```
+
+## **🎯 STRATEGIC SCORING IMPLEMENTATION**
+
+### **1. Context-Aware Scoring Strategy**
+
+```python
+from enum import Enum
+from dataclasses import dataclass
+from typing import Dict, Tuple, List
+
+class BiologicalContext(Enum):
+    """Biological contexts that require different scoring strategies."""
+    SINGLE_NUCLEOTIDE_VARIANT = "snv"
+    SMALL_INDEL = "small_indel"  # <50bp
+    STRUCTURAL_VARIANT = "structural"  # >50bp
+    COPY_NUMBER_VARIANT = "cnv"
+    REGULATORY_ELEMENT = "regulatory"
+    CODING_SEQUENCE = "coding"
+    INTRONIC_REGION = "intronic"
+    
+class VariantImpactLevel(Enum):
+    """Impact levels based on discovered Oracle sensitivity."""
+    NO_IMPACT = "no_impact"          # 0-100 score
+    MINOR_IMPACT = "minor_impact"    # 100-1000 score
+    MODERATE_IMPACT = "moderate_impact"  # 1000-10000 score
+    MAJOR_IMPACT = "major_impact"    # 10000-20000 score
+    CATASTROPHIC_IMPACT = "catastrophic_impact"  # 20000+ score
+
+@dataclass
+class ScoringStrategy:
+    """Optimal scoring strategy for different biological contexts."""
+    window_size: int
+    alteration_approach: str
+    expected_score_range: Tuple[int, int]
+    confidence_threshold: float
+    biological_rationale: str
+
+class OracleScoringStrategist:
+    """
+    Implements magnitude-aware scoring strategies based on biological context.
+    """
+    
+    STRATEGIES = {
+        BiologicalContext.SINGLE_NUCLEOTIDE_VARIANT: ScoringStrategy(
+            window_size=8000,
+            alteration_approach="minimal_context",
+            expected_score_range=(0, 100),
+            confidence_threshold=0.7,
+            biological_rationale="SNVs require Triumvirate Protocol for pathogenic detection"
+        ),
+        BiologicalContext.SMALL_INDEL: ScoringStrategy(
+            window_size=15000, 
+            alteration_approach="local_disruption",
+            expected_score_range=(500, 5000),
+            confidence_threshold=0.8,
+            biological_rationale="Small indels show moderate Oracle sensitivity"
+        ),
+        BiologicalContext.STRUCTURAL_VARIANT: ScoringStrategy(
+            window_size=35000,
+            alteration_approach="large_scale_disruption", 
+            expected_score_range=(10000, 30000),
+            confidence_threshold=0.9,
+            biological_rationale="Structural variants produce massive Oracle scores"
+        ),
+        BiologicalContext.CODING_SEQUENCE: ScoringStrategy(
+            window_size=25000,
+            alteration_approach="functional_disruption",
+            expected_score_range=(5000, 20000), 
+            confidence_threshold=0.85,
+            biological_rationale="Coding disruptions have high biological significance"
+        )
+    }
+    
+    @classmethod
+    def get_optimal_strategy(cls, context: BiologicalContext, 
+                           sequence_length: int = None) -> ScoringStrategy:
+        """
+        Get optimal scoring strategy based on biological context.
+        
+        Args:
+            context: Biological context of the variant
+            sequence_length: Length of available sequence context
+            
+        Returns:
+            ScoringStrategy: Optimal strategy for the context
+        """
+        base_strategy = cls.STRATEGIES.get(context, cls.STRATEGIES[BiologicalContext.SINGLE_NUCLEOTIDE_VARIANT])
+        
+        # Adjust window size based on available sequence
+        if sequence_length and sequence_length < base_strategy.window_size:
+            adjusted_strategy = ScoringStrategy(
+                window_size=min(sequence_length, base_strategy.window_size),
+                alteration_approach=base_strategy.alteration_approach,
+                expected_score_range=base_strategy.expected_score_range,
+                confidence_threshold=base_strategy.confidence_threshold - 0.1,  # Lower confidence for smaller windows
+                biological_rationale=f"Adjusted for available sequence length: {sequence_length}bp"
+            )
+            return adjusted_strategy
+        
+        return base_strategy
+    
+    @classmethod
+    def classify_impact_level(cls, score: float) -> VariantImpactLevel:
+        """
+        Classify biological impact based on Oracle score magnitude.
+        
+        Based on discovered patterns from Operation: Restore Massive Score.
+        """
+        abs_score = abs(score)
+        
+        if abs_score >= 20000:
+            return VariantImpactLevel.CATASTROPHIC_IMPACT
+        elif abs_score >= 10000:
+            return VariantImpactLevel.MAJOR_IMPACT
+        elif abs_score >= 1000:
+            return VariantImpactLevel.MODERATE_IMPACT
+        elif abs_score >= 100:
+            return VariantImpactLevel.MINOR_IMPACT
+        else:
+            return VariantImpactLevel.NO_IMPACT
+    
+    @classmethod
+    def recommend_followup_analysis(cls, score: float, context: BiologicalContext) -> List[str]:
+        """
+        Recommend follow-up analysis based on score and context.
+        """
+        impact = cls.classify_impact_level(score)
+        recommendations = []
+        
+        if impact == VariantImpactLevel.CATASTROPHIC_IMPACT:
+            recommendations.extend([
+                "URGENT: Structural validation with AlphaFold",
+                "Protein functionality prediction with ESM",
+                "Clinical correlation analysis",
+                "Therapeutic intervention prioritization"
+            ])
+        elif impact == VariantImpactLevel.MAJOR_IMPACT:
+            recommendations.extend([
+                "Structural impact assessment",
+                "Conservation analysis",
+                "Population frequency validation"
+            ])
+        elif impact == VariantImpactLevel.MODERATE_IMPACT:
+            recommendations.extend([
+                "Functional prediction analysis",
+                "Literature review for similar variants"
+            ])
+        elif impact == VariantImpactLevel.NO_IMPACT and context == BiologicalContext.SINGLE_NUCLEOTIDE_VARIANT:
+            recommendations.append("Consider Triumvirate Protocol for frameshift/nonsense detection")
+        
+        return recommendations
+```
+
+### **2. Adaptive Window Selection**
+
+```python
+class AdaptiveWindowSelector:
+    """
+    Selects optimal sequence windows based on variant type and Oracle sensitivity patterns.
+    """
+    
+    # Based on sensitivity analysis results
+    OPTIMAL_WINDOWS = {
+        "snv_detection": [8000, 12000, 16000],      # Small windows for SNV context
+        "indel_assessment": [15000, 20000, 25000],  # Medium windows for indels
+        "structural_analysis": [30000, 35000, 40000], # Large windows for structural variants
+        "regulatory_impact": [10000, 15000, 20000]  # Medium windows for regulatory elements
+    }
+    
+    @staticmethod
+    def select_optimal_window(variant_type: str, available_sequence: int, 
+                             target_score_range: Tuple[int, int] = None) -> int:
+        """
+        Select optimal window size based on variant type and available sequence.
+        
+        Args:
+            variant_type: Type of variant analysis
+            available_sequence: Total available sequence length
+            target_score_range: Desired score range for analysis
+            
+        Returns:
+            int: Optimal window size in base pairs
+        """
+        candidate_windows = AdaptiveWindowSelector.OPTIMAL_WINDOWS.get(
+            variant_type, AdaptiveWindowSelector.OPTIMAL_WINDOWS["snv_detection"]
+        )
+        
+        # Filter windows that fit in available sequence
+        feasible_windows = [w for w in candidate_windows if w <= available_sequence]
+        
+        if not feasible_windows:
+            # Use maximum available sequence if no standard window fits
+            return min(available_sequence, 8000)  # Minimum effective window
+        
+        # Select largest feasible window for maximum sensitivity
+        optimal_window = max(feasible_windows)
+        
+        # Adjust based on target score range if provided
+        if target_score_range:
+            min_target, max_target = target_score_range
+            if max_target > 20000:  # Targeting massive scores
+                optimal_window = max(feasible_windows)
+            elif max_target < 1000:  # Targeting small scores
+                optimal_window = min(feasible_windows)
+        
+        return optimal_window
+
+class SequenceContextOptimizer:
+    """
+    Optimizes sequence context for maximum Oracle sensitivity.
+    """
+    
+    @staticmethod
+    def optimize_variant_context(full_sequence: str, variant_position: int, 
+                                window_size: int, variant_type: str) -> Tuple[str, str]:
+        """
+        Extract optimal sequence context around variant for Oracle scoring.
+        
+        Args:
+            full_sequence: Full gene or genomic sequence
+            variant_position: 0-based position of variant in full_sequence
+            window_size: Target window size
+            variant_type: Type of variant for context optimization
+            
+        Returns:
+            tuple: (start_position, end_position) for optimal window
+        """
+        seq_length = len(full_sequence)
+        half_window = window_size // 2
+        
+        # Basic centering around variant
+        start_pos = max(0, variant_position - half_window)
+        end_pos = min(seq_length, variant_position + half_window)
+        
+        # Adjust for optimal biological context
+        if variant_type == "coding_variant":
+            # Try to include complete exon boundaries
+            start_pos = max(0, start_pos - (start_pos % 3))  # Align to codon boundary
+        elif variant_type == "regulatory_variant":
+            # Expand upstream for regulatory context
+            upstream_bias = int(window_size * 0.7)  # 70% upstream, 30% downstream
+            start_pos = max(0, variant_position - upstream_bias)
+            end_pos = min(seq_length, variant_position + (window_size - upstream_bias))
+        
+        # Ensure minimum window size
+        actual_window = end_pos - start_pos
+        if actual_window < window_size and end_pos < seq_length:
+            # Expand downstream if possible
+            end_pos = min(seq_length, start_pos + window_size)
+        elif actual_window < window_size and start_pos > 0:
+            # Expand upstream if possible  
+            start_pos = max(0, end_pos - window_size)
+        
+        return start_pos, end_pos
+```
+
+### **3. Magnitude-Based Variant Generation**
+
+```python
+class MagnitudeAwareVariantGenerator:
+    """
+    Generates variants with appropriate magnitude for Oracle sensitivity.
+    """
+    
+    @staticmethod
+    def generate_pathogenic_simulation(reference_seq: str, variant_position: int,
+                                     target_impact: VariantImpactLevel) -> str:
+        """
+        Generate simulated pathogenic variants with target impact level.
+        
+        Args:
+            reference_seq: Reference sequence
+            variant_position: Position for variant introduction
+            target_impact: Desired impact level
+            
+        Returns:
+            str: Alternate sequence with appropriate magnitude alteration
+        """
+        if target_impact == VariantImpactLevel.NO_IMPACT:
+            # Return identical sequence (for negative controls)
+            return reference_seq
+        
+        elif target_impact == VariantImpactLevel.MINOR_IMPACT:
+            # Single nucleotide change
+            alt_seq = list(reference_seq)
+            original_base = alt_seq[variant_position]
+            alt_bases = {'A': 'T', 'T': 'A', 'C': 'G', 'G': 'C'}
+            alt_seq[variant_position] = alt_bases.get(original_base, 'N')
+            return ''.join(alt_seq)
+        
+        elif target_impact == VariantImpactLevel.MODERATE_IMPACT:
+            # 1kb homopolymer replacement
+            replacement_size = 1000
+            start_pos = max(0, variant_position - replacement_size // 2)
+            end_pos = min(len(reference_seq), start_pos + replacement_size)
+            
+            return (reference_seq[:start_pos] + 
+                   'T' * (end_pos - start_pos) +
+                   reference_seq[end_pos:])
+        
+        elif target_impact == VariantImpactLevel.MAJOR_IMPACT:
+            # 10kb homopolymer replacement
+            replacement_size = 10000
+            start_pos = max(0, variant_position - replacement_size // 2)
+            end_pos = min(len(reference_seq), start_pos + replacement_size)
+            
+            return (reference_seq[:start_pos] + 
+                   'A' * (end_pos - start_pos) +
+                   reference_seq[end_pos:])
+        
+        elif target_impact == VariantImpactLevel.CATASTROPHIC_IMPACT:
+            # 25kb alternating pattern replacement
+            replacement_size = 25000
+            start_pos = max(0, variant_position - replacement_size // 2)
+            end_pos = min(len(reference_seq), start_pos + replacement_size)
+            
+            # Alternating ATCG pattern for maximum disruption
+            pattern = 'ATCG' * ((end_pos - start_pos) // 4 + 1)
+            replacement = pattern[:end_pos - start_pos]
+            
+            return (reference_seq[:start_pos] + 
+                   replacement +
+                   reference_seq[end_pos:])
+        
+        return reference_seq
+```
+
+## **🎯 INTEGRATION WITH ORACLE SERVICES**
+
+### **CommandCenter Integration Pattern**
+
+```python
+# In src/services/command_center/main.py
+
+class CommandCenter:
+    def __init__(self):
+        self.scoring_strategist = OracleScoringStrategist()
+        self.window_selector = AdaptiveWindowSelector()
+        self.context_optimizer = SequenceContextOptimizer()
+    
+    def score_variant_with_optimal_strategy(self, reference_seq: str, alt_seq: str,
+                                          biological_context: BiologicalContext) -> dict:
+        """
+        Score variant using optimal strategy based on biological context.
+        """
+        # Get optimal strategy
+        strategy = self.scoring_strategist.get_optimal_strategy(
+            biological_context, len(reference_seq)
+        )
+        
+        # Optimize sequence context if needed
+        if len(reference_seq) > strategy.window_size:
+            # Extract optimal window
+            optimized_window = self.extract_optimal_window(
+                reference_seq, alt_seq, strategy.window_size
+            )
+            reference_seq, alt_seq = optimized_window
+        
+        # Score with Oracle
+        oracle_result = self.invoke_oracle(reference_seq, alt_seq)
+        
+        # Classify impact and add recommendations
+        impact_level = self.scoring_strategist.classify_impact_level(
+            oracle_result.get("zeta_score", 0)
+        )
+        
+        recommendations = self.scoring_strategist.recommend_followup_analysis(
+            oracle_result.get("zeta_score", 0), biological_context
+        )
+        
+        # Enhanced result with strategic context
+        enhanced_result = {
+            **oracle_result,
+            "impact_level": impact_level.value,
+            "biological_context": biological_context.value,
+            "scoring_strategy": {
+                "window_size": strategy.window_size,
+                "approach": strategy.alteration_approach,
+                "expected_range": strategy.expected_score_range,
+                "confidence_threshold": strategy.confidence_threshold
+            },
+            "recommendations": recommendations
+        }
+        
+        return enhanced_result
+```
+
+### **Patient Assessment Integration**
+
+```python
+# In scripts/run_patient_assessment.py
+
+def assess_patient_variants_with_strategy(patient_data: dict) -> dict:
+    """
+    Assess patient variants using magnitude-aware scoring strategies.
+    """
+    command_center = CommandCenter()
+    results = []
+    
+    for variant in patient_data["variants"]:
+        # Determine biological context
+        context = determine_biological_context(variant)
+        
+        # Apply optimal scoring strategy
+        result = command_center.score_variant_with_optimal_strategy(
+            variant["reference_sequence"],
+            variant["alternate_sequence"], 
+            context
+        )
+        
+        results.append(result)
+    
+    return {"patient_id": patient_data["id"], "variant_assessments": results}
+
+def determine_biological_context(variant: dict) -> BiologicalContext:
+    """Determine biological context from variant characteristics."""
+    if variant["type"] == "SNV":
+        return BiologicalContext.SINGLE_NUCLEOTIDE_VARIANT
+    elif variant["type"] == "INDEL" and variant["size"] < 50:
+        return BiologicalContext.SMALL_INDEL
+    elif variant["type"] in ["DEL", "DUP", "INV"] and variant["size"] > 50:
+        return BiologicalContext.STRUCTURAL_VARIANT
+    elif variant.get("region") == "coding":
+        return BiologicalContext.CODING_SEQUENCE
+    else:
+        return BiologicalContext.SINGLE_NUCLEOTIDE_VARIANT  # Default
+```
+
+## **📊 SUCCESS METRICS & VALIDATION**
+
+### **Strategy Effectiveness Metrics**
+```python
+def validate_scoring_strategy_effectiveness(results: List[dict]) -> dict:
+    """
+    Validate that scoring strategies are producing expected results.
+    """
+    metrics = {
+        "strategies_tested": len(results),
+        "score_distribution": {},
+        "impact_classification": {},
+        "strategy_accuracy": {}
+    }
+    
+    for result in results:
+        score = result.get("zeta_score", 0)
+        impact = result.get("impact_level")
+        strategy = result.get("scoring_strategy", {})
+        
+        # Track score distribution
+        score_range = get_score_range_category(score)
+        metrics["score_distribution"][score_range] = metrics["score_distribution"].get(score_range, 0) + 1
+        
+        # Track impact classification
+        metrics["impact_classification"][impact] = metrics["impact_classification"].get(impact, 0) + 1
+        
+        # Validate score falls within expected range
+        expected_range = strategy.get("expected_range", (0, 0))
+        is_within_range = expected_range[0] <= abs(score) <= expected_range[1]
+        metrics["strategy_accuracy"][f"{impact}_within_range"] = is_within_range
+    
+    return metrics
+```
+
+## **⚔️ IMPLEMENTATION PRIORITY**
+
+1. **IMMEDIATE:** Implement `OracleScoringStrategist` in CommandCenter
+2. **HIGH:** Add magnitude-aware scoring to patient assessment workflows
+3. **MEDIUM:** Implement adaptive window selection
+4. **LOW:** Add comprehensive strategy validation metrics
+
+**DOCTRINE:** Oracle scoring must be context-aware and magnitude-sensitive. Single-approach scoring leads to suboptimal biological insight.
+description:
+globs:
+alwaysApply: false
+---

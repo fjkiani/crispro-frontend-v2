@@ -1,0 +1,65 @@
+
+# DOCTRINE: The Dynamic Analysis Workbench
+
+## I. The Core Principle: Guided Conquest, Not Card Dumps
+
+Our frontend tools will no longer be static pages or simultaneous "card dumps" of information. They will be **Dynamic Analysis Workbenches**—interactive, phase-gated experiences that guide the user through a complex analytical workflow, educating them on our platform's capabilities at each step.
+
+The user initiates a complex query, and we return a comprehensive, structured intelligence dossier. The blueprint for this architecture is the `/validate` page, implemented in [`oncology-coPilot/oncology-frontend/src/pages/HypothesisValidator.jsx`](mdc:oncology-coPilot/oncology-frontend/src/pages/HypothesisValidator.jsx).
+
+## II. Architectural Pillars
+
+This doctrine is built on four pillars, embodied by the [`ToolRunner`](mdc:oncology-coPilot/oncology-frontend/src/components/common/ToolRunner.jsx) component:
+
+1.  **Configuration-Driven UI:** All tool UIs are defined declaratively in [`toolconfigs.js`](mdc:oncology-coPilot/oncology-frontend/src/config/toolconfigs.js).
+2.  **Chained, Named Workflows:** Core analytical logic is encapsulated in named `async` functions within `ToolRunner.jsx`.
+3.  **Progressive UI Updates:** The UI provides real-time feedback via `currentStep` and `completedSteps` state management.
+4.  **Unified Results Dossier:** The final aggregated result set is passed to a single, dedicated results component that renders a cohesive, structured report.
+
+## III. Application: The "Trinity of Creation" Demo
+
+**STATUS:** Initial implementation of the Target Dossier Generator is complete. We have successfully implemented the configuration, the initial monolithic workflow (`dossierGenerationWorkflow`), and the unified results component (`TargetDossierDisplay`).
+
+**NEXT EVOLUTION:** We are now upgrading this initial proof-of-concept to the "Co-pilot Conquest" model to maximize narrative impact and user engagement.
+
+## IV. Strategic Refinement: The Co-pilot Conquest
+
+This refinement transforms the dossier from a static report into an interactive, guided analysis, directly addressing the biotech industry's most expensive problem.
+
+### The Central Problem: The "Valley of Death"
+
+Biotech companies fail in the preclinical stage (the "Valley of Death") because they cannot answer three critical questions with certainty: 1) Is our target correct? 2) Is our drug correct? 3) Will it be safe? Our platform is a **Clinical Trial De-Risking Engine** designed to answer these questions.
+
+### The Implementation: Phase-Gated Progression
+
+To achieve this, we will break the monolithic `dossierGenerationWorkflow` into smaller, independent, user-triggered workflows (e.g., `runOracleWorkflow`, `runForgeWorkflow`, `runGauntletWorkflow`).
+
+The progression between these workflows will be managed by a new, reusable **`DecisionPoint` component**. This component appears after each major analytical result, presenting a key insight and a clear call-to-action, putting the user in command of their R&D journey.
+
+### The Biotech De-Risking Narrative
+
+The entire demo will be framed as a guided, three-act de-risking campaign:
+
+**Act I: Target De-Risking ("Is our target a billion-dollar bet or a bust?")**
+*   **Workflow:** `runOracleWorkflow` reveals results endpoint-by-endpoint, triggered by `DecisionPoint` components.
+*   **Narrative Flow:**
+    1.  User clicks `Validate Target` -> see `/predict_variant_impact` result.
+    2.  `DecisionPoint`: "Damage confirmed. Is it critical for survival?" -> User clicks `Analyze Cancer Dependency`.
+    3.  See `/predict_gene_essentiality` result.
+    4.  `DecisionPoint`: "It's critical. Can a drug reach it?" -> User clicks `Assess Target Accessibility`.
+    5.  See `/predict_chromatin_accessibility` result.
+    6.  **Act I Finale:** "TARGET VALIDATED & DE-RISKED."
+
+**Act II: Lead Candidate De-Risking ("Are we building the right drug?")**
+*   **Workflow:** `runForgeWorkflow` is triggered.
+*   **Narrative Flow:** The UI reveals the portfolio of AI-generated therapeutic candidates from `/generate_optimized_guide_rna` and `/generate_therapeutic_protein_coding_sequence`, framed as a bespoke, de-risked "lead candidate portfolio."
+
+**Act III: Preclinical De-Risking ("Will this drug work and be safe?")**
+*   **Workflow:** `runGauntletWorkflow` is triggered.
+*   **Narrative Flow:** We run an `in silico` gauntlet, progressively revealing structural viability (AlphaFold), on-target efficacy (`/predict_crispr_spacer_efficacy`), and functional validation (`/predict_protein_functionality_change`). The final output is the **Therapeutic Blueprint**, a preclinically de-risked asset.
+
+        *   **Capability:** A second layer of validation. Scores the generated guides for their predicted on-target cutting efficiency.
+        *   **Value:** De-risking. We don't just generate, we rank and prioritize the most promising candidates, increasing the probability of success.
+    *   **Structural Prediction (e.g., AlphaFold Integration)**:
+        *   **Capability:** While Evo2 generates the sequence, structural models validate its 3D form. As the paper highlights, Evo2 does not predict structure.
+        *   **Value:** Prevents the "wet noodle" problem. Ensures our designed therapeutic can actually fold into a stable, functional weapon on the molecular battlefield. This is the ultimate `in silico` quality control.

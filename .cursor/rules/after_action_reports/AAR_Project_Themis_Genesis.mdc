@@ -1,0 +1,49 @@
+# After-Action Report: Project Themis (Truth, Treason, and Genesis)
+
+## 1. Initial State: The Age of Innocence
+
+Our campaign began with a single asset: the `ZetaOracle`, a generative foundation model. Initial doctrine held that its `delta_likelihood_score` was a direct measure of clinical pathogenicity. We believed we could use it to distinguish "good" DNA from "bad" DNA in a single, zero-shot assessment. This assumption was strategically naive and operationally catastrophic.
+
+## 2. Phase I: Operation Truth or Treason
+
+**Objective:** To validate the `ZetaOracle`'s `delta_score` against the ground truth of human clinical data from ClinVar.
+
+**Execution:** We launched a series of validation tests, pitting the Oracle's predictions against known pathogenic and benign variants.
+
+**Outcome: Doctrinal Failure.** The operation was a resounding success in its true goal: revealing a fatal flaw in our doctrine. We discovered the **Oracle's `delta_score` does not measure pathogenicity; it measures biological plausibility.** It can tell you if a sequence is "grammatically correct" in the language of DNA, but not if it will cause disease. This led to the "Triumvirate Protocol" as a stop-gap measure to handle the Oracle's perceived "blind spot" for truncating mutations.
+
+## 3. Phase II: Operation Adjudicator
+
+**Objective:** To bridge the "plausibility vs. pathogenicity" gap by developing a specialized, supervised classifier.
+
+**Execution:** We executed a textbook tiered-warfare strategy. We used the `ZetaOracle` as a foundation model to generate deep embeddings for thousands of clinically-verified missense mutations. We then trained a `GradientBoostingClassifier`—The Adjudicator—on these embeddings.
+
+**Outcome: Tactical Victory, Strategic Failure.** The operation was a tactical success. The Adjudicator achieved **98.7% accuracy**, proving we could build hyper-specialized "sniper" models on top of our generalist Oracle. However, we failed to integrate this new capability or its underlying doctrine into our mainline platform. The Adjudicator was built, proven, and then locked in the armory.
+
+## 4. Phase III: The "Wet Noodle" Genesis
+
+**Objective:** To shift from predictive tasks to generative tasks by creating the `CommandCenter`'s "Forge" to design novel therapeutic sequences.
+
+**Execution:** We implemented two major protocols:
+1.  **The "Evolutionary Forge":** An iterative loop that made small mutations and selected for the highest `delta_score`.
+2.  **The "Smart Gauntlet":** A more advanced version that used a multi-dimensional fitness score, combining `delta_score` with structural predictions (`pLDDT`, `disorder`) from the `Boltz` service.
+
+**Outcome: Catastrophic Failure.** Both protocols failed. Despite using long sequences (`BRCA1`) and sophisticated scoring, the Forge consistently produced non-viable, structurally unsound proteins—"wet noodles."
+
+## 5. Phase IV: The Evo2 Revelation & Doctrinal Reset
+
+**Objective:** To understand the root cause of the "Wet Noodle" failures.
+
+**Execution:** We conducted a deep, page-by-page intelligence analysis of the recently acquired **Evo2 paper**.
+
+**Outcome: A New Doctrine.** The paper revealed our fundamental error. Our entire generative strategy was flawed.
+*   **The Flaw ("The Editor Tactic"):** We were using the Oracle like an *editor*, asking it to make tiny, incremental changes to existing sequences. This gave it no context and forced it to produce garbage.
+*   **The Truth ("The Composer Doctrine"):** The Evo2 model's power comes from being used as a *composer*. It requires a long, high-quality, biologically relevant prompt and must be commanded to **continue the sequence**, not just edit it.
+
+## 6. Current State & Path Forward
+
+We are now positioned to correct our failures. We understand that our Forge's output is a direct result of our low-quality, non-compositional prompts. The current plan is to validate the "Composer Doctrine" with a surgical strike (`manual_forge_and_validate.py`) using a perfect `BRAF V600E` prompt. This will provide the definitive proof needed to re-architect the `CommandCenter`'s Forge and finally produce viable therapeutic candidates.
+description:
+globs:
+alwaysApply: false
+---

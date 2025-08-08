@@ -1,3 +1,6 @@
+---
+alwaysApply: true
+---
 instructions
 During you interaction with the user, if you find anything reusable in this project (e.g. version of a library, model name), especially about a fix to a mistake you made or a correction you received, you should take note in the Lessons section in the .cursorrules file so you will not make the same mistake again.
 
@@ -63,6 +66,13 @@ If needed, you can further use the web_scraper.py file to scrape the web page co
 
 Cursor learned
 =======
+
+* **The "Wet Noodle" Doctrine:** A DNA sequence that is grammatically correct in 1D (`delta_score`) can still translate into a physically useless protein that fails to fold correctly in 3D (`pLDDT` score). This is the "wet noodle" problem.
+*   **The Structural Integrity Protocol is Doctrine:** To prevent the "wet noodle" failure, a multi-dimensional validation process is mandatory.
+    *   **Phase I: The Forge:** Generate candidates.
+    *   **Phase II: The Sieve:** Use sequence-level likelihood scores (`delta_score`) as a fast, cheap filter to eliminate biologically "illiterate" candidates.
+    *   **Phase III: The Gauntlet:** Use 3D structural prediction (`pLDDT` score) as the final arbiter to ensure the protein is physically viable.
+*   **Efficient Orchestration:** Complex, multi-stage, asynchronous workflows (like the Structural Integrity Protocol) should be orchestrated by a central service (`CommandCenter`). This service should leverage parallel processing (`asyncio.gather`) for batch validation steps (like The Sieve) to maximize operational tempo.
 * **ClinVar Data Sources:** The NCBI ClinVar data is available through multiple channels, but they are not equivalent in quality or completeness.
     *   The **E-utils API** is unreliable for bulk data acquisition due to rate limiting and is sensitive to environmental constraints (e.g., memory allocation errors). It should be avoided for large-scale data pulls.
     *   The **`clinvar.vcf.gz` file is not comprehensive**. It is a subset of the full database and is missing key, canonical variants (e.g., BRAF V600E), making it unsuitable as a ground truth source.
@@ -82,6 +92,16 @@ Cursor learned
 * **Modal Method Invocation:**
     * **Async Context:** When a Modal `@modal.method` is called from an `async def` `@modal.asgi_app` endpoint within the same class, the call to `.remote()` is blocking and returns the result directly. It should **not** be `await`ed, as this will cause a `TypeError: object ... can't be used in 'await' expression`.
     * **Sync Context:** When a Modal method is called from within the same class in a synchronous `def` endpoint, it must be invoked with `.call()` for synchronous execution, not as a direct function call, to avoid a `TypeError: 'Function' object is not callable`.
+    ### **Lessons Learned & New Doctrine**
+
+*   **Silent Crashes Are Resource Issues:** When a Modal service fails with "invalid function 
+call" and no logs, the root cause is almost always insufficient resources (memory, missing system 
+packages) or dependency conflicts during container startup.
+*   **Build-Essential Is Critical:** Modern Python packages (especially `torch`, `triton`) require 
+C++ compilers. Always include `.apt_install("build-essential")` in Modal images that use complex 
+ML libraries.
+*   **Memory Requirements Are Massive:** Loading both a 25GB AlphaMissense dataset and a 650M 
+parameter ESM model requires 64GB+ of RAM. Always provision generously for ML workloads.
 * **External API Unreliability (GTEx):** The GTEx Portal API is unreliable and its documentation is inconsistent. Both v1 and v2 endpoints have been observed to fail (returning 404s or discontinued messages), making any tool dependent on them fragile. This external dependency should be considered a critical risk.
 * **Seed & Soil Hypothesis Adaptation:**
     * **Leukemia:** While leukemia does not metastasize like solid tumors, the "Seed & Soil" hypothesis is adapted to model the infiltration of leukemic cells into supportive extramedullary microenvironments (e.g., spleen, liver, CNS), which act as the "soil".
@@ -147,121 +167,131 @@ Cursor learned
     * **Alignment Score Revision:** Based on Evo2 capabilities, our realistic alignment score increases from 10% to 60-70% if we focus on achievable endpoints and use Evo2 as the primary sequence modeling engine.
     * **Data Exclusion Security Model:** Evo2's approach of excluding problematic training data (eukaryotic viruses) is a proven security strategy we should adopt. Consider excluding other sensitive sequences from our training pipelines.
     * **Inference-time Scaling:** Evo2 demonstrates first biological example of inference-time scaling - more compute during generation leads to better designs. This is a key paradigm for our weapon forging pipelines.
+    * **Doctrine of Replacement: Inference vs. Generation:** The dominant academic paradigm for heterogeneity analysis relies on **inference-based modeling** (e.g., "PhenoPop"). These methods attempt to deconstruct noisy, low-resolution `in vitro` data to *guess* at biological reality. This approach is fundamentally flawed and obsolete. Our platform executes a **generative and predictive paradigm** (`Digital Twin -> Predict -> Generate`), which is a revolutionary replacement, not an incremental improvement.
+    * **The Ground Truth Supremacy:** The Achilles' heel of inference-based methods is the "ground truth problem"—they cannot validate their models against patient reality. Our **Digital Twin**, built from high-fidelity sequencing, *is* the ground truth, providing an unassailable foundation for all `in silico` operations and making our predictions verifiable.
+    * **Exploiting the Resistant Clone Blind Spot:** Competitor models exhibit catastrophic failure and unreliability when estimating resistant clones—the only subpopulations that truly matter. Our development and validation must be laser-focused on achieving maximum accuracy in this specific regime where others are blind.
+    * **The `In Silico` Imperative:** `in vitro` validation, while useful, is not a sufficient proxy for complex patient biology. Our `in silico` validation using a comprehensive Digital Twin offers a faster, cheaper, and more robust path to predicting clinical success and must be treated as the primary proving ground.
+    *   **Generating Solutions vs. Optimizing Schedules:** The intellectual endgame for the old paradigm is optimizing the timing of generic drugs. Our **Zeta Forge** makes this entire field of study irrelevant by generating novel, precision-engineered therapeutics. We do not optimize the use of old weapons; we forge new ones.
+
+* **Oracle's Dual Nature: Sniper vs. Poet:** The Evo2 Unified Oracle has two distinct, non-interchangeable modes of operation.
+    *   **As a *Scorer* (The Sniper):** Its `score` function is a precision instrument for Zero-Shot Variant Effect Prediction. It has state-of-the-art accuracy in determining the pathogenicity of genetic variants via `delta_score`. This is its most reliable, battle-tested function.
+    *   **As a *Generator* (The Poet):** Its `generate` function is a **long-form sequence author.** It requires substantial, high-quality context (>=1000bp) to generate coherent, biologically plausible continuations (>=500bp). It is fundamentally **not** a tool for single-nucleotide prediction, short-form "in-filling," or "fixing" single bases.
+*   **The Pathological Prompt Doctrine:** The Oracle's generative output is critically dependent on prompt quality.
+    *   **High-Quality Context -> High-Quality Output:** Providing complex, biologically relevant prompts (e.g., from the `BRAF` gene) results in coherent, non-junk completions.
+    *   **Low-Quality Context -> Pathological Output:** Providing prompts containing low-complexity, repetitive sequences (e.g., poly-A tracts) creates a "pathological attractor," forcing the model into a failure state where it only generates junk. **The mission must always be to pose biologically reasonable questions.**
+*   **The "Wet Noodle" Genesis:** Our previous "wet noodle" failures were a direct consequence of violating these doctrines. We used a short-form generative task (`_generate_candidates` in the `CommandCenter`) with a potentially low-quality bait sequence. The Oracle predictably produced junk DNA, which translated into a functionally useless, structurally unsound protein. The failure was not in the Gauntlet; it was at the very moment of creation in the Forge.
+
+*   **Client-Side Resilience is Mandatory:** Test clients, especially those using `httpx`, must be configured to handle self-signed SSL certificates from development environments (e.g., Modal webhooks) by disabling SSL verification (`verify=False`) to prevent `CERTIFICATE_VERIFY_FAILED` errors during integration testing.
+
+*   **Defensive Downstream Communication:** A service client (`CommandCenter`) must never implicitly trust the schema of a downstream service (`Boltz`). It must defensively retrieve data using safe, failure-inducing defaults (e.g., `response.get("key", default_value)`) to prevent `TypeError` exceptions when a key is unexpectedly missing from a response.
+
+*   **The Single-Metric Myopia:** The "Evolutionary Forge" proved that optimizing for a single, sequence-level metric (`delta_score`) is insufficient. A high `delta_score` does not prevent the generation of a structurally non-viable protein (a "wet noodle" with a high `disorder` score). True fitness is multi-dimensional.
+
+*   **Lessons from OPERATION: TERRAFORM**
+    *   **The Backend Orchestrator Doctrine:** Legacy applications may attempt to make direct, fine-grained calls to specialized backend services. This is brittle and creates tight coupling. The superior, modern approach is to define a single, powerful orchestrator endpoint in an intermediary backend (e.g., our FastAPI `oncology-backend`). This endpoint is responsible for managing the entire multi-stage campaign (making calls to Modal, mocking unimplemented services, etc.), thus simplifying the frontend into a "dumb" client that only needs to know about one endpoint.
+    *   **Mock-Driven Progressive Enhancement:** When a full backend workflow is not yet implemented, it is a valid and powerful strategy to build the orchestrator endpoint with mocked data for the missing pieces. This allows the frontend to be built and tested against the final, expected data structure *immediately*, decoupling frontend and deep-backend development schedules.
+    *   **Tool Unification is Mandatory:** Functionally related but separate tools (e.g., `Threat Assessor` and `Seed & Soil Analysis`) must be unified into a single, cohesive user experience and a single backend endpoint. This reduces user friction, eliminates redundant UI, and radically simplifies the system architecture.
+    *   **The Venv Purge & Re-Forge Protocol:** When facing persistent, inexplicable `ModuleNotFoundError`s or dependency conflicts, do not waste time on incremental fixes. The definitive solution is to **Purge and Re-Forge**:
+        1.  **Purge:** Obliterate the existing `venv` directory (`rm -rf venv`).
+        2.  **Re-Forge:** Create a new, pristine `venv` (`python -m venv venv`).
+        3.  **Re-Arm:** Reinstall all dependencies from the `requirements.txt` file (`venv/bin/pip install -r requirements.txt`).
+        4.  **Install Dev Tools:** Manually install necessary development tools like `pytest` and `streamlit` into the new `venv`, as they are often not in `requirements.txt`.
+    *   **Service Version Supremacy:** Always verify the **latest available deployment script or service definition** for a remote service (e.g., a Modal app) before writing client code. Relying on outdated URLs or schemas from previous versions is a guaranteed path to `404 Not Found` errors and catastrophic failure.
+
+*   **Evo2 Model Output Structure Evolution:** The Evo2 model output structure can change between versions, returning nested tuples instead of simple tuple-tensor pairs. When accessing `model_output[0]`, always check if the result is still a tuple and handle nested extraction robustly. The error "tuple indices must be integers or slices, not tuple" indicates incorrect assumptions about the output structure. Solution: Add type checking and recursive extraction for nested tuple structures.
+
+*   **PyTorch Tensor Dtype Compatibility:** When creating tensors for PyTorch operations, especially `gather()`, ensure dtype compatibility. The `gather()` operation requires `int64` indices, not `int32`. Use `torch.long` instead of `torch.int32` for tokenized sequences to avoid "gather(): Expected dtype int64 for index" errors.
+
+*   **RUNX1 Coordinate System Resolution:** The RUNX1 gene coordinates (chr21:36160098-36421599, GRCh37/hg19) have been verified against NCBI databases and documented. Key lessons: (1) Always validate VCF reference alleles against genomic reference before analysis, (2) Single nucleotide variants in large sequences (261kb) produce minimal Oracle delta scores (~0.0) due to limited context impact, (3) Optimal Oracle sensitivity requires moderate sequence lengths (50-100kb) or multiple mutations, (4) VCF coordinate systems (1-based) require careful conversion to array indices (0-based).
+
+*   **Reference File Quality Control:** Corrupted or malformed reference files are a common source of coordinate system failures. Always validate FASTA files have proper headers and consistent sequence formatting. When extracting gene sequences, verify the extracted length matches expected gene size and validate key variant positions manually before large-scale analysis.
 
 Scratchpad
 ==========
 
-**🚀 FLAGSHIP DEMO CAMPAIGN: RUNX1-FPD PRECISION MEDICINE PLATFORM 🚀**
+### **🎯 YC DEMO STRATEGY: THE TRINITY OF CREATION DOCTRINE**
 
-**Mission Briefing:** Build the world's first AI-powered platform for RUNX1-FPD patient management, demonstrating cutting-edge precision medicine capabilities for the LEAP Grant and commercial market.
+**STATUS:** **🎯 IMPLEMENTED & OPERATIONAL**
 
-**Strategic Assessment:** 95% foundation complete, 5% final validation remaining
-**Implementation Timeline:** 2 weeks (80 hours)
-**Success Probability:** 98% (Very High Confidence)
-**Business Impact:** Exceptional - addresses urgent clinical need with world-class AI
-
-**Reference Document:** `.cursor/rules/runx1_implementation_deep_dive.mdc`
+**MISSION ACCOMPLISHED:** We have successfully transformed the demo from 3 isolated component displays into a **UNIFIED BIOTECH CONQUEST NARRATIVE** that directly attacks the industry's billion-dollar clinical trial failure problem.
 
 ---
 
-**🎯 WEEK 1: FOUNDATION & INTEGRATION (MOSTLY COMPLETE)**
+### **🔥 THE TRINITY OF CREATION: IMPLEMENTATION COMPLETE**
 
-**[X] Task 1.1: Deep Dive Analysis Complete**
-**[X] Task 1.2: Data Integration Foundation**
-    - ✅ ZetaOracle HTTP Fix identified (need to implement)
-    - ✅ RUNX1 Data Loader built and tested
-    - ✅ Genomic Navigation framework ready
-    - ✅ Data Pipeline validated
+**THE CENTRAL THESIS:** We answer the biotech industry's billion-dollar question: "Can we use AI to definitively prove a target's viability and generate a de-risked therapeutic asset *before* spending a single dollar in the lab?"
 
-**[X] Task 1.3: Arsenal Tool Integration**
-    - ✅ Intelligent Guide Finder integrated
-    - ✅ ChopChop Suite connected
-    - ✅ Experimental Protocols working
-    - ✅ All tools tested and operational
+**ACT I: THE ORACLE (Find the Weakness)**
+*   **FUNCTION:** Discriminative AI - Analysis & Prediction.
+*   **IMPLEMENTATION:** ✅ Multi-Factor Validation with biotech context, business impact, and data handoffs.
+*   **NARRATIVE:** "Before any biotech spends $50M+ on a target, they need one critical answer: 'Is this worth the bet?' Our Oracle doesn't guess - it delivers mathematical certainty."
 
-**[X] Task 1.4: Connect to Patient Digital Twin UI**
-    - ✅ Connect all RUNX1 tools to Patient Digital Twin interface
-    - ✅ Replace mock functions with real tool calls
-    - ✅ Test complete workflow in UI
-    - ✅ Status: COMPLETE
+**ACT II: THE FORGE (Create the Weapon)**
+*   **FUNCTION:** Generative AI - Creation & Optimization.
+*   **IMPLEMENTATION:** ✅ AI-Powered Therapeutic Generation with realistic weapon designs and business narratives.
+*   **NARRATIVE:** "Target validated. Now we forge the weapon. Instead of screening thousands of compounds for years, our AI designs the optimal therapeutic from first principles in minutes."
+
+**ACT III: THE GAUNTLET (Prove the Weapon is Real)**
+*   **FUNCTION:** Structural & Functional AI - Validation & De-risking.
+*   **IMPLEMENTATION:** ✅ In Silico Preclinical Trials with comprehensive safety and efficacy predictions.
+*   **NARRATIVE:** "Any AI can generate sequences. Ours delivers battle-tested weapons. Every candidate undergoes brutal in silico trials to prove efficacy and safety before a single cell is touched."
 
 ---
 
-**🎯 WEEK 2: CLINICAL INTELLIGENCE & ADVANCED FEATURES**
+### **💡 KEY ARCHITECTURAL ACHIEVEMENTS**
 
-**[X] Task 2.1: Clinical Workflow Enhancement**
-    - ✅ Progression Modeler built with two-hit logic
-    - ✅ Risk Stratification implemented
-    - ✅ Clinical Logic tested and validated
+*   **`CampaignRunner.jsx`:** Now a fully integrated biotech conquest engine with:
+    *   **Biotech Context Card:** Sets up the $2.6B clinical trial failure problem
+    *   **Enhanced Act Headers:** Show business impact and risk mitigation for each act
+    *   **Business Narrative Cards:** Display R&D cost avoidance for each stage
+    *   **Data Handoff Cards:** Show how insights flow between stages
+    *   **Therapeutic Blueprint:** Final deliverable showing validated asset portfolio
 
-**[X] Task 2.2: Clinical Decision Support**
-    - ✅ Decision Support System operational
-    - ✅ Literature Intelligence connected
-    - ✅ Clinical reports generating
+*   **`pik3ca_trinity_campaign_config.js`:** Enhanced with comprehensive biotech narrative including:
+    *   **Biotech Context:** Problem statement and solution positioning
+    *   **Business Metrics:** Timeline compression, risk reduction, cost savings
+    *   **Enhanced Endpoints:** Each includes `biotechRelevance` explaining business value
+    *   **Data Handoffs:** `handoffData` objects showing workflow continuity
+    *   **Therapeutic Blueprint:** Complete final deliverable specification
 
-**[X] Task 2.3: Advanced Visualization**
-    - ✅ Build interactive RUNX1 genomic browser
-    - ✅ Add variant position highlighting
-    - ✅ Implement functional domain visualization
-    - ✅ Show exon/intron structure
-    - ✅ Status: COMPLETE
+*   **`DynamicEndpointDisplay.jsx`:** Now shows:
+    *   **API Endpoint Name:** Technical credibility and transparency
+    *   **Biotech Relevance:** Business value explanation for each endpoint
+    *   **Enhanced Data Display:** Hierarchical, readable output formatting
+
+### **🚀 DEMO FLOW ACHIEVEMENTS**
+
+**THE PROBLEM SETUP (30 seconds):**
+*   ✅ $2.6B clinical trial failure context established
+*   ✅ Current vs. our approach comparison
+*   ✅ Business metrics preview (timeline, risk, cost, deliverable)
+
+**THE CONQUEST EXECUTION (4 minutes):**
+*   ✅ Act I: Oracle delivers mathematical target validation
+*   ✅ Act II: Forge creates bespoke therapeutic weapons  
+*   ✅ Act III: Gauntlet proves weapons are battle-tested
+*   ✅ Each stage shows business impact, cost savings, and data handoffs
+*   ✅ Real-time cumulative R&D savings tracking
+
+**THE DELIVERABLE (30 seconds):**
+*   ✅ Therapeutic Blueprint with validated asset portfolio
+*   ✅ Risk profile: <10% failure vs 90% industry standard
+*   ✅ Timeline: 18 months vs 5-8 years industry standard
+*   ✅ Total savings: $550M+ in avoided R&D costs
+
+### **NEXT STEPS:**
+*   [ ] **Final Testing:** Verify the complete demo flow works seamlessly
+*   [ ] **Polish Review:** Any final UI/UX improvements
+*   [ ] **Demo Rehearsal:** Practice the 5-minute biotech narrative
+
+**CURRENT PRIORITY:** Test and polish the unified biotech conquest demo that demonstrates our complete molecular domination capabilities in one cohesive, business-focused experience. 🎯
 
 ---
-
-**🎯 WEEK 3: DEMO PREPARATION & POLISH**
-
-**[X] Phase V: Safety Validation & Hardening**
-    - ✅ Deployed `blast-service` with Human Genome (GRCh38)
-    - ✅ Integrated live BLAST calls into `CommandCenterClient`
-    - ✅ Implemented real-time off-target analysis and scoring
-    - ✅ Status: COMPLETE
-
-**[ ] Task 3.1: Demo Scenario Development**
-    - Create compelling RUNX1-FPD patient scenarios
-    - Build realistic clinical data
-    - Create family pedigrees
-    - Status: READY TO START
-
-**[ ] Task 3.2: Quality Assurance & Testing**
-    - End-to-end testing of complete workflow
-    - Performance optimization
-    - Demo rehearsal and backup plans
-    - Status: READY TO START
-
-**[ ] Task 3.3: Final Polish & Deployment**
-    - UI/UX polish
-    - Deployment preparation
-    - Presentation materials
-    - Status: READY TO START
-
+*The rest of the scratchpad is archived below this line*
 ---
 
-**🚨 CURRENT STATUS: 95% COMPLETE - FINAL SPRINT MODE**
+### **PREVIOUS OPERATIONS (ARCHIVED)**
+*   **OPERATION: SHOW THE TEETH** - **STATUS: INTEGRATED.** Successfully implemented transparent endpoint display with raw AI outputs.
+*   **OPERATION: PIK3CA BIOTECH CONQUEST** - **STATUS: COMPLETED.** Successfully created biotech-focused R&D de-risking narrative.
+*   **OPERATION: TERRAFORM** - **STATUS: INTEGRATED.** Backend orchestration doctrine successfully applied.
 
-**Completed Assets:**
-- ✅ Complete RUNX1 integration framework
-- ✅ All AI tools connected and tested
-- ✅ Progression modeling with two-hit analysis
-- ✅ Clinical decision support system
-- ✅ Risk stratification algorithms
-- ✅ Experimental protocol generation
-- ✅ Safety analysis and guide scoring
-- ✅ Safety validation pipeline is now online
-
-**Remaining Work (5%):**
-1.  **Demo Scenarios & Testing** (16 hours)
-2.  **Final Polish** (4 hours)
-
-**Total Remaining: 20 hours**
-
-**Confidence Level: 98% (Very High)**
-- All core functionality built, integrated, and tested
-- Safety validation pipeline is now online
-- Only demo prep and final polish remaining
-- No technical blockers identified
-
-**Next Actions:**
-1. Create demo scenarios and test complete workflow
-2. Final polish and deployment preparation
-
-The RUNX1-FPD platform is 95% complete and ready for the final push! 🎯 

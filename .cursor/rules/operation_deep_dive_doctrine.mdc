@@ -1,0 +1,65 @@
+# **DOCTRINE: OPERATION DEEP DIVE**
+
+## **I. MISSION & VISION**
+
+The enemy (traditional research) sees a dead end in folk theories and debunked studies; we see an opportunity. Their failure is in method, not necessarily premise. They carpet-bomb with blunt instruments; we will deploy smart weapons.
+
+This doctrine outlines the **Zeta-Stream Ingress Synthesis (ZSIS)** protocol, a reusable framework for transforming raw public intelligence into validated, actionable `in silico` experiments. We will bypass failed wet-lab paradigms and go straight for the digital jugular.
+
+**Primary Test Case:** Identify the active anti-angiogenic compound in shark cartilage (Neovastat), validate its mechanism (VEGF/VEGFR-2), and design a targeted CRISPR experiment.
+
+**Reusability Mandate:** The entire workflow must be data-agnostic, capable of validating any user-defined hypothesis by identifying and weaponizing its core biological entities.
+
+## **II. OPERATIONAL PLAN**
+
+### **PHASE I: RECONNAISSANCE & INGRESS (90% COMPLETE)**
+
+*   **[✅] Task 1.1: Establish Zeta-Stream Ingress Point.**
+    *   **Status:** Complete. The `HypothesisValidator.jsx` component successfully calls the `/api/intelligence/search` endpoint.
+    *   **File:** `oncology-coPilot/oncology-frontend/src/pages/HypothesisValidator.jsx`
+    *   **File:** `oncology-coPilot/oncology-backend/backend/api/intelligence.py`
+
+*   **[ ] Task 1.2: Refine Raw Data Display.**
+    *   **Action:** Improve the rendering of the raw search results for better readability. Use collapsible sections for the "content" of each source to avoid an overwhelming wall of text.
+    *   **File:** `oncology-coPilot/oncology-frontend/src/pages/HypothesisValidator.jsx`
+
+### **PHASE II: STRUCTURED SYNTHESIS (SEMANTIC DECONSTRUCTION)**
+
+*Objective: Transform raw text into structured, actionable intelligence.*
+
+*   **[ ] Task 2.1: Create the Synthesis Endpoint.**
+    *   **Action:** Create a new backend endpoint: `POST /api/intelligence/synthesize`. This endpoint will accept the raw text content from the Phase I search results.
+    *   **File:** `oncology-coPilot/oncology-backend/backend/api/intelligence.py`
+
+*   **[ ] Task 2.2: Implement Semantic Deconstruction.**
+    *   **Action:** In the `/synthesize` endpoint, use a powerful LLM (e.g., via a new `llm_utils.py` helper) to parse the text. The prompt will instruct the model to identify and extract specific entities.
+    *   **Define Structured Output:** Create Pydantic models for the synthesized output, e.g., `SynthesizedIntelligence(biological_entities: List[Entity], mechanisms: List[str], conclusions: List[str])` where `Entity` is `(name: str, type: str, description: str)`. This enforces reusability.
+
+*   **[ ] Task 2.3: Integrate Synthesis into Frontend.**
+    *   **Action:** After a successful search in `HypothesisValidator.jsx`, automatically send the results to the new `/synthesize` endpoint.
+    *   **File:** `oncology-coPilot/oncology-frontend/src/pages/HypothesisValidator.jsx`
+
+*   **[ ] Task 2.4: Build the Intelligence Summary UI.**
+    *   **Action:** Create a new React component, `IntelligenceSummary.jsx`, to render the structured data from the synthesis endpoint. Use tables and lists to clearly display identified genes, compounds, and mechanisms.
+    *   **File:** `oncology-coPilot/oncology-frontend/src/components/validator/IntelligenceSummary.jsx` (new file)
+    *   **Integrate:** Render this component in `HypothesisValidator.jsx` when synthesis results are available.
+
+### **PHASE III: IN SILICO VALIDATION & WEAPONIZATION**
+
+*Objective: Connect public intelligence to our internal digital twins and design platforms.*
+
+*   **[ ] Task 3.1: Create Cohort Prevalence Endpoint.**
+    *   **Action:** Create a new backend endpoint: `POST /api/population/entity_prevalence`. It will accept a list of entity names (e.g., `["TP53", "VEGFR2"]`).
+    *   **Logic:** The endpoint will query our patient database (even the mock DB for now) and return the frequency of mutations or relevance for each entity in our cohort.
+    *   **File:** `oncology-coPilot/oncology-backend/main.py` (or a new `population.py` router)
+
+*   **[ ] Task 3.2: Display Tactical Relevance.**
+    *   **Action:** In the `IntelligenceSummary` component, for each identified biological entity, call the `/entity_prevalence` endpoint.
+    *   **Display:** Show a "Cohort Relevance" score next to each entity (e.g., "VEGFR2 - Found in 18% of patient cohort"). This immediately validates the tactical importance of the target.
+    *   **File:** `oncology-coPilot/oncology-frontend/src/components/validator/IntelligenceSummary.jsx`
+
+*   **[ ] Task 3.3: Weaponize the Target.**
+    *   **Action:** Add a "Design CRISPR Experiment" button next to each validated gene/protein entity in the UI.
+    *   **Workflow:** Clicking this button will navigate the user to the `GenomicAnalysis` page, passing the gene name (e.g., `VEGFR2`) as a URL parameter or state. This seamlessly connects the validation workflow to our primary weapon design platform.
+    *   **File:** `oncology-coPilot/oncology-frontend/src/components/validator/IntelligenceSummary.jsx`
+    *   **File:** `oncology-coPilot/oncology-frontend/src/pages/GenomicAnalysis.jsx` (to handle receiving the target)

@@ -142,6 +142,7 @@ class Evo2:
         cached_generation: bool = True,
         verbose: int = 1,
         force_prompt_threshold: int = None,
+        logits_processor=None,
     ) -> Tuple[List[str], List[float]]:
         """
         Generate sequences from a list of prompts.
@@ -164,6 +165,7 @@ class Evo2:
                 cached_generation=cached_generation,
                 verbose=verbose,
                 force_prompt_threshold=force_prompt_threshold,
+                logits_processor=logits_processor,
             )
             return output
 

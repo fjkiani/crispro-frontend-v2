@@ -1,0 +1,98 @@
+---
+title: Multiple Myeloma Drug Efficacy Doctrine
+---
+
+## Multiple Myeloma Drug Efficacy Doctrine
+
+### Objective
+Predict per‑drug Likelihood of Benefit (LoB) for multiple myeloma using:
+- Sequence evidence (Evo2 Δ metrics),
+- Pathway impact mapping,
+- Evidence priors from RCTs/guidelines/literature synthesis.
+
+Outputs per drug: { efficacy_score (0‑1), confidence (0‑1), rationale:[…], discordance?, links }.
+
+### Evo2 Endpoints To Leverage (today)
+- `/api/evo/score_variant_multi` → yields min_delta across windows
+- `/api/evo/score_variant_exon` → exon_delta (±600bp)
+- `/api/evo/score_variant_profile` → local Δ profile (±100bp)
+- `/api/evo/score_variant_probe` → sensitivity to alternative bases
+- Batch forms where available to reduce latency (or implement `/score_batch` aggregation server‑side)
+
+Note: Upstream Modal 7B/40B expose `/score_delta`, `/score_variant`, `/score_variant_multi`, `/score_variant_exon`, `/score_variant_profile`, `/score_variant_probe`. Use our evo proxy to normalize.
+
+### Composite Efficacy Model (S/P/E)
+- S (Sequence): normalize min_delta/exon_delta into disruption_score in [0,1].
+- P (Pathway): map variant‑level disruption to pathway impact (RAS/MAPK, TP53). Weight by drug MoA.
+- E (Evidence): RCT/guideline prior (+), conflicting evidence (−), case series (± small).
+- Combine: LoB = w_seq*S + w_path*P + w_evd*E. Expose weights per drug in config.
+- Confidence: function of window consistency, number of variants supporting pathway signal, and evidence strength.
+
+### Pathway Impact Aggregation
+- From each variant, derive features: {gene, variant_type, min_delta, exon_delta, hotspot_flag}.
+- Map gene→pathways (config). Aggregate to pathway_scores (e.g., summed_impact_ras_pathway, summed_impact_tp53) with gene‑specific caps.
+- Optionally incorporate profiles (peak_delta near functional motifs) as boosters.
+
+### Evidence Agent (LLM + Retrieval)
+- PubMed query templates tuned to MM drug efficacy and resistance, RCT‑first:
+  - "[GENE VARIANT] multiple myeloma response to [DRUG] randomized trial"
+  - "mechanism resistance [DRUG] [GENE VARIANT] myeloma"
+  - "guideline multiple myeloma [DRUG] biomarker"
+- Rate‑limit/backoff/caching to avoid 429. Pull titles first; fetch abstracts lazily; synthesize top‑N.
+- Grade evidence: {RCT/meta‑analysis > guideline > cohort > case report}.
+- Synthesis prompt targets LoB/Resistance summary with citations.
+
+### Discordance Policy (Δ vs ClinVar)
+- Never overrule strong ClinVar; mark as discordant and explain.
+- If ClinVar weak/absent and sequence strong with coherent literature, allow LoB with caution label.
+
+### New Backend Endpoint
+- `POST /api/efficacy/predict`
+  - Input: { use_case_id: "myeloma", model_id, mutations[], options{ use_priors, dual_compare } }
+  - Process:
+    1) Call evo proxy for multi/exon/profile as available (batch).
+    2) Aggregate to pathway scores.
+    3) Pull literature priors (cached, RCT‑first) per drug.
+    4) Compute S/P/E and return per‑drug cards.
+  - Output: { drugs:[{ name, efficacy_score, confidence, rationale[], evidence:{top_results[], synthesis?}, discordance? }], meta }
+
+### Extensibility
+- Drug panel is config: { name, MoA, pathway_weights, biomarkers, priors }.
+- Swap panel and weights to target other cancers without code changes.
+
+### Frontend UX
+- Drug Efficacy cards with LoB, confidence, rationale chips (Sequence, Pathway, Evidence), discordance banner when applicable.
+- "Why this score?" expands to S/P/E values and weights.
+- Literature panel: top results + synthesis; lazy abstract fetch.
+
+### Engineering Notes
+- Cache evo results by (model_id, locus, ref, alt, windows, exon_flank) for 24h.
+- PubMed: set NCBI_EMAIL/API_KEY; exponential backoff; fallback to Semantic Scholar/CrossRef when 429.
+- Telemetry: log which sources contributed to E; store hashes of queries and synthesis.
+
+### Doctrine in One Line
+Combine Evo2 sequence disruption with pathway mapping and RCT‑weighted evidence to produce a clear, explainable likelihood‑of‑benefit per drug for multiple myeloma—portable to other indications via configuration.
+
+---
+
+## Progress / Achievements / Lessons / Mechanisms — Update (2025)
+
+### Progress
+- Implemented `/api/efficacy/predict` with adaptive windows + exon worst‑case, S/P/E scoring, evidence_manifest, and Supabase logging.
+- Added env‑configurable weights/gates, feature flags (massive modes), operational modes (clinical/research).
+- Exposed `/api/efficacy/config` and `/api/efficacy/calibration/status`; frontend now displays mode/flags/calibration status and evidence tier chips.
+
+### Achievements
+- Reproducible, auditable LoB with configuration snapshots and run signatures.
+- Safer demos and clinical posture via feature flags and operational modes.
+- Extensible panel (config‑driven) for new drugs and disease mappings without code changes.
+
+### Lessons
+- Evo2 low delta alone is insufficient for decisioning; composite S/P/E with gating yields credible tiers.
+- Literature agent must prioritize RCT/guidelines and cache aggressively to avoid rate limits.
+- Calibration should be background‑refreshed and observable; do not block predictions on calibration.
+
+### Mechanisms
+- S: minΔ/exonΔ → normalized disruption; gene‑calibrated percentile/z where available.
+- P: gene→pathway aggregation; per‑drug weighting (RAS/MAPK, TP53, etc.).
+- E: evidence strength from PubMed/LLM + ClinVar prior; gates and tiering per env.

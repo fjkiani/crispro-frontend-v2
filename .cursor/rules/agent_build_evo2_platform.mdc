@@ -1,0 +1,106 @@
+---
+title: Build the Unified Evo2 Platform API (Discriminative + Generative) with Reusable Evidence Layer
+---
+
+## Assignment: Build the Unified Evo2 Platform API (Discriminative + Generative) with Reusable Evidence Layer
+
+### Role & Objective
+- You are building a single Evo2 Platform service exposing discriminative and generative endpoints, with a reusable evidence pipeline and configuration to support multiple indications (starting with multiple myeloma).
+- Deliver an evolvable API that our existing oncology backend can call, but which is general enough to support other use-cases by swapping config (drug panels, pathway weights, prompts).
+
+### Current Repo Context (where you will integrate)
+- Backend app: `oncology-coPilot/oncology-backend-minimal`
+- Existing evo proxy router: `api/routers/evo.py` (pass-through to Modal today)
+- New efficacy router (example aggregator): `api/routers/efficacy.py`
+- Evidence routes: `api/routers/evidence.py` (deep_analysis, literature, explain)
+- Config: `api/config.py` (dotenv loading enabled)
+
+### High-Level Deliverables
+1) Unified Evo2 Platform service (FastAPI) exposing:
+   - Discriminative endpoints: variant scoring, batch scoring, profiles, exon, probe, gene essentiality (optional), chromatin accessibility (optional)
+   - Generative endpoints: generate_optimized_guide_rna, generate_repair_template, (stubs for protein/regulatory if not ready)
+   - Health, warmup, version endpoints
+2) Reusable Evidence Layer:
+   - RCT/guideline-first PubMed retrieval with backoff, caching, and fallbacks
+   - Synthesis endpoint that accepts structured inputs and returns graded evidence with citations
+3) Config & Indication Support:
+   - Configurable drug panels, pathway weights, and rules per indication
+   - A stable `GET /config` endpoint to publish capability metadata to clients
+4) Documentation + examples and smoke tests
+
+### API Shape (proposed)
+- Prefix: `/v1`
+- Health
+  - `GET /v1/health` → {status, models}
+  - `POST /v1/warmup` → {status}
+- Discriminative
+  - `POST /v1/score_delta` → {ref_likelihood, alt_likelihood, delta_score}
+  - `POST /v1/score_batch` → {results: [{...}]} (pairs: [{ref_sequence, alt_sequence}] or locus pairs)
+  - `POST /v1/score_variant` → {delta_score, meta}
+  - `POST /v1/score_variant_multi` → {deltas:[{window, delta}], min_delta, window_used}
+  - `POST /v1/score_variant_exon` → {exon_delta, window_used}
+  - `POST /v1/score_variant_profile` → {profile:[{offset, delta}], peak_delta, peak_offset}
+  - `POST /v1/score_variant_probe` → {probes:[{alt, delta}], top_alt, top_delta}
+  - Optional: `POST /v1/predict_gene_essentiality`, `POST /v1/predict_chromatin_accessibility`
+- Generative (scaffold acceptable)
+  - `POST /v1/generate_optimized_guide_rna` → {guides:[{sequence, on_target?, off_target?, score}]}
+  - `POST /v1/generate_repair_template` → {templates:[{sequence, likelihood, qc}]}
+  - Future stubs: `generate_therapeutic_protein_coding_sequence`, `generate_optimized_regulatory_element`, `generate_epigenome_optimized_sequence`
+- Evidence
+  - `POST /v1/evidence/literature` → {top_results, pubmed_query, total_found}
+  - `POST /v1/evidence/synthesize` → {explanation, citations, grade}
+  - Internal: caching & backoff; support NCBI API key & email
+- Config/Capability
+  - `GET /v1/config` → {models, discriminative, generative, evidence_capabilities}
+  - `GET /v1/indications` → supported indication configs
+
+### Implementation Guidance
+- Service: new FastAPI app (e.g., `services/evo2_platform/main.py`) with modular routers `routers/discriminative.py`, `routers/generative.py`, `routers/evidence.py`, `routers/config.py`.
+- Models: pydantic request/response models per endpoint; explicit field types; strict validation.
+- Config: `.env` driven; allow overriding upstream model URLs; feature flags for optional endpoints.
+- Observability: structured logs; include `model_id`, latency, upstream URL and result status.
+- Error handling: map upstream 404/5xx to consistent JSON errors; add retry/backoff for transient failures; enforce timeouts.
+- Batch: if upstream lacks `score_batch`, emulate by per-pair `score_delta` with concurrency and rate limit.
+- Reuse: design evidence synthesis to accept {gene, hgvs_p, context, top_results[]} so any indication can reuse it.
+
+### Evidence Layer (operational)
+- PubMed client with:
+  - NCBI key/email; exponential backoff (e.g., jittered 0.5→8s)
+  - Cache results by (query, params) 24h; lazy abstracts; cap tokens for synthesis
+  - Fall back to Semantic Scholar/CrossRef/PMC when 429 or network errors
+- Synthesis prompt templates:
+  - Likelihood-of-Benefit (LoB) & Resistance, graded by hierarchy of evidence (RCT > guideline > cohort > case report)
+  - Return short explanation + citations array [{pmid,title,year,journal}]
+
+### Indication Config Pattern
+- `indications/myeloma.json` defines:
+  - drug_panel [{name, moa, pathway_weights}]
+  - pathway_map {gene: {pathway: weight}}
+  - weights for S/P/E
+- Add configs for other indications later; `GET /v1/indications` lists available.
+
+### Contracts & Examples
+- Provide example payloads/outputs for every endpoint in an `/examples` folder.
+- Include Postman/Bruno collection + curl snippets.
+
+### Non‑Functional Requirements
+- Timeouts: 60–180s caps depending on endpoint; cancel long requests.
+- Rate limiting: client & server-side where appropriate.
+- Security: never log secrets; read keys from env; CORS configurable.
+
+### Testing & QA
+- Unit tests for routers and validators
+- Integration tests for end‑to‑end flows: `score_variant_multi` → S/P/E combine → efficacy output
+- Golden tests for known variants (BRAF V600E) to ensure non‑regression of Δ trends
+
+### Milestones & Acceptance
+1) M1: Discriminative endpoints running with batch support; health/config endpoints; examples & tests
+2) M2: Evidence layer hardened (backoff/cache) + synthesis endpoint
+3) M3: Generative stubs with clear contracts; documentation finalized
+
+### Handover to Oncology Backend
+- Provide a single base URL (e.g., `EVO_PLATFORM_URL`) that the oncology backend will call instead of Modal URLs.
+- Maintain backward‑compatible evo proxy methods while migrating to platform endpoints.
+
+### Ready‑to‑Work Prompt (paste to start)
+“Build a unified Evo2 Platform API per the above spec. Start with Discriminative endpoints and `/v1/config` + `/v1/health`. Add batch support with graceful fallback. Then implement Evidence (PubMed client with backoff/cache) and `/v1/evidence/synthesize`. Finally, scaffold Generative endpoints with clear request/response models. Provide examples and tests. Optimize for reusability across indications by loading configs and exposing `/v1/indications`. Ensure robust error handling, timeouts, and structured logs. Deliver a single base URL consumable by our oncology backend.”

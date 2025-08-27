@@ -1,0 +1,81 @@
+
+## Delta Score Doctrine: Sequence Likelihood vs Clinical Classifications
+
+### What a Delta Score Is
+- **Delta score (Δ)**: Change in log-likelihood the Evo2 oracle assigns to a sequence when a variant is introduced. Negative Δ implies reduced plausibility under the learned biological distribution.
+- **Where it comes from**: Evo2 compares likelihoods of a reference vs. alternate sequence to compute Δ.
+- **Variants of Δ we use**:
+  - **min_delta**: Most negative Δ across multiple window sizes (multi-scale sweep); guards against poor window choice.
+  - **exon_delta**: Tight-window Δ around the locus (e.g., ±600 bp) for exon-centric context.
+  - **zeta_score**: A normalized or combined score capturing directionality and magnitude; used in UI for readability.
+  - **confidence_score**: Model confidence/gating measure based on consistency across windows, token context quality, and internal checks.
+
+### What Δ Is Not
+- **Δ is not a clinical verdict**: It reflects sequence-level plausibility, not patient-level pathogenicity or clinical validity.
+- **Δ is not prior knowledge**: It does not encode population-level evidence, case reports, segregation, functional assays, or expert review.
+
+### ClinVar: A Different Object Entirely
+- **ClinVar classification** (pathogenic / likely pathogenic / VUS / benign / likely benign) is a curated, evidence-based clinical label.
+- **Review strength**: Expert panel, practice guideline, criteria provided, or single submitter affect trust.
+- **Key difference**: ClinVar is an aggregation of human/clinical evidence; Δ is a model-based sequence plausibility metric.
+
+### Why They Differ (and Should)
+- **Different evidence foundations**:
+  - Δ: model-based sequence fitness proxy in the local genomic context.
+  - ClinVar: multifactored clinical evidence with priors, phenotype and segregation data.
+- **Time & coverage**: ClinVar may lag novel/rare variants; Δ is immediate but narrower in scope.
+- **Mechanistic blind spots**: Δ is less sensitive to truncating/frameshift/nonsense effects and may under-call regulatory-context impacts without adequate context.
+
+### Interpretation & Policy
+- **Gating Policy (used in UI/backend)**:
+  - **Magnitude gate**: Require Δ magnitude beyond a threshold (e.g., min_delta ≤ −X) for “sequence evidence present”.
+  - **Confidence gate**: Require confidence_score ≥ Y to avoid fragile inferences.
+  - Both must pass before calling “Likely Disruptive” from sequence alone.
+- **Discordance handling**:
+  - If Δ suggests disruption but ClinVar is benign or VUS with strong review, flag as “discordant”; prefer ClinVar for final call.
+  - If Δ is near-zero but ClinVar is pathogenic with strong review, explain “low sequence signal” and defer to ClinVar.
+  - If both are weak (small |Δ|, low confidence, weak ClinVar review), report “Unknown (low sequence evidence)”.
+- **Small Δ doesn’t imply safety**:
+  - Canonical gain-of-function hotspots can show modest Δ in large windows; use exon_delta and multi-window min_delta to recover signal.
+  - Provide rationale text to explain near-zero Δ cases (context dilution, model focus on sequence grammar vs. phenotype).
+
+### Known Limitations & Mitigations
+- **Truncation/frameshift insensitivity**: Run a deterministic truncation check before using Δ for final assessment.
+- **Context sensitivity**: Use multiple window sizes; avoid low-complexity prompts that induce pathological behavior.
+- **Noncoding/regulatory**: Ensure sufficient upstream/downstream context; combine with external models when available.
+
+### When to Trust Δ More
+- Non-controversial SNVs within well-modeled coding regions, with consistent Δ across windows and high confidence.
+- Novel or under-documented variants where ClinVar is weak/absent; Δ provides early, sequence-based signal (still report as “sequence-only evidence”).
+
+### When to Prefer ClinVar
+- Strong review levels (expert panel/practice guideline) or well-established pathogenic/benign consensus.
+- Clinical context (phenotype, segregation) contradicts a weak Δ.
+
+### Product Integration
+- Backend evidence orchestration: see [evidence.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evidence.py) for `/deep_analysis`, ClinVar scraping heuristics, and literature synthesis.
+- Evo proxy endpoints: see [evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py) for scoring and warmup strategies (min_delta, exon-level probes, fallbacks).
+- Frontend panels: `MyelomaResponseDisplay.jsx` maps Δ and confidence to user-facing calls; `DeepAnalysisPanel.jsx` reconciles ClinVar vs. Δ and literature.
+
+### UX Messaging Patterns
+- **Sequence-only call**: “Likely Disruptive (sequence evidence); consider prior/ClinVar.”
+- **Low evidence**: “Unknown (low sequence evidence).”
+- **Discordant**: “Discordant with ClinVar; explain confidence and review strength.”
+
+### Doctrine in One Line
+Use Δ to quantify sequence-level disruption, ClinVar to ground clinical truth, and reconcile them with a magnitude+confidence gating policy and explicit discordance reporting.
+
+### Gene/Protein Disruption: How Δ Relates to Biology
+- **Coding context (protein-level)**:
+  - Δ reflects how plausible the nucleotide context is around the variant. For missense variants, large |Δ| can indicate disruption of conserved sequence motifs that often correlate with altered protein function.
+  - Use exon_delta (±600 bp) to better proxy local coding constraints; combine with domain knowledge if the variant lies in an active/critical domain.
+  - Note: Δ is not a structure predictor. A small |Δ| does not guarantee structural integrity; it only suggests the sequence remains plausible under Evo2’s training distribution.
+- **Regulatory/noncoding context (gene-level)**:
+  - Δ captures disruption of transcriptional or splicing signals if sufficient context is provided (promoters, enhancers, splice junctions). Ensure prompts include upstream/downstream sequence.
+  - For splice-adjacent SNVs, examine Δ consistency across multiple windows. Consider specialized splice models when available.
+- **Mechanistic readout**:
+  - Treat Δ as a proxy for disruption of sequence-level constraints. When Δ aligns with known hotspots or functional motifs, confidence increases.
+  - Reconcile with ClinVar and literature to elevate from “sequence plausibility” to “clinical impact.”
+
+### Doctrine in One Line
+Use Δ to quantify sequence-level disruption, ClinVar to ground clinical truth, and reconcile them with a magnitude+confidence gating policy and explicit discordance reporting.

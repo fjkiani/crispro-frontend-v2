@@ -19,7 +19,7 @@ image = (
     .add_local_dir(local_path="src", remote_path="/root/src")
 )
 
-app = modal.App("hunter-analyst-service-v2-ghost", image=image) # New name for clarity
+app = modal.App("hunter-analyst", image=image)
 
 class HuntRequest(BaseModel):
     gene_symbol: str

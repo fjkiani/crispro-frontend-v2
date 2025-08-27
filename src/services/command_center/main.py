@@ -51,13 +51,13 @@ image = (
     # --- DOCTRINE ALIGNMENT: Use the full hg19 reference genome, not the snippet ---
     .add_local_dir("data/gene_database/reference", "/root/data/reference")
 )
-app = modal.App("command-center-v20-oracle-fix", image=image) # Force fresh deploy with correct Oracle URL
+app = modal.App("command-center", image=image)
 
 # --- Constants and Configuration ---
 # DOCTRINAL ALIGNMENT: Centralize and clarify service URLs.
-UNIFIED_ORACLE_URL = "https://crispro--zeta-oracle-v5-final-fix-zetaoracle-api.modal.run/invoke"
-GAUNTLET_URL = "https://crispro--gauntlet-v2-web-app-dev.modal.run/validate_inhibitors"
-HUNTER_ANALYALYST_URL = "https://crispro--hunter-analyst-service-v2-ghost-hunteranalyst-hunt.modal.run"
+UNIFIED_ORACLE_URL = "https://crispro--zeta-oracle-zetaoracle-api.modal.run/invoke"
+GAUNTLET_URL = "https://crispro--gauntlet-fastapi-app.modal.run/predict_structure"
+HUNTER_ANALYALYST_URL = "https://crispro--hunter-analyst-hunteranalyst-hunt.modal.run"
 BOLTZ_SERVICE_URL = "https://crispro--boltz-service-fastapi-app.modal.run/v1/predict_structure"
 
 # --- Schemas & State Management ---

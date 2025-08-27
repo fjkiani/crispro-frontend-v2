@@ -1,0 +1,160 @@
+---
+alwaysApply: false
+description: Doctrine and impact analysis for integrating Evo2 proxies and S/P/E evidence system; metrics, comparisons, and KPIs
+---
+# Evidence Capability Impact Doctrine — S/P/E with Evo2 Integration
+
+This rule explains the concrete impact of wiring Evo2 model proxies and the new discriminative/generative APIs into the S/P/E evidence system. It defines the right metrics, shows before/after comparisons, and sets KPIs so we can measure progress even when sequence signals are weak.
+
+## What Changed and Why It Matters
+
+- **Reliability**: Evo2 services deployed as Modal webhooks and proxied via the backend for warmup/fallback. See [evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py) and Modal app [src/services/evo_service/main.py](mdc:src/services/evo_service/main.py).
+- **Coverage**: New discriminative APIs (insights) add missing S-signals beyond raw deltas:
+  - `predict_gene_essentiality`, `predict_protein_functionality_change`, `predict_chromatin_accessibility`, `predict_spacer_efficacy` in [insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py)
+- **Explainability**: Frontend shows tiers/badges/citations and provenance (mode/flags/run_signature). See `CoPilot.jsx`, `EfficacyPanel.jsx`, `EfficacyRationaleDrawer.jsx`.
+- **Orchestration**: One-call evidence bundles in [command_center.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/command_center.py) compose insights and efficacy for side‑by‑side comparisons.
+
+## Metric Framework (S/P/E Composite)
+
+- **S — Sequence Disruption**
+  - Primary: `min_delta` from `/api/evo/score_variant_multi` and `exon_delta` from `/api/evo/score_variant_exon`.
+  - Calibrated: gene‑specific percentile and z via [gene_calibration.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/gene_calibration.py).
+  - Helpers: domain hints (functionality change), target-aware spacer heuristics.
+
+- **P — Pathway Alignment**
+  - Aggregate per‑variant `sequence_disruption` into pathway buckets weighted by MoA. See map in [efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py).
+
+- **E — External Evidence Strength**
+  - ClinVar prior via `/api/evidence/deep_analysis` and review status.
+  - Literature strength via `/api/evidence/literature` with badges (RCT/Guideline). Caching + backoff in [evidence.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evidence.py).
+
+- **Composite and Governance**
+  - Composite LoB: `W_seq*S + W_path*P + W_evd*E` with weights from [config.py](mdc:oncology-coPilot/oncology-backend-minimal/api/config.py).
+  - Gates/Tiers: supported | consider | insufficient using thresholds in config.
+  - Confidence recalibration tied to tier + percentiles.
+
+## Is “disruption” the right metric?
+
+- For single SNVs, Evo2 deltas are often small — not a failure, but expected sensitivity. We therefore:
+  - Calibrate per‑gene (percentile/z) to normalize magnitude.
+  - Use pathway aggregation to amplify clinically relevant alignment.
+  - Leverage E‑field (ClinVar/Lit) for priors and badges to carry tiering when S is weak.
+  - Add structure/context proxies (domain hints, accessibility) to shape S beyond raw delta.
+
+Conclusion: disruption is necessary but not sufficient; the ideal composite blends S (calibrated) + P (aligned) + E (priors/badges) under Evidence Gates.
+
+## Side‑by‑Side Comparison (Before → After)
+
+| Dimension | Before (ad‑hoc) | After (integrated) |
+| --- | --- | --- |
+| Model access | Occasional direct calls | Stable Modal webhooks proxied by backend |
+| Sequence scoring | Single delta, no context | Multi‑window + exon, gene‑calibration, domain hints |
+| Pathway | Minimal mapping | Expanded MoA‑weighted aggregation |
+| External evidence | Sparse | ClinVar prior + PubMed with caching/backoff, badges |
+| Tiers/confidence | Implicit | Evidence Gates + tiered confidence |
+| Orchestration | Manual | `/api/command/run_evidence_bundle` returns insights+efficacy |
+| Provenance | Limited | run_signature + flags/mode + snapshots |
+| Audit/Logging | Minimal | Supabase run + evidence items logging hooks |
+
+## Drug Efficacy Impact — What to Measure
+
+- Per‑drug deltas:
+  - `Δefficacy_score` and `rank_delta`
+  - Tier shifts (insufficient→consider→supported)
+  - Confidence shift
+  - Badge count change (RCT/Guideline/ClinVar‑Strong)
+- Global KPIs (from Supabase logs):
+  - % runs with non‑fallback calibration
+  - % drugs reaching “supported” tier
+  - Avg confidence and avg citations per drug
+  - Fraction of runs with pathway alignment ≥ threshold
+
+## When Results Are “Insufficient” — Doctrine
+
+If S is weak and E is thin:
+1) Surface “Insufficient sequence evidence” explicitly with calibration source and cache age.
+2) Escalate E‑field: broaden literature query, run Diffbot extraction if available, and refresh KB embeddings.
+3) Use pathway probes: add related variants (e.g., NRAS/KRAS) to test pathway alignment sensitivity.
+4) Report reproducible bundle output (run_signature, snapshots) and propose next data to collect.
+
+## How to Compare Side‑by‑Side Now
+
+- Single call:
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/command/run_evidence_bundle \
+  -H 'Content-Type: application/json' \
+  -d '{"mutations":[{"gene":"BRAF","chrom":"7","pos":140753336,"ref":"A","alt":"T","hgvs_p":"p.Val600Glu"}],"model_id":"evo2_7b"}'
+```
+- Inspect:
+  - `bundle[0]`: efficacy result (drugs, pathway_scores, sequence_details, run_signature)
+  - `bundle[1]`: insights result (essentiality)
+  - Compare `evidence_tier`, `confidence`, `rank_delta`, `badges`, and citations.
+
+## Files to Read/Modify
+
+- Backend entry & config: [api/main.py](mdc:oncology-coPilot/oncology-backend-minimal/api/main.py), [api/config.py](mdc:oncology-coPilot/oncology-backend-minimal/api/config.py)
+- Evo proxy: [api/routers/evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py)
+- Discriminative: [api/routers/insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py)
+- Efficacy S/P/E: [api/routers/efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py)
+- Evidence (literature/clinvar): [api/routers/evidence.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evidence.py)
+- Orchestrator: [api/routers/command_center.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/command_center.py)
+- Calibration: [api/services/gene_calibration.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/gene_calibration.py)
+- Supabase logging: [api/services/supabase_service.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/supabase_service.py)
+
+## KPIs and Targets (90‑day)
+
+- ≥60% runs with non‑fallback calibration (gene_specific)
+- ≥30% drugs move from “insufficient” to “consider” with E‑field + pathway aggregation
+- Avg citations per “supported” drug ≥ 2, with ≥1 high‑quality badge (RCT/Guideline)
+- ≥95% backend uptime for Evo2 proxy endpoints
+
+## Next Priorities
+
+1) Structure integration: ESM stub (now) → AF3 (later) for functionality change.
+2) Chromatin context: add Enformer signal (flagged) to refine S for noncoding/edge exons.
+3) KB/RAG: study‑type boosts, rerank, Diffbot re‑embed; normalize drugs/disease.
+4) Comparative dashboards from Supabase logs (tier shifts, badge counts, confidence distributions).
+
+## Execution Plan — How We Achieve Accurate MM Drug Response
+
+### Phase 0 (Immediate, 1–2 days): Turn On Evidence and Tighten Payloads
+- Enable GEMINI_API_KEY in backend env; re‑run `/api/evidence/literature` with RCT/guideline boosts.
+- Ensure orchestrator passes full payloads to efficacy:
+  - `mutations[]` include `gene, chrom, pos, ref, alt, hgvs_p`
+  - `disease: "multiple myeloma"`, `options: {adaptive:true, ensemble:true}`
+- Add curl/tests for insights/design/command to lock contracts.
+- KPIs: citations > 0 for known hotspots; badges appear (RCT/Guideline); reduction in “insufficient” share.
+
+### Phase 1 (1–2 weeks): Structure + Chromatin Signals
+- Functionality change: integrate ESM logits (stub interface) to lift missense in kinase/DNA‑binding domains.
+- Chromatin: add Enformer hook (feature‑flagged) to refine accessibility; fallback heuristic remains.
+- Update efficacy composite to optionally weight structure/chromatin sub‑signals within S.
+- KPIs: +15–25% shift from “insufficient” → “consider”; confidence +0.1–0.2 on affected drugs.
+
+### Phase 2 (2–4 weeks): Disease‑Tuned Pathway and Evidence Maturity
+- Refine MM‑specific pathway priors (FGFR3 t(4;14), NF‑kB lesions, CRBN/IKZF axis) and incorporate copy‑number/translocation hints when available.
+- KB/RAG maturity: study‑type boosts, rerank, Diffbot re‑embed; normalize drug classes and diseases; persist top‑K with provenance.
+- Dashboards: Supabase views for tier shifts, badge counts, confidence distributions; monitor calibration fallback rate.
+- KPIs: ≥30% drugs reach “consider”, ≥10–15% “supported” on real MM variants; non‑fallback calibration ≥60%.
+
+## Governance & Contracts
+- Backend contracts are canonical: see [insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py), [efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py), [command_center.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/command_center.py).
+- Orchestrator input (minimal):
+```json
+{
+  "model_id": "evo2_7b",
+  "disease": "multiple myeloma",
+  "mutations": [
+    {"gene":"BRAF","chrom":"7","pos":140753336,"ref":"A","alt":"T","hgvs_p":"p.Val600Glu"}
+  ],
+  "options": {"adaptive": true, "ensemble": true}
+}
+```
+- Output: efficacy bundle with `drugs[], pathway_scores, sequence_details, run_signature` plus `insights` in the same response for side‑by‑side.
+
+## What to Do When Results Are Still Weak
+- Explicitly label “Insufficient sequence evidence (fallback calibration)” with cache age.
+- Escalate E‑field breadth (wider date range, synonyms) and Diffbot extraction; re‑embed into KB.
+- Probe pathway by adding related RAS lesions to test alignment lift.
+- Record run_signature and propose next data needed (e.g., CNA, translocation, RNA subtype) for the twin.
+

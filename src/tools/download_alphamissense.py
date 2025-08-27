@@ -1,8 +1,5 @@
 import modal
 import os
-import requests
-from tqdm import tqdm
-import pandas as pd
 import logging
 
 # Setup logging
@@ -35,6 +32,10 @@ def prepare_data():
     """
     A unified function to download and convert the AlphaMissense data.
     """
+    # Defer heavy imports to container/runtime to avoid local import errors
+    import requests  # type: ignore
+    from tqdm import tqdm  # type: ignore
+    import pandas as pd  # type: ignore
     # --- Step 1: Download the TSV if it doesn't exist ---
     if not os.path.exists(TSV_PATH):
         logger.info(f"⬇️ TSV file not found. Downloading from {DATA_URL}...")

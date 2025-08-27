@@ -1,99 +1,218 @@
 ---
-description: 
-globs: 
 alwaysApply: false
+description: PrecisionRad Co-Pilot – Execution Doctrine (Aug 2025). Concrete steps, endpoints, and tests for radiosensitivity prediction using our S/P/E+insights stack.
+globs: 
 ---
-# PrecisionRad Co-Pilot: AI-Enhanced Targeted Radiation Therapy
+# PrecisionRad Co-Pilot – Execution Doctrine (Aug 2025)
 
-## 1. Vision
+This rule converts the prior concept into an execution-ready plan that reuses our current Oncology Co‑Pilot stack to produce radiosensitivity hypotheses and toxicity risk signals with transparent provenance.
 
-The PrecisionRad Co-Pilot aims to revolutionize targeted radiation therapy by empowering clinicians and researchers with an AI-driven platform that integrates multi-modal data, advanced analytics, and intelligent decision support. Our vision is to enhance treatment precision, personalize care based on individual tumor biology and patient genetics, optimize workflows, and ultimately improve patient outcomes while minimizing toxicities.
+## What we can deliver today (research-grade)
+- Radiosensitivity hypothesis per case using the existing S/P/E + insights pipeline:
+  - **Sequence (S)**: Evo2 magnitudes + gene calibration via `predict_gene_essentiality` and `predict_protein_functionality_change`.
+  - **Pathway (P)**: Map mutations to DNA damage response (DDR), cell cycle, apoptosis pathways aligned to radiation MoA.
+  - **Evidence (E)**: Literature/ClinVar evidence; shows badges and tier.
+  - **Insights**: Functionality, Chromatin (Enformer/Borzoi when configured), Essentiality, Regulatory.
+- Output surfaced like drugs: `efficacy_score` (label as “Radiosensitivity”), `confidence`, `evidence_tier`, `badges`, `insights`, `rationale`, `citations`.
 
-## 2. Core Problem Addressed in Radiation Oncology
+## Where the code lives (reused components)
+- Insights router: `[insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py)`
+  - `POST /api/insights/predict_gene_essentiality` (Evo2 multi/exon + calibration)
+  - `POST /api/insights/predict_protein_functionality_change` (hotspot-aware lift)
+  - `POST /api/insights/predict_chromatin_accessibility` (Enformer/Borzoi or heuristic)
+  - `POST /api/insights/predict_splicing_regulatory` (noncoding proxy)
+- Efficacy orchestrator: `[efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py)`
+  - Currently ranks systemic drugs; reuse scoring style to compute a radiosensitivity score.
+- Evo proxy and safety: `[evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py)`
+- Frontend evidence UI examples: `[evidenceIntelligence.js](mdc:oncology-coPilot/oncology-frontend/src/components/dossier/data/evidenceIntelligence.js)`
 
-Targeted radiation therapy, while highly advanced, grapples with inherent complexities that PrecisionRad Co-Pilot seeks to address:
+## How to run a radiosensitivity assessment now
+Use the same orchestrator endpoint and interpret the returned score for radiation context. Provide disease and mutation; include coordinates for Regulatory/Chromatin.
 
-*   **Complex Treatment Planning:** Accurately defining tumor volumes and organs at risk (OARs), and optimizing radiation delivery, is intricate and resource-intensive.
-*   **Biological Variability & Radio-Resistance/Sensitivity:** Tumors and patients exhibit diverse responses to radiation due to genetic makeup, tumor microenvironment factors (e.g., hypoxia), and intrinsic DNA repair capabilities. Tailoring treatment to this variability is a major hurdle.
-*   **Dynamic Changes During Treatment (Adaptive Radiotherapy - ART):** Patient anatomy and tumor geometry can change significantly over a multi-week treatment course, potentially compromising the original plan's accuracy and efficacy.
-*   **Risk of Normal Tissue Toxicity:** Predicting, mitigating, and managing radiation-induced side effects in healthy tissues is critical for patient quality of life.
-*   **Data Silos & Integration Challenges:** Radiation oncology relies on a wealth of data—imaging (CT, MRI, PET), dosimetry, patient-reported outcomes, and increasingly, molecular/genomic information. Integrating these disparate sources for holistic decision-making remains challenging.
+Example (lung, TP53 R175H):
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/efficacy/predict \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model_id":"evo2_7b",
+    "mutations":[{"gene":"TP53","hgvs_p":"R175H","chrom":"17","pos":7673803,"ref":"C","alt":"T","build":"hg38"}],
+    "disease":"non-small cell lung cancer",
+    "options":{"adaptive":true,"ensemble":true},
+    "api_base":"http://127.0.0.1:8000"
+  }'
+```
+Then, in the UI, filter the returned items to radiation-aligned MoA (DNA damage/DDR) or display a dedicated “Radiosensitivity” card using the aggregated S/P/E + insights and evidence tier.
 
-## 3. How PrecisionRad Co-Pilot Builds on Our Existing Stack's Philosophy
+## Chromatin configuration (to avoid heuristic fallback)
+Set these in backend `.env` to enable first‑class chromatin scores:
+```
+ENFORMER_URL=http://127.0.0.1:7001
+BORZOI_URL=http://127.0.0.1:7002
+```
+Each must expose `/predict` accepting `{ chrom, start, end }` and returning `{ accessibility_score }`.
 
-PrecisionRad Co-Pilot directly extends the core philosophy of our existing platforms (CasPro Assistant, CrisPRO Oncology Co-Pilot):
+## Methodology (S/P/E + radiosensitivity mapping)
+- **Sequence (S)**: Evo2 multi/exon absolute magnitudes with gene‑specific calibration snapshots; hotspot lift for functionality.
+- **Pathway (P)**: Weight DDR (ATM/ATR, BRCA1/2, TP53, CHEK2), apoptosis (BAX/BCL2), replication stress, proteostasis for combined modality contexts.
+- **Evidence (E)**: Literature agent scoped by disease and MoA terms: [“radiation therapy”, “radiosensitivity”, “radioresistance”, “DNA damage response”].
+- **Insights lifts (bounded)**: +functionality, +chromatin, +essentiality, +regulatory when ≥ thresholds (transparent in provenance).
 
-*   **AI-Driven Insight:** Leveraging machine learning, deep learning (especially computer vision for imaging), NLP/LLMs, and predictive modeling as central pillars.
-*   **Multi-Modal Data Integration:** A commitment to breaking down data silos and creating a unified view of the patient and their disease by integrating imaging, clinical, genomic, and dosimetric data.
-*   **LLM for Interaction & Summarization:** Employing Large Language Models to provide intuitive user interfaces, natural language querying, and clear, concise summaries of complex AI-generated insights.
-*   **Modular & Extensible Architecture:** Designing the platform with modular components (e.g., variant analysis, image segmentation, outcome prediction) that can be individually improved and collectively leveraged.
-*   **Actionable Intelligence:** Focusing not just on data processing, but on translating data into actionable insights that support clinical decision-making and research.
-*   **Personalization:** Enabling a shift towards more personalized treatment strategies based on individual patient and tumor characteristics.
+## Frontend integration (no schema change required)
+- Read from `/api/efficacy/predict` and render:
+  - `efficacy_score` (label as “Radiosensitivity” in RadOnc view), `confidence`, `evidence_tier`, `badges`.
+  - `insights` chips: Functionality, Chromatin, Essentiality, Regulatory.
+  - `rationale` list and `citations`/`provenance`.
+- Streamlit demo page reference: `[3_☢️_RadOnc_Co-Pilot.py](mdc:src/app/3_☢️_RadOnc_Co-Pilot.py)` and backend data endpoint example in `[main.py](mdc:oncology-coPilot/oncology-backend/main.py)`.
 
-While sharing these philosophical underpinnings, PrecisionRad will have a distinct focus on the specific data types (DICOM-RT, advanced imaging), physics (dosimetry, radiation transport), and clinical workflows unique to radiation oncology.
+## Roadmap to exceed capability
+1) Dedicated RadOnc orchestrator (backwards compatible):
+   - New endpoint: `POST /api/radonc/predict` → `{ radiosensitivity_score, confidence, evidence_tier, insights, rationale }`.
+   - Internally reuse insights and evidence services; add DDR‑specific pathway weights.
+2) Toxicity risk (NTCP proxy):
+   - New endpoint: `POST /api/radonc/predict_toxicity` consuming germline variants in radiosensitivity genes; return `{ toxicity_risk_score, confidence, rationale }`.
+3) Imaging hooks (phase II):
+   - Add radiomics extractor and optional CBCT change detection stubs; surface as additional evidence/insight.
+4) Evidence hardening:
+   - Provider keys + caching to lift literature recall; add guideline/RCT badges for radiation.
+5) Stabilize chromatin:
+   - Run real Enformer/Borzoi services; maintain fallback to heuristic only on failure.
 
-## 4. Key Capabilities: Technical, Scientific, and Business Aspects
+## Quick test flows
+- Chromatin (with Enformer/Borzoi):
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/insights/predict_chromatin_accessibility \
+  -H 'Content-Type: application/json' \
+  -d '{"chrom":"7","pos":140453136,"radius":500}'
+```
+- Essentiality:
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/insights/predict_gene_essentiality \
+  -H 'Content-Type: application/json' \
+  -d '{"gene":"TP53","variants":[{"gene":"TP53","chrom":"17","pos":7673803,"ref":"C","alt":"T","consequence":"missense_variant"}],"model_id":"evo2_7b"}'
+```
+- Radiosensitivity (via efficacy orchestrator for now): see example above.
 
-PrecisionRad Co-Pilot will offer a suite of interconnected capabilities:
+## Current limitations (transparent)
+- Literature agent may return sparse results in local dev → lowers evidence tier and confidence.
+- Evo service intermittency (404/500) can cause partial S instability; proxy includes fallbacks.
+- Chromatin defaults to heuristic unless Enformer/Borzoi URLs are live.
 
-### 4.1. AI-Enhanced Treatment Planning & Quality Assurance
-*   **Technical:** Deep learning models for automated/assisted contouring of tumors and OARs on planning CT/MRI. AI algorithms for proposing optimal beam arrangements and fluence maps. Predictive dosimetry models. Automated plan quality flagging systems.
-*   **Scientific:** More consistent and accurate target delineation. Exploration of novel planning strategies. Potential for reducing inter-observer variability in contouring.
-*   **Business:** Increased efficiency in the planning process, potentially reducing planning time. Improved plan quality leading to better potential outcomes. Standardization of best practices.
+## Success criteria
+- Consistent, transparent radiosensitivity hypotheses with clear rationale and bounded confidence.
+- Frontend chips and badges reflecting all four insights and evidence tier.
+- When Enformer/Borzoi and stronger literature are on, confidence lifts by ~0.05–0.10.
 
-### 4.2. Radio-Genomics & Biomarker Integration for Personalization
-*   **Technical:** Integration of genomic (germline/somatic variants), transcriptomic, and proteomic data. Radiomics feature extraction pipelines from CT, PET, MRI. AI models to correlate molecular and imaging biomarkers with radiation response. **This directly leverages a foundational `analyze_single_variant` (Evo2-style) capability for interpreting the functional impact of genetic variants in relevant pathways.**
-*   **Scientific:** Deeper understanding of the biological basis of radiosensitivity and resistance. Non-invasive tumor characterization through radiomics. Identification of patients likely to benefit from dose escalation, specific sensitizers, or alternative therapies. Prediction and understanding of normal tissue toxicity predispositions.
-*   **Business:** Enables patient stratification for clinical trials. Development of novel predictive biomarkers (potential IP). Attracts patients seeking cutting-edge personalized treatments.
 
-    *   **Paragraph on Integrating the Six Core Genomic Use Cases:** The six detailed use cases (VUS interpretation, predicting tumor radiosensitivity/resistance, forecasting normal tissue radiotoxicity, biologically guided dose painting, guiding systemic therapy selection, and smarter patient stratification/biomarker discovery) are integral to this pillar. The `analyze_single_variant` function, providing functional impact scores (e.g., delta_score) and predictions for individual mutations, serves as the engine. This allows PrecisionRad to:
-        1.  **Interpret VUS in hereditary cancer predisposition genes,** providing context for overall treatment strategy and genetic counseling (relevant if a patient in radiation oncology also has a hereditary syndrome).
-        2.  **Predict tumor radiosensitivity/resistance** by aggregating functional impacts of somatic mutations in key DNA repair and cell cycle genes within the tumor.
-        3.  **Forecast normal tissue radiotoxicity** by analyzing germline variants in genes influencing individual radiation sensitivity (e.g., oxidative stress, inflammation pathways).
-        4.  Enable **biologically guided dose painting** by assessing intra-tumoral heterogeneity in radiosensitivity based on spatially resolved genomic data, guiding higher doses to resistant sub-regions.
-        5.  Inform **decisions around concurrent or adjuvant systemic therapies** by understanding the functional impact of mutations that might confer sensitivity/resistance to those agents alongside radiation.
-        6.  Contribute to **smarter patient stratification for clinical trials** and the **discovery of novel radio-genomic biomarkers** by using Evo2-derived features from large patient cohorts.
+## Guidance-first build plan (next)
 
-### 4.3. Intelligent Adaptive Radiotherapy (ART) Support
-*   **Technical:** AI for automated change detection on daily/weekly on-board images (CBCT). Rapid dosimetric impact simulation. AI-driven recommendations for replanning triggers.
-*   **Scientific:** More accurate dose delivery throughout the treatment course. Ability to adapt to tumor response or anatomical changes, potentially improving TCP and reducing toxicity. Enables research into optimal ART strategies.
-*   **Business:** Positions the clinic as a leader in advanced ART. Potentially improves outcomes and reduces complications associated with geometric uncertainties.
+We now prioritize clinical guidance (tiered recommendations with on-label status and citations) over pure hypothesis. This section specifies exactly what to build across backend and frontend.
 
-### 4.4. Treatment Outcome & Toxicity Prediction
-*   **Technical:** Development of Tumor Control Probability (TCP) and Normal Tissue Complication Probability (NTCP) models incorporating clinical, dosimetric, imaging, and genomic data. LLM-driven presentation of risk/benefit profiles.
-*   **Scientific:** More accurate prognostication. Better informed shared decision-making with patients. Identification of factors driving treatment success or failure.
-*   **Business:** Enhanced patient counseling. Data for quality improvement initiatives and benchmarking.
+### Backend – Guidance Router
+- Add a new router: `api/routers/guidance.py`; include it in `api/main.py` under `/api/guidance`.
 
-### 4.5. Knowledge Integration & Research Support
-*   **Technical:** LLM for natural language querying of radiation oncology guidelines and literature. Tools for structured data capture for research. Clinical trial matching algorithms based on comprehensive patient profiles.
-*   **Scientific:** Facilitates evidence-based practice. Streamlines data collection for clinical research. Improves accrual to relevant clinical trials.
-*   **Business:** Enhances the clinic's research profile. Supports continuous learning and quality improvement.
+- `POST /api/guidance/chemo`
+  - Input:
+    - `{ disease: string, drug_or_class: string, mutations: [{ gene, hgvs_p, chrom?, pos?, ref?, alt?, build? }], options?: { adaptive?: bool, ensemble?: bool }, api_base?: string, moa_terms?: string[] }`
+  - Behavior:
+    - Calls existing `/api/efficacy/predict` with provided mutations/disease and seeds `moa_terms` from `drug_or_class` when missing.
+    - Filters returned `drugs[*]` to the requested `drug_or_class` (case-insensitive match on name/MoA).
+    - Applies clinical gates (see below) and returns a guidance object.
+  - Output (focused object):
+    - `{ therapy: string, disease: string, on_label: boolean, tier: "I"|"II"|"III"|"research", strength: "strong"|"moderate"|"weak", efficacy_score: number, confidence: number, insights: {...}, rationale: string[], citations: string[], evidence_tier: string, badges: string[], provenance: {...}, caveats?: string[] }`
 
-## 5. Value Proposition
+- `POST /api/guidance/radonc`
+  - Input:
+    - `{ disease?: string, mutations: [...same as above...], options?: {...}, api_base?: string }`
+  - Behavior:
+    - Calls `/api/efficacy/predict` and aggregates the result as "Radiosensitivity".
+    - Applies clinical gates specialized to radiation (guidelines/RCTs in disease, DDR-aligned biology).
+  - Output:
+    - `{ modality: "radiation", disease?: string, on_label: boolean, tier: "I"|"II"|"III"|"research", strength: "strong"|"moderate"|"weak", radiosensitivity_score: number, confidence: number, insights: {...}, rationale: string[], citations: string[], evidence_tier: string, badges: string[], provenance: {...}, caveats?: string[] }`
 
-*   **Radiation Oncologists & Clinical Teams:**
-    *   Increased precision and confidence in treatment planning and delivery.
-    *   Personalized treatment strategies tailored to individual tumor biology.
-    *   More efficient clinical workflows (e.g., faster contouring, ART decision support).
-    *   Improved ability to predict and manage treatment-related toxicities.
-    *   Enhanced tools for research and guideline adherence.
-*   **Medical Physicists & Dosimetrists:**
-    *   AI-assisted tools for planning, QA, and ART, reducing manual effort.
-    *   Support for implementing advanced and complex treatment techniques.
-*   **Patients:**
-    *   Potential for more effective tumor control with personalized radiation doses.
-    *   Reduced risk of side effects due to better OAR sparing and predictive toxicology.
-    *   Access to cutting-edge adaptive therapies tailored to their changing needs during treatment.
-    *   Clearer understanding of risks and benefits through AI-summarized information.
-*   **Researchers & Academia:**
-    *   A robust platform for collecting high-quality, structured multi-modal data.
-    *   Advanced tools for investigating radiobiology, developing novel treatment strategies, and validating predictive biomarkers.
-    *   Facilitation of clinical trials for new radiation techniques and combined modality treatments.
-*   **Healthcare Institutions & Payers:**
-    *   Potential for improved patient outcomes and reduced costs associated with managing severe toxicities or treatment failures.
-    *   Enhanced reputation as a center for excellence and innovation in radiation oncology.
-    *   Data-driven insights for optimizing resource allocation and service delivery.
+### Clinical gates (server-side)
+- Data sources available now: PubMed evidence bundle (publication types, counts), evidence_tier/badges, ClinVar prior/classification, MoA alignment, on/off-label (initially via curated rules; later via FDA/DailyMed integration).
+- Gate rules (conservative, deterministic):
+  1) Tier I (Guidance):
+     - On-label in disease context OR disease guideline present (detected in evidence as Guideline/Practice guidance), AND at least moderate evidence strength (e.g., ≥1 guideline/RCT/meta-analysis).
+  2) Tier II (Consider):
+     - ≥1 RCT/meta-analysis/systematic review in disease context OR strong consensus reviews with MoA alignment; not on-label but no contraindication.
+  3) Tier III (Hypothesis with supportive evidence):
+     - Mechanistic alignment + supportive literature (cohort/case series/case reports) AND insights supportive (e.g., functionality/chromatin ≥ thresholds).
+  4) Research:
+     - Insufficient literature or misaligned MoA; keep as research hypothesis only.
+- Strength mapping:
+  - strong: guideline or ≥2 high-quality RCT/meta/systematic reviews in disease
+  - moderate: ≥1 high-quality RCT/meta OR multiple consistent reviews
+  - weak: case series/case reports/limited reviews only
 
-## 6. Conclusion
+### Quick curl tests (local)
+- Chemo guidance (example; replace fields):
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/guidance/chemo \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "disease":"multiple myeloma",
+    "drug_or_class":"proteasome inhibitor",
+    "mutations":[{"gene":"BRAF","hgvs_p":"V600E","chrom":"7","pos":140453136,"ref":"T","alt":"A"}],
+    "options":{"adaptive":true,"ensemble":true},
+    "api_base":"http://127.0.0.1:8000"
+  }'
+```
 
-The PrecisionRad Co-Pilot, built upon the foundational AI and data integration philosophies of our existing stack and deeply informed by the specific needs of radiation oncology and the power of detailed genomic analysis (as exemplified by the six core use cases for variant interpretation), has the potential to be a transformative platform. It aims to bring a new level of intelligence, personalization, and efficiency to the fight against cancer through targeted radiation therapy.
+- Radiation guidance:
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/guidance/radonc \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "disease":"non-small cell lung cancer",
+    "mutations":[{"gene":"TP53","hgvs_p":"R175H","chrom":"17","pos":7673803,"ref":"C","alt":"T","build":"hg38"}],
+    "options":{"adaptive":true,"ensemble":true},
+    "api_base":"http://127.0.0.1:8000"
+  }'
+```
+
+### Frontend – Guidance UI
+- Add a Guidance card (CoPilot) that renders the guidance object:
+  - Tier badge (I/II/III/Research), on‑label/off‑label chip, strength, efficacy/radiosensitivity score, confidence.
+  - Insights chips (Functionality, Chromatin, Essentiality, Regulatory), rationale list, citations with links, badges.
+  - Explicit disclaimer banner (research tool; not medical advice).
+- Quick actions:
+  - "Get Chemo Guidance" → collects disease, mutation(s), drug/class → calls `/api/guidance/chemo`.
+  - "Get Radiation Guidance" → collects disease, mutation(s) → calls `/api/guidance/radonc`.
+
+### Implementation notes
+- Backend façade reuses `/api/efficacy/predict` and existing evidence; all gating happens server-side for consistency and auditability.
+- For on‑label detection, start with a minimal curated ruleset (JSON) keyed by `{disease, drug_or_class}` with citations; later integrate FDA/DailyMed.
+- Preserve backward compatibility; FE can still call `/api/efficacy/predict` directly.
+
+### Optional assisting agent (if needed)
+To raise guidance quality without blocking core delivery, we can attach a lightweight "Guidance Evidence Agent" behind the guidance router. It operates as a separate microservice and provides curated signals the router consumes. This keeps the FE unchanged.
+
+- Responsibilities
+  - Guideline harvester: detect and summarize disease‑specific guidelines (NCCN/ESMO or open equivalents where licenses permit).
+  - Label checker: determine on‑label/off‑label status using a curated ruleset first; later call FDA/DailyMed.
+  - Trial/rationale summarizer: extract RCT/meta/systematic‑review indicators and produce a compact rationale with citations.
+
+- Service API (HTTP)
+  - `POST /guidelines/query`
+    - Input: `{ disease, therapy, gene?, variant? }`
+    - Output: `{ has_guideline: boolean, sources: [{title,url,year}], notes?: string }`
+  - `POST /label/onlabel_status`
+    - Input: `{ disease, therapy }`
+    - Output: `{ on_label: boolean, source: {type:"ruleset"|"fda"|"dailymed", ref?: string} }`
+  - `POST /trials/summarize`
+    - Input: `{ disease, therapy, citations?: string[] }`
+    - Output: `{ rct_count: number, meta_count: number, systematic_review_count: number, strength: "strong"|"moderate"|"weak", key_citations: string[] }`
+
+- Integration in guidance router
+  - Guidance endpoints call the agent in parallel after `/api/efficacy/predict` returns.
+  - Merge signals into gates:
+    - Tier I requires `on_label==true` OR `has_guideline==true` with ≥ moderate strength.
+    - Tier II requires any high‑quality review/RCT signals with MoA alignment.
+  - Timeouts: 2–3s per agent call; degrade gracefully to ruleset/evidence only.
+
+- Deployment
+  - FastAPI microservice, containerized; env vars: `GUIDANCE_AGENT_URL` used by backend.
+  - Start with rule‑ and evidence‑based stubs; later enable FDA/DailyMed integrations.
+
+

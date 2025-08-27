@@ -1,0 +1,22 @@
+## Messaging Guidance: Δ (Evo2) vs ClinVar
+
+### When summarizing changes
+- **State the evidence type**: “This PR improves sequence-level evidence (Δ/min_delta/exon_delta), not clinical verdicts.”
+- **Call out gating**: “Magnitude and confidence gates applied; default thresholds X/Y; rationale included.”
+- **Indicate discordance behavior**: “If Δ disagrees with strong ClinVar, UI marks as ‘discordant’ and prefers ClinVar.”
+
+### Recommended phrasing in PRs
+- **Sequence-only signal**: “Introduces sequence-only assessment (Δ). Final clinical interpretation still depends on ClinVar and literature.”
+- **Low signal**: “Δ is near-zero; presented as ‘Unknown (low sequence evidence)’ pending external validation.”
+- **Alignment**: “Δ supports ClinVar classification; confidence high across windows.”
+- **Discordance**: “Δ suggests disruption but ClinVar is benign/VUS with strong review — flagged as discordant with explanation.”
+
+### Checklist for reviewers
+- Verify multi-window min_delta and exon_delta are computed and exposed
+- Confirm confidence_score is surfaced and used in gating
+- Ensure Δ-driven UI labels never override strong ClinVar without explicit discordance messaging
+- Confirm deep analysis includes ClinVar review strength and literature synthesis when available
+
+### Examples
+- “Add Δ min/exon and confidence to detailed panel; prefer ClinVar in discordance; rationale text for small-|Δ| hotspots.”
+- “Refactor warmup to /score_delta; add fallback behavior; expose upstream_service in UI.”

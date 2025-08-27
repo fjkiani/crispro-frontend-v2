@@ -1,0 +1,80 @@
+# VUS Doctrine — Evidence‑or‑Abstain Protocol
+
+Use this rule to guide any task that evaluates unknown variants (VUS) with the Evo2 pipeline. It defines inputs, evidence signals, decision thresholds, abstention criteria, orchestration, and artifact requirements.
+
+## Scope
+- Assess previously unlabeled variants (VUS/new edits) and output: {Likely Disruptive, Likely Neutral, Unknown} with full evidence and provenance.
+- Model‑agnostic (works with `evo2_7b`/`evo2_40b`).
+
+## Inputs
+- Variant format: `chr:pos REF>ALT` (hg38) plus optional `gene`, `hgvs_p`.
+- Required hygiene: strict REF base validation; abort per‑variant if mismatch; never fabricate.
+
+## Endpoints (evidence primitives)
+- Multi‑window effect: `/score_variant_multi` (windows: [1024, 2048, 4096, 8192])
+- Exon corroboration: `/score_variant_exon` (flank f=600; range 200–1000)
+- Local delta profile: `/score_variant_profile` (radius r=100; range 50–200)
+- 3‑alt sensitivity probe: `/score_variant_probe`
+- Warmup: `/api/evo/warmup`
+
+See: [api/index.py](mdc:oncology-coPilot/oncology-backend-minimal/api/index.py), [src/services/evo_service/main.py](mdc:src/services/evo_service/main.py)
+
+## Evidence signals
+- minΔ: minimum delta across windows (primary effect size)
+- Window consistency: `1 − stdev(Δ_w) / max(0.05, |minΔ|)`
+- Exon corroboration: sign agreement; magnitude support
+- Profile peak: peak |Δ| within ±r
+- Probe sensitivity: strongest Δ among 3 alternates at locus
+- Model corroboration (optional): sign/rank agreement between 7B and 40B
+
+## Composite risk and confidence
+- Confidence (baseline): `0.5*s1 + 0.3*s2 + 0.2*s3`
+  - s1: effect size = clamp(|minΔ|/k, k∈[0.3,1.0])
+  - s2: exon corroboration = 1.0 if same‑sign and |Δ_exon|≥|minΔ|; 0.5 if same‑sign; else 0.0
+  - s3: window consistency = 1 − stdev(Δ_w)/max(0.05,|minΔ|)
+
+## Decision policy (learned thresholds)
+- Learn percentiles from labeled ClinVar panel (see [scripts/generate_clinvar_panel.py](mdc:scripts/generate_clinvar_panel.py)):
+  - `P50_benign`, `P90_pathogenic` on |minΔ|
+- Call rules:
+  - Likely Disruptive if: |minΔ| ≥ P90_pathogenic AND s3 ≥ 0.7 AND exon corroborates AND |peakΔ| large
+  - Likely Neutral if: |minΔ| ≤ P50_benign AND |peakΔ| small AND no corroboration
+  - Unknown (abstain) if any of:
+    - |minΔ| in gray zone OR s3 < 0.3 OR exon opposite sign OR |peakΔ| tiny OR 7B vs 40B disagree on sign OR confidence < 0.4
+
+## Orchestration
+- Chunking: 20–50 variants per request to avoid serverless timeouts (see [scripts/run_myeloma_benchmark.py](mdc:scripts/run_myeloma_benchmark.py))
+- Warm model before large runs; follow redirects; long read/write timeouts
+- Non‑fatal per‑variant errors: include error in `evo2_result.error`, continue batch
+
+## Artifacts & Provenance (mandatory)
+- For every run: `selected_model`, `upstream_service`, `mode`, `run_signature`
+- Outputs per variant: minΔ, window_used, exonΔ, profile peakΔ/offset, probe top_alt/top_delta, confidence, decision label
+- Save: `vus_results_raw.json`, `vus_results_summary.json`, and CSV export
+
+## VUS extraction (optional)
+- Generate VUS panel from ClinVar with high‑quality reviews (criteria provided; no conflicts)
+- Command:
+```bash
+INCLUDE_VUS=1 FAST_MODE=1 python3 [scripts/generate_clinvar_panel.py](mdc:scripts/generate_clinvar_panel.py)
+```
+- Output: `docs/benchmarks/vus_panel.json`
+
+## Automation outline
+1) Warm model(s): `/api/evo/warmup`
+2) For each chunk of VUS: call multi, exon, profile, probe
+3) Compute signals, confidence, apply decision policy
+4) Save artifacts; emit CSV with decisions and evidence
+
+## Roadmap
+- Add 40B corroboration; report disagreement rate
+- Calibrate confidence (ECE); add bootstrapped CIs for hit‑rate in abstained vs labeled buckets
+- Extend to noncoding regulatory regions with tailored windows and external chromatin predictors
+
+## Messaging (internal/clinical)
+- “Evidence‑or‑abstain”: we only label when evidence is strong and consistent; otherwise Unknown
+- Orthogonal views and strict hygiene make VUS triage credible and audit‑ready
+description:
+globs:
+alwaysApply: false
+---

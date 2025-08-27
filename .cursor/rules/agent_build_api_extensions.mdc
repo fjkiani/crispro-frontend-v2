@@ -1,0 +1,563 @@
+---
+alwaysApply: false
+description: Doctrine and scaffold plan for extending backend APIs to strengthen evidence and capabilities
+---
+# API Extension Doctrine — Evidence‑First Capability Build (v2)
+
+Mission: Another agent will extend the oncology co‑pilot backend with new, orthogonal endpoints that improve evidence strength and separation for drug response, using our existing S/P/E foundation. This rule explains the architecture, where to connect code, the precise API contracts, gating/flags, and how to keep everything auditable and front‑end consumable.
+
+## Architecture overview
+
+- Backend app entry: [api/main.py](mdc:oncology-coPilot/oncology-backend-minimal/api/main.py)
+  - Routers included: `health`, `myeloma`, `evo`, `evidence`, `efficacy`.
+  - Startup/shutdown hooks: [api/startup.py](mdc:oncology-coPilot/oncology-backend-minimal/api/startup.py) — calibration preload/refresh.
+- Configuration: [api/config.py](mdc:oncology-coPilot/oncology-backend-minimal/api/config.py)
+  - Env‑config weights, gates, feature flags, operational mode.
+  - Use helpers: `get_evidence_weights()`, `get_evidence_gates()`, `get_feature_flags()`.
+- Evidence stack:
+  - Efficacy orchestrator: [api/routers/efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py)
+  - Evo proxies: [api/routers/evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py)
+  - Literature/ClinVar: [api/routers/evidence.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evidence.py)
+  - Calibration service: [api/services/gene_calibration.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/gene_calibration.py)
+  - Auditing: [api/services/supabase_service.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/supabase_service.py)
+
+Frontend integration points (read‑only for this agent):
+- Drug LoB: [EfficacyPanel.jsx](mdc:oncology-coPilot/oncology-frontend/src/features/efficacy/components/EfficacyPanel.jsx), [EfficacyCard.jsx](mdc:oncology-coPilot/oncology-frontend/src/features/efficacy/components/EfficacyCard.jsx), [EfficacyRationaleDrawer.jsx](mdc:oncology-coPilot/oncology-frontend/src/features/efficacy/components/EfficacyRationaleDrawer.jsx)
+- Variant insights: [MyelomaResponseDisplay.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/myeloma/MyelomaResponseDisplay.jsx)
+
+## Principles to preserve
+
+1) Evidence‑first: endpoints must add orthogonal signals that can raise evidence tiers (Supported/Consider/Insufficient) with transparent rationale and citations.
+2) Governance: all new endpoints sit behind feature flags in [config.py](mdc:oncology-coPilot/oncology-backend-minimal/api/config.py) and snapshot their configuration in Supabase logs.
+3) Safety: research/clinical modes must be respected; massive modes NEVER alter clinical tiers.
+4) Auditability: log request, response summary, configuration snapshots, and evidence_manifest via `log_evidence_run`/`log_evidence_items`.
+
+## Where to add code
+
+- Create a new router file: [api/routers/insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py)
+  - Define the new endpoints here (see Contracts below).
+  - Import `get_feature_flags`, `get_evidence_gates`, and `get_evidence_weights` from `config` when needed.
+  - Reuse evo proxy calls from [evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py).
+  - Log to Supabase through [supabase_service.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/supabase_service.py).
+- Wire the router in [api/main.py](mdc:oncology-coPilot/oncology-backend-minimal/api/main.py): `app.include_router(insights.router)`.
+- Add any shared helpers in [api/services](mdc:oncology-coPilot/oncology-backend-minimal/api/services) with small, focused modules (e.g., `protein_service.py`, `essentiality_service.py`).
+
+## Separation of Concerns: Discriminative vs Generative
+
+- Discriminative (Predictive, evidence‑producing) — names start with `predict_`:
+  - Produce scalar scores, flags, and rationales that feed S/P/E and evidence gates.
+  - Live under a dedicated router: [api/routers/insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py) with prefix `/api/insights`.
+  - Examples: `predict_gene_essentiality`, `predict_protein_functionality_change`, `predict_chromatin_accessibility`, `predict_spacer_efficacy`, `predict_immunogenicity`.
+
+- Generative (Design outputs) — names start with `generate_`:
+  - Produce candidate sequences/artifacts (guides, repair templates, optimized CDS/regulatory elements).
+  - Live under a separate router: [api/routers/design.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/design.py) with prefix `/api/design`.
+  - Examples: `generate_guide_rna`, `generate_repair_template`, `optimize_codon_usage`, `generate_regulatory_element`.
+
+This mirrors our existing modular routers (`evo`, `evidence`, `efficacy`) and keeps evidence signals decoupled from sequence generation.
+
+## Precise API contracts (v1)
+
+1) POST `/api/insights/predict_gene_essentiality`
+- Purpose: Quantify essentiality burden for a gene/variant set to strengthen “P”.
+- Request
+```json
+{
+  "gene": "TP53",
+  "variants": [{"chrom":"17","pos":7579472,"ref":"C","alt":"T","hgvs_p":"p.Arg248Gln"}],
+  "model_id": "evo2_7b",
+  "options": {"adaptive": true, "ensemble": true}
+}
+```
+- Process: Triumvirate
+  - Truncation check (deterministic CDS translation → stop/frameshift flags)
+  - Evo2 delta aggregation across windows; optional exon worst‑case
+  - Pathway mapping to a normalized essentiality_score [0,1]
+- Response
+```json
+{
+  "gene":"TP53",
+  "essentiality_score": 0.82,
+  "flags": {"truncation": false, "frameshift": false},
+  "rationale": {"sequence":0.31, "pathway":0.55, "notes":"RAS/TP53 burden"},
+  "confidence": 0.72,
+  "evidence_manifest": {"citations": ["PMID:xxxxxx"], "clinvar": {...}}
+}
+```
+
+2) POST `/api/insights/predict_protein_functionality_change`
+- Purpose: Protein‑level support for mechanism; strengthens “S/E”.
+- Request
+```json
+{"gene":"BRAF","hgvs_p":"p.Val600Glu","model_id":"evo2_7b"}
+```
+- Process (v1): Evo2 delta + optional ESM embedding (stub). Design a `source":"esm_stub"` field ready to swap for AF3 later.
+- Response
+```json
+{
+  "gene":"BRAF","hgvs_p":"p.Val600Glu",
+  "functionality_change_score": 0.91,
+  "sources": ["evo2_delta","esm_stub"],
+  "domains": ["kinase"] ,
+  "confidence": 0.7,
+  "notes": "Strong disruption in kinase domain"
+}
+```
+
+3) POST `/api/design/generate_guide_rna`
+- Request `{ chrom,pos,ref,alt, pam?:"NGG", constraints?:{} }`
+- Process: Evo2 context‑guided proposals + simple heuristics (GC%, homopolymers); return candidates with `spacer_efficacy_heuristic` and placeholders for off‑target.
+- Response: `{ candidates:[{sequence, pam, gc, notes, spacer_efficacy_heuristic}] }`
+
+4) POST `/api/design/generate_repair_template`
+- Request `{ chrom,pos,ref,alt, hdr_window?:60 }`
+- Response `{ template, notes, constraints }`
+
+5) POST `/api/epi/predict_chromatin_accessibility`
+- Request `{chrom,pos,radius?:2000}`
+- Response `{ accessibility_score, method:"evo2_proxy", confidence }` (slot Enformer later)
+
+6) POST `/api/immuno/predict_immunogenicity` (stub)
+- Request `{ peptide?:string, cds?:string }`
+- Response `{ immunogenicity_score, method:"stub", confidence }`
+
+7) POST `/api/insights/predict_spacer_efficacy` (heuristic v1)
+- Request `{ spacer, target_sequence }`
+- Response `{ spacer_efficacy_score, features:{gc, secondary_motifs}, confidence }`
+
+8) POST `/api/design/optimize_codon_usage` (utility)
+- Request `{ cds, organism?:"human" }`
+- Response `{ optimized_cds, cai_before, cai_after }`
+
+All responses must include a `provenance` object `{ upstream_service, feature_flags_snapshot, operational_mode }` and log via Supabase with a `run_signature`.
+
+## Implementation guidance
+
+- Feature flags: introduce `ENABLE_INSIGHTS_API` (for `/api/insights`) and `ENABLE_DESIGN_API` (for `/api/design`) and per‑endpoint flags in [config.py](mdc:oncology-coPilot/oncology-backend-minimal/api/config.py). Each handler should short‑circuit with 403/501 when disabled.
+- Defensive calls (reference patterns in our code):
+  - Model fallback: see [api/routers/evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py) for 7B→40B fallback and warmup probes.
+  - Backoff/caching: see [api/routers/evidence.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evidence.py) for exponential backoff and in‑memory cache for literature.
+  - Orchestration and logging: see [api/routers/efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py) for configuration snapshots and Supabase logging.
+- Calibration: do not block responses on calibration; attach `{ calibration_source: "gene_specific"|"fallback", sample_size }` where appropriate. See [api/services/gene_calibration.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/gene_calibration.py).
+- Logging: call `log_evidence_run` with a summary and `weights_snapshot/gates_snapshot/feature_flags_snapshot` (see efficacy router pattern).
+- Testing: provide `curl` smoke tests in module docstrings and add unit tests under [api/tests](mdc:oncology-coPilot/oncology-backend-minimal/tests/) mirroring efficacy tests.
+
+## Dependencies & patterns (reference)
+
+- Runtime & libs: FastAPI, httpx, pydantic, uvicorn; Supabase client used in [api/services/supabase_service.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/supabase_service.py).
+- Env and flags: load via `dotenv` in [api/config.py](mdc:oncology-coPilot/oncology-backend-minimal/api/config.py); read with safe defaults and `.strip()`.
+- Endpoint style: async def with typed request dicts or local Pydantic models; try/except around upstream calls;
+  return structured JSON with `provenance` and `confidence`; follow `efficacy.py` response patterns for manifests.
+
+## Acceptance criteria
+
+1) Endpoints compile, appear in OpenAPI, and return deterministic JSON shapes with `provenance` and `confidence`.
+2) Feature flags toggle behavior correctly; disabled endpoints return 403/501 without side‑effects.
+3) Logs written to Supabase with configuration snapshots and run signatures.
+4) Efficacy layer can ingest the new fields later (e.g., essentiality_score, functionality_change_score) without breaking current contracts.
+
+## Rollout plan
+
+Order of implementation (highest impact → lowest):
+Discriminative first (evidence):
+1) `/api/insights/predict_gene_essentiality` (P)
+2) `/api/insights/predict_protein_functionality_change` (S/E)
+3) `/api/insights/predict_chromatin_accessibility` (editability context)
+4) `/api/insights/predict_spacer_efficacy` (practical guide quality)
+
+Generative second (design):
+5) `/api/design/generate_guide_rna` + `/api/design/generate_repair_template`
+6) `/api/design/optimize_codon_usage` and `/api/design/generate_regulatory_element`
+7) `/api/immuno/predict_immunogenicity` (may remain stub until model available)
+
+## Example curl (smoke)
+
+```bash
+curl -sS http://127.0.0.1:8000/api/insights/predict_gene_essentiality \
+  -H 'Content-Type: application/json' \
+  -d '{"gene":"TP53","variants":[{"chrom":"17","pos":7579472,"ref":"C","alt":"T","hgvs_p":"p.Arg248Gln"}],"model_id":"evo2_7b","options":{"adaptive":true,"ensemble":true}}'
+```
+
+## Non‑goals for this agent (handed to evidence owner)
+
+- Front‑end UI changes beyond wiring new fields (the evidence owner will revise cards/rationales).
+- Changes to weights/gates policy.
+- Massive‑mode semantics.
+
+## Notes
+
+- Follow project code style and keep modules small and auditable.
+- Prefer pure functions under `services/` and thin endpoints in `routers/`.
+- Reuse existing models `api/models/requests.py` and `responses.py` if helpful, or inline Pydantic models local to the router.
+
+Mission: Another agent will extend the oncology co‑pilot backend with new, orthogonal endpoints that improve evidence strength and separation for drug response, using our existing S/P/E foundation. This rule explains the architecture, where to connect code, the precise API contracts, gating/flags, and how to keep everything auditable and front‑end consumable.
+
+## Architecture overview
+
+- Backend app entry: [api/main.py](mdc:oncology-coPilot/oncology-backend-minimal/api/main.py)
+  - Routers included: `health`, `myeloma`, `evo`, `evidence`, `efficacy`.
+  - Startup/shutdown hooks: [api/startup.py](mdc:oncology-coPilot/oncology-backend-minimal/api/startup.py) — calibration preload/refresh.
+- Configuration: [api/config.py](mdc:oncology-coPilot/oncology-backend-minimal/api/config.py)
+  - Env‑config weights, gates, feature flags, operational mode.
+  - Use helpers: `get_evidence_weights()`, `get_evidence_gates()`, `get_feature_flags()`.
+- Evidence stack:
+  - Efficacy orchestrator: [api/routers/efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py)
+  - Evo proxies: [api/routers/evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py)
+  - Literature/ClinVar: [api/routers/evidence.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evidence.py)
+  - Calibration service: [api/services/gene_calibration.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/gene_calibration.py)
+  - Auditing: [api/services/supabase_service.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/supabase_service.py)
+
+Frontend integration points (read‑only for this agent):
+- Drug LoB: [EfficacyPanel.jsx](mdc:oncology-coPilot/oncology-frontend/src/features/efficacy/components/EfficacyPanel.jsx), [EfficacyCard.jsx](mdc:oncology-coPilot/oncology-frontend/src/features/efficacy/components/EfficacyCard.jsx), [EfficacyRationaleDrawer.jsx](mdc:oncology-coPilot/oncology-frontend/src/features/efficacy/components/EfficacyRationaleDrawer.jsx)
+- Variant insights: [MyelomaResponseDisplay.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/myeloma/MyelomaResponseDisplay.jsx)
+
+## Principles to preserve
+
+1) Evidence‑first: endpoints must add orthogonal signals that can raise evidence tiers (Supported/Consider/Insufficient) with transparent rationale and citations.
+2) Governance: all new endpoints sit behind feature flags in [config.py](mdc:oncology-coPilot/oncology-backend-minimal/api/config.py) and snapshot their configuration in Supabase logs.
+3) Safety: research/clinical modes must be respected; massive modes NEVER alter clinical tiers.
+4) Auditability: log request, response summary, configuration snapshots, and evidence_manifest via `log_evidence_run`/`log_evidence_items`.
+
+## Where to add code
+
+- Create a new router file: [api/routers/insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py)
+  - Define the new endpoints here (see Contracts below).
+  - Import `get_feature_flags`, `get_evidence_gates`, and `get_evidence_weights` from `config` when needed.
+  - Reuse evo proxy calls from [evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py).
+  - Log to Supabase through [supabase_service.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/supabase_service.py).
+- Wire the router in [api/main.py](mdc:oncology-coPilot/oncology-backend-minimal/api/main.py): `app.include_router(insights.router)`.
+- Add any shared helpers in [api/services](mdc:oncology-coPilot/oncology-backend-minimal/api/services) with small, focused modules (e.g., `protein_service.py`, `essentiality_service.py`).
+
+## Separation of Concerns: Discriminative vs Generative
+
+- Discriminative (Predictive, evidence‑producing) — names start with `predict_`:
+  - Produce scalar scores, flags, and rationales that feed S/P/E and evidence gates.
+  - Live under a dedicated router: [api/routers/insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py) with prefix `/api/insights`.
+  - Examples: `predict_gene_essentiality`, `predict_protein_functionality_change`, `predict_chromatin_accessibility`, `predict_spacer_efficacy`, `predict_immunogenicity`.
+
+- Generative (Design outputs) — names start with `generate_`:
+  - Produce candidate sequences/artifacts (guides, repair templates, optimized CDS/regulatory elements).
+  - Live under a separate router: [api/routers/design.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/design.py) with prefix `/api/design`.
+  - Examples: `generate_guide_rna`, `generate_repair_template`, `optimize_codon_usage`, `generate_regulatory_element`.
+
+This mirrors our existing modular routers (`evo`, `evidence`, `efficacy`) and keeps evidence signals decoupled from sequence generation.
+
+## Precise API contracts (v1)
+
+1) POST `/api/insights/predict_gene_essentiality`
+- Purpose: Quantify essentiality burden for a gene/variant set to strengthen “P”.
+- Request
+```json
+{
+  "gene": "TP53",
+  "variants": [{"chrom":"17","pos":7579472,"ref":"C","alt":"T","hgvs_p":"p.Arg248Gln"}],
+  "model_id": "evo2_7b",
+  "options": {"adaptive": true, "ensemble": true}
+}
+```
+- Process: Triumvirate
+  - Truncation check (deterministic CDS translation → stop/frameshift flags)
+  - Evo2 delta aggregation across windows; optional exon worst‑case
+  - Pathway mapping to a normalized essentiality_score [0,1]
+- Response
+```json
+{
+  "gene":"TP53",
+  "essentiality_score": 0.82,
+  "flags": {"truncation": false, "frameshift": false},
+  "rationale": {"sequence":0.31, "pathway":0.55, "notes":"RAS/TP53 burden"},
+  "confidence": 0.72,
+  "evidence_manifest": {"citations": ["PMID:xxxxxx"], "clinvar": {...}}
+}
+```
+
+2) POST `/api/insights/predict_protein_functionality_change`
+- Purpose: Protein‑level support for mechanism; strengthens “S/E”.
+- Request
+```json
+{"gene":"BRAF","hgvs_p":"p.Val600Glu","model_id":"evo2_7b"}
+```
+- Process (v1): Evo2 delta + optional ESM embedding (stub). Design a `source":"esm_stub"` field ready to swap for AF3 later.
+- Response
+```json
+{
+  "gene":"BRAF","hgvs_p":"p.Val600Glu",
+  "functionality_change_score": 0.91,
+  "sources": ["evo2_delta","esm_stub"],
+  "domains": ["kinase"] ,
+  "confidence": 0.7,
+  "notes": "Strong disruption in kinase domain"
+}
+```
+
+3) POST `/api/design/generate_guide_rna`
+- Request `{ chrom,pos,ref,alt, pam?:"NGG", constraints?:{} }`
+- Process: Evo2 context‑guided proposals + simple heuristics (GC%, homopolymers); return candidates with `spacer_efficacy_heuristic` and placeholders for off‑target.
+- Response: `{ candidates:[{sequence, pam, gc, notes, spacer_efficacy_heuristic}] }`
+
+4) POST `/api/design/generate_repair_template`
+- Request `{ chrom,pos,ref,alt, hdr_window?:60 }`
+- Response `{ template, notes, constraints }`
+
+5) POST `/api/epi/predict_chromatin_accessibility`
+- Request `{chrom,pos,radius?:2000}`
+- Response `{ accessibility_score, method:"evo2_proxy", confidence }` (slot Enformer later)
+
+6) POST `/api/immuno/predict_immunogenicity` (stub)
+- Request `{ peptide?:string, cds?:string }`
+- Response `{ immunogenicity_score, method:"stub", confidence }`
+
+7) POST `/api/insights/predict_spacer_efficacy` (heuristic v1)
+- Request `{ spacer, target_sequence }`
+- Response `{ spacer_efficacy_score, features:{gc, secondary_motifs}, confidence }`
+
+8) POST `/api/design/optimize_codon_usage` (utility)
+- Request `{ cds, organism?:"human" }`
+- Response `{ optimized_cds, cai_before, cai_after }`
+
+All responses must include a `provenance` object `{ upstream_service, feature_flags_snapshot, operational_mode }` and log via Supabase with a `run_signature`.
+
+## Implementation guidance
+
+- Feature flags: introduce `ENABLE_INSIGHTS_API` (for `/api/insights`) and `ENABLE_DESIGN_API` (for `/api/design`) and per‑endpoint flags in [config.py](mdc:oncology-coPilot/oncology-backend-minimal/api/config.py). Each handler should short‑circuit with 403/501 when disabled.
+- Defensive calls (reference patterns in our code):
+  - Model fallback: see [api/routers/evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py) for 7B→40B fallback and warmup probes.
+  - Backoff/caching: see [api/routers/evidence.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evidence.py) for exponential backoff and in‑memory cache for literature.
+  - Orchestration and logging: see [api/routers/efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py) for configuration snapshots and Supabase logging.
+- Calibration: do not block responses on calibration; attach `{ calibration_source: "gene_specific"|"fallback", sample_size }` where appropriate. See [api/services/gene_calibration.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/gene_calibration.py).
+- Logging: call `log_evidence_run` with a summary and `weights_snapshot/gates_snapshot/feature_flags_snapshot` (see efficacy router pattern).
+- Testing: provide `curl` smoke tests in module docstrings and add unit tests under [api/tests](mdc:oncology-coPilot/oncology-backend-minimal/tests/) mirroring efficacy tests.
+
+## Dependencies & patterns (reference)
+
+- Runtime & libs: FastAPI, httpx, pydantic, uvicorn; Supabase client used in [api/services/supabase_service.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/supabase_service.py).
+- Env and flags: load via `dotenv` in [api/config.py](mdc:oncology-coPilot/oncology-backend-minimal/api/config.py); read with safe defaults and `.strip()`.
+- Endpoint style: async def with typed request dicts or local Pydantic models; try/except around upstream calls;
+  return structured JSON with `provenance` and `confidence`; follow `efficacy.py` response patterns for manifests.
+
+## Acceptance criteria
+
+1) Endpoints compile, appear in OpenAPI, and return deterministic JSON shapes with `provenance` and `confidence`.
+2) Feature flags toggle behavior correctly; disabled endpoints return 403/501 without side‑effects.
+3) Logs written to Supabase with configuration snapshots and run signatures.
+4) Efficacy layer can ingest the new fields later (e.g., essentiality_score, functionality_change_score) without breaking current contracts.
+
+## Rollout plan
+
+Order of implementation (highest impact → lowest):
+Discriminative first (evidence):
+1) `/api/insights/predict_gene_essentiality` (P)
+2) `/api/insights/predict_protein_functionality_change` (S/E)
+3) `/api/insights/predict_chromatin_accessibility` (editability context)
+4) `/api/insights/predict_spacer_efficacy` (practical guide quality)
+
+Generative second (design):
+5) `/api/design/generate_guide_rna` + `/api/design/generate_repair_template`
+6) `/api/design/optimize_codon_usage` and `/api/design/generate_regulatory_element`
+7) `/api/immuno/predict_immunogenicity` (may remain stub until model available)
+
+## Example curl (smoke)
+
+```bash
+curl -sS http://127.0.0.1:8000/api/insights/predict_gene_essentiality \
+  -H 'Content-Type: application/json' \
+  -d '{"gene":"TP53","variants":[{"chrom":"17","pos":7579472,"ref":"C","alt":"T","hgvs_p":"p.Arg248Gln"}],"model_id":"evo2_7b","options":{"adaptive":true,"ensemble":true}}'
+```
+
+## Non‑goals for this agent (handed to evidence owner)
+
+- Front‑end UI changes beyond wiring new fields (the evidence owner will revise cards/rationales).
+- Changes to weights/gates policy.
+- Massive‑mode semantics.
+
+## Notes
+
+- Follow project code style and keep modules small and auditable.
+- Prefer pure functions under `services/` and thin endpoints in `routers/`.
+- Reuse existing models `api/models/requests.py` and `responses.py` if helpful, or inline Pydantic models local to the router.
+
+Mission: Another agent will extend the oncology co‑pilot backend with new, orthogonal endpoints that improve evidence strength and separation for drug response, using our existing S/P/E foundation. This rule explains the architecture, where to connect code, the precise API contracts, gating/flags, and how to keep everything auditable and front‑end consumable.
+
+## Architecture overview
+
+- Backend app entry: [api/main.py](mdc:oncology-coPilot/oncology-backend-minimal/api/main.py)
+  - Routers included: `health`, `myeloma`, `evo`, `evidence`, `efficacy`.
+  - Startup/shutdown hooks: [api/startup.py](mdc:oncology-coPilot/oncology-backend-minimal/api/startup.py) — calibration preload/refresh.
+- Configuration: [api/config.py](mdc:oncology-coPilot/oncology-backend-minimal/api/config.py)
+  - Env‑config weights, gates, feature flags, operational mode.
+  - Use helpers: `get_evidence_weights()`, `get_evidence_gates()`, `get_feature_flags()`.
+- Evidence stack:
+  - Efficacy orchestrator: [api/routers/efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py)
+  - Evo proxies: [api/routers/evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py)
+  - Literature/ClinVar: [api/routers/evidence.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evidence.py)
+  - Calibration service: [api/services/gene_calibration.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/gene_calibration.py)
+  - Auditing: [api/services/supabase_service.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/supabase_service.py)
+
+Frontend integration points (read‑only for this agent):
+- Drug LoB: [EfficacyPanel.jsx](mdc:oncology-coPilot/oncology-frontend/src/features/efficacy/components/EfficacyPanel.jsx), [EfficacyCard.jsx](mdc:oncology-coPilot/oncology-frontend/src/features/efficacy/components/EfficacyCard.jsx), [EfficacyRationaleDrawer.jsx](mdc:oncology-coPilot/oncology-frontend/src/features/efficacy/components/EfficacyRationaleDrawer.jsx)
+- Variant insights: [MyelomaResponseDisplay.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/myeloma/MyelomaResponseDisplay.jsx)
+
+## Principles to preserve
+
+1) Evidence‑first: endpoints must add orthogonal signals that can raise evidence tiers (Supported/Consider/Insufficient) with transparent rationale and citations.
+2) Governance: all new endpoints sit behind feature flags in [config.py](mdc:oncology-coPilot/oncology-backend-minimal/api/config.py) and snapshot their configuration in Supabase logs.
+3) Safety: research/clinical modes must be respected; massive modes NEVER alter clinical tiers.
+4) Auditability: log request, response summary, configuration snapshots, and evidence_manifest via `log_evidence_run`/`log_evidence_items`.
+
+## Where to add code
+
+- Create a new router file: [api/routers/insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py)
+  - Define the new endpoints here (see Contracts below).
+  - Import `get_feature_flags`, `get_evidence_gates`, and `get_evidence_weights` from `config` when needed.
+  - Reuse evo proxy calls from [evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py).
+  - Log to Supabase through [supabase_service.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/supabase_service.py).
+- Wire the router in [api/main.py](mdc:oncology-coPilot/oncology-backend-minimal/api/main.py): `app.include_router(insights.router)`.
+- Add any shared helpers in [api/services](mdc:oncology-coPilot/oncology-backend-minimal/api/services) with small, focused modules (e.g., `protein_service.py`, `essentiality_service.py`).
+
+## Separation of Concerns: Discriminative vs Generative
+
+- Discriminative (Predictive, evidence‑producing) — names start with `predict_`:
+  - Produce scalar scores, flags, and rationales that feed S/P/E and evidence gates.
+  - Live under a dedicated router: [api/routers/insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py) with prefix `/api/insights`.
+  - Examples: `predict_gene_essentiality`, `predict_protein_functionality_change`, `predict_chromatin_accessibility`, `predict_spacer_efficacy`, `predict_immunogenicity`.
+
+- Generative (Design outputs) — names start with `generate_`:
+  - Produce candidate sequences/artifacts (guides, repair templates, optimized CDS/regulatory elements).
+  - Live under a separate router: [api/routers/design.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/design.py) with prefix `/api/design`.
+  - Examples: `generate_guide_rna`, `generate_repair_template`, `optimize_codon_usage`, `generate_regulatory_element`.
+
+This mirrors our existing modular routers (`evo`, `evidence`, `efficacy`) and keeps evidence signals decoupled from sequence generation.
+
+## Precise API contracts (v1)
+
+1) POST `/api/insights/predict_gene_essentiality`
+- Purpose: Quantify essentiality burden for a gene/variant set to strengthen “P”.
+- Request
+```json
+{
+  "gene": "TP53",
+  "variants": [{"chrom":"17","pos":7579472,"ref":"C","alt":"T","hgvs_p":"p.Arg248Gln"}],
+  "model_id": "evo2_7b",
+  "options": {"adaptive": true, "ensemble": true}
+}
+```
+- Process: Triumvirate
+  - Truncation check (deterministic CDS translation → stop/frameshift flags)
+  - Evo2 delta aggregation across windows; optional exon worst‑case
+  - Pathway mapping to a normalized essentiality_score [0,1]
+- Response
+```json
+{
+  "gene":"TP53",
+  "essentiality_score": 0.82,
+  "flags": {"truncation": false, "frameshift": false},
+  "rationale": {"sequence":0.31, "pathway":0.55, "notes":"RAS/TP53 burden"},
+  "confidence": 0.72,
+  "evidence_manifest": {"citations": ["PMID:xxxxxx"], "clinvar": {...}}
+}
+```
+
+2) POST `/api/insights/predict_protein_functionality_change`
+- Purpose: Protein‑level support for mechanism; strengthens “S/E”.
+- Request
+```json
+{"gene":"BRAF","hgvs_p":"p.Val600Glu","model_id":"evo2_7b"}
+```
+- Process (v1): Evo2 delta + optional ESM embedding (stub). Design a `source":"esm_stub"` field ready to swap for AF3 later.
+- Response
+```json
+{
+  "gene":"BRAF","hgvs_p":"p.Val600Glu",
+  "functionality_change_score": 0.91,
+  "sources": ["evo2_delta","esm_stub"],
+  "domains": ["kinase"] ,
+  "confidence": 0.7,
+  "notes": "Strong disruption in kinase domain"
+}
+```
+
+3) POST `/api/design/generate_guide_rna`
+- Request `{ chrom,pos,ref,alt, pam?:"NGG", constraints?:{} }`
+- Process: Evo2 context‑guided proposals + simple heuristics (GC%, homopolymers); return candidates with `spacer_efficacy_heuristic` and placeholders for off‑target.
+- Response: `{ candidates:[{sequence, pam, gc, notes, spacer_efficacy_heuristic}] }`
+
+4) POST `/api/design/generate_repair_template`
+- Request `{ chrom,pos,ref,alt, hdr_window?:60 }`
+- Response `{ template, notes, constraints }`
+
+5) POST `/api/epi/predict_chromatin_accessibility`
+- Request `{chrom,pos,radius?:2000}`
+- Response `{ accessibility_score, method:"evo2_proxy", confidence }` (slot Enformer later)
+
+6) POST `/api/immuno/predict_immunogenicity` (stub)
+- Request `{ peptide?:string, cds?:string }`
+- Response `{ immunogenicity_score, method:"stub", confidence }`
+
+7) POST `/api/insights/predict_spacer_efficacy` (heuristic v1)
+- Request `{ spacer, target_sequence }`
+- Response `{ spacer_efficacy_score, features:{gc, secondary_motifs}, confidence }`
+
+8) POST `/api/design/optimize_codon_usage` (utility)
+- Request `{ cds, organism?:"human" }`
+- Response `{ optimized_cds, cai_before, cai_after }`
+
+All responses must include a `provenance` object `{ upstream_service, feature_flags_snapshot, operational_mode }` and log via Supabase with a `run_signature`.
+
+## Implementation guidance
+
+- Feature flags: introduce `ENABLE_INSIGHTS_API` (for `/api/insights`) and `ENABLE_DESIGN_API` (for `/api/design`) and per‑endpoint flags in [config.py](mdc:oncology-coPilot/oncology-backend-minimal/api/config.py). Each handler should short‑circuit with 403/501 when disabled.
+- Defensive calls (reference patterns in our code):
+  - Model fallback: see [api/routers/evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py) for 7B→40B fallback and warmup probes.
+  - Backoff/caching: see [api/routers/evidence.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evidence.py) for exponential backoff and in‑memory cache for literature.
+  - Orchestration and logging: see [api/routers/efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py) for configuration snapshots and Supabase logging.
+- Calibration: do not block responses on calibration; attach `{ calibration_source: "gene_specific"|"fallback", sample_size }` where appropriate. See [api/services/gene_calibration.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/gene_calibration.py).
+- Logging: call `log_evidence_run` with a summary and `weights_snapshot/gates_snapshot/feature_flags_snapshot` (see efficacy router pattern).
+- Testing: provide `curl` smoke tests in module docstrings and add unit tests under [api/tests](mdc:oncology-coPilot/oncology-backend-minimal/tests/) mirroring efficacy tests.
+
+## Dependencies & patterns (reference)
+
+- Runtime & libs: FastAPI, httpx, pydantic, uvicorn; Supabase client used in [api/services/supabase_service.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/supabase_service.py).
+- Env and flags: load via `dotenv` in [api/config.py](mdc:oncology-coPilot/oncology-backend-minimal/api/config.py); read with safe defaults and `.strip()`.
+- Endpoint style: async def with typed request dicts or local Pydantic models; try/except around upstream calls;
+  return structured JSON with `provenance` and `confidence`; follow `efficacy.py` response patterns for manifests.
+
+## Acceptance criteria
+
+1) Endpoints compile, appear in OpenAPI, and return deterministic JSON shapes with `provenance` and `confidence`.
+2) Feature flags toggle behavior correctly; disabled endpoints return 403/501 without side‑effects.
+3) Logs written to Supabase with configuration snapshots and run signatures.
+4) Efficacy layer can ingest the new fields later (e.g., essentiality_score, functionality_change_score) without breaking current contracts.
+
+## Rollout plan
+
+Order of implementation (highest impact → lowest):
+Discriminative first (evidence):
+1) `/api/insights/predict_gene_essentiality` (P)
+2) `/api/insights/predict_protein_functionality_change` (S/E)
+3) `/api/insights/predict_chromatin_accessibility` (editability context)
+4) `/api/insights/predict_spacer_efficacy` (practical guide quality)
+
+Generative second (design):
+5) `/api/design/generate_guide_rna` + `/api/design/generate_repair_template`
+6) `/api/design/optimize_codon_usage` and `/api/design/generate_regulatory_element`
+7) `/api/immuno/predict_immunogenicity` (may remain stub until model available)
+
+## Example curl (smoke)
+
+```bash
+curl -sS http://127.0.0.1:8000/api/insights/predict_gene_essentiality \
+  -H 'Content-Type: application/json' \
+  -d '{"gene":"TP53","variants":[{"chrom":"17","pos":7579472,"ref":"C","alt":"T","hgvs_p":"p.Arg248Gln"}],"model_id":"evo2_7b","options":{"adaptive":true,"ensemble":true}}'
+```
+
+## Non‑goals for this agent (handed to evidence owner)
+
+- Front‑end UI changes beyond wiring new fields (the evidence owner will revise cards/rationales).
+- Changes to weights/gates policy.
+- Massive‑mode semantics.
+
+## Notes
+
+- Follow project code style and keep modules small and auditable.
+- Prefer pure functions under `services/` and thin endpoints in `routers/`.
+- Reuse existing models `api/models/requests.py` and `responses.py` if helpful, or inline Pydantic models local to the router.

@@ -187,3 +187,242 @@ What remains (near‑term mandates)
 Operational posture
 - Live‑only doctrine stands: strict REF checks, no mocks, transparent errors. Profile/probe and provenance elevate trust and auditability for investor demos.
 - Fallback is temporary and visible: when used, results carry `fallback_used: true` and the actual upstream service.
+
+## Doctrine Update (v1.2) — Architecture, Data, APIs, and Experiments Agent
+
+### Why There Are Two Backends
+- Evo2 Modal Services (Model Backends): Live foundation models (7B/40B) deployed on Modal. They do the actual biological scoring and interpretability (variant, multi-window, exon-tight, profile, probe). These are GPU workloads with their own cold starts and scaling.
+- Vercel FastAPI Gateway (App Backend): A lightweight, orchestration/proxy layer that:
+  - Normalizes requests (batch handling, parsing `chr:pos REF>ALT`, build → assembly).
+  - Routes to the selected model (`evo2_7b`/`evo2_40b`) via `_choose_base`.
+  - Aggregates evidence, computes confidence, applies pathway decisioning, and emits Supabase analytics/events.
+  - Exposes a stable, UI-friendly API surface with provenance and non-fatal per-variant error handling.
+
+This separation keeps the UI and orchestration decoupled from GPU model lifecycles and lets us version policy/logic independently of the model images.
+
+### Data Sources and How We Collect Them
+- Live Evo2 scoring: All variant evidence comes from Modal endpoints (no mocks in the myeloma pipeline).
+- Reference integrity: Ensembl REST `sequence/region` used by `/api/evo/refcheck` to verify REF at (chrom,pos,assembly).
+- Benchmarking/labels: Panels generated from ClinVar summary with strict filters (expert panel / multi-submitters, allele sanity, hg38 coordinates). Script writes JSON artifacts for reproducibility.
+- Run analytics: Optional Supabase logging captures run-level and per-variant metrics plus job events for status ribbons and dashboards.
+
+### APIs We Call (Inventory)
+- Modal (model backends):
+  - `/score_variant` → delta at fixed window (8192)
+  - `/score_variant_multi` → min_delta across [1024, 2048, 4096, 8192]
+  - `/score_variant_exon` → exon-tight delta with flank (e.g., 600)
+  - `/score_delta` → sequence-to-sequence warmup/probe
+  - `/score_variant_profile` → local ±N bp profile (interpretability)
+  - `/score_variant_probe` → 3-alt sensitivity probe (interpretability)
+- Vercel FastAPI (gateway/orchestrator):
+  - `/api/predict/myeloma_drug_response` → batch scoring + decision + provenance
+  - `/api/evo/score_variant[_multi|_exon|_profile|_probe|_delta]` → thin proxies
+  - `/api/evo/warmup` → model warm start by `model_id`
+  - `/api/evo/refcheck` → Ensembl-backed REF validator
+  - `/api/twin/submit` → enqueue a run and emit events (returns `run_signature`)
+  - `/api/twin/status` → read job state from Supabase (events + summary)
+  - `/api/analytics/dashboard` → summary/time series/model comparison (reads Supabase)
+
+All responses echo provenance: `mode`, `selected_model`, `upstream_service`, and per-variant rationale/confidence where applicable.
+
+### Provenance, Logging, and Status
+- Supabase (optional, controlled by env):
+  - `mdt_events(run_signature, stage, message, t)` — lifecycle/status for ribbons.
+  - `mdt_runs(run_signature, model_id, prediction, ras_sum, tp53_sum, num_variants, upstream, alt_model, agree_rate, created_at)` — run summaries.
+  - `mdt_run_variants(run_signature, gene, chrom, pos, zeta, min_delta, exon_delta, confidence, call, raw)` — per-variant records.
+- Backend never fails a user request due to logging; inserts are fire-and-forget.
+
+### Current Capabilities (v1.2)
+- Multi-variant batch scoring with strict REF validation and non-fatal per-variant error handling.
+- Model selection (7B/40B), warmup, and dual-model comparison (agreement rate).
+- Confidence scoring from effect size, window consistency, exon corroboration with human‑readable rationale.
+- Interpretability features: local delta profiles and 3‑alt probes (parity on 7B; 40B supported directly where available).
+- Pathway aggregation for myeloma decisioning (RAS/MAPK, TP53) with visible thresholds.
+- Provenance on every response plus Ensembl links for manual audit.
+- Optional analytics: job ribbons via events, run/variant analytics in Supabase, dashboard endpoint.
+
+### Limitations and Risks
+- Cold start latency on Modal; long windows increase cost/latency.
+- Delta magnitudes can be modest for some loci; requires calibrated thresholds and benchmarks.
+- 40B/7B parity for all interpretability endpoints must be maintained; version drift is a risk.
+- External dependencies (Ensembl API) can be flaky; we handle errors but expose them.
+
+### Next Tasks — Experiments Agent & Console
+- Build an “Experiments Console” that lets users/agents compose, run, and compare experiments across models/windows/flanks:
+  - Direct invocations of gateway APIs: `/api/evo/*`, `/api/predict/myeloma_drug_response`, `/api/twin/*` with saved presets.
+  - Live result streams from `mdt_events` and automatic pinning of artifacts (JSON downloads per step).
+  - Side‑by‑side comparisons (model, window, exon flank) with diff of deltas/profiles/probes.
+- Agent capabilities:
+  - Generate experiment plans, execute batches (chunked), retry on transient errors.
+  - Auto‑validate REF via `/api/evo/refcheck` and correct inputs when possible.
+  - Record all runs to Supabase with tags/notes; surface a mini analytics rollup per campaign.
+  - Trigger nightly/weekly benchmark jobs; compute AUROC/AUPRC and calibration; publish to dashboard.
+- Parity hardening:
+  - Ensure `/score_variant_profile` and `/score_variant_probe` are fully native on 40B with identical schema and provenance fields.
+- Threshold calibration:
+  - Calibrate pathway thresholds on curated panels; version and display configs; add guardrails for regression.
+
+### Quick Start for Another LLM/Agent
+- Choose model: set `model_id` to `evo2_7b` or `evo2_40b`.
+- Warmup: POST `/api/evo/warmup` with `{ "model_id": "evo2_7b" }`.
+- Batch run: POST `/api/predict/myeloma_drug_response` with `mutations[]` entries like `{ gene, hgvs_p, variant_info: "chr7:140753336 A>T", build: "hg38" }`.
+- Evidence: call `/api/evo/score_variant_profile` and `/api/evo/score_variant_probe` for any variant to enrich the record.
+- Orchestrate as a job: `/api/twin/submit` then poll `/api/twin/status` using `run_signature`.
+- Log and analyze: ensure Supabase env vars are set; read `mdt_*` tables to populate dashboards.
+
+Status: Active (v1.2). The platform is live-only, provenance-first, and ready for an Experiments Agent to automate comparative studies and benchmark‑driven calibration.
+
+## Extraction & Agents Doctrine (v1.3)
+
+### Goal
+End-to-end capability to: (1) extract and normalize all relevant data (genes, variants, coordinates, endpoints, provenance), (2) make it visible in the app for inspection and experimentation, and (3) enable autonomous agents to plan, execute, and log experiments using our services.
+
+### Backend Strategy: Minimal Gateway vs Legacy Agents Backend
+- Minimal Gateway (Vercel FastAPI):
+  - Pros: Simple, deploys fast, has stable API contracts, already used for myeloma, includes orchestration endpoints (`/api/twin/*`), proxies, provenance, and Supabase logging.
+  - Cons: Does not include complex multi-agent runners or long-running pipelines out of the box.
+- Legacy Agents Backend (oncology-backend):
+  - Pros: Rich agent scaffolding (tools, orchestrators), more primitives for complex workflows.
+  - Cons: Heavier footprint, more coupling and maintenance, slower iteration for demo-driven work.
+
+Doctrine Decision: Build new extraction and experiment capabilities on the Minimal Gateway first for speed and clarity, while exposing clean APIs that agents (in the legacy backend or future services) can also consume. Agents live “above” the gateway; the gateway is the single point of truth and logging.
+
+### What We Used for Myeloma (Repeatable Pattern)
+- Data sources:
+  - ClinVar summary → curated, labeled panel (scripted filters for confidence and allele sanity)
+  - Ensembl `sequence/region` → REF integrity checks
+  - Live Evo2 Modal endpoints → zeta/min_delta/exon_delta/profile/probe
+- Orchestration:
+  - `/api/predict/myeloma_drug_response` for batch scoring, confidence, pathway aggregation, provenance
+  - `/api/evo/refcheck` for REF validation
+  - Optional: `/api/twin/submit` + `/api/twin/status` for background execution and job ribbons
+- Logging/Visibility:
+  - Supabase `mdt_runs`, `mdt_run_variants`, `mdt_events` for analytics and status
+  - Frontend panels showing raw JSON, Ensembl links, rationale, and per-variant evidence
+
+This pipeline is domain-agnostic; swapping the panel source and decision layer yields a new use-case.
+
+### How to Repeat for Another Use-Case
+1) Define the variant universe: ingest a ClinVar-derived panel for the target disease (script parameterized by gene list or disease term); validate to hg38 and alleles.
+2) Evidence collection plan:
+   - REF validation via `/api/evo/refcheck`
+   - Scoring via `/api/predict/...` (or raw `/api/evo/*` if you want atomic steps)
+   - Interpretability via `/api/evo/score_variant_profile` and `/api/evo/score_variant_probe`
+3) Decision layer: implement a pathway or mechanism-specific aggregator and thresholds (config-driven) in the gateway; version and return in `threshold_config`.
+4) Visibility:
+   - UI: Experiments Console with per-variant cards (zeta/min_delta/exon_delta/confidence, profile/probe, provenance)
+   - Downloadable artifacts (JSON), Ensembl region links, and rationale text
+5) Logging:
+   - Ensure Supabase env vars are set; write runs/variants/events; power dashboard and ribbons
+6) Benchmarking:
+   - Run curated panels nightly via a small script or agent; compute AUROC/AUPRC/calibration and store summary metrics
+
+### Agents: Architecture and Capabilities
+- Placement: Agents sit above the Minimal Gateway and call its APIs. They do not directly call Modal.
+- Capabilities:
+  - Plan experiment matrices (model, windows, exon flanks, variant sets) and execute in chunks
+  - Auto REF-check and fix inputs (hg19→hg38 mapping if needed as a future enhancement)
+  - Retry on transient failures; respect timeouts; warm models first
+  - Record every run with tags/notes; write per-variant results and events
+  - Generate comparative reports (model parity, effect distributions, calibration plots)
+  - Trigger and validate nightly benchmarks; gate threshold updates on metrics
+- Minimal API surface for agents (already live):
+  - `/api/evo/warmup`, `/api/evo/refcheck`
+  - `/api/predict/myeloma_drug_response` (or use-case specific `/api/predict/...`)
+  - `/api/evo/score_variant[_multi|_exon|_profile|_probe|_delta]`
+  - `/api/twin/submit` + `/api/twin/status`
+  - `/api/analytics/dashboard`
+
+### App Capabilities to Build for Visibility
+- Experiments Console (UI):
+  - Input presets (gene lists, variant strings), batch editor, and validation badges
+  - Model selector, windows/flank controls, dual-compare toggle
+  - Live status ribbon powered by `mdt_events` (supabase)
+  - Per-variant evidence cards with profile/probe viewers, rationale, and provenance
+  - Compare view: side-by-side deltas/profiles/probes across models/windows
+  - Export: JSON bundles per run and CSV summaries
+- Admin/Analytics:
+  - Dashboard view backed by `/api/analytics/dashboard` + direct reads from `mdt_*`
+  - Run filters by model, date, tag; quick links to raw artifacts
+
+### Build Plan (Incremental)
+- Phase 1 (Gateway-first):
+  - Add generic `/api/predict/<use_case>` endpoint template (configurable pathway aggregators)
+  - Harden `/api/evo/*` proxies with consistent provenance + error bodies
+  - Ship Experiments Console MVP (UI) with Supabase-backed ribbons
+- Phase 2 (Agents):
+  - Implement a lightweight Agent Runner that reads an experiment spec (JSON), executes via gateway APIs, logs to Supabase, and emits a report
+  - Add nightly benchmark agent; store metrics and trendlines; alert on regressions
+- Phase 3 (Calibration & Extensibility):
+  - Calibrate thresholds per use-case from curated panels; version and surface
+  - Add genome build mapping utilities; extend beyond SNVs as feasible
+
+Status: Active (v1.3). We will center all extraction, visibility, and automation on the Minimal Gateway to maintain a single, auditable interface. Agents orchestrate experiments via gateway APIs and persist outcomes to Supabase for dashboards and continuous evaluation.
+
+## Scale-Out Doctrine (v1.4) — Unified Predict API, Config-Driven Use‑Cases, SAE Integration
+
+### Unified API for All Use‑Cases
+- Generic orchestrator endpoint:
+  - `POST /api/predict`
+  - Request:
+    ```json
+    {
+      "use_case_id": "myeloma",
+      "model_id": "evo2_7b",
+      "mutations": [
+        { "gene": "KRAS", "hgvs_p": "p.Gly12Asp", "variant_info": "chr12:25245350 C>T", "build": "hg38" }
+      ],
+      "options": { "dual_compare": false, "windows": [1024,2048,4096,8192], "exon_flank": 600 },
+      "tags": { "cohort": "demo" }
+    }
+    ```
+  - Response (always includes): `prediction`, `pathway_scores|risk_summary`, `detailed_analysis`, `selected_model`, `threshold_config`, `run_signature`, `mode`, `upstream_service`, optional `dual_compare`, `use_case_id`, `policy_version`.
+- Discovery endpoints:
+  - `GET /api/use_cases` → list available `UseCaseConfig`s
+  - `GET /api/use_cases/{id}` → fetch config and policy metadata
+- Keep atomic Evo2 proxies `/api/evo/*` and job orchestrators `/api/twin/*` as-is.
+- Backward compatibility: keep `/api/predict/myeloma_drug_response` as an alias that forwards to `/api/predict` with `use_case_id="myeloma"`.
+
+### Config-Driven Orchestration (Repeatable Pattern)
+- `UseCaseConfig` (data-only): `id`, optional `panel_genes`, `pathways`, ordered `evidence_steps` (e.g., [multi, exon, profile, probe]), `decision_policy_id`, `ui_layout` hints.
+- `DecisionPolicy`: weights, thresholds, mapping from evidence → verdict fields; versioned (`policy_version`).
+- Evidence Runner (single implementation):
+  - Steps per config: REF-check → multi-window → exon-tight → optional profile/probe.
+  - Output per variant: `zeta_score`, `min_delta`, `window_used`, `exon_delta`, optional `profile`, `probe`, `confidence_score`, `confidence_reason`, `rationale`, provenance.
+- Decision Engine (single implementation):
+  - Applies `DecisionPolicy` to evidence; returns `prediction`, scores, and `threshold_config`.
+- Logging (Supabase): unchanged `mdt_runs`, `mdt_run_variants`, `mdt_events`; attach `use_case_id`, `policy_version`, and `tags` in `raw` or new columns.
+
+### DRY Frontend Components for Scale
+- Shared primitives: `VariantInputList`, `ModelSelector`, `RunControls`, `JobStatusRibbon`, `EvidenceCard`, `ProfileViewer`, `ProbeViewer`, `ResultsSummary`, `EvidencePanel` (provenance + JSON download), `ExperimentsConsole` (compose and run specs).
+- Config registry: frontend loads `use_cases` and renders a generic `UseCaseRunner` → only the config changes per use-case.
+- Comparison views: side‑by‑side model/window/flank diffs with overlay on profile/probe viewers.
+
+### SAE Integration (Sparse Autoencoders) — Interpretability Roadmap
+- Rationale: Evo2’s SAE features provide mechanistic interpretability (e.g., exons/introns, TFBS, secondary structure). We surface these as evidence and for activation steering experiments.
+- Backend endpoints (Phase 2; contingent on model support):
+  - `POST /api/evo/sae/features` → return top‑k feature activations near a variant or within a defined window. Request: { assembly, chrom, pos, flank, k }. Response: { features: [{ id, name?, activation, span, annotation? }], provenance }.
+  - `POST /api/evo/sae/attribution` → attribute delta to top features. Request: variant payload + options. Response: { attributions: [{ feature_id, contribution }], total_delta }.
+  - `POST /api/evo/sae/steer` → apply activation steering to test causal effect on the local likelihood profile. Request: variant + { steer:{ feature_id: weight } }. Response: { profile_before, profile_after, steer_config }.
+- Logging schema additions (Supabase):
+  - New table `mdt_variant_features` (optional): `run_signature`, `gene`, `chrom`, `pos`, `feature_id`, `activation`, `span`, `annotation`, `created_at`.
+  - Or store SAE results in `mdt_run_variants.raw` under a `features` key for simplicity.
+- UI additions:
+  - Feature Panel: bar chart of top‑k activations with annotations; click to highlight spans on profile.
+  - Steering Controls: sliders per feature; overlay “before vs after” curves in `ProfileViewer`.
+  - Provenance badges: model id, SAE dict version, upstream URL.
+
+### Scale & DRY Guarantees
+- One predict endpoint, one evidence runner, one decision engine.
+- UseCaseConfigs and DecisionPolicies are the levers to create/switch use-cases.
+- Modal services remain model‑only; gateway owns orchestration and policies.
+- Agents sit above gateway APIs; they never bind to Modal internals.
+
+### Immediate Tasks to Enable Scale
+- Add endpoints: `GET /api/use_cases`, `GET /api/use_cases/{id}`, `POST /api/predict`.
+- Create `config/use_cases.py` and `config/decision_policies.py` (seed with `myeloma`, `hereditary_breast_cancer`).
+- Extract current logic into `services/evidence_runner.py` and `services/decision_engine.py` and wire `/api/predict`.
+- Frontend: scaffold `ExperimentsConsole` and reuse existing evidence components.
+- SAE: define request/response schemas and stubs; implement behind a feature flag; no‑op until model support lands.
+
+Status: Active (v1.4). The platform is standardized for rapid, configuration‑driven use‑case creation with a clear path to SAE‑powered interpretability and agent‑driven experimentation.

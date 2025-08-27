@@ -1,0 +1,66 @@
+---
+title: Simple Evidence Doctrine (S/P/E) — How Our Evidence Works
+---
+
+# Simple Evidence Doctrine (S/P/E) — How Our Evidence Works
+
+## What counts as evidence?
+- **S = Sequence signal** (from Evo2): How much the DNA change disrupts sequence likelihood.
+- **P = Pathway burden**: Aggregate effect across patient variants on key pathways (e.g., RAS/MAPK, TP53).
+- **E = External priors**: ClinVar classification/review + PubMed literature (Diffbot extraction + LLM synthesis).
+
+We combine S/P/E → a tier (“supported / consider / insufficient”) and a confidence.
+
+## Key truths (simple)
+- **Single-base variants rarely score big in Evo2**: Small Δ is normal. Don’t chase a big number.
+- **Massive synthetic scores are demos, not clinical**:
+  - `massive_impact` = 50kb synthetic contrast → big numbers; demo only.
+  - `massive_real_context` = real GRCh38 ±25kb → often still small for SNVs.
+- **Real decisions come from P and E**: pathway burden across all patient variants + ClinVar/literature gates.
+
+## What the API returns (readable fields)
+- `scoring_mode`: `standard_evo` | `massive_real` | `massive_impact`
+- `scoring_strategy`: how we measured (window/flank/approach)
+- `sequence_details[].impact_level`: no/minor/moderate/major/catastrophic (magnitude label)
+- `drugs[].badges`: `PathwayAligned`, `ClinVar-Strong`, `RCT`, `Guideline`
+- `drugs[].evidence_manifest`:
+  - `pubmed_query`
+  - `citations` (pmid, title, publication_types)
+  - `clinvar` (classification, review_status)
+
+## How we decide tiers (Evidence Gates)
+- **Supported**: RCT/Guideline evidence OR (ClinVar-Strong + PathwayAligned)
+- **Consider**: Partial evidence without gates
+- **Insufficient**: S < 0.02, P < 0.05, E < 0.2
+
+## How to improve signal (practical)
+- **For S (Sequence)**: Adaptive windows [8k, 12k, 16k, 25k, 50k], exon-aligned view, fwd/rev averaging, model ensemble (1B/7B/40B), percentile calibration.
+- **For P (Pathway)**: Sum sequence_disruption across all variants before drug weights.
+- **For E (Priors/Lit)**: ClinVar classification + review status; PubMed → Diffbot → LLM; cache + show citations.
+
+## Where to look in code
+- Backend evidence logic: [efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py)
+- Evo2 proxy scoring: [evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py)
+- Literature agent: [evidence.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evidence.py)
+- Frontend efficacy UI: 
+  - Panel: [EfficacyPanel.jsx](mdc:oncology-coPilot/oncology-frontend/src/features/efficacy/components/EfficacyPanel.jsx)
+  - Card: [EfficacyCard.jsx](mdc:oncology-coPilot/oncology-frontend/src/features/efficacy/components/EfficacyCard.jsx)
+  - Details drawer: [EfficacyRationaleDrawer.jsx](mdc:oncology-coPilot/oncology-frontend/src/features/efficacy/components/EfficacyRationaleDrawer.jsx)
+  - Legend: [EfficacyLegend.jsx](mdc:oncology-coPilot/oncology-frontend/src/features/efficacy/components/EfficacyLegend.jsx)
+  - Page: [MyelomaDigitalTwin.jsx](mdc:oncology-coPilot/oncology-frontend/src/pages/MyelomaDigitalTwin.jsx)
+
+## Plain-English summary
+- Small Evo2 scores for SNVs are expected; use them, don’t overfit them.
+- Show how we measured (strategy), label the mode (standard vs massive), and cite evidence (manifest).
+- Promote recommendations with gates (pathway + priors/lit), not raw Δ.
+
+## Patentable capabilities (platform co-inventor)
+- **Adaptive S/P/E Orchestration**: A configurable pipeline that fuses Evo2 sequence scoring, pathway aggregation, and literature/ClinVar priors with Evidence Gates and confidence calibration. Novel orchestration + calibration can be protectable as a method.
+- **Evidence Manifest Layer**: Structured, query-reproducible evidence (citations, claims, priors) tied to every recommendation; supports automated disclosure and co-inventor audit trails.
+- **Massive-Mode Labeling and Governance**: Dual-mode scoring with explicit safety labeling (synthetic vs real context) and policy gates to prevent misuse in clinical inference.
+- **Percentile Calibration & Gate Design**: Lightweight, disease-configurable percentile mapping and promotion criteria that convert weak S into rigorous, interpretable decisions via P/E.
+- **Agentic Literature Synthesis**: PubMed → Diffbot → LLM claims extraction bound to manifest keys, enabling reusable evidence across drugs/variants with caching and TTL.
+
+globs:
+alwaysApply: false
+---

@@ -13,7 +13,9 @@ import logging
 
 # It's critical to be able to import from the tools directory.
 import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+# CORRECTED PATHING LOGIC: Add the project's root `src` directory to the path
+# to ensure that the `tools` module can be found during the Modal build process.
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
 from tools.alphamissense_client import AlphaMissenseClient
 from tools.esm_client import ESMClient
@@ -36,14 +38,14 @@ fusion_image = (
         "numpy" # Explicitly add numpy to resolve dependency issue.
     )
     # Copy the 'tools' directory into the container image at build time.
-    .add_local_dir("./tools", remote_path="/root/tools")
+    .add_local_dir("src/tools", remote_path="/root/tools")
 )
 
 # Define the volume where our large data files are stored.
 alphamissense_volume = modal.Volume.from_name("alphamissense-data")
 
 # --- App Definition ---
-app = modal.App("fusion-engine-v1", image=fusion_image)
+app = modal.App("fusion-engine", image=fusion_image)
 
 # --- Pydantic Models for API Validation (Corrected Structure) ---
 class VariantInput(BaseModel):

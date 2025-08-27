@@ -1,0 +1,74 @@
+# CrisPRO Patent Doctrine — Evidence‑First Evo2 Pipeline
+
+Use this doctrine when drafting claims, specs, or disclosures related to our live, interpretable variant‑effect prediction pipeline. It defines what we can credibly claim (pipeline/method/system), what to avoid (OSS model weights), and how to ground filings with concrete references and artifacts.
+
+## Scope
+- Protect the pipeline’s methods, system architecture, data hygiene, provenance, evidence fusion, confidence calculus, and orchestration.
+- Do not attempt to claim the open‑source Evo2 model or its weights; keep claims model‑agnostic (“a sequence likelihood model”).
+
+## Novel, Claimable Inventions
+- **Strict REF‑allele validation in a live pipeline**: verify reference base at \(chrom, pos\); annotate per‑variant failure without aborting batch; propagate upstream errors with body excerpts.
+- **Multi‑view evidence fusion for variant effect prediction** combining:
+  - Multi‑window delta (zeta) scoring with windows in [1k, 8k].
+  - Exon‑tight corroboration with flank \(f\) in [200, 1000] (default 600).
+  - Local delta profile over radius \(r\) in [50, 200] (default 100).
+  - 3‑alt sensitivity probe at the locus.
+- **Confidence calculus** (example enablement):
+  - \(s_1 = \min(1, |\text{min}\,\Delta|/k)\) with \(k\in[0.3,1.0]\); effect size.
+  - \(s_2\) exon corroboration: 1.0 if same‑sign and \(|\Delta_{exon}|\ge|\text{min}\,\Delta|\); 0.5 if same‑sign; else 0.0.
+  - Window consistency \(s_3 = 1 - \operatorname{stdev}(\Delta_w)/\max(0.05, |\text{min}\,\Delta|)\).
+  - Confidence = \(0.5\,s_1 + 0.3\,s_2 + 0.2\,s_3\) (weights may be parameterized).
+- **Pathway aggregation** from per‑variant impacts to decision with tunable gene weights and threshold (e.g., RAS/MAPK sum threshold 2.0; weights for KRAS/NRAS/BRAF).
+- **Provenance‑first protocol**: signed `run_signature` over inputs; echo `selected_model`, `upstream_service`, request schema; downloadable request/response JSON.
+- **Serverless‑oriented orchestration**: warmup endpoint; long‑timeout routing; chunked batch execution (e.g., 10–20 variants/request); non‑fatal per‑variant errors; aggregate results post‑hoc.
+- **ClinVar‑driven benchmark constructor**: high‑confidence review filters (expert panel or criteria‑provided/no conflicts), VCF allele preference, optional sample Ensembl validation, per‑gene balancing, provenance CSV emission.
+
+## What Not to Claim
+- Evo2 weights or training; generic “use a model to predict variant effect” (pre‑empted).
+- Generic confidence scoring absent our specific fusion and corroboration logic.
+
+## Independent Claim Templates (Illustrative)
+- **Method claim**: Receiving a genomic variant (chr, pos, REF>ALT); verifying REF against a reference; computing (i) multi‑window delta, (ii) exon‑tight delta at flank f, (iii) local delta profile within radius r, and (iv) 3‑alt probe; computing confidence as a weighted function of effect size, exon corroboration, and window consistency; aggregating gene‑weighted impacts to a pathway score; emitting a decision and a signed provenance record.
+- **System claim**: A gateway, model service, and orchestrator that chunk variant lists, perform warmup, propagate upstream errors with body excerpts, preserve per‑variant failures, and return combined artifacts with `run_signature`, `selected_model`, and `upstream_service` identifiers.
+- **Data‑construction claim**: Transforming ClinVar variant_summary to a labeled, balanced benchmark via specified review filters, allele/position normalization (VCF columns, hg38), optional sample Ensembl validation, and provenance CSV.
+
+## Enablement — Parameters & Algorithms
+- Windows: [1024, 2048, 4096, 8192]; choose min‑Δ as primary effect.
+- Exon flank: 600 default; valid range [200, 1000].
+- Profile radius: 100 default; valid range [50, 200].
+- Confidence weights: [0.5, 0.3, 0.2] baseline with stated calculus above.
+- Aggregation: RAS/MAPK threshold 2.0; gene weights e.g., {KRAS:1.3, NRAS:1.3, BRAF:1.3, OTHER:0.6, TP53:0.7}.
+- Error handling: propagate upstream HTTP body excerpts; mark per‑variant errors; continue batch.
+
+## Code & Artifact References (for spec)
+- Live proxy and endpoints: [api/index.py](mdc:oncology-coPilot/oncology-backend-minimal/api/index.py)
+- Evo2 service endpoints (profile/probe/exon/multi): [src/services/evo_service/main.py](mdc:src/services/evo_service/main.py)
+- Benchmark runner (chunked): [scripts/run_myeloma_benchmark.py](mdc:scripts/run_myeloma_benchmark.py)
+- ClinVar panel generator: [scripts/generate_clinvar_panel.py](mdc:scripts/generate_clinvar_panel.py)
+- Demo plan & doctrine: [docs/myeloma_e2e_demo_plan.md](mdc:docs/myeloma_e2e_demo_plan.md), [docs/evo2_endpoint_refactor_plan.md](mdc:docs/evo2_endpoint_refactor_plan.md)
+- Frontend evidence UI: [MyelomaResponseDisplay.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/myeloma/MyelomaResponseDisplay.jsx)
+
+## Filing Checklist
+1. Include algorithms (formulas, parameter ranges), schemas, endpoint suite, confidence function, orchestration (chunking, warmup), error handling, and benchmark generator details.
+2. Attach artifacts (raw results, metrics, calibration tables, signed runs; panel provenance CSV).
+3. Keep model‑agnostic language (“sequence likelihood model”); confirm OSS license compliance.
+4. Add a second family if needed for “benchmarks + provenance pipeline”.
+
+## Royalty / Terms Integration
+- Reference IP monetization doctrine; add co‑inventor royalty disclosure and contribution tracking in UI and TOS.
+- UI hooks: [TherapeuticBlueprint.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/dossier/canisters/TherapeuticBlueprint.jsx), [ConquestStages.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/dossier/canisters/ConquestStages.jsx)
+
+## Prior Art Pointers (Search Focus)
+- Multi‑window delta + exon corroboration for variant effect.
+- Local delta profiles and multi‑alt probes as predictive evidence.
+- Confidence as normalized window‑variance fused with exon corroboration.
+- Serverless batch orchestration with non‑fatal per‑variant errors and provenance‑first reporting.
+
+## Messaging Guidance (for abstracts/executive summaries)
+- “Evidence‑first AI: every score comes with its receipts.”
+- “Live, interpretable, reproducible—benchmarked on high‑confidence ClinVar.”
+- Position claims around the pipeline (methods/systems), not the OSS model.
+description:
+globs:
+alwaysApply: false
+---

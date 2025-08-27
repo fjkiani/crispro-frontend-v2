@@ -256,3 +256,136 @@ The AI-Powered CRISPR Design Ecosystem is a revolutionary platform designed to t
 *   **Core Capabilities & Innovation:** Deep Genomic & Epigenomic Insight (Discriminative AI); Intelligent Biological Design (Generative AI); Comprehensive In Silico Validation (AlphaFold 3 Integration); and Modular AI Agent Orchestration.
 *   **Key Use Cases & Impact:** Precision Oncology (Targeted Cancer Therapy Design, Metastatic Cascade Intervention) and Proactive Genetic Health & Prevention (Hereditary Cancer Risk Management, Newborn Genetic Screening & Intervention).
 *   **Differentiation & Vision:** Our platform uniquely bridges the gap between the vastness of genomic data and actionable clinical utility. By overcoming the interpretability challenges of existing genetic tests and leveraging AI for de novo biological design, we enable a future where cancer treatments are more precise, effective, and personalized, building on the legacy of the Human Genome Project to accelerate precision medicine.
+
+---
+
+## Implementation Details (Build Plan)
+
+### /predict_variant_impact
+- Inputs
+  - Genomic: {assembly, chrom, pos, ref, alt} or Sequences: {ref_sequence, alt_sequence}
+  - Window: 8,192 nt centered on variant; for indels pad/trim flanks to keep total length constant
+- Algorithm
+  - Use Evo2.score_sequences([ref, alt]); delta_likelihood_score = alt_ll - ref_ll (more negative = more disruptive)
+  - Optional: expose SAE-based explainability (exon start/end, intron, TF motif proximity, frameshift/stop features)
+- Output
+  - {delta_likelihood_score, ref_likelihood, alt_likelihood, pathogenicity_prediction?, feature_disruption_scores?}
+- Notes
+  - Batch scoring support; validate nucleotides; cap sequence length; reject viral genomes only for generation endpoints (scoring allowed on host)
+  - Tests: ClinVar SNV/non-SNV coding/noncoding subsets; expect trends per paper
+
+### /predict_gene_essentiality
+- Inputs
+  - Gene locus or transcript sequence; organism; optional context tag
+- Algorithm
+  - KO proxy (protein-coding): insert premature stop codons at multiple offsets; delta = KO_ll - WT_ll aggregated to essentiality_score
+  - lncRNA: scramble 100‑bp tiles at Cas13 guide positions; average delta over tiles (paper Fig 2J)
+- Output
+  - {essentiality_score, essentiality_category, method, evidence}
+- Notes
+  - Controls: gene position, conservation; logistic baseline; datasets: DEG, phage, lncRNA essentiality
+
+### /predict_crispr_spacer_efficacy
+- Inputs
+  - {spacer_sequence, pam, target_locus, assembly}
+- Algorithm
+  - Simulate typical repair outcomes (frameshift/small indels) in target window; score via /predict_variant_impact; combine using empirical indel priors into efficacy_score
+- Output
+  - {efficacy_score, frameshift_proxy, mean_delta_ll, details}
+- Notes
+  - Off-target not here (handled in guide design); sanity: efficacy correlates with frameshift proxy
+
+### /predict_chromatin_accessibility
+- Inputs
+  - {sequence or locus+assembly, optional context (cell type/tissue)}
+- Algorithm
+  - Tier 1: Evo2 likelihood + SAE TF motif activations as proxy score
+  - Tier 2: Call Enformer/Borzoi to produce tracks; average/summarize into accessibility_score
+- Output
+  - {accessibility_score, accessibility_state?, tracks?}
+- Notes
+  - DART-Eval Tasks 1/2/5 for validation; cache external model calls
+
+### /predict_protein_functionality_change
+- Inputs
+  - {wt_sequence, mut_sequence} or {coding_sequence_ref, coding_sequence_alt}
+- Algorithm
+  - Prefer DNA-mode delta on coding sequences (robust for indels); or protein-mode embeddings as proxy
+  - Map delta to functionality_change; optionally include stability/folding proxy via ESM/AlphaFold 3 when available
+- Output
+  - {protein_functionality_score_change, refs: {DMS_correlation}}
+
+### /generate_optimized_guide_rna
+- Inputs
+  - {target_locus, assembly, pam, num_candidates, constraints}
+- Algorithm
+  - Generate candidates in window; score on-target via /predict_crispr_spacer_efficacy; prune off-targets via BLAST; ensure accessibility via /predict_chromatin_accessibility; rank Pareto front
+- Output
+  - {guides: [{sequence, on_target, off_target, accessibility, composite_score}]}
+- Notes
+  - Deterministic seed option; report trace for explainability
+
+### /generate_repair_template
+- Inputs
+  - {target_locus, desired_edit, homology_arm_length, num_candidates}
+- Algorithm
+  - Generate HDR templates; maximize Evo2 likelihood of full template; optional penalties for repeats/GC extremes
+- Output
+  - {templates: [{sequence, likelihood, qc}]}
+
+### /generate_epigenome_optimized_sequence
+- Inputs
+  - {genomic_context, target_pattern (binary/continuous), compute_budget_tok_per_bp, beam:{chunks,keep}, chunk_len}
+- Algorithm
+  - Beam-search autoregressive generation; score after each 128‑bp chunk with Enformer/Borzoi ensemble; keep top‑k; continue to length (paper Methods 4.6)
+- Output
+  - {designed_sequence, auroc, tracks}
+- Notes
+  - Enforce non-viral guard; record token/bp for reproducibility
+
+### /generate_optimized_regulatory_element
+- Inputs
+  - {expression_goal, TF motif profile, length, context}
+- Algorithm
+  - Reuse epigenome design; add motif constraints (SAE motif activations + TOMTOM match); multi-objective rank
+- Output
+  - {sequence, motif_hits, predicted_accessibility}
+
+### /generate_therapeutic_protein_coding_sequence
+- Inputs
+  - {desired_function, protein_family, length_constraints, expression_organism}
+- Algorithm
+  - Generate candidates; score function via /predict_protein_functionality_change; validate structure via AlphaFold 3; return ranked set
+- Output
+  - {candidates: [{dna, protein, function_score, structure_score}]}
+
+### /exon_intron_map
+- Inputs
+  - {sequence, window, stride}
+- Algorithm
+  - Extract embeddings from selected block; MLP classifier outputs p_exon/p_intron per position; aggregate intervals
+- Output
+  - {positions:[{idx, p_exon, p_intron}], intervals}
+
+### /brca_classifier
+- Inputs
+  - {gene: BRCA1|BRCA2, ref_context_8192, alt_context_8192}
+- Algorithm
+  - Extract embeddings (block 20 for 40B); average 128‑nt windows around variant for ref/alt; concatenate; 3‑layer MLP → prob_pathogenic (paper Fig 3G–I)
+- Output
+  - {prob_pathogenic, evidence:{block, window_nt}}
+
+---
+
+## Operational Considerations
+- Performance
+  - Default to evo2_7b_base for scoring; 40B for premium tier or batch offline
+  - Batch score_sequences for throughput; cache results by (context, variant)
+- Reliability
+  - Guardrails: sequence validation, max lengths, timeouts; circuit breakers for external models
+- Security & Compliance
+  - Reject generation of human viral proteins; log design intents; PHI not required for these endpoints
+- Versioning
+  - Semantic versions for each endpoint; include model/version in response meta
+- Testing
+  - Golden sets per paper (ClinVar, SpliceVarDB, BRCA1/2, DART‑Eval, ProteinGym); CI checks AUROC/AUPRC bounds

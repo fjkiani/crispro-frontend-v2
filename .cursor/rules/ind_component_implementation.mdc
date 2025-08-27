@@ -1,0 +1,355 @@
+# 🛠️ IND COMPONENT IMPLEMENTATION PATTERNS
+
+## **COMPONENT HIERARCHY & PROPS STRUCTURE**
+
+### **Standard Props Interface**
+All IND components must follow this interface pattern:
+
+```javascript
+interface INDComponentProps {
+  analysisData: {
+    oracle: OracleResults,
+    forge: ForgeResults, 
+    gauntlet: GauntletResults,
+    metadata: DossierMetadata
+  },
+  sectionConfig: {
+    fdaSection: string,           // e.g., "4.2 Primary Pharmacodynamics"
+    requirements: string[],       // FDA requirements for this section
+    evidenceWeight: number        // 1-5 (5 = critical for IND)
+  },
+  onExport?: (content: string) => void,
+  editable?: boolean
+}
+```
+
+## **🎯 REUSABLE COMPONENT PATTERNS**
+
+### **1. Evidence Mapping Component**
+**File Pattern:** `components/dossier/ind/common/EvidenceMapper.jsx`
+
+```jsx
+const EvidenceMapper = ({ 
+  analysisResult,     // Raw analysis data
+  fdaRequirement,     // Specific FDA requirement
+  mappingFunction,    // How to transform our data
+  evidenceStrength    // Calculated strength score
+}) => {
+  return (
+    <Card sx={{ border: `2px solid ${getStrengthColor(evidenceStrength)}` }}>
+      <CardHeader>
+        <Typography variant="h6">{fdaRequirement}</Typography>
+        <EvidenceStrengthBadge strength={evidenceStrength} />
+      </CardHeader>
+      <CardContent>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+          <Box flex={1}>
+            <Typography variant="subtitle2">Our Evidence:</Typography>
+            <Typography>{mappingFunction(analysisResult)}</Typography>
+          </Box>
+          <Box>
+            <ComplianceIndicator 
+              requirement={fdaRequirement}
+              evidence={analysisResult}
+            />
+          </Box>
+        </Box>
+      </CardContent>
+    </Card>
+  );
+};
+```
+
+### **2. Section Template Pattern**
+**File Pattern:** `components/dossier/ind/sections/BaseSectionTemplate.jsx`
+
+```jsx
+const BaseSectionTemplate = ({ 
+  sectionNumber,
+  sectionTitle, 
+  children,
+  completionPercentage,
+  exportHandler 
+}) => {
+  return (
+    <Paper sx={{ p: 4, mb: 3 }}>
+      {/* Standard FDA Section Header */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+        <Typography variant="h4">
+          Section {sectionNumber}: {sectionTitle}
+        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <CompletionProgress percentage={completionPercentage} />
+          <ExportButton onExport={exportHandler} />
+        </Box>
+      </Box>
+      
+      {/* Section Content */}
+      <Box>{children}</Box>
+      
+      {/* Footer with regulatory references */}
+      <RegulatoryFooter sectionNumber={sectionNumber} />
+    </Paper>
+  );
+};
+```
+
+### **3. Content Generation Pattern**
+**File Pattern:** `components/dossier/ind/templates/ContentGenerator.js`
+
+```javascript
+// Dynamic content generation based on analysis results
+export const generateRegulatoryText = (template, analysisData) => {
+  return template
+    .replace(/\{\{oracle\.zetaScore\}\}/g, analysisData.oracle.zetaScore)
+    .replace(/\{\{forge\.efficacy\}\}/g, analysisData.forge.averageEfficacy)
+    .replace(/\{\{gauntlet\.safety\}\}/g, analysisData.gauntlet.selectivityRatio)
+    // Add validation for required fields
+    .replace(/\{\{(\w+\.\w+)\}\}/g, (match, field) => {
+      console.warn(`Missing data for template field: ${field}`);
+      return `[${field} - DATA REQUIRED]`;
+    });
+};
+
+// Regulatory language helpers
+export const wrapInRegulatoryLanguage = (dataPoint, context) => {
+  const confidence = calculateConfidence(dataPoint);
+  const qualifier = confidence > 90 ? "demonstrates" : 
+                   confidence > 70 ? "indicates" : "suggests";
+  
+  return `Computational analysis ${qualifier} ${dataPoint} ${context}`;
+};
+```
+
+## **📋 SPECIFIC SECTION IMPLEMENTATIONS**
+
+### **Executive Summary Section**
+**File:** `[ExecutiveSummarySection.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/dossier/ind/sections/ExecutiveSummarySection.jsx)`
+
+```jsx
+const ExecutiveSummarySection = ({ analysisData }) => {
+  const summaryData = {
+    targetName: analysisData.metadata.targetName,
+    indication: analysisData.metadata.indication,
+    zetaScore: analysisData.oracle.zetaScore,
+    therapeuticCount: analysisData.forge.candidates.length,
+    safetyMargin: analysisData.gauntlet.selectivityRatio
+  };
+
+  return (
+    <BaseSectionTemplate 
+      sectionNumber="1" 
+      sectionTitle="Executive Summary"
+      completionPercentage={calculateCompleteness(summaryData)}
+    >
+      <EvidenceMapper 
+        analysisResult={summaryData}
+        fdaRequirement="Drug development rationale and strategy"
+        mappingFunction={generateExecutiveSummary}
+        evidenceStrength={95}
+      />
+      
+      <RegulatorySubsection title="1.1 Drug Development Background">
+        {generateRegulatoryText(TEMPLATES.executiveSummary, analysisData)}
+      </RegulatorySubsection>
+      
+      <RegulatorySubsection title="1.2 Clinical Development Plan">
+        {generateRegulatoryText(TEMPLATES.developmentPlan, analysisData)}
+      </RegulatorySubsection>
+    </BaseSectionTemplate>
+  );
+};
+```
+
+### **Nonclinical Pharmacology Section**
+**File:** `[NonclinicalPharmacologySection.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/dossier/ind/sections/NonclinicalPharmacologySection.jsx)`
+
+```jsx
+const NonclinicalPharmacologySection = ({ analysisData }) => {
+  const pharmacologyEvidence = [
+    {
+      requirement: "Primary pharmacodynamics (MOA)",
+      evidence: analysisData.oracle.functionalImpact,
+      mapping: (data) => `Target engagement confirmed via Zeta Score ${data.zetaScore}`,
+      strength: 88
+    },
+    {
+      requirement: "Secondary pharmacodynamics (selectivity)",
+      evidence: analysisData.gauntlet.selectivityData,
+      mapping: (data) => `${data.selectivityRatio}x selectivity vs normal tissue`,
+      strength: 92
+    }
+  ];
+
+  return (
+    <BaseSectionTemplate 
+      sectionNumber="4" 
+      sectionTitle="Nonclinical Pharmacology and Toxicology"
+    >
+      {pharmacologyEvidence.map((item, index) => (
+        <EvidenceMapper 
+          key={index}
+          analysisResult={item.evidence}
+          fdaRequirement={item.requirement}
+          mappingFunction={item.mapping}
+          evidenceStrength={item.strength}
+        />
+      ))}
+    </BaseSectionTemplate>
+  );
+};
+```
+
+## **🔄 DATA TRANSFORMATION UTILITIES**
+
+### **Analysis Data Normalizer**
+**File:** `[AnalysisDataNormalizer.js](mdc:oncology-coPilot/oncology-frontend/src/components/dossier/ind/utils/AnalysisDataNormalizer.js)`
+
+```javascript
+export const normalizeForIND = (rawAnalysisData) => {
+  return {
+    oracle: {
+      zetaScore: rawAnalysisData.oracle?.data?.endpoints?.[0]?.demoData?.delta_likelihood_score || null,
+      functionalImpact: rawAnalysisData.oracle?.data?.endpoints?.[0]?.demoData?.pathogenicity_prediction || null,
+      therapeuticWindow: rawAnalysisData.oracle?.data?.endpoints?.[1]?.demoData?.therapeutic_window || null
+    },
+    forge: {
+      candidates: rawAnalysisData.forge?.data?.endpoints?.map(endpoint => ({
+        type: endpoint.id.includes('guide') ? 'CRISPR' : 'inhibitor',
+        efficacy: endpoint.demoData?.predicted_efficacy || endpoint.demoData?.binding_affinity,
+        sequence: endpoint.demoData?.candidate_1?.sequence || null
+      })) || []
+    },
+    gauntlet: {
+      selectivityRatio: rawAnalysisData.gauntlet?.data?.endpoints?.[0]?.demoData?.selectivity_ratio || null,
+      structuralConfidence: rawAnalysisData.gauntlet?.data?.endpoints?.[0]?.demoData?.confidence || null
+    }
+  };
+};
+```
+
+### **Compliance Calculator**
+**File:** `[ComplianceCalculator.js](mdc:oncology-coPilot/oncology-frontend/src/components/dossier/ind/utils/ComplianceCalculator.js)`
+
+```javascript
+export const calculateSectionCompleteness = (sectionData, fdaRequirements) => {
+  const addressedRequirements = fdaRequirements.filter(req => 
+    hasEvidence(sectionData, req.field)
+  );
+  return (addressedRequirements.length / fdaRequirements.length) * 100;
+};
+
+export const assessEvidenceStrength = (dataPoint) => {
+  if (!dataPoint) return 0;
+  
+  // Computational evidence scoring
+  if (typeof dataPoint === 'number') {
+    return Math.min(Math.abs(dataPoint) * 10, 100); // Scale appropriately
+  }
+  
+  // Categorical evidence scoring
+  const strengthMap = {
+    'HIGH-CONFIDENCE': 95,
+    'CONFIRMED': 90,
+    'PREDICTED': 75,
+    'ESTIMATED': 60
+  };
+  
+  return strengthMap[dataPoint.toUpperCase()] || 50;
+};
+```
+
+## **📤 EXPORT & DOCUMENT GENERATION**
+
+### **PDF Export Component**
+**File:** `[INDDocumentExporter.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/dossier/ind/export/INDDocumentExporter.jsx)`
+
+```jsx
+import { jsPDF } from 'jspdf';
+
+const INDDocumentExporter = ({ analysisData, selectedSections }) => {
+  const generatePDF = () => {
+    const doc = new jsPDF();
+    
+    // FDA-compliant document formatting
+    doc.setFont('helvetica');
+    doc.setFontSize(12);
+    
+    // Title page
+    doc.text('INVESTIGATIONAL NEW DRUG APPLICATION', 20, 30);
+    doc.text(`Target: ${analysisData.metadata.targetName}`, 20, 50);
+    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 20, 70);
+    
+    // Table of contents
+    doc.addPage();
+    doc.text('TABLE OF CONTENTS', 20, 30);
+    
+    selectedSections.forEach((section, index) => {
+      const content = generateSectionContent(section, analysisData);
+      doc.addPage();
+      doc.text(`Section ${section.number}: ${section.title}`, 20, 30);
+      doc.text(content, 20, 50, { maxWidth: 170 });
+    });
+    
+    return doc;
+  };
+
+  return (
+    <Button 
+      variant="contained" 
+      onClick={() => generatePDF().save('IND-Package.pdf')}
+      startIcon={<PictureAsPdfIcon />}
+    >
+      Export IND Package
+    </Button>
+  );
+};
+```
+
+## **🎯 VALIDATION & QUALITY CHECKS**
+
+### **Content Validation Rules**
+```javascript
+const VALIDATION_RULES = {
+  requiredFields: [
+    'oracle.zetaScore',
+    'forge.candidates.length',
+    'gauntlet.selectivityRatio'
+  ],
+  minimumEvidenceStrength: 60,
+  requiredSections: [
+    'executiveSummary',
+    'nonclinicalPharmacology', 
+    'cmcManufacturing'
+  ]
+};
+
+export const validateINDPackage = (analysisData) => {
+  const errors = [];
+  
+  VALIDATION_RULES.requiredFields.forEach(field => {
+    if (!getNestedField(analysisData, field)) {
+      errors.push(`Missing required data: ${field}`);
+    }
+  });
+  
+  return {
+    isValid: errors.length === 0,
+    errors,
+    completeness: calculateOverallCompleteness(analysisData)
+  };
+};
+```
+
+## **💡 IMPLEMENTATION PRIORITIES**
+
+1. **Phase 1:** Build `BaseSectionTemplate` and `EvidenceMapper` core components
+2. **Phase 2:** Implement `ExecutiveSummarySection` and data normalization
+3. **Phase 3:** Add remaining sections and export functionality
+4. **Phase 4:** Implement validation and compliance checking
+
+This component architecture ensures that every piece of our AI analysis directly maps to FDA requirements while maintaining DRY principles and reusability across different targets and therapeutics.
+description:
+globs:
+alwaysApply: false
+---

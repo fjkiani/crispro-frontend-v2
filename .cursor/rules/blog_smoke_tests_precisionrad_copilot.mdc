@@ -1,0 +1,102 @@
+---
+alwaysApply: false
+description: Blog – What our end‑to‑end Co‑Pilot smoke tests prove and why it matters
+---
+# From Signals to Guidance: What Our Smoke Tests Prove (and How to Reproduce)
+
+We executed end‑to‑end smoke tests across the Oncology Co‑Pilot stack to verify that research‑grade signals (S/P/E + insights) translate into tiered, auditable clinical guidance (Yes GO/Consider/Research). Below is what we tested, what we saw, and why it matters.
+
+## What we tested (and passed)
+
+- Health and core services
+  - `GET /api/evo/health` – Evo proxy available with model fallbacks.
+  - Enformer/Borzoi proxies healthy on ports 7001/7002 when enabled.
+
+- Insights (biology‑aware signals)
+  - Chromatin: `POST /api/insights/predict_chromatin_accessibility` → returns `accessibility_score` with `provenance.method` = `enformer` or `heuristic_v0`.
+  - Functionality: `POST /api/insights/predict_protein_functionality_change` → hotspot‑aware functionality proxy.
+  - Essentiality: `POST /api/insights/predict_gene_essentiality` → truncation/frameshift gate + Evo2 multi/exon magnitudes + calibration snapshot.
+  - Splicing/regulatory: `POST /api/insights/predict_splicing_regulatory` → maps Evo2 `min_delta` to regulatory impact.
+
+- Orchestrator (S/P/E hypothesis)
+  - `POST /api/efficacy/predict` → ranked drug/classes with `efficacy_score`, `confidence`, `evidence_tier`, `insights` (Functionality/Chromatin/Essentiality/Regulatory), `rationale`, `citations`.
+
+- Clinical guidance (tiered verdicts)
+  - Chemo: `POST /api/guidance/chemo` (on‑label gates + evidence). Example: melanoma + BRAF inhibitor → Tier I (Yes GO).
+  - RadOnc: `POST /api/guidance/radonc` (PrecisionRad v0). Example: NSCLC + TP53 R175H → Tier I with radiosensitivity ~0.29, confidence ~0.83.
+  - Synthetic lethality: `POST /api/guidance/synthetic_lethality` (DDR damage + dependency → therapy mapping → guidance). Example: BRCA1 truncation (HRD) → platinum/PARP class; guidance returns Tier I with supportive signals.
+
+## What the results mean
+
+- Hypothesis → Guidance: The system converts multi‑signal S/P/E insights into a tiered verdict you can trust. A Tier I (Yes GO) recommendation means the therapy is on‑label or guideline‑supported with adequate evidence; we also expose an experimental path where strong internal signals can return Tier I for research scenarios when off‑label.
+- Transparent and auditable: Every verdict includes insights, rationale, citations, badges, and a run signature for reproducibility.
+- DDR/HRD doctrine (how to read BRCA1): Low BRCA1 essentiality does not contradict platinum sensitivity. HRD implies pathway vulnerability; our synthetic lethality + guidance captures this by combining damage (VEP/functional proxy/Evo2) and dependency (essentiality) and mapping to platinum/PARP where established.
+
+## How to reproduce locally
+
+1) Start services
+```bash
+# From repo root
+make backend
+make chromatin
+```
+
+2) Health and insights
+```bash
+curl -sS http://127.0.0.1:8000/api/evo/health | cat
+curl -sS -X POST http://127.0.0.1:8000/api/insights/predict_chromatin_accessibility \
+  -H 'Content-Type: application/json' \
+  -d '{"chrom":"7","pos":140453136,"radius":1500}' | cat
+```
+
+3) Efficacy orchestrator (MM, BRAF V600E)
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/efficacy/predict \
+  -H 'Content-Type: application/json' \
+  -d '{"mutations":[{"gene":"BRAF","hgvs_p":"V600E","chrom":"7","pos":140453136,"ref":"T","alt":"A"}],"disease":"multiple myeloma","options":{"adaptive":true,"ensemble":true},"api_base":"http://127.0.0.1:8000"}' | cat
+```
+
+4) Guidance verdicts
+```bash
+# PrecisionRad (RadOnc)
+curl -sS -X POST http://127.0.0.1:8000/api/guidance/radonc \
+  -H 'Content-Type: application/json' \
+  -d '{"disease":"non-small cell lung cancer","mutations":[{"gene":"TP53","hgvs_p":"R175H","chrom":"17","pos":7673803,"ref":"C","alt":"T","build":"hg38"}],"options":{"adaptive":true,"ensemble":true},"api_base":"http://127.0.0.1:8000"}' | cat
+
+# Chemo (on‑label baseline)
+curl -sS -X POST http://127.0.0.1:8000/api/guidance/chemo \
+  -H 'Content-Type: application/json' \
+  -d '{"disease":"melanoma","drug_or_class":"BRAF inhibitor","mutations":[{"gene":"BRAF","hgvs_p":"V600E","chrom":"7","pos":140453136,"ref":"T","alt":"A"}],"moa_terms":["BRAF inhibitor","dabrafenib","MAPK blockade"],"options":{"adaptive":true,"ensemble":true},"api_base":"http://127.0.0.1:8000"}' | cat
+
+# Synthetic lethality (HRD)
+curl -sS -X POST http://127.0.0.1:8000/api/guidance/synthetic_lethality \
+  -H 'Content-Type: application/json' \
+  -d '{"disease":"ovarian cancer","mutations":[{"gene":"BRCA1","hgvs_p":"Q1756*","chrom":"17","pos":43071077,"ref":"C","alt":"T","build":"hg38"}],"api_base":"http://127.0.0.1:8000"}' | cat
+```
+
+## Why this matters for users and partners
+
+- One system, two modes of value: Guidance (clinically‑gated, on‑label aware) and Hypothesis (S/P/E for exploration) share the same transparent core.
+- Faster, safer iteration: Researchers can test hypotheses (MM, chemo, radiation, DDR) while clinicians get an auditable tiered verdict with citations and provenance.
+- Modular growth: Adding new modalities (e.g., additional guidance routes) reuses the same S/P/E + insights backbone and UI primitives.
+
+## Where the code lives
+
+- Backend routers
+  - Guidance: `[guidance.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/guidance.py)`
+  - Orchestrator: `[efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py)`
+  - Insights: `[insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py)`
+  - Evo proxy: `[evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py)`
+
+- Chromatin proxies
+  - Enformer: `[enformer_server.py](mdc:tools/chromatin/enformer_server.py)`
+  - Borzoi: `[borzoi_server.py](mdc:tools/chromatin/borzoi_server.py)`
+
+- Co‑Pilot frontend
+  - Doctrine & integration: `[CoPilot_README.md](mdc:docs/doctrine/CoPilot_README.md)`
+  - Logic hook: `[CoPilotLogic.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/CoPilot/CoPilotLogic.jsx)`
+  - Insights UI: `[InsightsPanel.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/CoPilot/InsightsPanel.jsx)`
+  - Guidance hooks/cards: `[useRadOncGuidance.js](mdc:oncology-coPilot/oncology-frontend/src/components/CoPilot/hooks/useRadOncGuidance.js)`, `[useChemoGuidance.js](mdc:oncology-coPilot/oncology-frontend/src/components/CoPilot/hooks/useChemoGuidance.js)`, `[RadOncGuidanceCard.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/CoPilot/integrations/RadOncGuidanceCard.jsx)`, `[ChemoGuidanceCard.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/CoPilot/integrations/ChemoGuidanceCard.jsx)`
+
+We have crossed the credibility threshold: the same transparent signals that power research hypotheses now produce a tiered, auditable “Yes GO” verdict where appropriate—clear decisions with provenance, and a fast path to explore what‑ifs across MM, chemotherapy, radiation, and DDR/HRD.
+

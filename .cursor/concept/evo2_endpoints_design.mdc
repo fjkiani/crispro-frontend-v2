@@ -1,0 +1,144 @@
+# Evo2 Endpoint Design Plan
+
+This document translates the Evo2 paper into concrete service endpoints for our platform. It focuses on oncology R&D de-risking and VUS resolution. It is a planning rule only; no code is included here.
+
+## Scope and Principles
+- Single model, two modes:
+  - Zero-shot scoring via delta log-likelihood (primary, robust, cheap)
+  - Embedding extraction to power light supervised heads for gene-specific classification (e.g., BRCA1)
+- Default genomic window: 8,192 nt centered on variant; configurable 4–8 kb; keep total length equal for indels.
+- Long-context tasks (≥100 kb) used selectively (e.g., retrieval tests, genome-scale design).
+- Security: Virus sequences that infect eukaryotes are out of scope by doctrine; no viral generation.
+
+## Endpoint Suite
+
+### 1) Variant Impact (Zero-shot)
+- Path: `/evo2/score_delta`
+- Purpose: Score pathogenicity proxy for any variant type (coding, noncoding, indels, splice) via delta likelihood.
+- Request:
+```json
+{
+  "ref_sequence": "ACGT...",   
+  "alt_sequence": "ACcT..."
+}
+```
+- Response:
+```json
+{
+  "ref_likelihood": -1234.56,
+  "alt_likelihood": -1250.90,
+  "delta_score": -16.34
+}
+```
+- Batch: `/evo2/score_batch` with `{ "pairs": [ {ref, alt}, ...] }` → `results[]` as above.
+- Notes: Client constructs sequences with equal window length; for indels, pad/trim context windows to keep total length invariant.
+
+### 2) Clinical VUS Resolution (Supervised on Embeddings)
+- Path: `/evo2/brca_classifier`
+- Purpose: Resolve VUS in BRCA1/BRCA2 using Evo2 embeddings + small MLP head; AUROC ~0.95 reported for BRCA1.
+- Request:
+```json
+{
+  "gene": "BRCA1",
+  "variant": "chr17:... A>G",
+  "reference_context": "... 8192nt ...",
+  "alternate_context": "... 8192nt ..."
+}
+```
+- Response:
+```json
+{
+  "prob_pathogenic": 0.87,
+  "evidence": {"embedding_block": 20, "window_nt": 128}
+}
+```
+- Notes: Embedding extraction from pre-normalization layer; default block 20 (40B) per paper; configurable.
+
+### 3) Splicing Impact (Zero-shot + Optional Head)
+- Path: `/evo2/score_splice`
+- Purpose: Predict splice-altering variant effects (SpliceVarDB SOTA); returns splice-risk score.
+- Request: same as score_delta, plus `"mode": "exonic"|"intronic"`.
+- Response: `{ "splice_score": float, "method": "delta_likelihood" }` and optionally `{ "prob_splice_disruption": float }` if head configured.
+
+### 4) Noncoding Regulatory Impact (DART-Eval tasks)
+- Path: `/evo2/score_regulatory`
+- Purpose: Likelihood-based cCRE vs control and TF motif detection tasks; returns regulatory-risk score.
+- Request:
+```json
+{ "sequence": "ACGT...", "task": "cCRE|TF|variant" }
+```
+- Response: `{ "score": float, "task": "..." }`
+
+### 5) lncRNA Essentiality Proxy
+- Path: `/evo2/lncrna_essentiality`
+- Purpose: Predict essentiality via scramble-based delta likelihood (paper Section 2.2, Fig S3H–I); logistic model optional.
+- Request: `{ "sequence": "lncRNA...", "positions": [ {"start": int, "end": int} ] }`
+- Response: `{ "delta_score": float, "prob_essential": float }`
+
+### 6) Exon/Intron Classifier (Embeddings)
+- Path: `/evo2/exon_intron_map`
+- Purpose: Per-base classification using embeddings; returns exon/intron probabilities for region.
+- Request: `{ "sequence": "...", "stride": 1, "window": 8192 }`
+- Response: `{ "positions": [ {"idx": int, "p_exon": float, "p_intron": float } ] }`
+
+### 7) Generative Sequence Completion
+- Path: `/evo2/generate_sequence`
+- Purpose: Genome/gene completion with prompt (1000bp upstream + 500–1000bp gene); returns continuation.
+- Request: `{ "prompt": "...", "n_tokens": int, "temperature": float, "top_k": int }`
+- Response: `{ "sequence": "..." }`
+- Caution: Not for viral proteins; input validation enforced.
+
+### 8) Generative Epigenomics (Guided Design)
+- Path: `/evo2/design_accessibility`
+- Purpose: Inference-time search guided by Enformer/Borzoi to match target chromatin accessibility pattern; returns designed DNA + predicted tracks.
+- Request (simplified):
+```json
+{
+  "genomic_context": {"assembly": "mm39", "chrom": "chrX", "start": 52051929, "end": 52123468},
+  "pattern": {"type": "morse", "message": "EVO2", "dot_bp": 384},
+  "beam": {"chunks": 42, "keep": 2},
+  "chunk_len": 128,
+  "compute_budget_tok_per_bp": 30
+}
+```
+- Response: `{ "designed_sequence": "...", "tracks": {"enformer": [...], "borzoi": [...]}, "auroc": 0.90 }`
+
+### 9) Long-Context Retrieval Check (Optional)
+- Path: `/evo2/needle_recall_test`
+- Purpose: Validate 1M-token retrieval for QC (needle-in-haystack metric r≥0.8). For internal diagnostics.
+
+## Input/Output Conventions
+- Sequences uppercase DNA; reverse complements allowed for robustness.
+- Indel handling keeps fixed window length by padding/trimming flanks.
+- For GRCh38/hg19 convenience, add helper to fetch windows by `(chrom, pos, ref, alt)` if provided; but core API consumes sequences.
+
+## Model/Runtime Strategy
+- Default model for scoring: `evo2_7b_base` (fast, strong scoring), optionally `evo2_40b` where resources allow.
+- Embedding blocks: default 20 (40B), configurable via query/body.
+- Hardware: A100/H100 recommended for 40B; 7B feasible on smaller GPUs.
+
+## Safety & Ethics
+- Reject requests that attempt human viral protein generation.
+- Log contexts and mask potentially dangerous prompt classes.
+
+## Integration Plan
+- Phase 1 (Scoring): `/score_delta`, `/score_batch`, `/score_splice`, `/score_regulatory`
+- Phase 2 (VUS heads): `/brca_classifier`, `/lncrna_essentiality`, `/exon_intron_map`
+- Phase 3 (Generation): `/generate_sequence`, `/design_accessibility` (with Enformer/Borzoi services)
+
+## Backend Wiring
+- Thin proxy routes in backend map 1:1 to these endpoints; base URL via `EVO_SERVICE_URL` env.
+- Frontend uses Oracle phase for zero-shot scores; Forge phase for design endpoints; Gauntlet for downstream validation/structure.
+
+## Testing & Metrics
+- Unit: shape checks, deterministic small windows.
+- Integration: BRCA1/2 published test sets; SpliceVarDB subset; DART-Eval tasks.
+- Performance: latency SLOs and GPU utilization.
+
+## References
+- [evo2-paper.txt](mdc:.cursor/concept/evo2-paper.txt)
+- Evo2 repos and tools (see paper references)
+description:
+globs:
+alwaysApply: false
+---

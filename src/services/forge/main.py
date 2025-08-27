@@ -61,7 +61,7 @@ evo2_image = (
 
 # --- App Definition ---
 app = modal.App(
-    "zeta-forge-v1", image=evo2_image, secrets=[modal.Secret.from_dotenv()]
+    "zeta-forge", image=evo2_image, secrets=[modal.Secret.from_dotenv()]
 )
 
 # --- SINGLE, SECURED FASTAPI APP ---
@@ -112,7 +112,7 @@ class ForgeStatusResponse(BaseModel):
 # --- Shared State ---
 # A modal.Dict is used to share state (job status) between the submission endpoint
 # and the background function running the computationally expensive forge loop.
-job_status_dict = modal.Dict.from_name("zeta-forge-job-status", create_if_missing=True)
+job_status_dict = modal.Dict.from_name("zeta-forge-jobs", create_if_missing=True)
 
 # --- Global FastAPI Endpoints ---
 @fastapi_app.post("/generate_inhibitor", status_code=202, response_model=JobSubmitResponse)

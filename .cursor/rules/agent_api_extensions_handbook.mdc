@@ -1,0 +1,173 @@
+---
+alwaysApply: false
+description: Complete execution handbook for the API Extensions + Command Center agent (Oracle/Forge) while evidence owner focuses on scoring
+---
+# API Extensions + Command Center — Agent Operations Handbook
+
+This handbook gives another agent end‑to‑end instructions to extend our backend with new capabilities and a slim orchestrator, while respecting our Oracle (discriminative) / Forge (generative) architecture. The evidence owner continues improving S/P/E and calibration.
+
+See companion rules: [agent_build_api_extensions.mdc](mdc:.cursor/rules/agent_build_api_extensions.mdc), [command_center_doctrine.mdc](mdc:.cursor/rules/command_center_doctrine.mdc)
+
+## Mission & Scope
+
+- Deliver new discriminative (predict_*) and generative (generate_*) endpoints under separate routers and wire a slim Command Center.
+- Ensure governance (feature flags, modes), provenance logging, and graceful fallbacks.
+- Do NOT change evidence policies/weights/gates or frontend visuals beyond JSON shape stability.
+
+## Ownership Map
+
+- You own (implement/edit):
+  - `api/routers/insights.py` (prefix `/api/insights`) — discriminative endpoints
+  - `api/routers/design.py` (prefix `/api/design`) — generative endpoints
+  - `api/routers/command_center.py` (prefix `/api/command`) — orchestrator
+  - `api/config.py` — add flags: `ENABLE_INSIGHTS_API`, `ENABLE_DESIGN_API`, `ENABLE_COMMAND_CENTER` (read‑only getters already exist)
+  - `api/main.py` — include new routers
+  - `api/services/*` — small helper modules per area (essentiality, protein, design heuristics)
+
+- Evidence owner owns (don’t modify):
+  - `api/routers/efficacy.py`, `api/routers/evidence.py`, `api/services/gene_calibration.py`, S/P/E weights/gates
+  - Frontend efficacy UI — they will read your new fields later
+
+## Architecture Guardrails
+
+- Discriminative vs Generative separation (strict):
+  - Predictive signals → `/api/insights/*` (no sequence generation)
+  - Design/candidates → `/api/design/*` (no tiering or gates)
+- Reuse Evo proxies in `api/routers/evo.py` for model calls (fallback: 7B→40B; warmup probes).
+- Centralized governance: respect `get_feature_flags()`, `is_research_mode()`; snapshot flags into responses and Supabase logs.
+
+## Endpoint Backlog (v1)
+
+Discriminative (`/api/insights`)
+1) `POST /predict_gene_essentiality`
+   - Inputs: `{ gene, variants[], model_id, options{adaptive,ensemble} }`
+   - Steps: truncation check → Evo2 delta aggregation → pathway map → `essentiality_score` [0,1]
+   - Output: `{ essentiality_score, flags{truncation,frameshift}, rationale, confidence, provenance }`
+
+2) `POST /predict_protein_functionality_change`
+   - Inputs: `{ gene, hgvs_p, model_id }`
+   - Steps: Evo2 delta + ESM stub (later AF3); return `functionality_change_score` and affected domains
+
+3) `POST /predict_chromatin_accessibility`
+   - Inputs: `{ chrom,pos,radius? }`
+   - Steps: Evo2 proxy heuristic now; slot Enformer later
+
+4) `POST /predict_spacer_efficacy`
+   - Inputs: `{ spacer, target_sequence }`
+   - Steps: composite heuristics (GC%, motifs) + confidence
+
+Generative (`/api/design`)
+5) `POST /generate_guide_rna` → `{ candidates:[{sequence,pam,gc,notes,spacer_efficacy_heuristic}] }`
+6) `POST /generate_repair_template` → `{ template, hdr_window, notes }`
+7) `POST /optimize_codon_usage` → `{ optimized_cds, cai_before, cai_after }`
+8) `POST /generate_regulatory_element` (optional stub)
+
+## Orchestrator (`/api/command`)
+
+1) `POST /run_evidence_bundle`: fan‑out to `/api/efficacy/predict` and key `/api/insights/*`; return bundle with snapshots + `run_signature`.
+2) `POST /run_design_bundle`: fan‑out to `/api/design/*` to produce guides/HDR.
+3) `POST /run_full_pipeline`: run evidence bundle → thresholded design bundle.
+
+## Implementation Steps
+
+1) Create routers and wire them
+   - `api/routers/insights.py` / `design.py` / `command_center.py`
+   - Add `app.include_router(...)` in `api/main.py`
+
+2) Add flags in `api/config.py`
+   - `ENABLE_INSIGHTS_API`, `ENABLE_DESIGN_API`, `ENABLE_COMMAND_CENTER` (bools, default false for prod safety)
+   - Each handler checks flags and returns 403/501 if disabled
+
+3) Build `predict_gene_essentiality` first
+   - Truncation check helper in `api/services/essentiality_service.py`
+   - Reuse Evo proxy (`/api/evo/score_variant_multi` & exon) for deltas
+   - Map to `[0,1]` with clear rationale; attach `calibration_source` if used
+   - Log via `log_evidence_run` with `weights_snapshot/gates_snapshot/feature_flags_snapshot`
+
+4) Implement `predict_protein_functionality_change`
+   - Add `api/services/protein_service.py` for ESM stub plumbing (return deterministic placeholder + evo delta)
+
+5) Heuristic endpoints
+   - `predict_chromatin_accessibility` / `predict_spacer_efficacy`: pure functions + typed JSON
+
+6) Generative endpoints
+   - `generate_guide_rna` / `generate_repair_template`: keep simple, deterministic heuristics; mark `method` and `limitations` in response
+
+7) Orchestrator
+   - Use `httpx.AsyncClient` and `asyncio.gather`; add a small `gather_safe()` to convert exceptions → `{error}` objects
+   - Log one orchestrator record with snapshots and sub‑call summaries
+
+## Patterns to Copy from Our Code
+
+- Evo fallback and warmup probes → `api/routers/evo.py`
+- Backoff + memory cache → `api/routers/evidence.py`
+- Config snapshots + tiering discipline → `api/routers/efficacy.py`
+- Calibration TTL/refresh → `api/services/gene_calibration.py`
+- Supabase logging → `api/services/supabase_service.py`
+
+## Testing & Smoke
+
+Add docstring curl to each endpoint and a test module under `api/tests/`.
+
+Examples:
+```bash
+curl -sS http://127.0.0.1:8000/api/insights/predict_gene_essentiality \
+  -H 'Content-Type: application/json' \
+  -d '{"gene":"TP53","variants":[{"chrom":"17","pos":7579472,"ref":"C","alt":"T","hgvs_p":"p.Arg248Gln"}]}'
+
+curl -sS http://127.0.0.1:8000/api/command/run_evidence_bundle \
+  -H 'Content-Type: application/json' \
+  -d '{"model_id":"evo2_7b","mutations":[{"gene":"BRAF","chrom":"7","pos":140753336,"ref":"A","alt":"T"}]}'
+```
+
+## Modal Deployment Playbook (what to copy)
+
+Use Modal for heavy model services (Oracle/Evo2 or future modelic compute). Keep the FastAPI backend slim and call Modal via HTTP webhooks (preferred) or internal calls where appropriate.
+
+1) Oracle/Evo2 usage (existing)
+- Webhook URLs are configured in [api/config.py](mdc:oncology-coPilot/oncology-backend-minimal/api/config.py): `EVO_URL_1B`, `EVO_URL_7B`, `EVO_URL_40B`.
+- The backend talks to these via [api/routers/evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py) with warmup probes and 7B→40B fallback.
+- DO NOT embed Evo2 in the backend; update env with new Modal webhook URLs if you redeploy models.
+
+2) If you must deploy a new Modal microservice (pattern)
+- Base image: prefer a clean CUDA dev image if GPU required (e.g., `nvidia/cuda:12.4.0-devel-ubuntu22.04`), otherwise `debian-slim`/`ubuntu` for CPU.
+- Always install toolchain: `.apt_install("build-essential")` to avoid build failures for ML libs.
+- Package management: pin versions; avoid `pip install .` for complex upstream unless necessary; if required, force reinstall known-good versions (see lessons on `transformer_engine`).
+- Resource decorators: set generous `cpu`, `memory`, and `timeout` on `@app.cls`/`@app.function` for data-heavy tasks.
+- Expose ASGI endpoint for HTTP calls:
+  - `@app.asgi_app()` returning a FastAPI app; this yields a webhook URL to be used by our backend.
+  - Note: Webhook functions cannot be invoked with `.remote()`; call via HTTP from our backend.
+- For internal Modal service-to-service calls (within Modal only), use `modal.Cls.lookup("app-name")` to get a client handle. Ensure `app-name` matches the `modal.App("app-name")` in the service.
+- Secrets: use `modal.Secret.from_name("NAME")` and read with `os.environ.get("NAME")` inside the container; do not hardcode keys.
+- Health: expose `/health` returning `{"ok": true}`; add a warmup endpoint or rely on a lightweight scoring probe as our backend does.
+
+3) Deployment steps
+- Build & deploy: `modal deploy your_service.py`
+- Capture webhook URL(s); update backend env: `EVO_SERVICE_URL`, `EVO_URL_1B`, `EVO_URL_7B`, `EVO_URL_40B` (or service‑specific equivalents).
+- Verify with a probe:
+```bash
+curl -sS ${EVO_URL_7B}/score_delta -H 'Content-Type: application/json' \
+  -d '{"ref_sequence":"AAAAAA","alt_sequence":"AAACAA","model_id":"evo2_7b"}'
+```
+- In dev, configure clients to skip SSL verification if Modal uses self‑signed certs (e.g., `verify=False` in httpx during tests only).
+
+4) Failure & fallback doctrine
+- If a Modal call returns 502/timeout, the backend should try another model tier (7B→40B) and report `fallback_used=true`.
+- On persistent failure, return a structured error with `upstream_service`, `attempts`, and a sentinel score (e.g., `zeta_score: null`) without crashing the orchestrator.
+
+5) Observability
+- Log upstream URL, fallback use, and latency in the backend response under `provenance` so we can debug deployments without entering Modal logs.
+
+## Deliverables Checklist
+
+- [ ] Routers created and wired; flags enforced; OpenAPI shows endpoints
+- [ ] `predict_gene_essentiality` returns stable JSON with `provenance` and `confidence`
+- [ ] Logs include configuration snapshots and `run_signature`
+- [ ] Orchestrator endpoints compose subcalls with async gather and soft‑fail behavior
+- [ ] Curl smoke tests in README snippets / docstrings
+- [ ] No breaking changes to existing efficacy API
+
+## Coordination with Evidence Owner
+
+- Provide JSON field names and example payloads before changes; do not change existing shapes.
+- When adding a new score, propose `fields_for_feeds` (short list of primitives) for the evidence owner to wire into the UI later.

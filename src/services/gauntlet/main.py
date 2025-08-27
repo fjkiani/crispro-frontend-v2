@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class ProteinSequence(BaseModel):
     protein_sequence: str
 
-app = modal.App("gauntlet-service-juggernaut")
+app = modal.App("gauntlet",)
 
 # Volume for caching model parameters and databases
 volume = modal.Volume.from_name("gauntlet-cache", create_if_missing=True)

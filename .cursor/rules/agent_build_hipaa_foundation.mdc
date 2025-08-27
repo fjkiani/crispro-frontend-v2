@@ -1,0 +1,107 @@
+---
+title: HIPAA Foundation
+---
+
+## Assignment: Build the HIPAA Foundation for Our Evo2/Oncology Platform
+
+### Mission & Scope
+Implement a pragmatic HIPAA-aligned foundation across our FastAPI services to protect PHI/PII, ensure secure processing and logging, and harden runtime environments. Deliver modular capabilities we can enable per environment (HIPAA_MODE=true) without breaking existing flows.
+
+### Repo Context & Targets
+- Primary backend: `oncology-coPilot/oncology-backend-minimal`
+  - App entry: `api/main.py`
+  - Routers: `api/routers/*`
+  - Config: `api/config.py` (dotenv enabled)
+  - Services/utilities: `api/services/*`, `api/utils/*` (create if missing)
+- Add new directories:
+  - `api/middleware/` → HIPAA/PII middleware
+  - `api/security/` → RBAC, auth utils, key policies
+  - `api/audit/` → audit writer, append-only sink, verifiers
+
+### Core Capabilities (Deliverables)
+1) PHI/PII Detection & Redaction Middleware
+   - FastAPI middleware that inspects request/response bodies/headers, scrubs PHI/PII tokens from logs (names, emails, phone, MRN, DOB, address, SSN, free text heuristics).
+   - Configurable allowlist/denylist via env: `HIPAA_PHI_FIELDS`, `HIPAA_SCRUB_HEADERS`.
+   - Never mutate the in-flight request passed to the handler; only scrub log copies.
+
+2) Secure Structured Logging + Immutable Audit Trail
+   - JSON logging with a fixed schema {ts, req_id, user_id?, route, method, status, latency_ms, pii_redactions, error?}.
+   - Scrubbed application logs (no PHI/PII).
+   - Append-only audit sink (e.g., file or sqlite table) with SHA-256 chaining (hash(prev_hash + record)) and rotation.
+   - Retention policy via env: `HIPAA_AUDIT_TTL_DAYS`.
+
+3) Secrets & TLS Baseline
+   - Read secrets only from env. Add interface for Vault/KMS (shim now, ready to swap): `api/security/secrets.py`.
+   - Enforce HTTPS in production, set HSTS, secure cookies, strict CORS. Add `api/middleware/security_headers.py`.
+
+4) RBAC & Least-Privilege Service Accounts
+   - Add simple JWT/OIDC verification utility (bearer token), roles: {admin, clinician, analyst, service}.
+   - Per-route role requirements decorator/helper.
+   - Scoped service API keys for internal calls with prefix/version and hashed storage.
+
+5) Data Minimization & De-identification Utilities
+   - Helpers to hash or tokenize patient identifiers; deterministic pseudonyms for joins.
+   - Ensure endpoints accept and return only necessary fields; central sanitizer for outbound payloads.
+
+6) Storage & Retention Controls
+   - At-rest encryption notes/config (DB connection flags). If using files, encrypt with AES-GCM (key from env/Vault).
+   - Retention policy helpers and a janitor task (cron-friendly) to purge expired artifacts.
+   - Data Subject Request (DSR)-like utilities (export/delete where legally permissible; log denials with reason).
+
+7) Environment Isolation & Egress Controls
+   - Profiles: dev/stage/prod via env flag. In HIPAA_MODE: disallow PHI to external services by default.
+   - Evidence/LLM proxy: add feature flags to disable abstracts/synthesis or strip PHI from prompts.
+   - Network: document VPC/private networking expectations; add hooks for allowlist-only egress domains.
+
+8) SIEM/Alerts & Incident Response Hooks
+   - Webhook exporter for critical events (auth failures, RBAC denials, PHI scrub events over threshold).
+   - Basic alert thresholds configurable via env.
+   - Include an Incident Response (IR) runbook and drill checklist in `/docs/hipaa/`.
+
+### Integration Plan (Step-by-step)
+- `api/config.py`:
+  - Add feature flags: `HIPAA_MODE`, `LOG_JSON`, `AUDIT_ENABLED`, `EVIDENCE_PH_SAFE` (default true in HIPAA mode), `DISABLE_EXTERNAL_LLM`.
+- `api/middleware/hipaa_pii.py`:
+  - Implement scrubbing middleware; register in `api/main.py` when `HIPAA_MODE=true`.
+- `api/utils/logging.py`:
+  - Initialize structured JSON logger; add request-id correlation; include pii_redactions count.
+- `api/audit/writer.py`:
+  - Append-only audit log with hash chaining; daily rotation; simple verifier.
+- `api/security/auth.py`:
+  - JWT parser/validator; role extraction; decorator to enforce roles on routes.
+- `api/security/secrets.py`:
+  - Abstraction for env and (future) Vault/KMS; functions: `get_secret(name)`, `rotate_key(name)` (stub).
+- `api/utils/data_sanitizer.py`:
+  - Tokenize identifiers, de-identification helpers, outbound sanitizer.
+- Routers:
+  - Wrap sensitive endpoints with role enforcement and ensure sanitizers used on responses.
+- Evidence/LLM calls:
+  - In HIPAA mode, block PHI in prompts; set `include_abstracts=false` by default; redact titles if needed; never send raw patient text.
+
+### Acceptance Criteria
+- In HIPAA_MODE:
+  - No PHI/PII appears in application logs.
+  - Audit records produced for auth, access to sensitive routes, and config changes; hash chain valid.
+  - RBAC enforced on selected endpoints (mark at least 3 routes).
+  - External egress to LLMs disabled or PHI-scrubbed; evidence endpoint runs with safe defaults.
+  - Security headers present (HSTS, X-Content-Type-Options, Referrer-Policy, etc.).
+
+### Milestones
+- M1: Middleware + structured logs + security headers → merged with feature flag; tests for scrubbing and headers
+- M2: Audit writer + RBAC + secrets abstraction → merged with CLI verifier; role tests
+- M3: Data minimization utilities + egress controls + SIEM hooks + docs/runbooks → end-to-end walkthrough
+
+### Testing
+- Unit tests: scrubbing regex/heuristics, logger fields, RBAC decorators.
+- Integration tests: verify no PHI in logs; audit chain valid; RBAC denies/permits correctly.
+- Chaos tests: simulate 429s/LLM disabled; ensure evidence endpoints degrade gracefully.
+
+### Documentation
+- Add `/docs/hipaa/` with:
+  - Policies overview & data flow diagrams
+  - Data inventory & maps (what PHI we process, where)
+  - BAA checklist and vendor posture
+  - IR playbook & on-call quickstart
+
+### Ready-to-Work Prompt (paste to start)
+“Implement the HIPAA foundation per this spec in our FastAPI backend. Start with M1: PHI/PII scrubbing middleware, structured JSON logs, and security headers behind `HIPAA_MODE`. Add tests that verify logs contain no PHI. Then deliver M2 (audit trail with hash chaining, RBAC decorators, secrets abstraction) and M3 (minimization utilities, egress controls, SIEM hooks, docs). Ensure defaults are safe in HIPAA_MODE and configurable via env. Provide a verification checklist and sample log/audit outputs.”

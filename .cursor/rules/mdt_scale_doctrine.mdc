@@ -1,0 +1,84 @@
+o# Myeloma Digital Twin – Scale Doctrine (API‑first, Safety, Calibration, Agents)
+
+## What this rule is
+A concise, code‑anchored strategy to improve result quality and trust at scale, while keeping the system modular (not monolithic). It defines: endpoints to add, safety/validation flow, confidence calibration, and agent roles. Use it when implementing new features or debugging model/ClinVar discordance.
+
+## Current anchors in code
+- Backend gateway: [api/index.py](mdc:oncology-coPilot/oncology-backend-minimal/api/index.py)
+  - Live Evo2 proxies: `/api/evo/*`
+  - Orchestrator: `/api/predict`, `/api/twin/*`
+  - Safety (added): `/api/evo/refcheck`, `/api/evo/refcheck_batch`, preflight validation, policy v1.1
+  - Evidence: `/api/evidence/deep_analysis` (ClinVar context + discordance)
+- Frontend page: [MyelomaDigitalTwin.jsx](mdc:oncology-coPilot/oncology-frontend/src/pages/MyelomaDigitalTwin.jsx)
+  - Inputs: `VariantInputList`
+  - Banner/controls: `LiveJobBanner`, `ModelSelector`, job ribbon
+  - Results: `MyelomaResponseDisplay` (profile/probe, EvidencePanel, DualModelAgreement)
+- Benchmark script: [scripts/run_myeloma_benchmark.py](mdc:scripts/run_myeloma_benchmark.py)
+- Doctrine: [myeloma_demo_doctrine.mdc](mdc:docs/doctrine/myeloma_demo_doctrine.mdc)
+
+## Gaps we must close
+- Confidence is low/unstable on some variants; ClinVar/our calls can be discordant.
+- Interpretability endpoints must be parity‑clean across models.
+- Safety checks should precede scoring and be visible in UI.
+- Calibration is ad‑hoc; no automated AUROC/AUPRC gating.
+
+## Non‑monolithic Architecture
+- Keep Modal model services model‑only. Backend gateway owns orchestration, safety, policy, and provenance.
+- Introduce agents as thin clients of gateway APIs (no direct Modal coupling).
+
+## API‑first Context & Safety (additions)
+- Ensembl context (backend additions in [api/index.py](mdc:oncology-coPilot/oncology-backend-minimal/api/index.py)):
+  - `POST /api/safety/ensembl_context` → { refcheck, exon_overlap, transcripts, vep_consequence, urls }
+- ClinVar context:
+  - `POST /api/safety/clinvar_context` → { variation_id|url, clinical_significance, review_status, somatic_tier, citations, url }
+- Evidence synth bridge (already present base):
+  - `POST /api/evidence/deep_analysis` prefers the two APIs above; fall back to Tavily only to discover URLs or when APIs fail.
+
+## Safety Protocol (gateway)
+1) Input validation: strict `chr:pos REF>ALT`, assembly whitelist.
+2) Batch REF‑check: block scoring on mismatch; return actionable error.
+3) Duplicate collapse: `(gene, chrom, pos, ref>alt)`.
+4) Context checks: exon overlap + VEP consequence (missense/stop/etc.).
+5) Optional ClinVar read: classification + review status; set `discordant` when ClinVar Pathogenic/Likely vs our Unknown/Benign.
+
+## Confidence & Decision Policy
+- v1.1 (implemented): magnitude + confidence gating; weighted pathway aggregation (confidence × normalized effect).
+- v1.2 (to implement):
+  - Adaptive windowing: increase confidence when short window corroborates exon sign/magnitude.
+  - Transcript‑aware exon‑tight: center on canonical transcript; reduce flank in coding exons.
+  - Optional ensemble signals (AM/ESM) as positive‑only boosters when consistent (never override safety checks).
+- Always version policies (`policy_version`) and expose `threshold_config.policy` in responses.
+
+## Calibration & Quality Gates
+- Restore nightly benchmarks ([.github/workflows/nightly_benchmark.yml](mdc:.github/workflows/nightly_benchmark.yml)) to compute AUROC/AUPRC + calibration on curated ClinVar panel.
+- Store metrics in Supabase; block deploy on regression; display in `/api/analytics/dashboard`.
+
+## Agents (modular, API‑only)
+- SafetyAgent: preflight variants (format, REF, duplicates, exon/VEP), annotate fixes.
+- ExperimentsAgent: run matrix specs (models×windows×flanks), compare runs, log to Supabase.
+- EvidenceAgent: call `/api/evidence/deep_analysis`, summarize ClinVar/Ensembl context, set `discordant`.
+- CalibratorAgent: run nightly panel, compute AUROC/AUPRC, update thresholds proposal (manual review).
+
+## Frontend UX (DRY, config‑driven)
+- Preflight badges on `VariantInputList` (Format✔/REF✔/Duplicate/Exon/Consequence).
+- “Deeper analysis” button per variant → drawer with ClinVar verdict, counts, somatic tier, our call, `discordant` badge.
+- Gate Run until all inputs pass preflight (or proceed with warnings acknowledged).
+
+## Implementation Tasks
+- Backend
+  - [ ] Add `/api/safety/ensembl_context` and `/api/safety/clinvar_context`; refactor deep_analysis to prefer them.
+  - [ ] Policy v1.2 adaptive windowing + transcript‑aware exon‑tight; keep `policy_version` bump.
+  - [ ] Nightly benchmark workflow + Supabase metrics write.
+- Frontend
+  - [ ] Preflight gating + badges; surface `preflight_issues` from responses.
+  - [ ] “Deeper analysis” drawer and discordance badge.
+- Agents
+  - [ ] Implement SafetyAgent, ExperimentsAgent, EvidenceAgent as thin clients of gateway.
+
+## Guardrails
+- Never up‑weight pathway score based on ClinVar; expose discordance visually instead.
+- Treat Tavily/LLM as discovery/synthesis utilities, not sources of truth; prefer structured APIs for scoring/safety.
+description:
+globs:
+alwaysApply: false
+---

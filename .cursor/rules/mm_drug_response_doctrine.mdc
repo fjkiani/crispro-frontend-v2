@@ -1,0 +1,76 @@
+# Multiple Myeloma Drug Response Doctrine (Live Evo2)
+
+## TL;DR (plain English)
+We predict whether a myeloma patient will respond to therapy by quantifying how harmful each mutation is to critical cancer pathways (RAS/MAPK and TP53). We use Evo2, a genome-scale language model of DNA/RNA/protein, to measure how “surprising” the mutation is in its native genomic context. Bigger negative numbers (delta scores) mean bigger functional disruption. We aggregate disruption over key pathways to estimate sensitivity vs resistance, and we only return real model results – no mocks.
+
+## Key ideas (with simple definitions)
+- Evo2 delta (a.k.a. zeta score): difference in sequence likelihood between the mutated sequence and the reference. Negative = more disruptive.
+- Context window: the slice of genome we score around the variant. If it’s too big, the signal dilutes; too small, you miss regulatory context.
+- Pathway aggregation: sum the impact of variants landing in RAS/MAPK and TP53 to estimate resistance risk.
+- Confidence: stronger (more negative) deltas, consistent across window sizes/transcripts, yield higher confidence.
+
+## What makes this expert-grade
+- Live, transcript-aware, multi-scale scoring (no canned lookups) grounded in Evo2.
+- Strict data hygiene (allele and coordinate validation) and error transparency (fail rather than fabricate).
+- Clinically relevant pathways (KRAS/NRAS/BRAF; TP53) with interpretable outputs.
+- Extensible fusion with splice-aware checks and protein-level models.
+
+## Inputs we accept
+- Single SNV: `{ gene, hgvs_p, variant_info: "chr:pos REF>ALT", build }`
+- Or a list in `mutations[]`
+
+## Outputs we produce
+- Per-variant: `{ zeta_score, interpretation (pathogenic|benign), calculated_impact_level }`
+- Pathway-level: `summed_impact_ras_pathway`, `summed_impact_tp53`
+- Final: `prediction` (Likely Resistant vs Likely Sensitive), `mode: live`, and `upstream_service`
+
+## Live pipeline (current)
+1) Validate inputs (build, chr, pos, REF>ALT). Hard fail on errors.
+2) Fetch genomic window from Ensembl (default 8,192 nt) and center the variant.
+3) Score ref vs alt with Evo2 → `zeta_score` (delta).
+4) Map delta → impact level: ≤ -10 → 3.0; ≤ -3 → 2.0; ≤ -0.5 → 1.0; else 0.5.
+5) Aggregate impacts into RAS/MAPK and TP53 pathway scores.
+6) Return JSON; no mocks.
+
+## Near‑term upgrades (recommended)
+- Multi-scale windows: score at 1k/2k/4k/8k; report the most negative delta and `window_used`.
+- Transcript/exon mode: score tight exon windows (±150–300 bp) for coding variants to boost signal.
+- Local delta profile: a ±100 bp curve to reveal sharp local disruptions.
+- Splice-aware scoring for near-boundary variants.
+
+## Decision guidance
+- Strong disruption: min delta ≤ -3 with consistency across windows → high impact; elevate resistance risk.
+- Near-neutral: |delta| < 0.5 across windows/transcripts → likely neutral in Evo2’s view; consider structure/protein or splice checks before concluding.
+
+## Timeouts & reliability
+- Up to 10 minutes end-to-end wait for cold starts. Redirects are followed. Errors are surfaced in responses; we do not fabricate outputs.
+
+## Implementation touchpoints
+- Backend proxy (Vercel; live only, 10‑min timeout, redirect following):
+  - [oncology-coPilot/oncology-backend-minimal/api/index.py](mdc:oncology-coPilot/oncology-backend-minimal/api/index.py)
+- Evo2 service (Modal; scoring endpoints):
+  - [src/services/evo_service/main.py](mdc:src/services/evo_service/main.py)
+- Frontend Myeloma page and display:
+  - [oncology-coPilot/oncology-frontend/src/pages/MyelomaDigitalTwin.jsx](mdc:oncology-coPilot/oncology-frontend/src/pages/MyelomaDigitalTwin.jsx)
+  - [oncology-coPilot/oncology-frontend/src/components/myeloma/MyelomaResponseDisplay.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/myeloma/MyelomaResponseDisplay.jsx)
+- Tool config (inputs and API route):
+  - [oncology-coPilot/oncology-frontend/src/config/toolconfigs.js](mdc:oncology-coPilot/oncology-frontend/src/config/toolconfigs.js)
+
+## Testing
+- Live smoke test script (no third‑party deps):
+  - [oncology-coPilot/oncology-backend-minimal/tests/smoke_mdt_live.py](mdc:oncology-coPilot/oncology-backend-minimal/tests/smoke_mdt_live.py)
+  - Run: `python3 tests/smoke_mdt_live.py`
+  - Or point to another deploy: `VERCEL_BASE=https://your.vercel.app python3 tests/smoke_mdt_live.py`
+
+## Roadmap to clinical strength
+- Add BRCA‑style supervised heads using Evo2 embeddings for myeloma‑specific genes.
+- Fuse splice predictors and protein-level models for complex cases.
+- Calibrate thresholds on retrospective cohorts; report ROC/AUROC and calibration curves.
+
+## FAQ
+- Why are some deltas tiny? Context dilution or truly neutral sites. Multi‑scale + exon mode reduces dilution; protein/splice models catch orthogonal effects.
+- Do we ever guess? No. If Evo2 fails or inputs are invalid, we surface an error.
+description:
+globs:
+alwaysApply: false
+---

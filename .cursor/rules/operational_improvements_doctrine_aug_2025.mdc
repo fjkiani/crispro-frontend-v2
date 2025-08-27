@@ -1,0 +1,170 @@
+---
+alwaysApply: true
+description: Operational Improvements Doctrine (Aug 2025) – Evo2 insights, regulatory scoring, safer generation, efficacy integration
+---
+## Operational Improvements Doctrine (Aug 2025)
+
+This doctrine documents the concrete platform upgrades completed in Aug 2025, what changed, where the code lives, and how to use the new capabilities. It serves as a high‑signal reference for developers and product to understand behavior, contracts, safety, and test flows.
+
+### What we improved
+- **Essentiality scoring (Insights)**: Upgraded to use Evo2 multi/exon magnitudes with gene‑specific calibration snapshot.
+- **Splicing/regulatory scoring (Insights)**: New noncoding impact proxy endpoint powered by Evo2 min_delta.
+- **Guide RNA generation (Design)**: Wired to Evo2 prompt‑guided generation, with PAM windowing and safety gates; returns candidates with GC/efficacy heuristics.
+- **Safety hardening (Evo/Design)**: Viral content guard in generation; length checks in guide design.
+- **Efficacy orchestrator**: Integrated regulatory insight into S/P/E combination; confidence modulation reflects insights bundle (functionality, chromatin, essentiality, regulatory).
+- **Minor domain‑aware lift**: Protein functionality change now gets a small lift when hotspot domains match.
+
+### Where the code lives
+- Insights router: `[insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py)`
+  - `POST /api/insights/predict_gene_essentiality`
+  - `POST /api/insights/predict_splicing_regulatory` (new)
+  - `POST /api/insights/predict_protein_functionality_change` (lift)
+  - `POST /api/insights/predict_chromatin_accessibility`
+- Design router: `[design.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/design.py)`
+  - `POST /api/design/generate_guide_rna` (Evo2 prompt‑guided + safety)
+- Evo proxy: `[evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py)`
+  - `POST /api/evo/generate` (adds viral content safety gate)
+- Efficacy orchestrator: `[efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py)`
+  - `POST /api/efficacy/predict` (consumes new insights and adjusts confidence)
+
+### Details of each improvement
+
+#### 1) Essentiality scoring – Evo2 magnitudes + calibration
+- Endpoint: `POST /api/insights/predict_gene_essentiality`
+- Approach:
+  - Flags truncation/frameshift deterministically (Triumvirate doctrine compliance).
+  - Calls Evo2 `score_variant_multi` and `score_variant_exon` and aggregates absolute magnitudes.
+  - Produces `essentiality_score ∈ [0,1]` with rationale and confidence that reflect truncation/frameshift and Evo magnitude.
+  - Returns a calibration snapshot from the gene calibration service when available.
+- Output shape (additions):
+  - `provenance.method: "evo2_multi_exon_v1"`
+  - `provenance.calibration: { calibrated_percentile, z_score, confidence, source }`
+
+#### 2) Splicing/regulatory (noncoding) scoring – new endpoint
+- Endpoint: `POST /api/insights/predict_splicing_regulatory`
+- Inputs: `{ chrom, pos, ref, alt, model_id? }`
+- Approach: Queries Evo proxy `score_variant_multi` and maps `abs(min_delta)` to `regulatory_impact_score ∈ [0,1]`.
+- Output: `{ regulatory_impact_score, provenance }`
+
+#### 3) Guide RNA generation – Evo2 prompt‑guided with safety
+- Endpoint: `POST /api/design/generate_guide_rna`
+- Improvements:
+  - Safety: Viral content blocklist and minimal context length check.
+  - PAM windowing: Find `NGG` sites, extract 20bp windows, and prompt Evo2 generator to propose spacers.
+  - Heuristic scoring: Per‑candidate GC, homopolymer penalties, and a simple efficacy heuristic.
+- Output: `{ candidates: [{ sequence, pam, gc, spacer_efficacy_heuristic }], provenance }`
+
+#### 4) Safety gates – Evo generate/Design
+- Evo generate: `POST /api/evo/generate` rejects prompts containing viral keywords (HIV/SARS/EBOLA/INFLUENZA).
+- Design guide: rejects too‑short target contexts; same viral checks applied to input target strings.
+
+#### 5) Efficacy orchestration – regulatory integration and confidence modulation
+- Endpoint: `POST /api/efficacy/predict`
+- Changes:
+  - Insights bundle now includes `regulatory` by calling `predict_splicing_regulatory` when variant coords exist.
+  - Confidence adjusts with modest lifts from insights: functionality, chromatin, essentiality, regulatory.
+  - `drugs[*].insights` now includes `{ regulatory }`.
+
+#### 6) Protein functionality change – domain‑aware lift
+- Endpoint: `POST /api/insights/predict_protein_functionality_change`
+- Adds small lift when variant localizes to known hotspot domains (e.g., BRAF V600, RAS G12/G13/Q61, TP53 hotspots).
+
+### Configuration and stability notes
+- Evo URLs: Set `EVO_URL_1B|7B|40B` in environment for maximum stability. Fallback to 40B is automatic in proxy.
+- Calibration preload: Service preloads common genes at startup and provides snapshots; see logs for counts.
+- Evidence service (literature): Enhanced agent is integrated but may return sparse results under rate‑limit or network constraints; efficacy remains robust due to multi‑signal design.
+
+### Quick test flows (local)
+- Essentiality
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/insights/predict_gene_essentiality \
+  -H 'Content-Type: application/json' \
+  -d '{"gene":"BRAF","variants":[{"gene":"BRAF","chrom":"7","pos":140453136,"ref":"T","alt":"A","consequence":"missense_variant"}],"model_id":"evo2_7b"}'
+```
+- Splicing/regulatory
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/insights/predict_splicing_regulatory \
+  -H 'Content-Type: application/json' \
+  -d '{"chrom":"7","pos":140453136,"ref":"T","alt":"A","model_id":"evo2_7b"}'
+```
+- Guide RNA generation (requires ≥30bp target)
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/design/generate_guide_rna \
+  -H 'Content-Type: application/json' \
+  -d '{"target_sequence":"GACTGACTGACTGACTGACTGACTGACTGACTGACTGACTGACTGAC","pam":"NGG","num":3,"model_id":"evo2_7b"}'
+```
+- Efficacy prediction (consumes insights bundle, now incl. regulatory)
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/efficacy/predict \
+  -H 'Content-Type: application/json' \
+  -d '{"model_id":"evo2_7b","mutations":[{"gene":"BRAF","hgvs_p":"V600E","chrom":"7","pos":140453136,"ref":"T","alt":"A"}],"options":{"adaptive":true,"ensemble":true},"api_base":"http://127.0.0.1:8000"}'
+```
+
+### API contract changes (backward‑compatible)
+- `predict_gene_essentiality`: adds `provenance.method = "evo2_multi_exon_v1"` and `provenance.calibration` snapshot.
+- `predict_splicing_regulatory`: new endpoint returns `regulatory_impact_score`.
+- `generate_guide_rna`: returns Evo2‑guided candidates with `gc` and `spacer_efficacy_heuristic`.
+- `efficacy/predict`: `drugs[*].insights` includes `regulatory`; `confidence` may be slightly higher when insights are supportive.
+
+### Developer guidance
+- Prefer Evo2 multi/exon magnitudes for sequence‑level signal; keep truncation/frameshift as the first gate.
+- Maintain safety gates in any new generation entry points; extend the keyword list via configuration if needed.
+- When integrating new insights, keep lifts modest and transparent in `provenance` or rationale for auditability.
+- For stability, ensure Evo service URLs are present; proxy already includes model fallback logic.
+
+### MM drug response – current capability and outcome
+- What we can do now:
+  - Orchestrate multi-signal efficacy for Multiple Myeloma (MM) and return a per-drug `efficacy_score ∈ [0,1]`, `confidence ∈ [0,1]`, `evidence_tier` (supported/consider/insufficient), `badges` (RCT/Guideline/etc.), and `insights` (functionality/chromatin/essentiality/regulatory).
+  - Rank candidate drug classes (BRAF inhibitor, MEK inhibitor, IMiD, proteasome inhibitor, Anti‑CD38) with consistent scoring/rationale.
+
+- How we compute it (high level):
+  - Sequence (S): CrisPRO `min_delta` + worst‑case `exon_delta` via adaptive windows; calibrated percentiles per gene.
+  - Pathway (P): Map disrupted genes to MM pathways (RAS/MAPK, TP53, etc.) and aggregate weighted impact.
+  - Evidence (E): Literature strength + ClinVar prior (expert/practice boosts), with MoA‑aware highlighting.
+  - Insights lifts: +functionality (≥0.6), +chromatin (≥0.5), +essentiality (≥0.7), +regulatory (≥0.6) applied modestly to score and confidence.
+
+- Current observed outcome (BRAF V600E example from logs):
+  - insights: functionality≈0.6, chromatin≈0.6, essentiality≈0.35, regulatory≈0.1 → lifts from functionality+chromatin only.
+  - per‑drug `confidence` around ~0.45–0.51, `efficacy_score` ~0.17–0.26 depending on evidence strength and pathway weighting.
+  - `evidence_tier` typically “consider” due to sparse literature returns in local dev and conservative gates.
+
+### Deeper analysis methodology (how decisions are formed)
+- Sequence scoring
+  - `score_variant_multi` for `min_delta` (zero‑shot Evo2 sequence impact proxy).
+  - `score_variant_exon` with adaptive flanks (4096–25000bp) for exon‑context signal; use best absolute magnitude.
+  - Symmetry (ref→alt vs alt→ref) averaged internally for robustness.
+  - Gene‑specific calibration converts deltas to percentile‑like measures to avoid cross‑gene scale drift.
+- Transcript/context enrichment
+  - `POST /api/safety/ensembl_context` fetches transcripts; optionally probes worst‑case exon delta across top transcripts to update sequence disruption and percentile.
+- Evidence fusion
+  - `POST /api/evidence/deep_analysis` extracts ClinVar classification/review status to derive a prior.
+  - Literature service ranks PubMed items; MoA terms boost relevance; badges “RCT/Guideline/ClinVar‑Strong/PathwayAligned” are derived for auditability.
+- Confidence and gating
+  - Evidence gates: strong literature or ClinVar‑Strong + pathway alignment → higher tier.
+  - Confidence is modulated by evidence tier, calibrated S/P percentiles, and positive insights (functionality/chromatin/essentiality/regulatory).
+
+### What this means for “Can we predict MM drug response?”
+- Capability statement (current):
+  - We can produce a transparent, ranked efficacy hypothesis with calibrated sequence disruption, pathway alignment, and literature/ClinVar evidence, plus an explicit confidence score.
+  - This is suitable for research and prioritization, not clinical decision‑making.
+- Strengths:
+  - Multi‑modal signal integration (S/P/E + insights) with audit trails, percentiles, and badges.
+  - Works with sparse evidence due to conservative gates and transparent confidence.
+- Limitations (current, under active improvement):
+  - Upstream Evo URLs occasionally return 404/500; fallback logic mitigates but reduces S stability.
+  - Literature agent may return zero items in dev due to API/rate limits, lowering E and overall confidence.
+  - Chromatin endpoint uses heuristic unless Enformer/Borzoi URLs are provided.
+
+### Frontend integration notes (what to display)
+- Read `drugs[*]` from `/api/efficacy/predict` and surface:
+  - `efficacy_score`, `confidence`, `evidence_tier`, `badges`.
+  - `insights`: show 4 chips (Functionality, Chromatin, Essentiality, Regulatory) with thresholds indicating lifts.
+  - `rationale` array: list sequence/pathway/evidence components with percentiles and weighted breakdowns.
+  - `citations` and `evidence_manifest` for provenance.
+- No FE schema changes are required; regulatory is already included in `drugs[*].insights`.
+
+### Next milestones to raise accuracy and confidence
+- Configure `EVO_URL_1B|7B|40B` for stable S and complete adaptive windows.
+- Wire Enformer/Borzoi services for first‑class chromatin signal.
+- Harden literature agent (provider keys, caching, MoA targeting) to lift E and reduce “insufficient” tiers.
+- Expand calibration sets and benchmarking; add MM‑specific validation panels and expected pathway responses.

@@ -80,7 +80,7 @@ evo2_image = (
 )
 
 # --- App Definition ---
-app = modal.App("zeta-oracle-v5-final-fix", image=evo2_image)
+app = modal.App("zeta-oracle", image=evo2_image)
 
 fastapi_app = FastAPI(
     title="Zeta Oracle V2",

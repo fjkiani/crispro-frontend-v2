@@ -1,0 +1,84 @@
+---
+alwaysApply: false
+description: Slim Command Center orchestration doctrine for Oracle (discriminative) and Forge (generative)
+---
+# Command Center — Slim Orchestration Doctrine
+
+Goal: Keep our Oracle (discriminative scoring) and Forge (generative design) architecture while deploying a slimmer, reliable orchestrator that centralizes workflows and governance.
+
+## Current anchors in code
+- Orchestrator endpoints: [api/main.py](mdc:oncology-coPilot/oncology-backend-minimal/api/main.py)
+  - `/api/twin/run`, `/api/twin/submit`, `/api/twin/status` (reference for orchestration/logging patterns)
+- Oracle (Evo2) proxies: [api/routers/evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py)
+- Evidence stack (S/P/E): [api/routers/efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py), [api/routers/evidence.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evidence.py)
+- Calibration: [api/services/gene_calibration.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/gene_calibration.py)
+- Auditing: [api/services/supabase_service.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/supabase_service.py)
+
+## Slim split: Oracle vs Forge
+- Oracle (discriminative): Use `/api/insights/*` (see [agent_build_api_extensions.mdc](mdc:.cursor/rules/agent_build_api_extensions.mdc)) to expose predictive signals; under the hood re‑use Evo proxies.
+- Forge (generative): Use `/api/design/*` to emit candidates (guides, HDR templates, optimized CDS/regulatory elements).
+- Keep strong separation: Insights never generate sequences; Design never sets evidence tiers. Orchestrator composes their outputs.
+
+## Command Center responsibilities
+1) Orchestrate multi‑step runs with async fan‑out/fan‑in (use `asyncio.gather`).
+2) Governance: enforce feature flags, operational mode, and evidence gates once per workflow.
+3) Provenance & logging: attach `{weights_snapshot, gates_snapshot, feature_flags_snapshot, operational_mode}`; persist to Supabase.
+4) Fault isolation: soft‑fail missing providers (store sentinel values and continue), never crash end‑to‑end runs.
+
+## Proposed router & endpoints
+- File: [api/routers/command_center.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/command_center.py)
+- Prefix: `/api/command`
+
+Endpoints
+1) `POST /api/command/run_evidence_bundle`
+   - Input: `{ model_id, mutations[], options{ use_priors, adaptive, ensemble } }`
+   - Steps (in parallel):
+     - Oracle: call `/api/efficacy/predict` (S/P/E composite)
+     - Insights: call `/api/insights/predict_gene_essentiality`, `/predict_protein_functionality_change` (when enabled)
+   - Output: `{ efficacy, insights:{ essentiality, protein }, provenance, run_signature }`
+
+2) `POST /api/command/run_design_bundle`
+   - Input: `{ mutations[], design_options{ pam, hdr_window } }`
+   - Steps (in parallel):
+     - Forge: `/api/design/generate_guide_rna`, `/api/design/generate_repair_template`
+   - Output: `{ guides, hdr_templates, provenance, run_signature }`
+
+3) `POST /api/command/run_full_pipeline`
+   - Input: union of the two above
+   - Steps: run evidence bundle → conditionally run design bundle (e.g., only for genes with essentiality above threshold / supported tier)
+   - Output: `{ efficacy, insights, designs, decision_summary, provenance }`
+
+## Slim deployment strategy
+- Keep single FastAPI app with modular routers; no extra heavy services.
+- Push heavy compute to Oracle (Modal Evo2) via `evo.py` proxies; use fallbacks (7B→40B) and warmup probes.
+- Keep Forge logic lightweight (heuristics + context‑guided prompts); leave model‑heavy structure (AF3, off‑target) as pluggable stubs.
+- Feature flags: `ENABLE_COMMAND_CENTER`, `ENABLE_INSIGHTS_API`, `ENABLE_DESIGN_API` in [api/config.py](mdc:oncology-coPilot/oncology-backend-minimal/api/config.py).
+
+## Implementation sketch (pseudocode)
+```python
+# api/routers/command_center.py
+router = APIRouter(prefix="/api/command", tags=["command"])
+
+@router.post("/run_evidence_bundle")
+async def run_evidence_bundle(req: dict):
+    # read flags, snapshots
+    flags = get_feature_flags(); gates = get_evidence_gates(); weights = get_evidence_weights()
+    # fan-out
+    efficacy_task = client.post("/api/efficacy/predict", json=req)
+    ess_task = client.post("/api/insights/predict_gene_essentiality", json=req_insights)
+    prot_task = client.post("/api/insights/predict_protein_functionality_change", json=req_prot)
+    # gather with guards
+    eff, ess, prot = await gather_safe(efficacy_task, ess_task, prot_task)
+    # log snapshots
+    run_data = {"weights_snapshot":weights, "gates_snapshot":gates, "feature_flags_snapshot":flags}
+    await supabase.log_evidence_run(run_data)
+    return {"efficacy": eff, "insights": {"essentiality": ess, "protein": prot}, "provenance": {"flags":flags}}
+```
+
+## Frontend consumption
+- Keep the Efficacy UI as is; new insights can surface as chips/badges and inform the recommendation strip.
+- Design outputs appear in a separate “Therapy Design” panel; Command Center returns run_signature to fetch details.
+
+## Acceptance
+- Orchestrator endpoints appear in OpenAPI, respect flags/modes, parallelize subcalls, and always return a coherent bundle with provenance and run_signature.
+- No tight coupling to any provider; insights/design endpoints can be disabled without breaking the orchestrator.

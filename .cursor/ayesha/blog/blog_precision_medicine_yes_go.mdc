@@ -1,0 +1,215 @@
+---
+alwaysApply: false
+description: Blog – From hypothesis to guidance (Yes GO) with transparent, evidence-backed precision medicine
+---
+# From Hypothesis to Guidance: Achieving a “Yes GO” Verdict in Precision Medicine
+
+We turned a research-grade hypothesis engine into a guidance-first system that can return a clear, evidence-backed clinical verdict – the “Yes GO.” This post explains what we built, why it matters, and how it works under the hood.
+
+## What we just shipped
+- Guidance router (backend) with two endpoints:
+  - `POST /api/guidance/chemo` and `POST /api/guidance/radonc` in `[guidance.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/guidance.py)`
+  - Wraps our existing orchestrator (`[efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py)`), applies clinical gates, and returns a focused guidance object (tier, on‑label, strength, citations, rationale)
+- Clear clinical gates (server‑side):
+  - Tier I (Yes GO): on‑label in disease context OR guideline present
+  - Tier II/III (Consider): strong/moderate evidence but off‑label or no guideline
+  - Research: mechanistic/hypothesis only, insufficient disease‑specific evidence
+- On‑label rules (curated/stub) with a plan to integrate FDA/DailyMed next
+- Kept our transparent S/P/E + insights pipeline in place:
+  - Insights and Evo2‑based signals in `[insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py)` and Evo proxy `[evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py)`
+  - Frontend chips and provenance already supported; guidance adds tiered clinical meaning
+
+## Why this matters for precision medicine
+- Clinicians and researchers need more than a score; they need a decision boundary with provenance. “Yes GO” means: on‑label therapy (or guideline‑supported) for this disease context, with adequate supporting evidence. It bridges the gap between probabilistic signals and clinically actionable guidance.
+- The system remains auditable: every verdict includes citations, rationale, insights, and a run signature for traceability.
+
+## What is a “Yes GO” verdict?
+- **Definition**: A Tier I guidance recommendation where the therapy is on‑label for the disease (or guideline‑supported), and evidence is not weak.
+- **Contract** (returned fields): `{ on_label, tier, strength, efficacy_score|radiosensitivity_score, confidence, insights, rationale[], citations[], badges[] }`
+- **Disclaimers**: The system is a research tool; it does not replace clinical judgment. We provide transparent evidence, gates, and provenance to support expert decisions.
+
+## How we predict (and then gate to guidance)
+1) Orchestrate S/P/E + insights (hypothesis stage)
+   - Sequence: Evo2 multi/exon magnitudes + calibration
+   - Pathway: disease‑aware MoA alignment
+   - Evidence: PubMed agent + ClinVar (citations, types, strength)
+   - Insights: Functionality, Chromatin (Enformer/Borzoi when configured), Essentiality, Regulatory
+2) Convert hypothesis → guidance (gating stage)
+   - On‑label rules (curated/stub to start; FDA/DailyMed later)
+   - Guideline/RCT/meta‑analysis detection (using evidence/badges mapping; extensible)
+   - Tiering and strength classification applied server‑side
+
+## Case study: Melanoma with BRAF V600E → BRAF inhibitor
+- Input (chemo guidance)
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/guidance/chemo \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "disease": "melanoma",
+    "drug_or_class": "BRAF inhibitor",
+    "mutations": [
+      { "gene": "BRAF", "hgvs_p": "V600E", "chrom": "7", "pos": 140453136, "ref": "T", "alt": "A" }
+    ],
+    "moa_terms": ["BRAF inhibitor","dabrafenib","MAPK blockade"],
+    "options": { "adaptive": true, "ensemble": true },
+    "api_base": "http://127.0.0.1:8000"
+  }'
+```
+- Example outcome (abridged):
+```json
+{
+  "therapy": "BRAF inhibitor",
+  "disease": "melanoma",
+  "on_label": true,
+  "tier": "I",
+  "strength": "moderate",
+  "efficacy_score": 0.261,
+  "confidence": 0.51,
+  "citations": ["39866931","40411938","40484006"],
+  "provenance": {"source": "efficacy/predict"}
+}
+```
+- Why Tier I? The on‑label rule for melanoma + BRAF inhibitor is met, and evidence is not weak. S/P/E + insights provide mechanistic and contextual support.
+
+## Evidence and uniqueness
+- **Evidence‑backed**:
+  - PubMed evidence with basic classification and counts (RCT/review/guideline enrichments planned)
+  - ClinVar prior/classification integrated where relevant
+  - On‑label status via curated rules (moving to FDA/DailyMed)
+- **Unique advantages**:
+  - Multi‑signal: Evo2 sequence magnitudes + exon windows + regulatory/chromatin + essentiality + functionality (hotspot aware)
+  - Transparent: Every verdict includes citations, insights, rationale, and a run signature
+  - Safety and provenance: generation guards, defensive fallbacks, auditability
+  - Frontend‑ready: renders chips, tiers, badges without schema churn
+
+## How to test locally
+- Health
+```bash
+curl -sS http://127.0.0.1:8000/api/evo/health | cat
+```
+- Chemo guidance (replace disease/therapy/mutations as needed)
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/guidance/chemo \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "disease": "multiple myeloma",
+    "drug_or_class": "proteasome inhibitor",
+    "mutations": [{"gene":"BRAF","hgvs_p":"V600E","chrom":"7","pos":140453136,"ref":"T","alt":"A"}],
+    "options": {"adaptive": true, "ensemble": true},
+    "api_base": "http://127.0.0.1:8000"
+  }'
+```
+- Radiation guidance
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/guidance/radonc \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "disease": "non-small cell lung cancer",
+    "mutations": [{"gene":"TP53","hgvs_p":"R175H","chrom":"17","pos":7673803,"ref":"C","alt":"T","build":"hg38"}],
+    "options": {"adaptive": true, "ensemble": true},
+    "api_base": "http://127.0.0.1:8000"
+  }'
+```
+
+## Where this is going next
+- FDA/DailyMed integration for authoritative label status
+- Better guideline/RCT/meta detection (badges + strength mapping)
+- Trial matching stubs in guidance payloads
+- Expanded on‑label rulesets, disease/therapy coverage
+
+## Architecture pointers
+- Guidance plan and roadmap: `[precisionrad_copilot_concept.mdc](mdc:.cursor/rules/research/precisionrad_copilot_concept.mdc)`
+- Backend routers:
+  - Guidance: `[guidance.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/guidance.py)`
+  - Efficacy orchestrator: `[efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py)`
+  - Insights: `[insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py)`
+  - Evo proxy: `[evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py)`
+
+We’ve crossed the critical threshold: prediction → guidance. “Yes GO” is now a tiered, explainable verdict backed by real evidence, MoA alignment, and transparent provenance—exactly what precision medicine needs to be trustworthy and useful.
+
+---
+
+## Deep dive: DDR/HRD glossary and how we use them
+
+- DNA Damage Response (DDR): the cellular network that detects and repairs DNA damage. Core modules include homologous recombination (HR; BRCA1/2, ATM/ATR), non‑homologous end joining, checkpoint signaling (CHEK2), and replication stress responses.
+- Homologous Recombination Deficiency (HRD): loss of accurate double‑strand break repair, commonly via BRCA1/2 loss‑of‑function. HRD creates exploitable vulnerabilities to platinum agents and PARP inhibitors (synthetic lethality).
+- LOH (Loss of Heterozygosity): large regions where one parental allele is lost; elevated levels are part of genomic HRD scars.
+- TAI (Telomeric Allelic Imbalance): allelic imbalance extending to telomeres; another HRD scar component.
+- LST (Large‑Scale Transitions): number of chromosomal breakpoints between adjacent segments; elevated in HRD genomes.
+
+How we apply these concepts today:
+- Our “damage” signals (variant context, functionality proxy, Evo2 sequence deltas) flag likely loss‑of‑function in DDR genes (e.g., BRCA1/2, ATM).
+- Our “dependency” signal (gene essentiality) estimates whether a tumor is critically dependent on a specific gene. Important: HRD implies pathway vulnerability, not necessarily high essentiality of the damaged gene itself.
+- Guidance (and the new synthetic lethality route) maps DDR damage → therapy classes (e.g., platinum/PARP) using clinical gates and evidence, even when per‑gene essentiality is low.
+
+Key interpretation note:
+- Low BRCA1 essentiality doesn’t argue against platinum. The correct lens is HRD (pathway vulnerability) → platinum/PARP sensitivity, which our synthetic lethality path and guidance capture.
+
+## Enformer/Borzoi: what they add
+
+- Enformer and Borzoi are sequence‑to‑regulatory predictors used to estimate chromatin accessibility and regulatory impacts from DNA sequence context.
+- In our stack: `/api/insights/predict_chromatin_accessibility` consults Enformer/Borzoi if configured (via `ENFORMER_URL`/`BORZOI_URL`), otherwise falls back to a heuristic. Provenance includes `method: "enformer"|"borzoi"|"heuristic_v0"`.
+- Practical effect: supports the Chromatin insight chip and lifts confidence modestly when regulatory context aligns with the target locus.
+
+## Interpreting our results (practical guide)
+
+- efficacy_score (0–1): relative benefit proxy within the returned set for that case. Compare across drugs/classes in the same response.
+- confidence (0–1): trust in the score given signal quality and evidence availability.
+- evidence_tier/badges/citations: strength and nature of supporting literature (guideline/RCT/meta planned as badges; ClinVar and counts already present in many cases).
+- insights: quick biological context—Functionality (variant effect), Chromatin (regulatory context), Essentiality (per‑gene dependency proxy), Regulatory (noncoding impact proxy).
+- guidance.tier (I/II/III/Research): clinical recommendation after gates (on‑label/guideline and strength); Tier I is “Yes GO.”
+
+Examples:
+- Melanoma + BRAF V600E → BRAF inhibitor:
+  - On‑label → Tier I (Yes GO) even if essentiality is modest; S/P/E + insights provide mechanistic support; citations appear and provenance is recorded.
+- MM + BRAF V600E:
+  - Often “Consider” due to sparse disease‑specific evidence; efficacy scores modest, confidence mid‑range, essentiality lower; guidance reflects the uncertainty transparently.
+- BRCA1 truncation (HRD) → platinum (synthetic lethality):
+  - Damage signals flag loss‑of‑function; essentiality may remain low; guidance still recommends DDR‑aligned therapy via synthetic lethality mapping and evidence gates.
+
+## Why we’re unique
+
+- Multi‑signal fusion: Evo2 sequence impact (multi/exon windows) + functionality proxy + chromatin/regulatory + essentiality, all kept transparent with provenance.
+- Clinical gates: Decisions aren’t pure scores; they honor label/guideline context with citations and auditable rationale.
+- Safety and resilience: input guards, defensive fallbacks, and explicit run signatures.
+- Ready for FE: minimal schema churn; chips, tiers, badges, rationale already renderable.
+
+## Limitations and planned upgrades
+
+- Evidence recall can be sparse in local dev; enabling provider keys and adding guideline/RCT detection will lift evidence_strength and tiers.
+- Chromatin is heuristic unless Enformer/Borzoi services are up; configure `ENFORMER_URL`/`BORZOI_URL`.
+- Essentiality lacks lineage priors today; integrating DepMap/lineage‑specific calibrations can improve dependency interpretation.
+- HRD signatures (LOH/TAI/LST) are not yet computed; adding a simple genomic‑scar proxy would strengthen DDR guidance.
+
+
+## What this means for our partners (biotechs, oncologists)
+
+- Faster prioritization, lower risk: Turn noisy variant lists into tiered, evidence‑backed guidance (Yes GO / Consider / Research) with explicit on‑label status and citations. This compresses the time from hypothesis to a defensible therapeutic plan.
+- Transparent rationale: Every verdict ships with insights (Functionality/Chromatin/Essentiality/Regulatory), pathway alignment, and provenance, enabling expert review and regulatory audit trails.
+- Modular collaboration: You can bring proprietary evidence (internal trials, curated compendia) to strengthen gates without changing the API contract. We’ll surface your badges and citations.
+- Fit for translational workflows: The same API supports drug repurposing screens, synthetic lethality drills (DDR→platinum/PARP), and targeted agents (e.g., MAPK, PI3K) with MoA‑aware evidence.
+- Safety and governance: Guidance is conservative by design (label/guideline gates). Scores never silently override clinical realities; they inform when evidence is sparse.
+
+Partner value examples
+- Trial design: Use “Consider” tiers with strong internal signals to seed arm hypotheses; lock “Yes GO” where on‑label or guideline support exists.
+- Biomarker strategy: Map recurring HRD/DDR patterns to platinum/PARP cohorts; track chips and genomic‑scar proxies as they come online.
+- Companion diagnostics: Tie guidance tiers to assay outputs (variant + context) with stable, auditable APIs.
+
+## PrecisionRad Co‑Pilot: next we build (reusable across scenarios)
+
+- What we’ll ship first
+  - A dedicated radiation view that consumes our existing orchestrator and displays Radiosensitivity (renamed efficacy), Confidence, Evidence tier, Badges, and the four Insight chips.
+  - A guidance call for radiation (`/api/guidance/radonc`) surfaced in Co‑Pilot with a Tier badge and on‑label/guideline indicators.
+  - Synthetic lethality drill‑downs for DDR contexts (damage → dependency → therapy) that reuse the new `/api/guidance/synthetic_lethality`.
+
+- Early scenarios it unlocks
+  - TP53 and radiosensitivity triage (lung, head & neck).
+  - HRD panels (ovarian, breast, prostate) with platinum/PARP guidance.
+  - Myeloma contexts that combine MAPK and proteostasis axes with transparent uncertainty when literature is sparse.
+
+- Why this scales
+  - Same S/P/E + insights core, different gating profiles per modality.
+  - Same FE primitives (chips, tiers, badges), minimal schema churn.
+  - Clear path to partner data fusion (labels, guidelines, internal evidence) to raise tiers without changing endpoints.
+
+

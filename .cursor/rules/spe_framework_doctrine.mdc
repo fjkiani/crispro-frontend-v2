@@ -1,0 +1,152 @@
+---
+alwaysApply: false
+description: Doctrine for using the S/P/E framework (Sequence/Pathway/Evidence) via backend APIs — endpoints, flags, quick tests, and best practices for agents
+---
+
+# S/P/E Framework Doctrine (for Agents)
+
+This rule explains how any agent can use the existing S/P/E framework end‑to‑end or component‑by‑component. It includes endpoints, payload templates, flags, and quick smoke tests.
+
+## What is S/P/E?
+- **S (Sequence)**: Variant impact/sequence signals (Evo2 proxies, insights bundle).
+- **P (Pathway)**: Aggregation of variant effects into pathway‑level signals.
+- **E (Evidence)**: Literature/ClinVar priors and citations.
+
+The primary orchestrator combines S/P/E to return per‑therapy efficacy hypotheses with scores, confidence, evidence tiers, badges, and provenance.
+
+## Where the code lives
+- Backend app init: [oncology-coPilot/oncology-backend-minimal/api/main.py](mdc:oncology-coPilot/oncology-backend-minimal/api/main.py)
+- Orchestrator (S/P/E): [oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py)
+- Insights (S signals): [oncology-coPilot/oncology-backend-minimal/api/routers/insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py)
+- Evidence (E): [oncology-coPilot/oncology-backend-minimal/api/routers/evidence.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evidence.py)
+- Fusion (AlphaMissense): [oncology-coPilot/oncology-backend-minimal/api/routers/fusion.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/fusion.py)
+- Evo proxy (sequence oracle): [oncology-coPilot/oncology-backend-minimal/api/routers/evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py)
+
+## Start the API locally
+```bash
+cd /Users/fahadkiani/Desktop/development/crispr-assistant-main/oncology-coPilot/oncology-backend-minimal
+/Users/fahadkiani/Desktop/development/crispr-assistant-main/venv/bin/python -m uvicorn api.main:app --reload
+```
+
+## One‑call S/P/E orchestrator (recommended)
+Endpoint: `POST /api/efficacy/predict`
+
+Minimal example:
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/efficacy/predict \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model_id":"evo2_1b",
+    "mutations":[{"gene":"BRAF","hgvs_p":"V600E","chrom":"7","pos":140453136,"ref":"T","alt":"A"}],
+    "options":{"adaptive":true,"ensemble":true}
+  }'
+```
+
+Response (abridged):
+```json
+{
+  "drugs": [
+    {
+      "name": "ExampleDrug",
+      "efficacy_score": 0.23,
+      "confidence": 0.51,
+      "evidence_tier": "consider",
+      "badges": ["PathwayAligned"],
+      "insights": {"functionality": 0.6, "chromatin": 0.5, "essentiality": 0.35, "regulatory": 0.12},
+      "rationale": ["S: calibrated sequence impact ...", "P: pathway mapping ...", "E: literature/ClinVar ..."],
+      "provenance": {"run_id": "...", "profile": "baseline"}
+    }
+  ]
+}
+```
+
+Notes:
+- Pass `model_id` (default recommended: `evo2_1b`).
+- `mutations[*]` can include `gene`, `hgvs_p`, and/or GRCh38 `chrom/pos/ref/alt`.
+- Output includes S/P/E‑aware `insights`, `rationale`, `citations` (when available), and `provenance`.
+
+## Using S (Insights) directly
+For chips/feature engineering or UI panels, call these:
+- Functionality: `POST /api/insights/predict_protein_functionality_change`
+- Essentiality: `POST /api/insights/predict_gene_essentiality`
+- Regulatory (splicing/noncoding proxy): `POST /api/insights/predict_splicing_regulatory`
+- Chromatin (heuristic unless Enformer/Borzoi configured): `POST /api/insights/predict_chromatin_accessibility`
+
+Example (functionality):
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/insights/predict_protein_functionality_change \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "gene": "ERBB2",
+    "variants": [{"chrom":"17","pos":39724851,"ref":"C","alt":"T","hgvs_p":"V777L"}],
+    "model_id": "evo2_1b"
+  }'
+```
+
+## Using E (Evidence) directly
+- ClinVar lookup: `GET /api/evidence/clinvar?gene=...&variant=...`
+- Literature aggregation: `POST /api/evidence/deep_analysis`
+
+Notes:
+- Evidence services are best‑effort and degrade gracefully under rate limits; do not block on them.
+
+## Optional: Fusion (AlphaMissense)
+- Coverage (GRCh38 missense only): `GET /api/fusion/coverage?chrom=...&pos=...&ref=...&alt=...`
+- Score: `POST /api/fusion/score_variant`
+
+Gates:
+- Enforce GRCh38 coordinates and missense; show a Fusion coverage badge in UI before using.
+
+## Evo proxy (low‑level S scoring)
+- `POST /api/evo/score_variant_multi` — multi‑window delta proxy
+- `POST /api/evo/score_variant_exon` — exon‑context delta proxy
+
+Use these only if building your own S features; otherwise prefer insights or the orchestrator.
+
+## Profiles, flags, and safety
+- Default model: `evo2_1b` (stable, cost‑controlled). Use `model_id` in requests.
+- Avoid viral/forbidden content in generation routes; guardrails exist in Evo/Design endpoints.
+- Triumvirate doctrine: truncation/frameshift gate → Evo analysis → structural assessment (roadmap).
+- Keep coordinates GRCh38; validate `REF/ALT` against reference when possible.
+
+## Quick smoke tests (local)
+```bash
+# 1) Orchestrator end-to-end
+curl -sS -X POST http://127.0.0.1:8000/api/efficacy/predict -H 'Content-Type: application/json' \
+  -d '{"model_id":"evo2_1b","mutations":[{"gene":"BRAF","hgvs_p":"V600E","chrom":"7","pos":140453136,"ref":"T","alt":"A"}],"options":{"adaptive":true}}'
+
+# 2) Insights: regulatory proxy
+curl -sS -X POST http://127.0.0.1:8000/api/insights/predict_splicing_regulatory -H 'Content-Type: application/json' \
+  -d '{"chrom":"7","pos":140453136,"ref":"T","alt":"A","model_id":"evo2_1b"}'
+
+# 3) Evidence: ClinVar (best-effort)
+curl -sS 'http://127.0.0.1:8000/api/evidence/clinvar?gene=BRAF&variant=V600E'
+```
+
+## Output fields to surface in UI
+- `drugs[*].efficacy_score` — 0..1
+- `drugs[*].confidence` — 0..1 (reflects S/P/E + insights lifts)
+- `drugs[*].evidence_tier` — supported/consider/insufficient
+- `drugs[*].badges` — e.g., PathwayAligned, ClinVar‑Strong
+- `drugs[*].insights` — functionality/chromatin/essentiality/regulatory (0..1)
+- `drugs[*].rationale[]`, `citations[]`, `provenance{ run_id, profile }`
+
+## Best practices
+- Prefer the orchestrator for end‑to‑end S/P/E; call insights only for chips/ablations.
+- Keep GRCh38 normalization strict; Fusion only when coverage is true (missense).
+- Treat Evidence as additive; do not block flows on sparse literature.
+- Expose `run_id`, `profile`, and flags in UI for provenance/audit.
+- Label clearly as Research Use Only (RUO).
+
+## Known limitations
+- Evidence services can be sparse due to provider limits; responses degrade gracefully.
+- Chromatin endpoint uses heuristics unless Enformer/Borzoi services are configured.
+- Upstream Evo services may intermittently fail; orchestrator handles fallback with conservative defaults.
+
+## Contact points
+- Orchestrator: `POST /api/efficacy/predict` (primary entry point)
+- Insights: `/api/insights/*`
+- Evidence: `/api/evidence/*`
+- Fusion: `/api/fusion/*`
+- Evo: `/api/evo/*`
+

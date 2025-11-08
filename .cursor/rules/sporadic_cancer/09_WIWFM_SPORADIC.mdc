@@ -1,0 +1,50 @@
+# 🎯 WIWFM FOR SPORADIC - EFFICACY PREDICTION
+
+---
+
+## **INPUTS**
+
+- `germline_status`: "negative" | "positive" | "unknown"
+- `tumor_context` (when germline negative):
+  - `somatic_mutations[]`
+  - `tmb`, `msi_status`, `hrd_score`
+  - `copy_number_alterations[]`
+- `treatment_history`
+- `options` (profile flags)
+
+---
+
+## **SCORING (S/P/E + SAE + LINES)**
+
+### **Sequence (S)**:
+- Score somatic mutations with Evo2
+- Merge with CNAs (e.g., ERBB2 amp)
+
+### **Pathway (P)**:
+- Aggregate multi-hit disruptions
+- Weight by disease + line
+
+### **Evidence (E)**:
+- Prefer tumor-based literature
+- Apply badges (Guideline/Label/PathwayAligned)
+
+### **SAE Features**:
+- TMB, MSI, HRD, amplifications, losses
+- Lift drug classes (checkpoint for TMB-high)
+
+### **Treatment Lines**:
+- `line_appropriateness`, `cross_resistance_risk`, `sequencing_fitness`
+
+### **Germline Gating**:
+- If germline negative + no HRD → penalize PARP
+- If TMB ≥10-15 or MSI-high → boost checkpoint
+
+---
+
+## **OUTPUT**
+
+`drugs[*]`: efficacy_score, confidence, evidence_tier, sae_features, treatment_line, rationale, provenance
+
+---
+
+**NEXT**: Read `10_AYESHA_CASE_STUDY.mdc`

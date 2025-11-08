@@ -1,0 +1,130 @@
+---
+alwaysApply: false
+description: Clinical Genomics Command Center – end‑to‑end doctrine from clinical intake → biopsy/NGS → S/P/E efficacy, SAE explainability, toxicity PGx, evidence, and cohort context. Execution plan, inputs, outputs, and acceptance criteria.
+---
+
+# Clinical Genomics Command Center – End‑to‑End Doctrine (RUO)
+
+This doctrine explains, in plain language, how our platform supports a patient like the CT case described (peritoneal carcinomatosis with pleural effusions) from first clinical imaging through tissue diagnosis and molecular profiling, then turns those results into a transparent, evidence‑backed therapy hypothesis with explainable confidence and toxicity awareness.
+
+## 1) Clinical intake → what the CT means
+- Peritoneal carcinomatosis + ascites + abdominopelvic lymphadenopathy: advanced disease with peritoneal spread; ovarian/peritoneal origin is common in females, but GI sources must be ruled out.
+- Bilateral pleural effusions with atelectasis: fluid around lungs; diagnostic and symptomatic thoracentesis may be indicated.
+- Ovaries inseparable from peritoneal deposits: likely involvement; tissue sampling is required to confirm histology and origin.
+
+Immediate clinical next steps (outside the platform):
+- Tissue confirmation: image‑guided peritoneal implant/node biopsy; cytology on ascites/pleural fluid as appropriate.
+- Pathology + IHC to establish origin.
+- Tumor markers: CA‑125, CEA, CA19‑9 as clinically indicated.
+- Molecular: Tumor NGS panel + HRD/BRCA, MSI/TMB. Consider germline testing (BRCA1/2, Lynch, etc.).
+
+## 2) What our platform does (once tissue + NGS available)
+- Translate the variant list into an actionable, explainable story:
+  - Sequence (S): Evo2‑based delta magnitudes with bounded exon‑context and calibrated percentiles.
+  - Pathway (P): Map altered genes → pathways (e.g., RAS/MAPK, PI3K, DNA repair) with disease‑aware weights.
+  - Evidence (E): Guidelines, ClinVar priors, and literature cues; cohort overlays when available.
+  - Explainability (SAE): Real‑data derived features (no mocks) that explain why confidence is high/low (e.g., exon disruption, hotspot mutation, DNA repair burden, essentiality signal, cohort overlap).
+  - Toxicity PGx: Detect germline pharmacogene risks (e.g., DPYD) and MoA‑overlap toxicity factors (e.g., DNA repair burden for platinum agents) to inform dose adjustments/alternatives.
+
+## 3) Key platform components (code map)
+- Backend API (FastAPI):
+  - Efficacy orchestrator: [`efficacy_orchestrator/orchestrator.py`](mdc:oncology-coPilot/oncology-backend-minimal/api/services/efficacy_orchestrator/orchestrator.py)
+  - Efficacy models: [`efficacy_orchestrator/models.py`](mdc:oncology-coPilot/oncology-backend-minimal/api/services/efficacy_orchestrator/models.py)
+  - Sequence scorers: Evo2, Fusion AM: [`sequence_scorers/`](mdc:oncology-coPilot/oncology-backend-minimal/api/services/sequence_scorers)
+  - Pathway aggregation: [`pathway/aggregation.py`](mdc:oncology-coPilot/oncology-backend-minimal/api/services/pathway/aggregation.py)
+  - Insights endpoints (Functionality/Chromatin/Essentiality/Regulatory): [`routers/insights.py`](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py)
+  - Evo proxy (delta/multi/exon): [`routers/evo.py`](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py)
+  - Clinical Genomics unified endpoint (fast path orchestrator): [`routers/clinical_genomics.py`](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/clinical_genomics.py)
+  - Toxicity & off‑target (PGx + guide heuristics): [`routers/safety.py`](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/safety.py)
+  - SAE service (REAL data transformation): [`services/sae_service.py`](mdc:oncology-coPilot/oncology-backend-minimal/api/services/sae_service.py)
+
+- Frontend (React/MUI):
+  - Mechanistic Evidence Tab: [`tabs/MechanisticEvidenceTab.jsx`](mdc:oncology-coPilot/oncology-frontend/src/components/ClinicalGenomicsCommandCenter/tabs/MechanisticEvidenceTab.jsx)
+  - Cards: Efficacy, Toxicity, Off‑Target, EvidenceBand, SAEFeatures (new): [`cards/`](mdc:oncology-coPilot/oncology-frontend/src/components/ClinicalGenomicsCommandCenter/cards)
+  - Hooks: useEfficacy, useToxicity, useOffTarget: [`hooks/`](mdc:oncology-coPilot/oncology-frontend/src/components/ClinicalGenomicsCommandCenter/hooks)
+  - CoPilot integration (quick actions + questions): [`integrations/ClinicalGenomicsCoPilotIntegration.jsx`](mdc:oncology-coPilot/oncology-frontend/src/components/ClinicalGenomicsCommandCenter/integrations/ClinicalGenomicsCoPilotIntegration.jsx)
+
+## 4) Inputs → Platform → Outputs
+- Inputs (from clinic):
+  - Confirmed pathology + IHC; full variant list (HGVS or VCF), HRD/BRCA, MSI/TMB.
+  - Germline PGx (if available), prior treatments, performance status.
+
+- Platform processing:
+  1) Validate variants (GRCh38, REF/ALT); truncate/frameshift gates per Triumvirate Protocol.
+  2) Sequence scoring (Evo2 delta + exon‑context, calibrated); Fusion AM when GRCh38 missense covered.
+  3) Pathway impact aggregation with disease‑aware weights.
+  4) Evidence integration (guidelines, ClinVar priors, literature); cohort overlays when present.
+  5) Toxicity PGx and MoA overlap; CRISPR off‑target heuristics (if design is in scope).
+  6) SAE explainability: real‑data features with provenance (no mocks) explaining confidence.
+
+- Outputs (structured JSON rendered in UI):
+  - Ranked therapies with efficacy_score, confidence, evidence_tier, badges, insights, rationale, citations.
+  - Provenance: run_id, profile, methods, confidence_breakdown (S, P, E, SAE attribution), data sources.
+  - Toxicity risk with factors (germline, pathway), and recommended caution/alternatives.
+  - SAEFeatures: boosting vs limiting features, activations, and impact.
+
+## 5) SAE explainability (real data only)
+Core features we derive from live signals:
+- exon_disruption (Evo2 delta magnitude / calibrated percentile)
+- hotspot_mutation (AlphaMissense; hotspot floor; ClinVar Pathogenic)
+- essentiality_signal (Insights essentiality)
+- DNA_repair_capacity (toxicity pathway overlap)
+- seed_region_quality (off‑target heuristic)
+- cohort_overlap (cohort coverage fraction)
+
+See: [`services/sae_service.py`](mdc:oncology-coPilot/oncology-backend-minimal/api/services/sae_service.py)
+
+## 6) Toxicity PGx and safety
+- Detect pharmacogene variants (e.g., DPYD, TPMT) → dose adjustments/alternatives.
+- Map drug MoA to toxicity pathways (e.g., DNA repair burden for platinum agents).
+- Endpoint: [`routers/safety.py`](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/safety.py)
+
+## 7) How we answer “What should we do for this patient?”
+- After biopsy/NGS:
+  - If HRD/BRCA+: PARP inhibitor suitability with calibrated confidence; show SAE “why”.
+  - If RAS/MAPK/PI3K disruptions: targeted/chemo strategy, pathway alignment, trial options.
+  - If MSI‑H/TMB‑high: immunotherapy pathway with evidence tiering.
+  - Always include toxicity PGx risk and confidence attribution.
+
+## 8) End‑to‑end flow (one‑pager)
+1) Intake: CT report → biopsy order → pathology.
+2) Molecular: NGS panel + HRD/BRCA + MSI/TMB; optional germline.
+3) Platform run: unified endpoint → efficacy + toxicity + SAE.
+4) Review: ranked therapies with confidence + “why”, toxicity cautions, trials.
+5) Decide: oncologist uses results to plan next steps (RUO; supports, not replaces, clinical judgment).
+
+## 9) Minimal test commands (local)
+- Efficacy (fast path):
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/clinical_genomics/analyze_variant \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "mutations": [{"gene":"BRAF","chrom":"7","pos":140753336,"ref":"T","alt":"A","build":"GRCh38","consequence":"missense_variant"}],
+    "disease": "ovarian_carcinoma",
+    "profile": "richer",
+    "options": {"include_sae_features": true}
+  }' | python3 -m json.tool | head -120
+```
+- Toxicity risk:
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/safety/toxicity_risk \
+  -H 'Content-Type: application/json' \
+  -d '{"patient":{"germlineVariants":[{"gene":"DPYD","chrom":"1","pos":97450058,"ref":"C","alt":"T"}]},"candidate":{"type":"drug","moa":"platinum_agent"}}' | python3 -m json.tool
+```
+- Off‑target preview:
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/safety/off_target_preview \
+  -H 'Content-Type: application/json' \
+  -d '{"guides":[{"seq":"AGCTGCTAGCTGCTAGCTGC","pam":"NGG"}]}' | python3 -m json.tool
+```
+
+## 10) Acceptance criteria
+- Clinical clarity: Outputs readable to a clinician (plain labels, confidence with “why”, toxicity flags).
+- Technical transparency: Provenance includes run_id, profile, feature flags, confidence_breakdown (S/P/E + SAE attribution) and data sources.
+- Real data only for SAE: All features mapped from live signals; missing values shown as N/A with provenance.
+- Latency: Fast path under ~10–20s for a small variant set; richer profiles acceptable at ~20–40s.
+- Safety: Truncation/frameshift gates enforced; Fusion used only when eligible; toxicity guardrails present.
+
+## 11) Disclaimers
+- Research‑Use Only (RUO). Not a substitute for medical advice. Results should be interpreted by qualified clinicians.
+- External services (Evo2/Fusion/Literature) may be rate‑limited; provenance will indicate when fallbacks were applied.

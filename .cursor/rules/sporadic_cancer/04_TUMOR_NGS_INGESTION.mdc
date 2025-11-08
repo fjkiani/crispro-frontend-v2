@@ -1,0 +1,33 @@
+# 🎯 TUMOR NGS INGESTION - PARSERS
+
+**Goal**: Parse Foundation/Tempus reports → structured TumorContext
+
+---
+
+## **ENDPOINT**: `POST /api/tumor/ingest_ngs`
+
+**Inputs**: PDF/JSON from Foundation Medicine or Tempus
+**Output**: TumorContext JSON
+
+---
+
+## **IMPLEMENTATION** (Day 3)
+
+```python
+# api/routers/tumor.py
+
+@router.post("/ingest_ngs")
+async def ingest_ngs(report: UploadFile):
+    # 1. Detect provider (Foundation/Tempus)
+    # 2. Parse TMB, MSI, HRD, variants, CNAs
+    # 3. Return TumorContext schema
+    ...
+```
+
+---
+
+**Acceptance**: Both Foundation and Tempus reports produce valid TumorContext
+
+---
+
+**NEXT**: Read `05_CLINICAL_TRIAL_MATCHING.mdc`

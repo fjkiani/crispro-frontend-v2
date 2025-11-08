@@ -1,0 +1,37 @@
+# 🎯 BACKEND CONTRACTS - SCHEMAS & ENDPOINTS
+
+---
+
+## **NEW SCHEMA**: `TumorContext`
+
+```python
+class TumorContext(BaseModel):
+    somatic_mutations: List[Mutation]
+    tmb: Optional[float] = None  # mutations/megabase
+    msi_status: Optional[str] = None  # MSI-high/MSS
+    hrd_score: Optional[float] = None  # somatic HRD
+    copy_number_alterations: Optional[List[CNA]] = None
+    purity: Optional[float] = None
+    ploidy: Optional[float] = None
+```
+
+---
+
+## **UPDATED**: `/api/efficacy/predict`
+
+**New Inputs**:
+- `germline_status`: "negative" | "positive" | "unknown"
+- `tumor_context?`: TumorContext
+
+**Behavior**: PARP penalty when germline negative, TMB boost when high
+
+---
+
+## **NEW**: `/api/tumor/ingest_ngs`
+
+**Input**: Foundation/Tempus PDF/JSON
+**Output**: TumorContext + provenance
+
+---
+
+**NEXT**: Read `09_WIWFM_SPORADIC.mdc`

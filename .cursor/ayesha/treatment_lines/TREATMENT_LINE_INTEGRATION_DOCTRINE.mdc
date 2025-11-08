@@ -1,0 +1,520 @@
+---
+alwaysApply: false
+description: Treatment Line Integration Doctrine – Bake treatment line sequencing into drug panels, SAE features, and confidence scoring
+---
+
+# ⚔️ TREATMENT LINE INTEGRATION DOCTRINE
+
+## **MISSION**
+Integrate treatment line sequencing (1st, 2nd, 3rd, 4th+) into CrisPRO platform so SAE can explain:
+- **Line appropriateness** (Is this drug right for this line?)
+- **Cross-resistance** (Will this work if prior therapy failed?)
+- **Sequencing optimization** (What's the best next step?)
+
+---
+
+## **CURRENT STATE ANALYSIS**
+
+### **What We Have ✅**
+1. **NCCN Endpoint** (`api/routers/nccn.py`)
+   - Treatment lines defined: `first_line`, `second_line`, `relapsed`
+   - Config: `nccn_guidelines_config.json`
+   - **Limitation**: Siloed, not integrated with S/P/E or SAE
+
+2. **Drug Panel** (`api/services/pathway/panel_config.py`)
+   - Basic drug info: name, MoA, pathway weights
+   - **Missing**: Treatment line metadata
+
+3. **SAE Features** (`api/services/sae_service.py`)
+   - 6 features: exon disruption, hotspot, essentiality, DNA repair, seed region, cohort
+   - **Missing**: Treatment line awareness, prior therapy context
+
+### **What We're Missing ❌**
+1. **Treatment Line Metadata in Drug Panel**
+   - No `preferred_lines`, `sequencing_order`, `prior_therapy_exclusions`
+   
+2. **Cross-Resistance Modeling**
+   - No MoA overlap detection (e.g., platinum → PARP cross-resistance)
+   
+3. **SAE Treatment Line Features**
+   - No features like `line_appropriateness`, `prior_therapy_resistance`, `sequencing_fitness`
+
+---
+
+## **TARGET STATE - WHAT WE'LL BUILD**
+
+### **Phase 1: Treatment Line-Aware Drug Panel** (2-3 hours)
+
+**File**: `api/services/pathway/panel_config.py`
+
+**Enhanced Schema**:
+```python
+{
+    "name": "PARP inhibitor",
+    "moa": "DNA repair blockade",
+    "pathway_weights": {"dna_repair": 0.9, "tp53": 0.3},
+    
+    # NEW: Treatment line metadata
+    "treatment_line_metadata": {
+        "preferred_lines": [2, 3],  # Best for 2nd/3rd line
+        "avoid_lines": [1],  # Avoid first-line (reserve for relapse)
+        "nccn_categories_by_line": {
+            1: "2A",  # Category 2A for first-line
+            2: "1",   # Category 1 for second-line
+            3: "1"    # Category 1 for third-line
+        },
+        "requires_prior_failure": ["platinum"],  # Only use after platinum fails
+        "contraindicated_with_prior": [],  # No contraindications
+        "cross_resistance_with": ["platinum"],  # Cross-resistance concern
+        "sequencing_rationale": "Reserve for post-platinum progression; synthetic lethality with BRCA",
+        "evidence_by_line": {
+            2: {"trial": "SOLO-2", "pfs_months": 19.1, "evidence_level": "High"},
+            3: {"trial": "ARIEL3", "pfs_months": 16.6, "evidence_level": "High"}
+        }
+    }
+}
+```
+
+**Example Full Panels**:
+
+**Ovarian Cancer Panel**:
+```python
+OVARIAN_PANEL = [
+    {
+        "name": "platinum + taxane",
+        "moa": "DNA crosslinking + microtubule disruption",
+        "pathway_weights": {"dna_repair": 0.8, "cell_cycle": 0.6},
+        "treatment_line_metadata": {
+            "preferred_lines": [1],
+            "nccn_categories_by_line": {1: "1"},
+            "sequencing_rationale": "First-line standard of care",
+            "evidence_by_line": {
+                1: {"trial": "GOG-0218", "pfs_months": 14.1, "evidence_level": "High"}
+            }
+        }
+    },
+    {
+        "name": "PARP inhibitor",
+        "moa": "DNA repair blockade",
+        "pathway_weights": {"dna_repair": 0.9, "tp53": 0.3},
+        "treatment_line_metadata": {
+            "preferred_lines": [2, 3],
+            "avoid_lines": [1],
+            "requires_prior_failure": ["platinum"],
+            "cross_resistance_with": ["platinum"],
+            "nccn_categories_by_line": {2: "1", 3: "1"},
+            "sequencing_rationale": "Reserve for post-platinum progression; BRCA synthetic lethality",
+            "evidence_by_line": {
+                2: {"trial": "SOLO-2", "pfs_months": 19.1, "evidence_level": "High"}
+            }
+        }
+    },
+    {
+        "name": "bevacizumab + chemotherapy",
+        "moa": "VEGF blockade + DNA damage",
+        "pathway_weights": {"angiogenesis": 0.8, "dna_repair": 0.5},
+        "treatment_line_metadata": {
+            "preferred_lines": [2, 3],
+            "nccn_categories_by_line": {2: "1", 3: "2A"},
+            "sequencing_rationale": "Anti-angiogenesis for platinum-resistant disease",
+            "evidence_by_line": {
+                2: {"trial": "OCEANS", "pfs_months": 12.4, "evidence_level": "High"}
+            }
+        }
+    }
+]
+```
+
+**Breast Cancer Panel**:
+```python
+BREAST_HER2_PANEL = [
+    {
+        "name": "trastuzumab + pertuzumab + taxane",
+        "moa": "HER2 blockade + microtubule disruption",
+        "pathway_weights": {"her2_signaling": 0.9, "cell_cycle": 0.6},
+        "treatment_line_metadata": {
+            "preferred_lines": [1],
+            "nccn_categories_by_line": {1: "1"},
+            "sequencing_rationale": "First-line standard for HER2+ metastatic",
+            "evidence_by_line": {
+                1: {"trial": "CLEOPATRA", "os_months": 56.5, "evidence_level": "High"}
+            }
+        }
+    },
+    {
+        "name": "trastuzumab deruxtecan (T-DXd)",
+        "moa": "HER2-targeted ADC",
+        "pathway_weights": {"her2_signaling": 0.9, "dna_repair": 0.7},
+        "treatment_line_metadata": {
+            "preferred_lines": [2, 3],
+            "requires_prior_failure": ["trastuzumab"],
+            "nccn_categories_by_line": {2: "1", 3: "1"},
+            "sequencing_rationale": "Post-trastuzumab progression; ADC payload delivery",
+            "evidence_by_line": {
+                2: {"trial": "DESTINY-Breast03", "pfs_months": 28.8, "evidence_level": "High"}
+            }
+        }
+    },
+    {
+        "name": "tucatinib + trastuzumab + capecitabine",
+        "moa": "Selective HER2/TKI + HER2 mAb + chemotherapy",
+        "pathway_weights": {"her2_signaling": 0.9, "dna_repair": 0.5},
+        "treatment_line_metadata": {
+            "preferred_lines": [3, 4],
+            "requires_prior_failure": ["trastuzumab", "pertuzumab", "T-DXd"],
+            "nccn_categories_by_line": {3: "1", 4: "1"},
+            "sequencing_rationale": "Post-T-DXd progression; brain mets active",
+            "evidence_by_line": {
+                3: {"trial": "HER2CLIMB", "pfs_months": 7.8, "evidence_level": "High"}
+            }
+        }
+    }
+]
+```
+
+---
+
+### **Phase 2: SAE Treatment Line Features** (3-4 hours)
+
+**File**: `api/services/sae_service.py`
+
+**New SAE Features**:
+
+**1. `line_appropriateness`** (0-1)
+- **Definition**: How appropriate is this drug for the current treatment line?
+- **Calculation**:
+```python
+def compute_line_appropriateness(
+    drug: Dict,
+    current_line: int,
+    prior_therapies: List[str]
+) -> float:
+    """
+    Returns 1.0 if drug is preferred for this line, 0.5 if acceptable, 0.0 if contraindicated.
+    """
+    metadata = drug.get("treatment_line_metadata", {})
+    
+    # Check if line is preferred
+    preferred_lines = metadata.get("preferred_lines", [])
+    if current_line in preferred_lines:
+        return 1.0
+    
+    # Check if line is avoided
+    avoid_lines = metadata.get("avoid_lines", [])
+    if current_line in avoid_lines:
+        return 0.0
+    
+    # Check if prior therapy requirements are met
+    requires_prior = metadata.get("requires_prior_failure", [])
+    if requires_prior:
+        prior_moas = [get_drug_moa(t) for t in prior_therapies]
+        if not any(req in prior_moas for req in requires_prior):
+            return 0.2  # Not eligible yet
+    
+    # Default: acceptable but not preferred
+    return 0.6
+```
+
+**2. `cross_resistance_risk`** (0-1)
+- **Definition**: Risk of cross-resistance based on prior therapies
+- **Calculation**:
+```python
+def compute_cross_resistance_risk(
+    drug: Dict,
+    prior_therapies: List[str]
+) -> float:
+    """
+    Returns 0.0 (no risk) to 1.0 (high risk) based on MoA overlap.
+    """
+    metadata = drug.get("treatment_line_metadata", {})
+    cross_resistant_moas = metadata.get("cross_resistance_with", [])
+    
+    if not cross_resistant_moas:
+        return 0.0  # No known cross-resistance
+    
+    prior_moas = [get_drug_moa(t) for t in prior_therapies]
+    overlaps = [moa for moa in cross_resistant_moas if moa in prior_moas]
+    
+    if not overlaps:
+        return 0.0  # No cross-resistance concern
+    
+    # Risk increases with number of overlapping MoAs
+    risk = min(len(overlaps) * 0.4, 1.0)
+    return risk
+```
+
+**3. `sequencing_fitness`** (0-1)
+- **Definition**: Overall fitness considering line + resistance + evidence
+- **Calculation**:
+```python
+def compute_sequencing_fitness(
+    drug: Dict,
+    current_line: int,
+    prior_therapies: List[str]
+) -> float:
+    """
+    Combined score: line appropriateness - cross-resistance risk + evidence strength.
+    """
+    line_app = compute_line_appropriateness(drug, current_line, prior_therapies)
+    cross_res = compute_cross_resistance_risk(drug, prior_therapies)
+    
+    # Get evidence strength for this line
+    metadata = drug.get("treatment_line_metadata", {})
+    evidence = metadata.get("evidence_by_line", {}).get(current_line, {})
+    evidence_level = evidence.get("evidence_level", "Low")
+    evidence_boost = {"High": 0.2, "Moderate": 0.1, "Low": 0.0}.get(evidence_level, 0.0)
+    
+    # Combine: appropriateness - resistance + evidence
+    fitness = line_app - cross_res + evidence_boost
+    return max(0.0, min(1.0, fitness))
+```
+
+---
+
+### **Phase 3: Integration with Confidence Scoring** (1-2 hours)
+
+**File**: `api/services/efficacy_orchestrator/orchestrator.py`
+
+**Enhancement**: Add treatment line modulation to confidence
+
+**Current Confidence**:
+```python
+confidence = (
+    seq_pct * 0.4 +          # Sequence disruption
+    path_pct * 0.3 +          # Pathway alignment
+    evidence_strength * 0.3   # Evidence strength
+    + insight_lifts           # Functionality/chromatin/essentiality
+    + sae_attribution         # SAE overall impact
+)
+```
+
+**Enhanced Confidence**:
+```python
+confidence = (
+    seq_pct * 0.3 +                    # Sequence (reduced weight)
+    path_pct * 0.25 +                  # Pathway (reduced weight)
+    evidence_strength * 0.25 +         # Evidence (reduced weight)
+    line_appropriateness * 0.2 +       # NEW: Treatment line fitness
+    + insight_lifts                    # Functionality/chromatin/essentiality
+    + sae_attribution                  # SAE overall impact
+    - cross_resistance_penalty         # NEW: Penalty for cross-resistance
+)
+```
+
+**Provenance Tracking**:
+```python
+provenance["confidence_breakdown"]["treatment_line"] = {
+    "current_line": current_line,
+    "line_appropriateness": line_app,
+    "cross_resistance_risk": cross_res,
+    "sequencing_fitness": seq_fitness,
+    "prior_therapies": prior_therapies,
+    "nccn_category": nccn_category
+}
+```
+
+---
+
+## **AYESHA USE CASE - BEFORE vs AFTER**
+
+### **Before (Current)**:
+**User Input**:
+```json
+{
+  "mutations": [{"gene": "BRCA2", "hgvs_p": "p.S1982R"}],
+  "disease": "ovarian_carcinoma"
+}
+```
+
+**Output**:
+```json
+{
+  "drugs": [
+    {
+      "name": "PARP inhibitor",
+      "efficacy_score": 0.73,
+      "confidence": 0.68,
+      "evidence_tier": "supported",
+      "rationale": ["S: 0.75", "P: 0.8", "E: 0.7"]
+    }
+  ]
+}
+```
+
+**Problem**: No indication of **when** to use PARP (1st line vs 2nd line vs 3rd line)
+
+---
+
+### **After (With Treatment Lines)**:
+**User Input**:
+```json
+{
+  "mutations": [{"gene": "BRCA2", "hgvs_p": "p.S1982R"}],
+  "disease": "ovarian_carcinoma",
+  "treatment_history": {
+    "current_line": 2,
+    "prior_therapies": ["platinum + taxane"],
+    "prior_outcomes": [
+      {"therapy": "platinum + taxane", "pfs_months": 8, "response": "partial"}
+    ]
+  }
+}
+```
+
+**Output**:
+```json
+{
+  "drugs": [
+    {
+      "name": "PARP inhibitor",
+      "efficacy_score": 0.78,
+      "confidence": 0.82,  // Higher confidence due to line appropriateness
+      "evidence_tier": "supported",
+      "treatment_line_info": {
+        "current_line": 2,
+        "line_appropriateness": 1.0,  // Preferred for 2nd line
+        "cross_resistance_risk": 0.4,  // Moderate risk (platinum overlap)
+        "sequencing_fitness": 0.85,  // High fitness overall
+        "nccn_category": "1",  // Category 1 for 2nd line
+        "rationale": "Preferred 2nd-line option post-platinum; BRCA synthetic lethality validated in SOLO-2 trial"
+      },
+      "sae_features": [
+        {
+          "id": "line_appropriateness",
+          "activation": 1.0,
+          "impact": "positive",
+          "explanation": "Drug is preferred for 2nd-line treatment (NCCN Category 1)"
+        },
+        {
+          "id": "cross_resistance_risk",
+          "activation": 0.4,
+          "impact": "negative",
+          "explanation": "Moderate cross-resistance risk with prior platinum (DNA repair overlap)"
+        },
+        {
+          "id": "sequencing_fitness",
+          "activation": 0.85,
+          "impact": "positive",
+          "explanation": "High overall fitness: preferred line + strong evidence (SOLO-2) - moderate cross-resistance"
+        },
+        {
+          "id": "DNA_repair_capacity",
+          "activation": 0.85,
+          "impact": "positive",
+          "explanation": "BRCA2 mutation → DNA repair deficiency → synthetic lethality with PARP"
+        }
+      ],
+      "rationale": [
+        "S: 0.75 (sequence disruption)",
+        "P: 0.8 (DNA repair pathway alignment)",
+        "E: 0.7 (SOLO-2 trial evidence)",
+        "Line: 1.0 (preferred 2nd-line)",
+        "SAE: +0.45 (line appropriateness + DNA repair - cross-resistance)"
+      ]
+    },
+    {
+      "name": "bevacizumab + chemotherapy",
+      "efficacy_score": 0.65,
+      "confidence": 0.58,
+      "evidence_tier": "consider",
+      "treatment_line_info": {
+        "current_line": 2,
+        "line_appropriateness": 0.8,  // Acceptable for 2nd line
+        "cross_resistance_risk": 0.2,  // Low risk (different MoA)
+        "sequencing_fitness": 0.7,
+        "nccn_category": "1",
+        "rationale": "Alternative 2nd-line for platinum-resistant disease; anti-angiogenesis mechanism"
+      }
+    }
+  ]
+}
+```
+
+**Impact**: Doctor sees:
+- PARP is **preferred** for 2nd line (line_appropriateness: 1.0)
+- **But**: Moderate cross-resistance risk (0.4) due to platinum overlap
+- **Net**: High sequencing fitness (0.85) → proceed with PARP, monitor closely
+
+---
+
+## **IMPLEMENTATION PLAN**
+
+### **P0: Treatment Line-Aware Drug Panels** (2-3 hours)
+1. **Enhance `panel_config.py`** (1h)
+   - Add treatment_line_metadata schema
+   - Build ovarian cancer panel with 5+ drugs
+   - Build breast cancer panel with 5+ drugs
+
+2. **Create Panel Loader** (30 min)
+   - `get_panel_for_disease(disease: str, current_line: int)` → filters drugs by appropriateness
+
+3. **Add NCCN Integration** (30 min)
+   - Link panel metadata to NCCN categories
+   - Fetch evidence by line from config
+
+4. **Testing** (1h)
+   - Smoke tests: ovarian 2nd line, breast 3rd line
+   - Verify NCCN categories match
+
+### **P1: SAE Treatment Line Features** (3-4 hours)
+1. **Add SAE Features** (2h)
+   - `compute_line_appropriateness()`
+   - `compute_cross_resistance_risk()`
+   - `compute_sequencing_fitness()`
+
+2. **Integrate into `sae_service.py`** (1h)
+   - Add treatment history to SAE extraction inputs
+   - Return 3 new features in SAE response
+
+3. **Testing** (1h)
+   - Test with/without treatment history
+   - Verify cross-resistance detection
+
+### **P2: Confidence Integration** (1-2 hours)
+1. **Update Orchestrator** (1h)
+   - Add `treatment_history` to EfficacyRequest
+   - Modulate confidence with line appropriateness
+   - Add cross-resistance penalty
+
+2. **Update Provenance** (30 min)
+   - Add `treatment_line` section to confidence_breakdown
+
+3. **Testing** (30 min)
+   - End-to-end test with full treatment history
+
+### **P3: Frontend Display** (2-3 hours)
+1. **Treatment History Input** (1h)
+   - Add form in Clinical Genomics tab
+   - Fields: current_line, prior_therapies, outcomes
+
+2. **SAE Features Display** (1h)
+   - Update SAEFeaturesCard to show 3 new features
+   - Add treatment line badges (1st/2nd/3rd/4th+)
+
+3. **CoPilot Actions** (1h)
+   - "What's the best next line?" action
+   - "Explain cross-resistance?" action
+
+---
+
+## **TOTAL TIMELINE: 8-12 hours** (1-2 days)
+
+**P0**: 2-3 hours (drug panels)  
+**P1**: 3-4 hours (SAE features)  
+**P2**: 1-2 hours (confidence)  
+**P3**: 2-3 hours (frontend)
+
+---
+
+## **ACCEPTANCE CRITERIA**
+
+✅ Drug panels have treatment_line_metadata for 10+ drugs  
+✅ SAE extracts 3 new features: line_appropriateness, cross_resistance_risk, sequencing_fitness  
+✅ Confidence modulated by treatment line fitness  
+✅ Provenance includes treatment line breakdown  
+✅ Frontend displays treatment line badges and SAE features  
+✅ CoPilot can explain sequencing rationale  
+
+---
+
+⚔️💀 **TREATMENT LINE INTEGRATION - READY FOR EXECUTION** 💀⚔️

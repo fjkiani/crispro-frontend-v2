@@ -1,0 +1,78 @@
+---
+alwaysApply: false
+description: Synthetic lethality in Multiple Myeloma – our A–B dependency technique, AI orchestration, and what it unlocks (RUO)
+---
+
+## Engineering Synthetic Lethality in Multiple Myeloma
+
+### Executive summary
+- **What we did**: Operationalized synthetic lethality discovery for Multiple Myeloma (MM) using an AI‑orchestrated A–B dependency technique that integrates Sequence/Pathway/Evidence (S/P/E), Evo2 plausibility, interpretable SAE features, and treatment‑line context.
+- **How it works**: Identify gene A (tumor alteration) → infer compensatory dependency on gene B → rank drug B (or B‑pathway) while modulating confidence with real‑world treatment history and evidence gates.
+- **Why it matters**: Produces transparent, mechanism‑anchored therapy hypotheses with confidence, citations, and provenance—faster than manual literature review, and adaptable to new data.
+- **Privacy**: No patient identifiers. All data shown are generalized findings from our research sandbox. Research‑Use Only (RUO).
+
+### Synthetic lethality, briefly
+Synthetic lethality exploits the fact that two perturbations—A and B—are tolerated independently but lethal together. In oncology, if a tumor harbors alteration A, inhibiting B can collapse the malignant network while sparing normal cells. In practice, we use this to: (1) map A→B dependencies, (2) short‑list B‑targeting drugs, and (3) explain the mechanistic “why” behind each recommendation.
+
+### The A–B dependency technique (our operational pattern)
+- **A = Tumor alteration**: somatic mutation, copy‑number change, transcriptional program, or proteasome stressor characteristic of MM.
+- **B = Compensatory dependency**: genes/pathways cancer cells become reliant on given A (derived from public dependency resources, MM biology, and our Evo2/SAE signals).
+- **Therapeutic mapping**: match B to available drugs (FDA/Guideline/Trial), rank with S/P/E + SAE, modulate by treatment line and evidence strength, return confidence and rationale.
+
+### How our AI executes it (end‑to‑end)
+1) **Sequence (S) – Evo2 plausibility**
+   - Score variant impact and domain context (coding and non‑coding proxies) to estimate disruption magnitude and direction.
+   - Calibrate per‑gene to avoid cross‑gene scale drift; aggregate multi‑window and exon‑context signals.
+
+2) **Pathway (P) – A→B mapping**
+   - Map A to disrupted MM pathways (e.g., DNA repair, proteostasis, NF‑κB, MAPK, B‑cell programs).
+   - Query dependency priors to infer candidate B nodes (genes/pathways whose inhibition is predicted to be lethal given A’s state).
+   - Score pathway overlap between B‑targets and the disrupted network.
+
+3) **Evidence (E) – literature + clinical priors**
+   - Retrieve mechanism‑of‑action–aware literature; derive evidence tiers and badges (RCT/Guideline/Pathway‑Aligned) with citations and deduping.
+   - Surface cohort or guideline signals when available; degrade gracefully when sparse.
+
+4) **SAE interpretability – “why this works”**
+   - Compute interpretable features (e.g., exon disruption, hotspot, essentiality signal, DNA‑repair burden, proteostasis load) and attach them to the EvidenceBand so clinicians see the mechanism behind the score.
+
+5) **Treatment‑line context – confidence you can trust**
+   - Compute line appropriateness, cross‑resistance risk, and sequencing fitness per drug.
+   - Modulate confidence (e.g., reduce when prior therapies create MoA overlap risks) with transparent provenance and rationale.
+
+### MM case study (generalized, RUO)
+In our MM sandbox, we applied the A–B technique to common malignant programs:
+- **Proteostasis stress (A)** → elevated reliance on **proteasome and UPR nodes (B)**. Our AI surfaced B‑targets aligned with proteasome/ER‑stress pathways and ranked drugs that intensify synthetic stress selectively in MM cells, with SAE features highlighting proteostasis burden and pathway alignment.
+- **DNA repair burden (A)** → dependency on **PARP and checkpoint pathways (B)** in defined molecular contexts. When supported by S/P/E and evidence gates, B‑class agents rose in rank; otherwise the system penalized over‑reach and explained why.
+- **Transcriptional addiction (A)** → dependency on **IKZF1/3 and related CRBN‑axis (B)**. The engine linked A to B‑targeting agents where MoA and pathway overlap justified consideration, with confidence modulated by prior IMiD exposure.
+
+Rather than a single “best drug,” the system produces a ranked slate with: efficacy_score, confidence, evidence_tier, badges, insight chips, and a rationale list that connects A→B→drug with citations and per‑feature attributions.
+
+### What “AB‑dependent” means in practice
+We use “A–B dependent” to denote a conditional vulnerability: given alteration A, inhibition of B is predicted to be lethal or strongly growth‑limiting. Our stack operationalizes this by:
+- Learning A→B pairs from public dependency atlases and MM‑specific literature.
+- Verifying biological plausibility with Evo2 sequence/context scoring.
+- Confirming pathway connectives and MoA fit.
+- Adjusting confidence via treatment‑line intelligence (line fit, cross‑resistance, sequencing fitness).
+- Packaging everything as auditable provenance (run_id, profile, features, citations).
+
+### What we achieved so far (capabilities)
+- **Transparent, mechanism‑anchored rankings**: Every recommendation comes with “why”—pathway matches, SAE features, and literature badges.
+- **Context‑aware confidence**: Treatment history dynamically modulates confidence, preventing over‑confident calls after prior MoA exposure.
+- **Profile controls**: Baseline (fast) vs Richer (deeper S/P/E+SAE) profiles, with consistent contracts for UI and reports.
+- **Graceful degradation**: When external evidence is sparse, the engine is honest—lower tiers, lower confidence, clear next steps.
+
+### Implications beyond MM
+- **Portability across cancers**: The A–B pattern generalizes—swap in tumor‑specific pathways, dependency priors, and drug maps; keep the same orchestration and interpretability.
+- **Combination design**: A–B pairs compose into A–B–C triplets for rational combos (orthogonal stressors with non‑overlapping toxicities).
+- **Trial matching**: Mechanism‑labeled outputs map cleanly to biomarker‑driven trials and inclusion criteria.
+
+### What’s next (roadmap)
+- **Tumor‑specific inputs**: Parse tumor NGS (TMB/MSI/HRD + somatic variants) to specialize A→B in each patient’s context.
+- **Expanded dependency priors**: Integrate larger CRISPR screen resources and MM‑focused perturbation data.
+- **Closed‑loop learning**: Capture outcomes, recalibrate confidence, and strengthen future A–B calls.
+- **Design loop**: For CRISPR concepts, pass ranked B‑targets into guide design and structure assessment for rapid RUO prototyping.
+
+### RUO disclaimer
+All outputs are Research‑Use Only and intended to support (not replace) clinical judgment. When data are incomplete, the system makes that visible via conservative confidence and documented gaps.
+

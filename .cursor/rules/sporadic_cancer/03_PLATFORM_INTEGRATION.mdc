@@ -1,0 +1,65 @@
+# 🎯 PLATFORM INTEGRATION - S/P/E + SAE + LINES
+
+---
+
+## **SEQUENCE (S) - TUMOR SOMATIC VARIANTS**
+
+**Input**: Tumor NGS panel results (VCF or report)  
+**Process**: Evo2 scoring for SOMATIC mutations (not germline)  
+**Context**: `context=tumor` flag in insights endpoints
+
+**Key Difference**: Somatic mutations are acquired, not inherited
+
+---
+
+## **PATHWAY (P) - MULTI-HIT AGGREGATION**
+
+**Sporadic Complexity**: Often multiple somatic hits across pathways
+
+**Aggregate Across**:
+- DNA repair (HRD, MMR, BER)
+- Cell cycle (TP53, CDKN2A, RB1)
+- Growth signaling (KRAS, PIK3CA, EGFR)
+- Immune evasion (PD-L1, TMB-high)
+
+**File**: `api/services/efficacy_orchestrator/orchestrator.py`
+
+---
+
+## **EVIDENCE (E) - TUMOR-BASED LITERATURE**
+
+**Focus**:
+- Somatic mutation clinical trials
+- Drug approvals for somatic alterations
+- NCCN guidelines for tumor genomics
+- Published response rates in similar profiles
+
+---
+
+## **SAE FEATURES - TUMOR LANDSCAPE**
+
+**Somatic-Specific Features**:
+- `tumor_mutational_burden` (TMB) - immunotherapy candidate
+- `microsatellite_instability` (MSI) - checkpoint response
+- `homologous_recombination_deficiency` (HRD) - somatic PARP
+- `oncogene_amplifications` (HER2, MYC, FGFR2)
+- `tumor_suppressor_loss` (TP53, PTEN, RB1)
+
+**File**: `api/services/sae_service.py`
+
+---
+
+## **TREATMENT LINE INTEGRATION**
+
+**Track**: Prior therapies for cross-resistance mapping
+
+**Compute**:
+- `line_appropriateness` - standard for current line?
+- `cross_resistance_risk` - overlap with failed therapies
+- `sequencing_fitness` - optimal ordering
+
+**File**: `.cursor/ayesha/treatment_lines/backend/services/treatment_line_integration.py`
+
+---
+
+**NEXT**: Read `04_TUMOR_NGS_INGESTION.mdc` for parsers

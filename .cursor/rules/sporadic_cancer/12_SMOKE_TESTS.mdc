@@ -1,0 +1,45 @@
+# 🎯 SMOKE TESTS - 4 SCENARIOS
+
+---
+
+## **Test 1: Germline Negative Detection**
+```bash
+curl -X POST /api/genomic_intelligence/parse_report \n  -F "report=@AyeshasGenetics.pdf"
+
+# Expected: { germline_status: "negative", genes_tested: 38, pathogenic_mutations: 0 }
+```
+
+---
+
+## **Test 2: PARP Inhibitor Penalty**
+```bash
+curl -X POST /api/efficacy/predict \n  -d '{ "germline_status": "negative", "drug": "olaparib" }'
+
+# Expected: efficacy_score < 0.5, rationale includes PARP penalty
+```
+
+---
+
+## **Test 3: Clinical Trial Filtering**
+```bash
+curl -X POST /api/clinical_trials/search \n  -d '{ "cancer_type": "ovarian", "germline_status": "negative" }'
+
+# Expected: Exclude BRCA-required trials, include tumor-agnostic
+```
+
+---
+
+## **Test 4: Tumor NGS Integration**
+```bash
+curl -X POST /api/efficacy/predict \n  -d '{ "germline_status": "negative", "tumor_context": { "tmb": 18.5, "hrd_score": 52 } }'
+
+# Expected: Boost immunotherapy (TMB-high), boost PARP combo (somatic HRD)
+```
+
+---
+
+**ACCEPTANCE**: All 4 tests pass with correct gating/filtering
+
+---
+
+**SPORADIC CANCER MODULARIZATION COMPLETE!** ⚔️

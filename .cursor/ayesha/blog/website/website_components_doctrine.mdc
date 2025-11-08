@@ -1,0 +1,143 @@
+---
+alwaysApply: false
+description: Website Components & Flows – Landing page IA, product capability cards, chips, evidence, and platform interconnects (RUO). For building FE layout and wiring to BE.
+globs: 
+---
+
+# Website Components Doctrine (RUO)
+
+This rule describes the information architecture (IA), core UI components (chips, cards, panels), evidence model, and end‑to‑end flows to power the public website and product landing experience. It is non‑technical but precise enough for FE implementation and BE wiring.
+
+## 1) Information Architecture (IA)
+- Hero: promise + proof + CTA
+- Capability Cards: MM WIWFM, VUS Explorer, Clinical Trials Co‑Pilot, Pathway View, CRISPR Design (demo), Cohort Lab
+- Evidence & Trust: badges, confidence, citations, provenance
+- How It Works: Sequence/Pathway/Evidence (S/P/E) with plain copy
+- Live Demos (Research‑Mode): quick actions linking to product pages
+- Run Provenance: run IDs, profiles, last updated
+
+## 2) Core UI Components
+- Chips (insight): Function, Regulatory, Essentiality, Chromatin
+  - Props: label, score (0–1), threshold, helperText, provenance
+- Coverage Chips: ClinVar prior, AlphaMissense coverage
+  - Props: covered (bool), source, lastChecked
+- Confidence Bar: 0–1 with tier label
+  - Props: confidence, tier (Supported/Consider/Insufficient), rationaleSummary
+- Evidence Badges: Guideline, RCT, ClinVar‑Strong, Pathway‑Aligned
+  - Props: badges[], tooltip per badge, citations[]
+- Capability Card: title, summary, KPI, CTA
+  - Props: title, subtitle, kpis[], actions[]
+- Provenance Bar: runId, profile, timestamp, featureFlags
+  - Props: runId, profile (Baseline/Richer/Fusion), apiBase, flags{}
+- Trials List Item: label (Likely/Potential/Unlikely), short why, link
+  - Props: tierLabel, reason, trialId, source
+- Dossier Panel: print‑ready summary (variants→chips→therapies→trials→citations→provenance)
+  - Props: sections[], export(JSON/PDF)
+
+## 3) Capability Cards (Landing)
+- MM Will‑It‑Work‑For‑Me
+  - Output: per‑drug ranking, confidence, evidence tier, badges, insights
+  - KPIs (examples): { "ClinVar AUROC": 0.957, "VUS → 15%": true, "Splice AUROC": 0.826 }
+- VUS Explorer
+  - Output: 4 chips, coverage, simple helper copy, send‑to Dossier/WIWFM
+  - KPIs: { "Coverage variants": 53210, "BRCA1 sup AUROC": 0.94, "BRCA2 zero‑shot AUROC": 0.901 }
+- Clinical Trials Co‑Pilot
+  - Output: Likely/Potential/Unlikely with reasons; one‑pager export
+- Pathway View
+  - Output: top pathways affected, one‑line why, linked chips
+- CRISPR Design (Demo)
+  - Output: feasibility, access, off‑target preview, delivery notes (demo‑labeled)
+- Cohort Lab
+  - Output: extract→label→benchmark, AUPRC/AUROC, artifacts
+
+## 4) Flows (End‑to‑End)
+- Analyze Variant → (chips, coverage) → Therapy Fit → Trials → Dossier
+- Start with Pathway → see candidate drugs → add evidence → Dossier
+- Cohort Lab → benchmark KPIs → overlay with MM → lift confidence on Therapy Fit
+- Trials search → shortlist → add rationale → Dossier
+
+## 5) Evidence Model (Display)
+- Confidence: 0–1
+- Evidence Tier: Supported / Consider / Insufficient
+- Badges: Guideline / RCT / ClinVar‑Strong / Pathway‑Aligned
+- Citations: provider, title, year, doi/url
+- Provenance: runId, profile, inputs snapshot, feature flags
+
+## 6) Content Guidelines (Copy)
+- Plain language first, methods in tooltips
+- Always show RUO labels and sources
+- Keep KPIs on card fronts; details behind toggles
+
+## 7) JSON Schemas (Frontend contracts)
+```json
+{
+  "Chip": {"label": "Function", "score": 0.62, "threshold": 0.6, "helperText": "Likely impact on function", "provenance": {"method": "evo2_multi_exon_v1"}},
+  "Evidence": {"confidence": 0.48, "tier": "Consider", "badges": ["Pathway-Aligned"], "citations": [{"provider": "PubMed", "title": "...", "year": 2022, "url": "https://..."}], "provenance": {"run_id": "...", "profile": "Baseline"}},
+  "CapabilityCard": {"title": "VUS Explorer", "subtitle": "Turn unknowns into plain signals", "kpis": [
+    {"label": "ClinVar AUROC", "value": 0.957},
+    {"label": "Coding SNVs (n=14319)", "value": 0.957},
+    {"label": "Non‑coding SNVs (n=34761)", "value": 0.958},
+    {"label": "Coding non‑SNVs (n=1236)", "value": 0.939},
+    {"label": "Non‑coding non‑SNVs (n=3894)", "value": 0.918},
+    {"label": "BRCA1 sup AUROC/AUPRC", "value": "0.94 / 0.84"},
+    {"label": "BRCA2 zero‑shot AUROC", "value": 0.901},
+    {"label": "Splice AUROC (n=4950)", "value": 0.826},
+    {"label": "Target VUS 40%→15% (~$2.1M saved)", "value": true}
+  ], "actions": [{"label": "Try it", "href": "/vus"}]}
+}
+```
+
+## 8) Wiring Notes (BE endpoints)
+- Efficacy: `/api/efficacy/predict` → drugs[*] with insights/evidence/provenance
+- Insights: `/api/insights/predict_*` → chips with provenance/calibration
+- Evidence: `/api/evidence/clinvar`, `/api/evidence/deep_analysis` (optional)
+- Fusion: `/api/fusion/coverage` → AM coverage chip
+- Datasets: `/api/datasets/extract_and_benchmark` → cohort metrics/artifacts
+
+## 9) RUO & Provenance
+- RUO banner on all cards; show runId/profile
+- Export includes sources and timestamps
+
+---
+
+# Evidence Emphasis (Iteration)
+
+## Evidence Tiers & Confidence
+- Tier rules (display):
+  - Supported: meaningful literature or ClinVar‑Strong + pathway alignment
+  - Consider: partial support or mixed signals
+  - Insufficient: sparse or conflicting evidence
+- Confidence drivers (display‑only): sequence disruption, pathway alignment, evidence strength, supportive insights (chips)
+
+## Badges (What they mean)
+- Guideline: aligns with recognized practice guidance
+- RCT: evidence from randomized trials exists (class‑level)
+- ClinVar‑Strong: strong prior on variant/gene from ClinVar
+- Pathway‑Aligned: MoA aligns with disrupted pathway(s)
+
+## Evidence Panel JSON (drop‑in)
+```json
+{
+  "evidencePanel": {
+    "confidence": 0.52,
+    "tier": "Consider",
+    "badges": ["Pathway-Aligned"],
+    "citations": [
+      {"provider": "PubMed", "title": "BRAF pathway in MM", "year": 2021, "url": "https://..."}
+    ],
+    "provenance": {"run_id": "abc-123", "profile": "Baseline", "timestamp": "2025-09-01T10:12:00Z"}
+  }
+}
+```
+
+## Provider & Caching Notes
+- Providers: PubMed, OpenAlex, Semantic Scholar (fallback chain)
+- Caching: Redis for query results; 24–72h TTL; dedupe by normalized title/DOI
+- Idempotency: hash query params + user/session for safe retries
+
+## Display Rules
+- Always show confidence + tier + badges together
+- Tooltips on badges explain “why this appears”
+- Show source count (e.g., “3 citations”) with a quick expand
+- Grey‑state when providers unavailable; keep the rest of the result
+

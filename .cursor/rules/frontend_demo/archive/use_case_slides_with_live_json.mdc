@@ -1,0 +1,99 @@
+---
+alwaysApply: false
+description: Guidance for building use‑case slides with live JSON outputs, schema, API examples, MM outcomes, and Co‑Pilot framing
+globs: oncology-coPilot/oncology-frontend/src/assets/slides/SPE/*.tsx
+---
+
+## Use‑Case Slides with Live JSON – Doctrine
+
+This rule provides a consistent pattern to author investor‑friendly slides that show live JSON outputs, explain what each field means, and tie the results back to clinical framing (on‑label tiers) and our in‑silico Co‑Pilot.
+
+### Slide Content Pattern
+- Title: “<Disease/Use‑case>: What the live output means”
+- Subtitle: “Aligned with FDA labels and transparent evidence”
+- Left panel: a monospace block with the live JSON snippet from our backend
+- Right panel: 3 short bullets that explain the output in plain English
+- Footer: a one‑line research‑mode qualifier, plus a run ID if available
+
+### Canonical JSON Schema (backend responses)
+Expect per‑therapy entries to include these keys:
+
+```json
+{
+  "therapy": "string",                 
+  "disease": "string",
+  "on_label": true,
+  "tier": "I|II|III|IV",
+  "strength": "low|moderate|high",
+  "efficacy_score": 0.0,
+  "confidence": 0.0,
+  "insights": { "functionality": 0.0, "chromatin": 0.0, "essentiality": 0.0, "regulatory": 0.0 },
+  "rationale": ["short strings"],
+  "citations": ["pmid strings"],
+  "evidence_tier": "consider|supported|insufficient",
+  "badges": ["RCT|Guideline|ClinVar-Strong"],
+  "provenance": { "efficacy_run": "short id" }
+}
+```
+
+Field meanings:
+- efficacy_score: 0–1 signal combining Sequence/Pathway/Evidence (S/P/E), not a probability; used to rank options.
+- confidence: 0–1 trust in the recommendation, modulated by evidence and insight agreement.
+- on_label + tier: clinical framing gates (Tier I for FDA on‑label; research‑mode still shows this alignment).
+- insights: supportive signals (functionality/chromatin/essentiality/regulatory) surfaced as chips in UI.
+- rationale, citations: human‑readable why and PubMed PMIDs for auditability.
+
+### Example Live API Calls
+Use the local backend root `http://127.0.0.1:8000` and pass options as needed.
+
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/efficacy/predict \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "model_id":"evo2_1b",
+        "mutations":[{"gene":"BRAF","hgvs_p":"V600E","chrom":"7","pos":140453136,"ref":"T","alt":"A"}],
+        "options":{"adaptive":true,"ensemble":true},
+        "api_base":"http://127.0.0.1:8000"
+      }'
+```
+
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/insights/predict_gene_essentiality \
+  -H 'Content-Type: application/json' \
+  -d '{"gene":"BRAF","variants":[{"gene":"BRAF","chrom":"7","pos":140453136,"ref":"T","alt":"A","consequence":"missense_variant"}],"model_id":"evo2_1b"}'
+```
+
+### Multiple Myeloma (MM) – What We Determined
+- Live WIWFM flow returns per‑drug entries with efficacy_score, confidence, evidence_tier, and insights.
+- Observed outcome on a micro set: moderate confidence (~0.45–0.51), efficacy_score ~0.17–0.26 depending on evidence strength and pathway weighting.
+- Tiering reflects FDA on‑label gates when applicable; otherwise, research‑mode “consider/supported”.
+- Fusion (AM) can raise clarity on AM‑covered missense variants and is presented as a separate profile.
+
+### How to Explain Efficacy and Confidence in Slides
+- “Efficacy score” ranks options by combining sequence disruption, pathway alignment, and available evidence. It is not a probability; it’s a composite ranking signal.
+- “Confidence” reflects the consistency and strength of supporting evidence and insight agreement.
+- Be explicit: “research‑mode; cohort‑dependent; full provenance shown in UI.”
+
+### CrisPRO In‑Silico for Drug Development (Slide Framing)
+- One endpoint to run: unified efficacy with transparent S/P/E and insights chips.
+- Profiles: Baseline (1B, delta‑only), Richer S (bounded), and Fusion (AM‑covered missense).
+- Outputs: ranked therapies with efficacy_score, confidence, evidence_tier, badges, rationale, citations, provenance.
+- Value: faster hypothesis → guidance, traceable decisions, and repeatable runs for partners.
+
+### Co‑Pilot (RAG) – What to Say
+- Actions: Analyze variant (insights → efficacy), Extract cohort (cBio/GDC), Run benchmark (HRD AUPRC, Guidance tier eval).
+- Debug: fusion coverage chip, model profile toggles, run IDs.
+- Positioning: research‑mode assistant that orchestrates steps, shows provenance, and provides operator‑grade controls.
+
+### Slide Authoring Checklist
+1) Use a live JSON block (or recent saved output) on the left.
+2) Right panel: 3 bullets – FDA/on‑label framing, clinical gates (“Yes GO”/tier), transparent provenance.
+3) Add a short footnote: “Research‑mode; cohort‑dependent” + `efficacy_run` ID when present.
+4) Avoid numeric guarantees; prefer profile comparisons and explain what the numbers mean.
+
+### References to Code
+- Efficacy orchestrator: [efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py)
+- Insights router: [insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py)
+- Evo proxy: [evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py)
+- Fusion (Modal): [fusion_engine/main.py](mdc:oncology-coPilot/src/services/fusion_engine/main.py)
+

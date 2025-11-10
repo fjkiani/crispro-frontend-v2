@@ -1,0 +1,101 @@
+# 🎯 PHASE 2: ENABLE FORGE - THERAPEUTIC GENERATION
+
+**Duration**: 2-4 weeks  
+**Status**: ⏳ **NOT STARTED** (waiting for Phase 1)  
+**Goal**: Generate therapeutic candidates with safety validation
+
+---
+
+## 🎯 **OBJECTIVE**
+
+Enable safe, context-aware therapeutic generation using Evo2 for:
+- CRISPR guide RNAs
+- Therapeutic protein sequences
+- Peptide therapeutics
+- mRNA sequences
+
+**Feature Flag**: `EVO2_GENERATION_ENABLED=False` (default OFF)
+
+---
+
+## 📋 **TASKS**
+
+### **Task 2.1: Context-Aware Prompting** (3 days)
+
+**Goal**: Rich biological context for better Evo2 generation
+
+**Implementation**:
+```python
+# api/services/therapeutic_prompt_builder.py
+
+class TherapeuticPromptBuilder:
+    def build_prompt(
+        self,
+        target_gene: str,
+        disease: str,
+        mechanism: str,  # "inhibit" or "activate"
+        gene_context: str,
+        binding_sites: dict
+    ) -> str:
+        return f"""
+        # Therapeutic Design Context
+        Target: {target_gene}
+        Disease: {disease}
+        Mechanism: {mechanism}
+        
+        # Gene Sequence (first 1000bp)
+        {gene_context[:1000]}
+        
+        # Binding Sites
+        {binding_sites}
+        
+        # Constraints
+        - GC content: 40-60%
+        - No homopolymers >4bp
+        - Avoid viral sequences
+        
+        # Generate therapeutic:
+        """
+```
+
+**Acceptance**: 10 test generations are biologically plausible
+
+---
+
+### **Task 2.2: Iterative Optimization** (4 days)
+
+**Goal**: Generate → Score → Refine loop
+
+**Implementation**: See `03_PHASE1_EXPAND_HUNT.mdc` for `TherapeuticOptimizer` class
+
+**Acceptance**: 5/5 test cases achieve score ≥0.85 within 10 iterations
+
+---
+
+### **Task 2.3: Safety Validation** (3 days)
+
+**Goal**: Block dangerous sequences
+
+**Checks**:
+- Viral content (HIV, SARS, Ebola, Influenza)
+- GC content extremes (<30% or >70%)
+- Homopolymer runs (>6bp)
+- Known toxic sequences
+
+**Acceptance**: 100% of viral sequences blocked
+
+---
+
+## ⏳ **DEPENDENCIES**
+
+- **Blocker**: Phase 1 complete
+- **Required**: Evo2 service stable
+- **Optional**: ChEMBL binding site data
+
+---
+
+**GATE 2 CRITERIA**: See `11_ACCEPTANCE_CRITERIA.mdc`
+
+---
+
+**NEXT**: Phase 3 (Gauntlet - Structural Validation)

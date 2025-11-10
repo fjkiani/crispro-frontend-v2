@@ -1,0 +1,146 @@
+---
+alwaysApply: false
+description: Agent Onboarding Doctrine – architecture, APIs, Evo2 capabilities, feature flags, and smoke tests for quick ramp-up
+---
+
+### Purpose
+A concise, high-signal onboarding doctrine so any new agent can quickly understand what CrisPRO is, how the backend/FE are organized, what endpoints exist, how to run smoke tests locally, and how Evo2 is used across the stack.
+
+### What CrisPRO Is (Platform TL;DR)
+- Precision medicine co‑pilot: predicts therapy fit (S/P/E), explains rationale, and supports CRISPR design (RUO).
+- Key stacks:
+  - Backend (FastAPI) in `oncology-coPilot/oncology-backend-minimal/` with modular routers and services
+  - Frontend (React/Vite) in `oncology-coPilot/oncology-frontend/` with demo pages wired to live APIs
+  - Legacy algorithms and tools retained under `crispr-assistant-main/` for research mode
+
+### Backend – File Map (Operational)
+- App entry: `oncology-coPilot/oncology-backend-minimal/api/main.py`
+- Routers: `oncology-coPilot/oncology-backend-minimal/api/routers/`
+  - Efficacy (S/P/E orchestrator)
+    - `efficacy/router.py` (thin endpoint) and `efficacy.py` (legacy shim)
+  - Insights (4-chip bundle)
+    - `insights.py` – functionality/chromatin/essentiality/regulatory endpoints
+  - Evo proxy
+    - `evo.py` – Evo2 scoring/generation proxy (delta/default safety)
+  - Fusion Engine
+    - `fusion.py` – AlphaMissense coverage/score (GRCh38 missense gating)
+  - Sessions
+    - `sessions.py` – create/append/get/list with Supabase fallback
+  - Knowledge Base (KB)
+    - `kb/router.py` – modular endpoints `items`, `search`, `admin`, `validation`
+- Services: `oncology-coPilot/oncology-backend-minimal/api/services/`
+  - Sequence Scorers: `sequence_scorers/` (Evo2, Fusion, Massive) – `README.md`
+  - Efficacy Orchestrator: `efficacy_orchestrator/` – `README.md`
+  - Confidence: `confidence/` (tiers, badges, lifts) – `README.md`
+  - Evidence: `evidence/` (ClinVar, literature) – `README.md`
+  - Insights: `insights/` (bundle client) – `README.md`
+  - Pathway: `pathway/` (panel config, aggregation, drug mapping) – `README.md`
+  - Logging: `logging/` (Supabase client + loggers)
+  - Caching: `cache_service.py` (Redis + single‑flight)
+  - Supabase: `supabase_service.py`
+
+### Frontend – Key Pages (Demo‑Complete Wiring)
+- `src/pages/MyelomaDigitalTwin.jsx` – WIWFM end‑to‑end demo
+- `src/pages/TargetDossier.jsx` – Variant insights, provenance, citations
+- `src/pages/MutationExplorer.jsx` – VUS triage; actions to Dossier/WIWFM
+- Hooks: `src/hooks/useInsights.js`, `src/hooks/useEvidence.js`
+- Efficacy UI: `src/features/efficacy/components/EfficacyPanel.jsx`
+
+### Core APIs (Contracts kept stable)
+- Efficacy
+  - `POST /api/efficacy/predict` → `{ drugs[*]: { efficacy_score, confidence, evidence_tier, badges, insights, rationale, citations, provenance } }`
+- Insights
+  - `POST /api/insights/predict_gene_essentiality`
+  - `POST /api/insights/predict_splicing_regulatory`
+  - `POST /api/insights/predict_protein_functionality_change`
+  - `POST /api/insights/predict_chromatin_accessibility`
+- Evo2 Proxy
+  - `POST /api/evo/score_variant_multi`, `POST /api/evo/score_variant_exon`, `POST /api/evo/generate`
+- Fusion Engine
+  - `GET /api/fusion/coverage`, `POST /api/fusion/score_variant` (GRCh38 missense only)
+- Datasets (RUO demo)
+  - `POST /api/datasets/extract_and_benchmark`, `GET /api/datasets/studies`
+- Sessions
+  - `POST /api/sessions`, `POST /api/sessions/append`, `GET /api/sessions/{id}`, `GET /api/sessions`
+- Knowledge Base (KB)
+  - `GET /api/kb/items/{type}`, `POST /api/kb/search`, `GET /api/kb/coverage/{gene}`
+
+### Feature Flags & Env
+- Evo2 control: `EVO_FORCE_MODEL`, `DEFAULT_EVO_MODEL`, `EVO_USE_DELTA_ONLY=1`, `EVO_SPAM_SAFE=1`
+- Fusion toggle: `DISABLE_FUSION=0|1`, `FUSION_AM_URL`
+- Literature toggle: `DISABLE_LITERATURE=1`
+- Redis: `REDIS_URL` (enables cache + single‑flight)
+- Supabase: `SUPABASE_URL`, `SUPABASE_KEY` (sessions/logging)
+- Frontend: `VITE_API_ROOT`
+
+### Evo2 – Capabilities and Use
+- Zero‑shot variant impact via sequence likelihood deltas (coding/noncoding)
+- Multi‑window and exon‑context scoring, symmetric ref/alt probing
+- Generation for long‑form context (guarded; viral blocklist; min length)
+- Limits: no structure prediction; relies on Boltz/AlphaFold for 3D
+- Used by: `sequence_scorers/evo2_scorer.py`, `api/routers/evo.py`, Insights bundle, Efficacy S‑signal
+
+### Quickstart – Local Run
+```bash
+# Backend (from backend-minimal root)
+python3 -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+export EVO_FORCE_MODEL=evo2_1b DEFAULT_EVO_MODEL=evo2_1b EVO_USE_DELTA_ONLY=1 EVO_SPAM_SAFE=1 DISABLE_LITERATURE=1 DISABLE_FUSION=0
+uvicorn api.main:app --host 127.0.0.1 --port 8000
+```
+
+### Smoke Tests – Curl
+```bash
+# Health
+curl -sS http://127.0.0.1:8000/health | jq .
+
+# Evo2 score (multi)
+curl -sS -X POST http://127.0.0.1:8000/api/evo/score_variant_multi \
+  -H 'Content-Type: application/json' \
+  -d '{"mutations":[{"gene":"BRAF","chrom":"7","pos":140453136,"ref":"T","alt":"A"}],"model_id":"evo2_1b"}' | jq .
+
+# Insights (regulatory)
+curl -sS -X POST http://127.0.0.1:8000/api/insights/predict_splicing_regulatory \
+  -H 'Content-Type: application/json' \
+  -d '{"chrom":"7","pos":140453136,"ref":"T","alt":"A"}' | jq .
+
+# Fusion coverage (GRCh38 missense only)
+curl -sS "http://127.0.0.1:8000/api/fusion/coverage?chrom=7&pos=140453136&ref=T&alt=A" | jq .
+
+# Efficacy (WIWFM)
+curl -sS -X POST http://127.0.0.1:8000/api/efficacy/predict \
+  -H 'Content-Type: application/json' \
+  -d '{"model_id":"evo2_1b","mutations":[{"gene":"BRAF","hgvs_p":"V600E","chrom":"7","pos":140453136,"ref":"T","alt":"A"}],"options":{"adaptive":true,"ensemble":true},"api_base":"http://127.0.0.1:8000"}' | jq .
+
+# Sessions
+curl -sS -X POST http://127.0.0.1:8000/api/sessions \
+  -H 'Content-Type: application/json' -d '{"title":"Test"}' | jq .
+```
+
+### Troubleshooting (Fast Signals)
+- Empty JSON from curl → server not running or port conflict
+- 404 on Fusion → set `DISABLE_FUSION=0` and ensure `fusion.py` router is included
+- `int()` errors in insights → ensure `chrom` and `pos` are provided and integers
+- Redis not found → install redis or unset `REDIS_URL` to run without cache
+- Supabase errors → verify `SUPABASE_URL`/`SUPABASE_KEY` or run sessions in in‑memory mode
+
+### Cross‑Links (Read These First)
+- Modularization overview: `[MODULARIZATION_README.md](mdc:MODULARIZATION_README.md)`
+- Sequence scorers: `[oncology-coPilot/oncology-backend-minimal/api/services/sequence_scorers/README.md](mdc:oncology-coPilot/oncology-backend-minimal/api/services/sequence_scorers/README.md)`
+- Efficacy orchestrator: `[oncology-coPilot/oncology-backend-minimal/api/services/efficacy_orchestrator/README.md](mdc:oncology-coPilot/oncology-backend-minimal/api/services/efficacy_orchestrator/README.md)`
+- Confidence service: `[oncology-coPilot/oncology-backend-minimal/api/services/confidence/README.md](mdc:oncology-coPilot/oncology-backend-minimal/api/services/confidence/README.md)`
+- Evidence client: `[oncology-coPilot/oncology-backend-minimal/api/services/evidence/README.md](mdc:oncology-coPilot/oncology-backend-minimal/api/services/evidence/README.md)`
+- Insights client: `[oncology-coPilot/oncology-backend-minimal/api/services/insights/README.md](mdc:oncology-coPilot/oncology-backend-minimal/api/services/insights/README.md)`
+- Pathway service: `[oncology-coPilot/oncology-backend-minimal/api/services/pathway/README.md](mdc:oncology-coPilot/oncology-backend-minimal/api/services/pathway/README.md)`
+- KB router: `[oncology-coPilot/oncology-backend-minimal/api/routers/kb/README.md](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/kb/README.md)`
+- Platform evolution doctrine: `[.cursor/rules/complete_platform_evolution_doctrine.mdc](mdc:.cursor/rules/complete_platform_evolution_doctrine.mdc)`
+
+### Scope & Posture
+- RUO only; explicit research‑mode language across UI/Docs
+- Triumvirate Protocol: truncation checks → Evo2 analysis → structural validation (roadmap)
+- Transparent provenance with run IDs, flags, calibration snapshots
+
+### Acceptance for New Agents
+- Can bring up backend, run smoke tests, and see WIWFM outputs
+- Can trace S/P/E signals in responses and read provenance
+- Can locate services and edit in the correct package with confidence

@@ -1,0 +1,63 @@
+# 🔧 INTEGRATION GUIDE - WIRING INTO EXISTING CODE
+
+---
+
+## **Phase 1 Integration**
+
+### **Files to Modify**:
+1. **`api/services/dynamic_food_extraction.py`**
+   - Replace hardcoded aliases with `CompoundAliasResolver`
+   - Add retry logic for ChEMBL/PubChem
+
+2. **`api/services/food_spe_integration.py`**
+   - Add calibration service integration
+   - Keep neutral S=0.5 fallback
+
+3. **`api/routers/hypothesis_validator.py`**
+   - Point to `universal_disease_pathway_database.json`
+   - Add provenance tracking
+
+### **No Breaking Changes**:
+- ✅ All changes are additive
+- ✅ Existing functionality preserved
+- ✅ Backward compatible
+
+---
+
+## **Phase 2 Integration**
+
+### **New Endpoints**:
+- `POST /api/evo/generate_therapeutic`
+- `POST /api/design/optimize_sequence`
+
+### **Feature Flags**:
+- `EVO2_GENERATION_ENABLED=False` (default)
+
+---
+
+## **Phase 3-4 Integration**
+
+### **New Services**:
+- `api/services/structural_validator.py`
+- `api/services/lethality_assessor.py`
+
+### **Boltz API Calls**:
+```python
+import requests
+
+# Structure validation
+response = requests.post(
+    "https://crispro--boltz-service-fastapi-app.modal.run/v1/predict_structure",
+    json={"protein_sequence": "...", "job_id": "..."}
+)
+
+# Binding affinity
+response = requests.post(
+    ".../v1/predict_interaction",
+    json={"target_sequence": "...", "candidate_sequences": [...]}
+)
+```
+
+---
+
+**Minimal Changes**: Focus on additive integration, preserve existing functionality

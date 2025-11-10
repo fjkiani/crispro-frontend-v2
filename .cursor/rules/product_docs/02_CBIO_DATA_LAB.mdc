@@ -1,0 +1,617 @@
+---
+alwaysApply: false
+description: cBio Data Lab – End‑to‑end dataset extraction/benchmark rules, scripts, API, and FE integration
+---
+
+# cBio Data Lab – End‑to‑end extraction, benchmarking, and app integration
+
+This rule defines exactly how to extract cohorts from cBioPortal/GDC, normalize and label them, run HRD‑style benchmarks, and wire results into the UI (VUS Explorer, Dossier, Cohort Lab). It includes precise scripts/commands, a unified backend API contract, a reusable frontend component plan, and acceptance criteria.
+
+## Why this matters (business + technical)
+- Business: removes dependency on external portals; lets partners create in‑product cohorts, quantify lifts (AUPRC/AUROC), and audit provenance.
+- Technical: one unified API + reusable FE component avoids one‑offs; caching and smoke tests make runs reproducible.
+
+## Capabilities – what we extract
+- Mutations: per‑sample MAF/TSV (genes, variant type, GRCh38 coords when available).
+- Clinical (sample + patient): key attributes (sex, age, disease subtype), outcome proxies, dates.
+- Treatments: drug name/class, line, start/stop, free‑text responses (where available).
+- Labels: cohort labels (e.g., platinum exposure) derived from treatments; optional survival proxies.
+- Normalization: GRCh38, REF/ALT validation; safe defaults when incomplete.
+
+## Data scope (expanded – what we’ll support next)
+- Pathways: map mutated genes to curated pathways (e.g., RAS/MAPK, PI3K/AKT, TP53) with per‑sample pathway disruption scores.
+- Copy number & fusions (when provided by study): gene‑level CNV status; known oncogenic fusions (e.g., BCR‑ABL) with validation flags.
+- Expression summaries (where available): basic TPM/FPKM aggregates per tumor type to contextualize targets (safely; no raw PHI).
+- MSI/TMB flags (when accessible): basic tumor phenotype proxies to inform efficacy gating.
+- Timelines: per‑patient diagnosis → treatment episodes → progression/relapse markers (derived from available clinical dates/notes).
+- Pathology images (links/manifests): registry of image URIs (no storage in‑app); hash manifests and consent metadata for optional downstream imaging pipelines.
+
+## Scripts (local) – exact commands
+
+Prereq: from project root, use venv.
+```bash
+source venv/bin/activate
+```
+
+1) Extract cohort (cBioPortal, HRD example)
+```bash
+venv/bin/python [extract_cbioportal_hrd_cohort.py](mdc:tools/benchmarks/extract_cbioportal_hrd_cohort.py) \
+  --study ov_tcga_pan_can_atlas_2018 \
+  --out tools/benchmarks/artifacts/ov_tcga_ov_hrd.json \
+  --genes BRCA1,BRCA2,TP53,KRAS,NRAS,PSMB5 \
+  --verbose
+```
+
+2) Run HRD AUPRC benchmark on the extracted cohort
+```bash
+venv/bin/python [hrd_platinum_auprc.py](mdc:tools/benchmarks/hrd_platinum_auprc.py) \
+  --csv tools/benchmarks/data/hrd_tcga_ov_snv_labeled.csv \
+  --api_base http://127.0.0.1:8000 \
+  --out tools/benchmarks/artifacts/hrd_tcga_ov_results.json
+```
+
+Notes
+- For quick smoke: use study `ov_tcga_pan_can_atlas_2018` and small gene lists.
+- The extractor aggregates clinical rows and scans for platinum terms (exposure label). See the extractor’s `--help` for flags.
+
+## ETL patterns (extract → transform → load)
+- Extract
+  - cBio REST & pyBioPortal for mutations/clinical/treatments; GDC POST + chunking for clinical/mutations when needed.
+  - Optional: study download artifacts (TSV) for bulk fallback.
+- Transform
+  - Normalize to GRCh38, validate REF/ALT; collapse duplicate clinical rows; label treatments (drug → class; line of therapy); derive cohort labels (e.g., platinum_exposure, responders).
+  - Pathway mapping: gene→pathway table; compute simple disruption scores per pathway.
+  - Timelines: build events from dates; approximate progression from notes when available (flag inferred).
+  - Images: store hash manifests + URIs; do not ingest raw pixels.
+- Load
+  - Cache artifacts (extracted.json, labeled.csv, results.json) with provenance; register manifests (optional on‑chain attestation per web3 doctrine).
+
+## pyBioPortal‑first extraction doctrine (what we learned and how to modularize)
+
+Why pyBioPortal:
+- More reliable than raw REST for complex joins; handles authentication and base URLs; has stable study/mutation/clinical/treatment accessors.
+- Paginates and normalizes responses; fewer 414/URL length errors vs naive GETs.
+
+Backend module architecture (non‑monolith):
+```
+oncology-coPilot/oncology-backend-minimal/api/services/datasets/
+  __init__.py
+  cbio_client.py             # thin wrapper around pyBioPortal; typed calls + retries
+  cbio_models.py             # dataclasses/pydantic models for Mutations/Clinical/Treatments
+  cbio_extractor.py          # orchestrates multi-table pulls (mutations/clinical/treatments)
+  transforms.py              # normalize to GRCh38, REF/ALT validation, treatment labeling
+  labelers.py                # cohort label builders (e.g., platinum_exposure), MSI/TMB stubs
+  artifact_store.py          # write/read artifacts + manifests; paths + Supabase optional
+  caching.py                 # Redis/file cache helpers; single-flight by (study, filters)
+```
+
+Key design rules:
+- Keep `cbio_client.py` single‑purpose: one method per entity with explicit args and server‑side paging.
+- Keep transformations pure/stateless in `transforms.py`; no network or filesystem calls.
+- Keep labeling logic in `labelers.py` for reuse in benchmarks and Dossier chips.
+- Centralize artifact IO in `artifact_store.py`; return stable paths + manifest objects.
+- All network calls go through `cbio_client.py`; do not import pyBioPortal elsewhere.
+
+cbio_client.py (contract):
+```python
+class CbioClient:
+  def __init__(self, base_url: str, api_key: str|None, timeout_s: float = 30.0)
+  def get_studies(self) -> list[Study]
+  def get_mutations(self, study_id: str, genes: list[str]|None, page_size: int = 5000) -> Iterator[Mutation]
+  def get_clinical_samples(self, study_id: str, page_size: int = 5000) -> Iterator[ClinicalSample]
+  def get_clinical_patients(self, study_id: str, page_size: int = 5000) -> Iterator[ClinicalPatient]
+  def get_treatments(self, study_id: str, page_size: int = 5000) -> Iterator[Treatment]
+```
+- Implement retries (max=2) and backoff for 429/5xx; expose `provenance.provider` and timings per call.
+- Support header API key and optional basic auth; ensure timeouts are per‑request with overall budget.
+
+Extractor flow (cbio_extractor.py):
+1) Validate input `study` and `filters.genes` (optional).
+2) Stream mutations via `get_mutations` (paginator) and materialize to file or list depending on size.
+3) Fetch clinical (samples + patients) and treatments; index by sampleId/patientId.
+4) Join and normalize in memory using `transforms.py` (GRCh38 normalization where possible; keep provenance for unknowns).
+5) Build labels via `labelers.py` (e.g., platinum_exposure from treatments; responders when present).
+6) Derive coverage.by_gene summary.
+7) Persist via `artifact_store.py` to `results/datasets/{study}/{run_id}/...` and return artifact paths + metrics.
+
+Transforms (transforms.py):
+- `normalize_variant(record) -> record'` (GRCh38 lookup or pass‑through with `provenance.ref_validation=true|false`).
+- `map_drug_to_class(drug_name) -> class` (simple table; configurable).
+- `pathway_scores(genes: list[str]) -> dict[pathway, score]` (stub for chips; optional).
+
+Labelers (labelers.py):
+- `label_platinum_exposure(treatments) -> bool`
+- `label_responder(clinical_notes?) -> Optional[bool]` (study‑dependent; conservative default None)
+
+Artifact store (artifact_store.py):
+- `write_artifact(obj, path)`, `read_artifact(path)`, `write_manifest(manifest)`, `hash_filters(filters) -> str`
+- Manifests include `{ study, filters_hash, generated_at, row_counts, versions, provenance }`.
+
+Caching (caching.py):
+- Redis key: `cbio:{study}:{filters_hash}` with TTL; file cache mirror under `results/cache/`.
+- Single‑flight dedupe using Redis locks by the same key; return existing artifact if in progress.
+
+Backend router usage:
+- `POST /api/datasets/extract_and_benchmark` calls `cbio_extractor.extract()` when `source=cbio` and `mode` includes `extract`; uses the same artifact store and returns canonical response.
+
+pyBioPortal pitfalls and solutions:
+- Rate limits: handle 429 with jittered backoff; respect `X-RateLimit-*` headers where provided.
+- Pagination: use server paging parameters; never attempt to fetch everything in one call.
+- Treatment tables: fields and availability vary by study; make labelers robust to missing keys.
+- Study variance: normalize keys to a minimal internal schema (Mutation, ClinicalSample, ClinicalPatient, Treatment) and keep raw copies for audits.
+
+## Unified backend API (FastAPI) – one endpoint
+
+POST `/api/datasets/extract_and_benchmark`
+
+Payload
+```json
+{
+  "mode": "extract_only | run_only | both",
+  "source": "cbio | gdc",
+  "study": "ov_tcga_pan_can_atlas_2018",
+  "filters": {
+    "genes": ["BRCA1","BRCA2","TP53"],
+    "variant_types": ["SNV","MISSENSE"],
+    "disease": "OVARIAN"
+  },
+  "benchmark": {
+    "type": "hrd_platinum_auprc",
+    "profile": "baseline | richer_s | fusion"
+  }
+}
+```
+
+Response (canonical)
+```json
+{
+  "success": true,
+  "artifacts": {
+    "extracted": "path/to/extract.json",
+    "labeled_csv": "path/to/labeled.csv",
+    "benchmark": "path/to/results.json"
+  },
+  "metrics": {"auprc": 0.51, "auroc": 0.50},
+  "cohort": {"n_samples": 1000, "n_variants": 12000, "label": "platinum_exposure"},
+  "provenance": {"run_id": "...", "mode": "both", "source": "cbio"}
+}
+```
+
+Contract notes
+- `mode` controls whether we only extract, only run, or do both.
+- Server caches artifacts by (study, filters, profile) key; returns file paths and summary metrics.
+- GDC source uses POST with JSON filters and chunking to avoid URI length issues.
+
+## Frontend – cBio Data Lab component (reusable)
+
+Location: `ResearchPortal/CbioDataLab.jsx` (new)
+- Steps UI: 1) Select Study → 2) Filters (genes/variant types) → 3) Extract → 4) Label → 5) Benchmark → 6) Review & Export.
+- Uses unified endpoint with `mode` toggles; shows artifact links and metrics.
+- Reuse shared client (timeouts/retries/telemetry) and the existing ActivityContext for logs.
+
+Data model (FE)
+```ts
+type DataLabRun = {
+  id: string
+  study: string
+  filters: { genes?: string[]; variant_types?: string[]; disease?: string }
+  profile: 'baseline' | 'richer_s' | 'fusion'
+  artifacts?: { extracted?: string; labeled_csv?: string; benchmark?: string }
+  metrics?: { auprc?: number; auroc?: number }
+  provenance?: { run_id?: string; mode?: string; source?: string }
+}
+```
+
+DRY hooks
+- `useApiClient()` for POSTs (retries/backoff/timeouts), shared across VUS/MDT/Cohort Lab.
+- `useCachedArtifact(key)` to memoize artifact lookups/application state.
+
+Frontend modularization (avoid monolith):
+```
+oncology-coPilot/oncology-frontend/src/components/datasets/
+  StudyPicker.jsx          # fetches studies via lightweight KB proxy or direct list
+  FilterForm.jsx           # genes, variant types, disease selectors; validates
+  Stepper.jsx              # orchestrates steps (extract/label/benchmark)
+  ArtifactPanel.jsx        # shows artifact links; download/export buttons
+  MetricsCard.jsx          # shows AUPRC/AUROC, counts; provenance chips
+  CoverageChips.jsx        # reuse to show by_gene coverage post‑extract
+```
+- Keep `ResearchPortal/CbioDataLab.jsx` as thin composition over these components.
+- Use a shared `apiClient` with timeouts/retries and consistent error toasts.
+
+## Building queries – user guidance
+- Choose study (cBio ID); optionally add genes and variant types (SNV/MISSENSE/NONCODING).
+- Pick profile for later benchmarks (Baseline/Richer S/Fusion).
+- Why download: generate cohort statistics, lift WIWFM confidence with cohort evidence, and build explainable narratives with citations + cohort outcomes.
+
+## How this fills Mutation Explorer gaps
+- Adds “Study coverage” and “Add cohort context” chips per variant; WIWFM confidence can lift when cohort outcomes align.
+- Provides cohort‑derived evidence to Dossier (cohort summary panel).
+- Enables export for partners (CSV/JSON) with provenance.
+
+## Evidence/literature hardening – fusion with cohort signals
+- Cache + provider fallback (OpenAlex/Semantic Scholar/PubMed); MoA targeting; dedup; rate‑limit safeguards.
+- Confidence gating: lift or penalize efficacy confidence using cohort outcomes (n, response rate) from Data Lab.
+- Extract fields from cBio: TREATMENTS (drug, class, line, start/stop), responses (when present), and free‑text parsing.
+
+## Replace Dossier mocks – live data
+- Replace static stages with:
+  - Insights chips (functionality/chromatin/essentiality/regulatory) from live endpoints and calibration snapshots.
+  - WIWFM summary (per‑drug score/confidence/tier/badges) + citations.
+  - Cohort summary (if present): n, response rate, study links.
+  - Provenance: run IDs, profile, URLs; explicit Demo/Live badges.
+
+## IP Royalty disclosure & contribution metrics (FE + BE)
+- FE: add disclosure text + contribution widget (human vs platform %) in `TherapeuticBlueprint.jsx` and `ConquestStages.jsx`.
+- BE: populate `provenance.contribution` using endpoint usage (insights, generation), novelty of designs, and AI‑authored rationale share.
+- Show royalty terms (2–5%) and link to Terms.
+
+## Test scripts (smoke → scale)
+
+Smoke (extraction only)
+```bash
+source venv/bin/activate
+venv/bin/python tools/benchmarks/extract_cbioportal_hrd_cohort.py \
+  --study ov_tcga_pan_can_atlas_2018 \
+  --genes BRCA1,BRCA2 \
+  --out tools/benchmarks/artifacts/smoke_ov.json
+```
+
+Smoke (unified API, both)
+```bash
+curl -sS -X POST "$VITE_API_ROOT/api/datasets/extract_and_benchmark" \
+ -H 'Content-Type: application/json' \
+ -d '{"mode":"both","source":"cbio","study":"ov_tcga_pan_can_atlas_2018","filters":{"genes":["BRCA1","BRCA2"]},"benchmark":{"type":"hrd_platinum_auprc","profile":"baseline"}}' | jq .
+```
+
+Scale (benchmark)
+```bash
+venv/bin/python tools/benchmarks/hrd_platinum_auprc.py \
+  --csv tools/benchmarks/data/hrd_tcga_ov_snv_labeled.csv \
+  --api_base http://127.0.0.1:8000 \
+  --out tools/benchmarks/artifacts/hrd_ov_1k.json
+```
+
+Additional smokes (pathways/timelines/images manifests)
+```bash
+# Pathway mapping sanity – small gene set
+venv/bin/python - << 'PY'
+import json, sys
+genes = ["BRCA1","BRCA2","TP53","KRAS","NRAS"]
+pathways = {"RAS/MAPK": ["KRAS","NRAS"], "PI3K/AKT": ["PIK3CA","PTEN"], "TP53": ["TP53"], "HRR": ["BRCA1","BRCA2"]}
+scores = {p: len(set(gs)&set(genes))/max(1,len(gs)) for p,gs in pathways.items()}
+print(json.dumps({"genes": genes, "pathway_scores": scores}, indent=2))
+PY
+
+# Timeline mock transform – derive events
+venv/bin/python - << 'PY'
+from datetime import date
+clinical = {"diagnosis": "2011-03-05", "treatments": [{"drug":"carboplatin","start":"2011-04-10","stop":"2011-08-12"},{"drug":"paclitaxel","start":"2011-04-10","stop":"2011-08-12"}], "progression":"2012-02-01"}
+events = [
+  {"event":"diagnosis","date": clinical["diagnosis"]},
+  *[{"event":"treatment","drug":t["drug"],"start":t["start"],"stop":t["stop"]} for t in clinical["treatments"]],
+  {"event":"progression","date": clinical["progression"]}
+]
+print(events)
+PY
+
+# Image manifest hash (no image upload)
+venv/bin/python - << 'PY'
+import hashlib, json
+uri = "s3://pathology-bucket/study123/sampleABC/slide01.svs"
+m = hashlib.sha256(uri.encode()).hexdigest()
+print(json.dumps({"uri": uri, "sha256": m}, indent=2))
+PY
+```
+
+## Component structure (reusable)
+- `ResearchPortal/CbioDataLab.jsx` – orchestrates the flow; uses shared client and ActivityContext.
+- `hooks/useDatasetRuns.js` – CRUD + caching for dataset runs/artifacts.
+- `components/datasets/*` – Stepper, StudyPicker, FilterForm, ArtifactPanel, MetricsCard.
+- Reuse in Mutation Explorer via lightweight integration chips and “Add cohort context”.
+
+## Acceptance & KPIs
+- End‑to‑end extract→label→benchmark succeeds for one public study; artifacts cached; metrics returned.
+- VUS/Dossier show cohort chips and provenance; efficacy confidence reflects cohort‑derived gates.
+- KPIs: extraction time, cache hit rate, AUPRC/AUROC lift vs control, error rate.
+
+## ML training & partner eval (how we use the data)
+- Train simple supervised heads using Evo2 sequence features plus cohort labels (e.g., responder vs non‑responder) for specific indications.
+- Use pathway scores as covariates to improve generalization in small data scenarios.
+- For imaging pilots: link slide manifests to sample IDs for partner‑hosted models (no raw images in‑app) and allow evaluation runs.
+- Provide standardized eval harness (input CSV schema + profile flags) so partners can run apples‑to‑apples comparisons and log AUROC/AUPRC to Supabase.
+
+## Sources matrix (where data comes from)
+- cBio REST + pyBioPortal: mutations, clinical, treatments.
+- GDC API: clinical/mutations via POST filters + chunking; pathology URIs/manifests when available.
+- Study downloads: TSV artifacts for backup and audits.
+
+## Priorities
+- P0: Unified endpoint; FE Data Lab; Mutation Explorer cohort chips; Dossier CohortSummary; HRD benchmarks stable.
+- P1: Pathway mapping in ETL; timelines support; basic MSI/TMB flags; export CSV/JSON.
+- P2: Image manifest registry; partner evaluation hooks; additional tumor types.
+
+## Remaining work (overall)
+
+- Backend
+  - [ ] Fix backend boot (`api/main.py` indentation) so `/api/datasets/extract_and_benchmark` can be exercised.
+  - [ ] Ensure extract→label→benchmark flow handles large case lists (GDC POST + chunking) and returns stable `metrics` + `artifacts`.
+  - [ ] Add by‑gene coverage summary to the response (e.g., `{ metrics: { by_gene: [{ gene, n, prevalence }] } }`) for quick chips in FE.
+  - [ ] Add caching (Redis) for artifacts/metrics keyed by `(study, filters, profile)` with TTL and single‑flight dedupe.
+  - [ ] Surface `provenance` consistently (run_id, mode, source, cache hit|miss).
+  - [ ] Implement `api/services/datasets/cbio_client.py` + `cbio_extractor.py` + `artifact_store.py` as described; wire into router; add unit tests.
+  - [ ] Add typed models in `cbio_models.py` or Pydantic schemas to validate inputs/outputs at service boundaries.
+
+- ETL scripts
+  - [ ] Confirm `extract_cbioportal_hrd_cohort.py` aggregates treatments and labels platinum exposure deterministically.
+  - [ ] Confirm benchmark script `hrd_platinum_auprc.py` works with `--use_evo` path and documents control profile.
+  - [ ] Add minimal pathway score stub (optional) to unblock UI chips later.
+  - [ ] Provide a small `pybioportal_smoke.py` script that lists studies and fetches 100 mutations for a known study for connectivity tests.
+
+- Frontend (Cohort Lab)
+  - [ ] Wire steps UI to `/api/datasets/extract_and_benchmark` with `mode` toggles; show artifact links and core metrics.
+  - [ ] Add “Open in VUS/Dossier” action to pass cohort context (genes, coverage) to those pages.
+  - [ ] Add error toasts/retries; keep UI responsive on long extractions.
+  - [ ] Break `CbioDataLab` into `StudyPicker`, `FilterForm`, `Stepper`, `ArtifactPanel`, `MetricsCard` as separate files.
+
+- Integration points
+  - [ ] VUS Explorer: “Add Cohort Context” button opens Cohort Lab prefilled; after run, show coverage chip and optionally lift confidence gates.
+  - [ ] Dossier: CohortSummary panel reads `metrics` and shows n, prevalence, study link.
+
+- Ops
+  - [ ] Provide Redis `REDIS_URL` and set cache TTLs; add idempotency keys to prevent accidental duplicate runs.
+  - [ ] Add basic rate‑limit and log‑redaction checks.
+  - [ ] Configure `CBIO_BASE_URL` and optional `CBIO_API_KEY`; document fallback to public endpoints without API key.
+
+- Testing/demo
+  - [ ] Smoke: small gene list extract (ov_tcga...) → artifacts exist; metrics present; provenance shown.
+  - [ ] Scale smoke: benchmark on labeled CSV returns deterministic control AUPRC (~0.5 baseline) and persists results.
+  - [ ] FE: run Cohort Lab end‑to‑end; verify chips in VUS and CohortSummary in Dossier.
+  - [ ] Unit: parser/transform/labeler produce identical outputs given fixtures; client handles pagination and retries.
+
+- Known blockers/risks
+  - [ ] Backend boot error blocks the endpoint; fix indentation first.
+  - [ ] External APIs (cBio/GDC) can 414 or rate‑limit; must use POST + chunking and retries with backoff.
+  - [ ] Field sparsity in treatments/clinical varies by study; labelers must be resilient and document missingness in provenance.
+
+
+
+This rule defines exactly how to extract cohorts from cBioPortal/GDC, normalize and label them, run HRD‑style benchmarks, and wire results into the UI (VUS Explorer, Dossier, Cohort Lab). It includes precise scripts/commands, a unified backend API contract, a reusable frontend component plan, and acceptance criteria.
+
+## Why this matters (business + technical)
+- Business: removes dependency on external portals; lets partners create in‑product cohorts, quantify lifts (AUPRC/AUROC), and audit provenance.
+- Technical: one unified API + reusable FE component avoids one‑offs; caching and smoke tests make runs reproducible.
+
+## Capabilities – what we extract
+- Mutations: per‑sample MAF/TSV (genes, variant type, GRCh38 coords when available).
+- Clinical (sample + patient): key attributes (sex, age, disease subtype), outcome proxies, dates.
+- Treatments: drug name/class, line, start/stop, free‑text responses (where available).
+- Labels: cohort labels (e.g., platinum exposure) derived from treatments; optional survival proxies.
+- Normalization: GRCh38, REF/ALT validation; safe defaults when incomplete.
+
+## Data scope (expanded – what we’ll support next)
+- Pathways: map mutated genes to curated pathways (e.g., RAS/MAPK, PI3K/AKT, TP53) with per‑sample pathway disruption scores.
+- Copy number & fusions (when provided by study): gene‑level CNV status; known oncogenic fusions (e.g., BCR‑ABL) with validation flags.
+- Expression summaries (where available): basic TPM/FPKM aggregates per tumor type to contextualize targets (safely; no raw PHI).
+- MSI/TMB flags (when accessible): basic tumor phenotype proxies to inform efficacy gating.
+- Timelines: per‑patient diagnosis → treatment episodes → progression/relapse markers (derived from available clinical dates/notes).
+- Pathology images (links/manifests): registry of image URIs (no storage in‑app); hash manifests and consent metadata for optional downstream imaging pipelines.
+
+## Scripts (local) – exact commands
+
+Prereq: from project root, use venv.
+```bash
+source venv/bin/activate
+```
+
+1) Extract cohort (cBioPortal, HRD example)
+```bash
+venv/bin/python [extract_cbioportal_hrd_cohort.py](mdc:tools/benchmarks/extract_cbioportal_hrd_cohort.py) \
+  --study ov_tcga_pan_can_atlas_2018 \
+  --out tools/benchmarks/artifacts/ov_tcga_ov_hrd.json \
+  --genes BRCA1,BRCA2,TP53,KRAS,NRAS,PSMB5 \
+  --verbose
+```
+
+2) Run HRD AUPRC benchmark on the extracted cohort
+```bash
+venv/bin/python [hrd_platinum_auprc.py](mdc:tools/benchmarks/hrd_platinum_auprc.py) \
+  --csv tools/benchmarks/data/hrd_tcga_ov_snv_labeled.csv \
+  --api_base http://127.0.0.1:8000 \
+  --out tools/benchmarks/artifacts/hrd_tcga_ov_results.json
+```
+
+Notes
+- For quick smoke: use study `ov_tcga_pan_can_atlas_2018` and small gene lists.
+- The extractor aggregates clinical rows and scans for platinum terms (exposure label). See the extractor’s `--help` for flags.
+
+## ETL patterns (extract → transform → load)
+- Extract
+  - cBio REST & pyBioPortal for mutations/clinical/treatments; GDC POST + chunking for clinical/mutations when needed.
+  - Optional: study download artifacts (TSV) for bulk fallback.
+- Transform
+  - Normalize to GRCh38, validate REF/ALT; collapse duplicate clinical rows; label treatments (drug → class; line of therapy); derive cohort labels (e.g., platinum_exposure, responders).
+  - Pathway mapping: gene→pathway table; compute simple disruption scores per pathway.
+  - Timelines: build events from dates; approximate progression from notes when available (flag inferred).
+  - Images: store hash manifests + URIs; do not ingest raw pixels.
+- Load
+  - Cache artifacts (extracted.json, labeled.csv, results.json) with provenance; register manifests (optional on‑chain attestation per web3 doctrine).
+
+## Unified backend API (FastAPI) – one endpoint
+
+POST `/api/datasets/extract_and_benchmark`
+
+Payload
+```json
+{
+  "mode": "extract_only | run_only | both",
+  "source": "cbio | gdc",
+  "study": "ov_tcga_pan_can_atlas_2018",
+  "filters": {
+    "genes": ["BRCA1","BRCA2","TP53"],
+    "variant_types": ["SNV","MISSENSE"],
+    "disease": "OVARIAN"
+  },
+  "benchmark": {
+    "type": "hrd_platinum_auprc",
+    "profile": "baseline | richer_s | fusion"
+  }
+}
+```
+
+Response (canonical)
+```json
+{
+  "success": true,
+  "artifacts": {
+    "extracted": "path/to/extract.json",
+    "labeled_csv": "path/to/labeled.csv",
+    "benchmark": "path/to/results.json"
+  },
+  "metrics": {"auprc": 0.51, "auroc": 0.50},
+  "cohort": {"n_samples": 1000, "n_variants": 12000, "label": "platinum_exposure"},
+  "provenance": {"run_id": "...", "mode": "both", "source": "cbio"}
+}
+```
+
+Contract notes
+- `mode` controls whether we only extract, only run, or do both.
+- Server caches artifacts by (study, filters, profile) key; returns file paths and summary metrics.
+- GDC source uses POST with JSON filters and chunking to avoid URI length issues.
+
+## Frontend – cBio Data Lab component (reusable)
+
+Location: `ResearchPortal/CbioDataLab.jsx` (new)
+- Steps UI: 1) Select Study → 2) Filters (genes/variant types) → 3) Extract → 4) Label → 5) Benchmark → 6) Review & Export.
+- Uses unified endpoint with `mode` toggles; shows artifact links and metrics.
+- Reuse shared client (timeouts/retries/telemetry) and the existing ActivityContext for logs.
+
+Data model (FE)
+```ts
+type DataLabRun = {
+  id: string
+  study: string
+  filters: { genes?: string[]; variant_types?: string[]; disease?: string }
+  profile: 'baseline' | 'richer_s' | 'fusion'
+  artifacts?: { extracted?: string; labeled_csv?: string; benchmark?: string }
+  metrics?: { auprc?: number; auroc?: number }
+  provenance?: { run_id?: string; mode?: string; source?: string }
+}
+```
+
+DRY hooks
+- `useApiClient()` for POSTs (retries/backoff/timeouts), shared across VUS/MDT/Cohort Lab.
+- `useCachedArtifact(key)` to memoize artifact lookups/application state.
+
+## Building queries – user guidance
+- Choose study (cBio ID); optionally add genes and variant types (SNV/MISSENSE/NONCODING).
+- Pick profile for later benchmarks (Baseline/Richer S/Fusion).
+- Why download: generate cohort statistics, lift WIWFM confidence with cohort evidence, and build explainable narratives with citations + cohort outcomes.
+
+## How this fills Mutation Explorer gaps
+- Adds “Study coverage” and “Add cohort context” chips per variant; WIWFM confidence can lift when cohort outcomes align.
+- Provides cohort‑derived evidence to Dossier (cohort summary panel).
+- Enables export for partners (CSV/JSON) with provenance.
+
+## Evidence/literature hardening – fusion with cohort signals
+- Cache + provider fallback (OpenAlex/Semantic Scholar/PubMed); MoA targeting; dedup; rate‑limit safeguards.
+- Confidence gating: lift or penalize efficacy confidence using cohort outcomes (n, response rate) from Data Lab.
+- Extract fields from cBio: TREATMENTS (drug, class, line, start/stop), responses (when present), and free‑text parsing.
+
+## Replace Dossier mocks – live data
+- Replace static stages with:
+  - Insights chips (functionality/chromatin/essentiality/regulatory) from live endpoints and calibration snapshots.
+  - WIWFM summary (per‑drug score/confidence/tier/badges) + citations.
+  - Cohort summary (if present): n, response rate, study links.
+  - Provenance: run IDs, profile, URLs; explicit Demo/Live badges.
+
+## IP Royalty disclosure & contribution metrics (FE + BE)
+- FE: add disclosure text + contribution widget (human vs platform %) in `TherapeuticBlueprint.jsx` and `ConquestStages.jsx`.
+- BE: populate `provenance.contribution` using endpoint usage (insights, generation), novelty of designs, and AI‑authored rationale share.
+- Show royalty terms (2–5%) and link to Terms.
+
+## Test scripts (smoke → scale)
+
+Smoke (extraction only)
+```bash
+source venv/bin/activate
+venv/bin/python tools/benchmarks/extract_cbioportal_hrd_cohort.py \
+  --study ov_tcga_pan_can_atlas_2018 \
+  --genes BRCA1,BRCA2 \
+  --out tools/benchmarks/artifacts/smoke_ov.json
+```
+
+Smoke (unified API, both)
+```bash
+curl -sS -X POST "$VITE_API_ROOT/api/datasets/extract_and_benchmark" \
+ -H 'Content-Type: application/json' \
+ -d '{"mode":"both","source":"cbio","study":"ov_tcga_pan_can_atlas_2018","filters":{"genes":["BRCA1","BRCA2"]},"benchmark":{"type":"hrd_platinum_auprc","profile":"baseline"}}' | jq .
+```
+
+Scale (benchmark)
+```bash
+venv/bin/python tools/benchmarks/hrd_platinum_auprc.py \
+  --csv tools/benchmarks/data/hrd_tcga_ov_snv_labeled.csv \
+  --api_base http://127.0.0.1:8000 \
+  --out tools/benchmarks/artifacts/hrd_ov_1k.json
+```
+
+Additional smokes (pathways/timelines/images manifests)
+```bash
+# Pathway mapping sanity – small gene set
+venv/bin/python - << 'PY'
+import json, sys
+genes = ["BRCA1","BRCA2","TP53","KRAS","NRAS"]
+pathways = {"RAS/MAPK": ["KRAS","NRAS"], "PI3K/AKT": ["PIK3CA","PTEN"], "TP53": ["TP53"], "HRR": ["BRCA1","BRCA2"]}
+scores = {p: len(set(gs)&set(genes))/max(1,len(gs)) for p,gs in pathways.items()}
+print(json.dumps({"genes": genes, "pathway_scores": scores}, indent=2))
+PY
+
+# Timeline mock transform – derive events
+venv/bin/python - << 'PY'
+from datetime import date
+clinical = {"diagnosis": "2011-03-05", "treatments": [{"drug":"carboplatin","start":"2011-04-10","stop":"2011-08-12"},{"drug":"paclitaxel","start":"2011-04-10","stop":"2011-08-12"}], "progression":"2012-02-01"}
+events = [
+  {"event":"diagnosis","date": clinical["diagnosis"]},
+  *[{"event":"treatment","drug":t["drug"],"start":t["start"],"stop":t["stop"]} for t in clinical["treatments"]],
+  {"event":"progression","date": clinical["progression"]}
+]
+print(events)
+PY
+
+# Image manifest hash (no image upload)
+venv/bin/python - << 'PY'
+import hashlib, json
+uri = "s3://pathology-bucket/study123/sampleABC/slide01.svs"
+m = hashlib.sha256(uri.encode()).hexdigest()
+print(json.dumps({"uri": uri, "sha256": m}, indent=2))
+PY
+```
+
+## Component structure (reusable)
+- `ResearchPortal/CbioDataLab.jsx` – orchestrates the flow; uses shared client and ActivityContext.
+- `hooks/useDatasetRuns.js` – CRUD + caching for dataset runs/artifacts.
+- `components/datasets/*` – Stepper, StudyPicker, FilterForm, ArtifactPanel, MetricsCard.
+- Reuse in Mutation Explorer via lightweight integration chips and “Add cohort context”.
+
+## Acceptance & KPIs
+- End‑to‑end extract→label→benchmark succeeds for one public study; artifacts cached; metrics returned.
+- VUS/Dossier show cohort chips and provenance; efficacy confidence reflects cohort‑derived gates.
+- KPIs: extraction time, cache hit rate, AUPRC/AUROC lift vs control, error rate.
+
+## ML training & partner eval (how we use the data)
+- Train simple supervised heads using Evo2 sequence features plus cohort labels (e.g., responder vs non‑responder) for specific indications.
+- Use pathway scores as covariates to improve generalization in small data scenarios.
+- For imaging pilots: link slide manifests to sample IDs for partner‑hosted models (no raw images in‑app) and allow evaluation runs.
+- Provide standardized eval harness (input CSV schema + profile flags) so partners can run apples‑to‑apples comparisons and log AUROC/AUPRC to Supabase.
+
+## Sources matrix (where data comes from)
+- cBio REST + pyBioPortal: mutations, clinical, treatments.
+- GDC API: clinical/mutations via POST filters + chunking; pathology URIs/manifests when available.
+- Study downloads: TSV artifacts for backup and audits.
+
+## Priorities
+- P0: Unified endpoint; FE Data Lab; Mutation Explorer cohort chips; Dossier CohortSummary; HRD benchmarks stable.
+- P1: Pathway mapping in ETL; timelines support; basic MSI/TMB flags; export CSV/JSON.
+- P2: Image manifest registry; partner evaluation hooks; additional tumor types.
+

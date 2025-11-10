@@ -1,0 +1,70 @@
+ scanned the repo for AlphaFold/ColabFold, Boltz, and Gauntlet artifacts. Here’s the handoff inventory, why prior attempts failed, and what to fix next.
+Where the code lives (current assets)
+AlphaFold/ColabFold (vendored + notebooks)
+src/services/alphafold/ColabFold-main/ (full tree incl. Dockerfile, batch runner, tests)
+src/services/alphafold/main.ipynb
+Test outputs (sample CIFs): tests/protien/fold_2025_07_27_05_28 2/*.cif
+Boltz (vendored + service scaffolds + tests)
+Vendored lib: boltz-main/ (models, training, eval, docs)
+Service scaffolds: src/services/boltz_service/main.py, src/services/boltz/main.py, src/services/boltz_service/schemas.py
+Clients/tests: tools/boltz_client.py, tools/manual_boltz_test.py, tools/manual_boltz_v2_test.py, tests/integration/test_boltz_direct.py, tools/test_oracle_boltz_loop.py
+Gauntlet (structural validation client/tests)
+Client + manuals: tools/gauntlet_client.py, tools/manual_gauntlet_test.py, tools/manual_gauntlet_reforged_test.py
+Service stub: src/services/gauntlet/main.py
+Tests: tests/integration/test_gauntlet_service_direct.py, tests/integration/test_structural_integrity_protocol.py
+Frontend surfaces (UI scaffolds exist; not wired to a live service)
+oncology-coPilot/oncology-frontend/src/components/structure/StructurePredictionResults.jsx
+oncology-coPilot/oncology-frontend/src/components/dossier/canisters/StructureViewer3D.jsx
+oncology-coPilot/oncology-frontend/src/pages/StructurePredictor.jsx
+oncology-coPilot/oncology-frontend/src/components/dossier/canisters/GauntletTrialsDisplay.jsx
+Doctrine/notes
+docs/doctrine/boltz2_protocol.md
+docs/doctrine/forge_and_simulate_protocol.mdc
+What we attempted vs current state
+AlphaFold/ColabFold
+Vendored ColabFold present; notebooks and Dockerfile exist.
+No production service is deployed/wired; runs were ad‑hoc (sample CIFs in tests).
+Boltz
+Vendored Boltz code and a thin service scaffold exist; no confirmed working deployment.
+Manual test scripts and integration tests exist but not green in CI (no live service target).
+Gauntlet
+Client and service stub exist; no confirmed production endpoint; tests assume a running service.
+Why prior efforts failed (root causes)
+Environment/build issues
+ColabFold/JAX/dm‑haiku version conflicts; required official ColabFold container to avoid “AttributeError: jax.core.JaxprEqn” and similar (resolved by using official image).
+Missing system toolchain (“build-essential”) for native deps; caused opaque build/runtime failures.
+PyTorch/transformer_engine binary mismatch; needed forced reinstall sequence.
+Modal/service invocation mistakes
+Invoked webhook functions with .remote(); should use HTTP for @modal.asgi_app (or modal.Cls.lookup() for internal functions).
+Underprovisioned memory/CPU; silent startup crashes without logs.
+Architecture gaps
+No production AlphaFold/ColabFold runner (queue, GPU, storage, provenance).
+Boltz not integrated as a stable service; clients/tests point to non-existent or inconsistent endpoints.
+No backend router endpoint exposing structure jobs/results to the FE.
+Data/compute constraints
+Large models/datasets need 32–64GB RAM and GPU; attempts ran on insufficient resources.
+Lack of caching and resumable job orchestration → brittle end‑to‑end flows.
+What we have now (usable)
+FE components to display structures and results.
+Vendored ColabFold code and notebooks.
+Clients/tests and stubs for Boltz/Gauntlet to guide wiring.
+Doctrine stating the structural protocol, plus lessons learned.
+What to fix next (minimum to unblock)
+P0: Stand up a production ColabFold service on Modal
+Base: official ColabFold Docker image
+Resources: A100 40GB, generous timeout
+Features: job queue, retries/backoff, artifact upload (PDB/CIF/JSON metrics) to storage, provenance (run_id)
+API: POST /api/structure/predict (submit), GET /api/structure/{id} (status/results)
+P0: Backend integration
+Thin FastAPI router to proxy jobs to Modal service; response schema with pLDDT/PAE summaries and artifact URLs
+Update tools/gauntlet_client.py to call new endpoint
+Add unit/integration tests (submit → poll → retrieve)
+P0: Frontend wiring
+Wire StructurePredictionResults.jsx to new endpoints
+Show pLDDT histogram, optional PAE heatmap, 3D viewer of top model
+P1: Stabilize Boltz (optional, after AF)
+Either de‑scope Boltz for now or wrap it behind the same job orchestration pattern with fixed envs
+P1: Observability and cost controls
+Log GPU time, artifact sizes, error rates; simple quota/budget guard
+One‑liner “why it failed” for another agent
+We tried to run AlphaFold/Boltz inside an ad‑hoc environment with fragile deps and insufficient resources, invoked Modal webhooks incorrectly, and lacked a production runner (GPU, queue, storage, provenance). The code and UI scaffolds exist, but no stable service is wired, so tests/clients had nothing reliable to call.

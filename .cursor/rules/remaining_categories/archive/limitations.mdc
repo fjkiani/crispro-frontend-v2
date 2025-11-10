@@ -1,0 +1,587 @@
+# PLATFORM LIMITATIONS & CAPABILITIES DOCTRINE
+
+## CURRENT PLATFORM CAPABILITIES
+
+### 1. Target Selection (Multi-Modal Insights)
+**What We Do:**
+- Score genes based on 4 biological signals:
+  - **Functionality:** Protein function disruption (Evo2 delta scoring)
+  - **Essentiality:** Gene dependency (Evo2 multi/exon magnitudes)  
+  - **Chromatin:** Accessibility (heuristic based on GC content + Enformer roadmap)
+  - **Regulatory:** Splicing/noncoding impact (Evo2 min_delta)
+- Weight signals: `0.35/0.35/0.15/0.15` by default
+- Select highest-scoring gene for mission step
+
+**Implementation:**
+- **Code:** `api/services/metastasis_interception_service.py::target_lock()`
+- **Endpoints:** Calls 4 `/api/insights/predict_*` endpoints
+- **Example:** For "angiogenesis" → checks VEGFA, MMP2 against patient mutations
+
+**⚠️ LIMITATION:** Insights are predictions, not experimental validation. We're not proving these genes drive metastasis in THIS patient - we're using ML models to prioritize.
+
+---
+
+### 2. Guide RNA Design (Evo2-Driven)
+**What We Do:**
+- Generate CRISPR guide RNAs using Evo2 prompt-guided generation
+- Context window: ±150bp around target (Task 1 expanded this)
+- PAM sites: NGG detection
+- Heuristic scoring: GC content, homopolymer penalties
+
+**Implementation:**
+- **Code:** `api/routers/design.py::generate_guide_rna()`
+- **Process:** Calls Evo2 `/api/evo/generate` with genomic context
+- **Output:** 20bp spacer sequences with PAM sites
+
+**⚠️ LIMITATION:** This is sequence generation, not functional validation. We don't know if these guides actually work in cells until wet-lab testing.
+
+---
+
+### 3. Efficacy Prediction (Evo2 Delta Scoring)
+**What We Do:**
+- Predict on-target activity using Evo2 likelihood change
+- Formula: `efficacy = 1 / (1 + exp(Δ / 10))`
+- Context: 300bp window (guide ± 150bp)
+
+**Implementation:**
+- **Code:** `api/routers/design.py::predict_crispr_spacer_efficacy()`
+- **Process:** Calls Evo2 `/api/evo/score` for sequence likelihood
+- **Output:** Efficacy score [0,1]
+
+**⚠️ LIMITATION:** Zero-shot prediction - no training on actual CRISPR cutting data. Evo2 was trained on genomic sequences, not CRISPR efficacy. This is an extrapolation.
+
+---
+
+### 4. Safety Validation (Off-Target Search)
+**What We Do:**
+- Detect unintended binding sites using:
+  - **minimap2:** Fast short-read alignment to GRCh38
+  - **BLAST:** Fallback for sensitive search
+- Safety score: `exp(-0.5 × total_hits)` (exponential decay)
+- Count mismatches: 0mm, 1mm, 2mm, 3mm
+
+**Implementation:**
+- **Code:** `src/services/blast_service/main.py::search_offtargets()`
+- **Process:** Parses SAM/tabular BLAST output
+- **Output:** Off-target counts and distribution
+
+**⚠️ LIMITATION:** In silico only - we're aligning sequences, not testing in cells. Real off-targets depend on chromatin state, PAM accessibility, cell type.
+
+---
+
+### 5. Assassin Score (Composite Ranking)
+**What We Do:**
+- Rank guides using weighted formula:
+  ```python
+  assassin_score = 0.40 × efficacy + 0.35 × safety + 0.25 × mission_fit
+  ```
+- Combines efficacy (Evo2), safety (off-target), mission fit (target lock score)
+
+**Implementation:**
+- **Code:** `api/services/metastasis_interception_service.py::assassin_score()`
+- **Output:** Ranked list of candidates
+
+**⚠️ LIMITATION:** Prediction pipeline - not experimental validation. Weights (0.40/0.35/0.25) are heuristic, not optimized from real data.
+
+---
+
+## METASTASIS CASCADE GENE MAPPING
+
+### 8-Step Metastatic Cascade Targets
+```json
+{
+  "primary_growth": ["BRAF", "KRAS", "MAP2K1", "MAP2K2"],        // MAPK pathway
+  "local_invasion": ["TWIST1", "SNAIL1", "ZEB1", "CDH1"],       // EMT
+  "intravasation": ["MMP2", "MMP9", "MMP14", "CTSD"],           // ECM degradation
+  "survival_in_circulation": ["BCL2", "MCL1", "BIRC5"],         // Anti-apoptosis
+  "extravasation": ["ICAM1", "VCAM1", "SELE"],                  // Adhesion
+  "micrometastasis_formation": ["CXCR4", "CXCL12", "CCR7"],     // Homing
+  "angiogenesis": ["VEGFA", "VEGFR2", "FGF2", "ANGPT2"],        // Vessel growth
+  "metastatic_colonization": ["PTGS2", "IL6", "TGFB1", "POSTN"] // Niche remodeling
+}
+```
+
+**Implementation:**
+- **Config:** `oncology-backend-minimal/api/config/metastasis_interception_rules.json`
+- **Logic:** User selects mission step → System checks target genes → Ranks by multi-modal insights → Designs guides against top target
+
+**Biological Rationale:**
+- **Hallmark hypothesis:** Each cascade step has rate-limiting genes
+- **Interception strategy:** Cut the highest-scoring gene for that step
+- **Example:** If you disrupt angiogenesis, metastases can't vascularize → they stay dormant
+
+
+---
+
+## ROADMAP TO EXPERIMENTAL VALIDATION
+
+### Phase 1 (NOW): Computational Pipeline ✅
+**What We Built:**
+- Multi-modal target lock
+- Evo2-based guide design  
+- Off-target search
+- Assassin score ranking
+
+**What This Enables:**
+- **Researchers:** Fast hypothesis generation ("what if I cut VEGFA at step 7?")
+- **Biotechs:** Target validation and guide design for anti-metastatic programs
+- **Academia:** Publications showing computational methods for precision CRISPR design
+
+### Phase 2 (6-12 months): Experimental Validation
+**Wet Lab Testing:**
+- Synthesize top 10 guides for each step
+- Test cutting efficiency in cell lines (HEK293T, cancer cell lines)
+- Measure on-target editing rates
+- Validate off-target predictions (GUIDE-seq, CIRCLE-seq)
+
+### Phase 3 (12-24 months): Functional Validation
+**Biological Proof:**
+- Test guides in metastasis models (e.g., 4T1 breast cancer cells)
+- **Measure:** Does cutting VEGFA reduce angiogenesis?
+- **Measure:** Does cutting MMP2 reduce invasion?
+- **Goal:** Prove the biological hypothesis
+
+### Phase 4 (24-36 months): Therapeutic Development
+**Clinical Translation:**
+- Optimize delivery (AAV, LNP, RNP)
+- Test in patient-derived xenografts (PDX)
+- Toxicity studies
+- IND filing for clinical trials
+
+---
+
+## WHAT "IN SILICO" ACTUALLY MEANS
+
+**Definition:** In silico = Latin for "in silicon" = computer simulation/prediction
+
+**What We're Doing:** Using AI models (Evo2) + computational tools (BLAST/minimap2) to predict guide RNA performance without touching a single cell.
+
+**Current Capability Example:**
+- **Input:** Patient mutations + mission step (e.g., "angiogenesis")
+- **Output:**
+  - Target gene: VEGFA (target lock score: 0.85)
+  - Top guide candidate: ATCCAGACAACTGTTCAAAC (assassin score: 0.79)
+  - Predicted efficacy: 0.78
+  - Predicted off-targets: 2 (1mm mismatch)
+- **Time:** 5 minutes
+- **Cost:** ~$0.10 (API calls)
+
+**⚠️ CRITICAL LIMITATION:** This is prediction, not proof. We need wet lab validation to confirm biological efficacy.
+
+---
+
+## EXISTING IN SILICO FRAMEWORKS
+
+### 1. Digital Twins for Preclinical Studies
+
+#### A) Organoid Simulation (CellBox, CellOracle)
+- **Framework:** https://github.com/dfci/CellBox
+- **Papers:** Xia et al., Nature Methods 2019
+- **Capability:** Predicts cellular responses to genetic/drug perturbations using neural ODEs trained on high-throughput screens
+- **Our Use Case:**
+  - **Input:** VEGFA knockout (our designed guide)
+  - **Output:** Predicted changes in proliferation, migration, tube formation
+  - **Replaces:** In vitro angiogenesis assay (Week 2-3 of wet lab)
+
+#### B) Tumor Growth Simulators (PhysiCell, CompuCell3D)
+- **Framework:** http://physicell.org
+- **Papers:** Ghaffarizadeh et al., PLoS Comput Biol 2018
+- **Capability:** Simulates tumor growth, angiogenesis, hypoxia, immune interactions at cellular resolution
+- **Our Use Case:**
+  - **Input:** 4T1 cells with VEGFA knockout
+  - **Output:** Predicted tumor growth curves, vascular density, metastatic potential
+  - **Replaces:** 4T1 orthotopic model (Months 3-6 of wet lab)
+
+
+
+#### C) Metastasis Cascade Simulators (MetaPredict, CancerInSilico)
+- **Capability:** 8-compartment ODE model of metastatic cascade
+- **Our Use Case:**
+  - **Input:** Cascade step + intervention efficiency (from our CRISPR efficacy prediction)
+  - **Output:** Predicted metastatic burden reduction
+  - **Replaces:** Full 4T1 metastasis study (saves $30K, 3 months)
+
+**Example Implementation:**
+```python
+# Metastasis cascade ODE model
+import numpy as np
+from scipy.integrate import odeint
+
+def metastasis_ode(state, t, params):
+    """
+    8-compartment model of metastatic cascade
+    state = [primary, local_inv, intravas, circ, extravas, micro, angio, macro]
+    """
+    P, L, I, C, E, M, A, Ma = state
+    
+    # Transition rates (can be modified by CRISPR intervention)
+    k_inv = params['invasion_rate'] * (1 - params['MMP2_inhibition'])
+    k_intra = params['intravasation_rate']
+    k_circ = params['circulation_survival'] * (1 - params['BCL2_inhibition'])
+    k_extra = params['extravasation_rate']
+    k_micro = params['micromet_rate']
+    k_angio = params['angiogenesis_rate'] * (1 - params['VEGFA_inhibition'])
+    k_colon = params['colonization_rate']
+    
+    # Differential equations
+    dP = params['growth_rate'] * P * (1 - P/params['capacity']) - k_inv * P
+    dL = k_inv * P - k_intra * L
+    dI = k_intra * L - k_circ * I
+    dC = k_circ * I - k_extra * C
+    dE = k_extra * C - k_micro * E
+    dM = k_micro * E - k_angio * M
+    dA = k_angio * M - k_colon * A
+    dMa = k_colon * A
+    
+    return [dP, dL, dI, dC, dE, dM, dA, dMa]
+
+# Simulate VEGFA knockout effect
+params_control = {
+    'invasion_rate': 0.1, 'intravasation_rate': 0.05,
+    'circulation_survival': 0.01, 'extravasation_rate': 0.02,
+    'micromet_rate': 0.03, 'angiogenesis_rate': 0.08,
+    'colonization_rate': 0.05, 'growth_rate': 0.5,
+    'capacity': 1e6,
+    'MMP2_inhibition': 0, 'BCL2_inhibition': 0, 'VEGFA_inhibition': 0
+}
+
+params_vegfa_ko = params_control.copy()
+params_vegfa_ko['VEGFA_inhibition'] = 0.90  # 90% VEGFA knockout
+
+# Run simulations
+t = np.linspace(0, 60, 1000)  # 60 days
+initial_state = [1000, 0, 0, 0, 0, 0, 0, 0]  # Start with 1000 primary tumor cells
+
+control = odeint(metastasis_ode, initial_state, t, args=(params_control,))
+treatment = odeint(metastasis_ode, initial_state, t, args=(params_vegfa_ko,))
+
+print(f"Control lung mets at day 60: {control[-1, 7]:.0f}")
+print(f"VEGFA KO lung mets at day 60: {treatment[-1, 7]:.0f}")
+print(f"Reduction: {(1 - treatment[-1, 7]/control[-1, 7])*100:.1f}%")
+```
+
+**References:**
+- Benzekry et al., Cancer Research 2016 (metastasis ODE models)
+- Scott et al., Nature Reviews Cancer 2014 (mathematical oncology)
+
+
+### 2. Pharmacokinetics/Pharmacodynamics (PK/PD) Models
+
+#### PBPK Models (Physiologically-Based Pharmacokinetic)
+- **Frameworks:**
+  - **Simcyp:** Commercial PBPK simulator (pharma standard)
+  - **PK-Sim:** Open-source PBPK (https://github.com/Open-Systems-Pharmacology/PK-Sim)
+  - **mrgsolve:** R package for PK/PD modeling (https://mrgsolve.org)
+
+**Example Implementation:**
+```python
+# Simcyp, PK-Sim, or custom PBPK model
+from pbpk import Mouse, AAV_Therapy
+
+mouse = Mouse(
+    strain='C57BL6',
+    weight_g=25,
+    tumor_location='mammary_fat_pad',
+    tumor_volume_mm3=200
+)
+
+# Simulate AAV delivery of CRISPR
+therapy = AAV_Therapy(
+    dose=1e11,  # viral genomes
+    route='intratumoral',
+    payload='Cas9_VEGFA_guide',
+    time_course_days=30
+)
+
+# Predict tissue distribution and editing efficiency
+results = therapy.simulate(mouse)
+
+print(f"Tumor editing efficiency: {results.tumor_editing}%")
+print(f"Off-target editing (liver): {results.liver_editing}%")
+print(f"Immune response (CD8+ infiltration): {results.cd8_count} cells/mm²")
+```
+
+**Our Use Case:**
+- Predict CRISPR delivery efficiency to tumor vs. off-target tissues
+- Optimize dose/route (IV vs. intratumoral vs. intravenous)
+- **Replaces:** Dose-finding studies (saves $50K, 6 months)
+
+---
+
+## VIRTUAL WET LAB VISION
+
+### The 5 Virtual Benches
+
+#### Bench 1: Virtual Cell Culture (CellSim)
+**What it simulates:**
+- Cell line growth (HEK293T, 4T1, HUVECs)
+- Transfection efficiency (lipofectamine, electroporation, AAV)
+- Genome editing outcomes (indels, HDR, base editing)
+- Off-target editing in silico
+
+**Technology Stack:**
+```python
+# Integration points
+from cellbox import predict_phenotype
+from vep_api import predict_variant_effect
+from our_platform import predict_guide_efficacy
+
+def virtual_transfection(
+    cell_line='HEK293T',
+    guide='ATCCAGACAACTGTTCAAAC',
+    delivery='lipofectamine'
+):
+    # Step 1: Predict editing efficiency
+    efficacy = predict_guide_efficacy(guide)  # Our platform
+    
+    # Step 2: Predict delivery efficiency
+    delivery_eff = DELIVERY_MODELS[cell_line][delivery]
+    
+    # Step 3: Combine for net editing rate
+    net_editing = efficacy * delivery_eff
+    
+    # Step 4: Predict off-target editing
+    offtargets = search_offtargets(guide)  # Our platform
+    offtarget_editing = [ot['score'] * delivery_eff * 0.1 for ot in offtargets]
+    
+    # Step 5: Predict phenotype change
+    phenotype = predict_phenotype(
+        perturbations=[f'{target_gene}_knockout'],
+        cell_line=cell_line
+    )
+    
+    return {
+        'on_target_editing': net_editing,
+        'off_target_editing': offtarget_editing,
+        'phenotype_change': phenotype,
+        'predicted_time_hours': 48
+    }
+```
+
+**Data Requirements:**
+- Train on published CRISPR screen data (Doench, Kim datasets - 13K guides)
+- Cell-type specific delivery efficiency (literature meta-analysis)
+- Phenotype prediction models (CellBox, trained on Perturb-seq data)
+
+#### Bench 2: Virtual Microscopy (ImageSim)
+**What it simulates:**
+- Tube formation assays (angiogenesis)
+- Wound healing assays (migration)
+- Colony formation assays (proliferation)
+- Immunofluorescence (protein expression)
+
+**Data Requirements:**
+- Train generative model on 100K+ microscopy images (public datasets)
+- Annotated datasets for tube formation, wound healing (ImageNet-style for biology)
+
+#### Bench 3: Virtual Flow Cytometry (FlowSim)
+**What it simulates:**
+- Cell cycle analysis (EdU/BrdU incorporation)
+- Apoptosis (Annexin V/PI staining)
+- Cell surface markers (CD45, CD3, CD8)
+- Editing efficiency (flow-based indel detection)
+
+#### Bench 4: Virtual Mouse Colony (MouseSim)
+**What it simulates:**
+- Tumor growth kinetics (orthotopic, subcutaneous, tail vein)
+- Metastasis formation (lung, liver, brain)
+- Survival curves (Kaplan-Meier)
+- Toxicity (weight loss, organ damage)
+
+**Data Requirements:**
+- Historical tumor growth data (TumorGrowth.org - 2000+ growth curves)
+- Metastasis data (literature mining - 500+ studies)
+- Treatment response curves (ChEMBL, GDSC drug response data)
+
+#### Bench 5: Virtual Sequencing (SeqSim)
+**What it simulates:**
+- Sanger sequencing (indel detection)
+- NGS (amplicon sequencing, whole genome)
+- RNA-seq (gene expression changes)
+- ATAC-seq (chromatin accessibility)
+
+---
+
+## IMPLEMENTATION ROADMAP
+
+### Phase 1: Integration Layer (3-6 months)
+**Goal:** Connect existing tools into unified API
+**Cost:** $150K
+
+```python
+# Our unified in silico wet lab API
+class VirtualWetLab:
+    def __init__(self):
+        self.cellbox = CellBox()
+        self.physicell = PhysiCell()
+        self.pbpk = PK_Sim()
+        self.our_platform = MetastasisInterceptionAPI()
+    
+    def run_virtual_experiment(
+        self,
+        experiment_type='tube_formation',
+        cell_line='HUVECs',
+        treatment='VEGFA_CRISPR',
+        controls=['untreated', 'scrambled_guide']
+    ):
+        # Orchestrate multiple simulators
+        guide_performance = self.our_platform.intercept(
+            mission_step='angiogenesis'
+        )
+        
+        cell_response = self.cellbox.predict(
+            perturbation=f"{guide_performance['target']}_knockout",
+            cell_line=cell_line
+        )
+        
+        return {
+            'guide': guide_performance,
+            'predicted_phenotype': cell_response,
+            'confidence': 'moderate',  # Based on validation data
+            'recommended_wet_lab_validation': True
+        }
+```
+
+### Phase 2: Train Custom Models (6-12 months)
+**Cost:** $400K
+
+**Data Collection:**
+- Scrape PubMed/bioRxiv for experimental data
+- Partner with Labs for proprietary data
+- Synthetic Data Generation using PhysiCell
+
+**Model Training:**
+```python
+# Supervised learning on wet lab outcomes
+from sklearn.ensemble import GradientBoostingRegressor
+
+model = GradientBoostingRegressor()
+model.fit(
+    X=guide_features,  # [efficacy_pred, safety_score, GC, etc.]
+    y=actual_editing_efficiency  # From published CRISPR screens
+)
+
+# Now we can predict real editing from in silico features
+predicted_editing = model.predict(our_platform_scores)
+```
+
+### Phase 3: Validation Loop (12-18 months)
+**Cost:** $300K
+
+**Closed-Loop System:**
+1. Platform predicts guide performance (in silico)
+2. Partner tests top 3 guides (wet lab)
+3. Partner reports results back
+4. We update models with real data
+5. Next user gets better predictions
+
+**Metrics to Track:**
+- Prediction accuracy: r² between predicted vs. actual
+- Success rate: % of top-3 guides that work
+- Cost savings: $ saved by avoiding bad guides
+- Time savings: Days saved vs. blind screening
+
+### Phase 4: Full Virtual Lab (18-36 months)
+**Cost:** $800K
+
+**Complete Simulation Suite:**
+- Virtual bench → Virtual mouse → Virtual clinic
+- Replace 80% of preclinical experiments
+- Only validate top candidates in wet lab
+
+**Business Model:**
+- Tier 1: In silico design only ($0.10/guide)
+- Tier 2: In silico + virtual wet lab ($10/experiment)
+- Tier 3: In silico + virtual mouse ($100/study)
+- Tier 4: Full preclinical simulation ($10K/program)
+---
+
+## EXISTING FRAMEWORKS WE CAN LEVERAGE
+
+### Open Source Frameworks
+- **CellBox (MIT)** - Cellular perturbation prediction
+- **PhysiCell (BSD)** - Tumor microenvironment simulation
+- **CompuCell3D (LGPL)** - Multi-scale tissue simulation
+- **PK-Sim (GPLv2)** - Pharmacokinetic modeling
+- **mrgsolve (GPL)** - PK/PD modeling in R
+
+### Commercial Platforms
+- **Simcyp (Certara)** - Clinical trial simulation
+- **Benchling** - Lab notebook + LIMS
+- **SIMULIA Living Heart (Dassault)** - Organ simulation
+- **InSilico Medicine** - Drug discovery AI
+
+### Academic Consortia
+- **Virtual Physiological Human (VPH)** - EU initiative
+- **Physiome Project** - Multi-scale modeling
+- **Cancer Systems Biology Consortium (CSBC)** - NCI funded
+
+---
+
+## STRATEGIC ROADMAP
+
+### Now (2025) ✅
+- In silico CRISPR design (this platform)
+- Efficacy/safety prediction
+- Target dossier generation
+
+### Near-term (2026) ⏳
+- Virtual cell culture (CellBox integration)
+- Virtual tube formation assays
+- Feedback loop with wet lab partners
+
+### Mid-term (2027-2028) 🔮
+- Virtual mouse models (PhysiCell + metastasis ODE)
+- PK/PD simulation for delivery optimization
+- 80% preclinical replacement
+
+### Long-term (2029+) 🔮
+- Virtual clinical trials (patient digital twins)
+- FDA acceptance of in silico evidence
+- Therapeutic candidates approved with minimal wet lab
+
+---
+
+## KEY STRATEGIC INSIGHTS
+
+### What Exists Now
+- **CellBox** (cellular perturbation prediction) - ready to integrate
+- **PhysiCell** (tumor microenvironment) - ready to integrate
+- **PK-Sim** (drug delivery) - ready to integrate
+
+### What We Need to Build
+- Integration layer (6 months)
+- Custom ML models (12 months)
+- Validation loop (12 months)
+
+### The Vision
+- Replace $50K, 6-month mouse study with $100, 1-day simulation
+- Test 100 candidates instead of 3 with same budget
+- 80% preclinical cost reduction
+
+**Bottom Line:** We start with CRISPR design (done), then layer in virtual experiments (next 2 years). Eventually, we replace most of the $50K, 6-month preclinical grind with $100, 1-week simulations. 🎯
+
+---
+
+## BUSINESS MODEL
+
+### Revenue Tiers
+- **Tier 1:** In silico design only ($0.10/guide)
+- **Tier 2:** In silico + virtual wet lab ($10/experiment)
+- **Tier 3:** In silico + virtual mouse ($100/study)
+- **Tier 4:** Full preclinical simulation ($10K/program)
+
+### Strategic Milestones
+- **Year 1:** $100K ARR (foundation)
+- **Year 2:** $2M ARR (validation)
+- **Year 3:** $10M ARR (scale)
+- **Year 5:** $50M+ ARR (market leadership)
+
+### Competitive Moat
+- **CRISPR-first** approach
+- **Open architecture** 
+- **Partner network** for validation
+
+---
+
+*This doctrine represents the complete roadmap from current computational capabilities to full virtual wet lab implementation, enabling 80% cost reduction in preclinical development while maintaining scientific rigor.*

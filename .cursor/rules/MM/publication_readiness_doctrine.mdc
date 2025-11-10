@@ -1,0 +1,198 @@
+---
+description: Publication Readiness Doctrine (MM) – close gaps for full paper, harden FE/BE, multi-agent plan, tests, and reproducibility so users can run similar experiments
+---
+
+## Purpose
+This doctrine is the execution plan to move from a strong MM RUO abstraction to a full publication and hardened product that lets users run similar experiments end-to-end. It enumerates gaps, assigns agent workstreams, defines API/FE contracts, test plans, deliverables, and publication assembly steps.
+
+## How the current architecture supports this (what we already have)
+- Backend (FastAPI, modular routers)
+  - Efficacy orchestration: [api/routers/efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py) and/or [api/routers/efficacy/router.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy/router.py) call into services orchestrating S/P/E + insights, badges, confidence.
+  - Insights: [api/routers/insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py) returns Functionality/Regulatory/Essentiality/Chromatin with provenance and calibration hooks.
+  - Evo proxy + diagnostics: [api/routers/evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py) supports bounded scoring and a diagnostics endpoint to debug deltas/flanks.
+  - Fusion gating: [api/services/sequence_scorers/fusion_scorer.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/sequence_scorers/fusion_scorer.py) and [api/routers/fusion.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/fusion.py) (if present) manage AM coverage and scoring (GRCh38 missense only).
+  - Evidence proxy: [api/routers/evidence.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evidence.py) integrates ClinVar/literature with provenance and caching hooks.
+  - Datasets: [api/routers/datasets.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/datasets.py) provides extraction/benchmark endpoints; extend for MM cohorts.
+  - Toxicity hint: [api/routers/toxicity.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/toxicity.py) for RUO chip.
+- Backend services (clean seams)
+  - Orchestrator: [api/services/efficacy_orchestrator/](mdc:oncology-coPilot/oncology-backend-minimal/api/services/efficacy_orchestrator) (drug_scorer.py, orchestrator.py, models.py) – central place to inject ablations, cohort overlays, calibration snapshots, provenance.lifts.
+  - Sequence scorers: [api/services/sequence_scorers/](mdc:oncology-coPilot/oncology-backend-minimal/api/services/sequence_scorers) (Evo2, Fusion, Massive) – enables toggles and fallback logic.
+  - Confidence/tier/badges: [api/services/confidence/](mdc:oncology-coPilot/oncology-backend-minimal/api/services/confidence) – compute confidence, tiers, FDA/Guideline badges; add reliability/calibration logic here.
+  - Pathway aggregation: [api/services/pathway/](mdc:oncology-coPilot/oncology-backend-minimal/api/services/pathway) – gene→pathway weights and drug mappings.
+- Provenance and toggles
+  - Provenance (run_id, profile, mode) surfaced in responses; feature toggles (Baseline/Richer/Fusion) already plumbed in orchestrator options and FE.
+- Frontend (React)
+  - MM: [oncology-frontend/src/components/MyelomaDigitalTwin.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/MyelomaDigitalTwin.jsx) consumes `/api/efficacy/predict` and displays ranked drugs, confidence, badges, insights.
+  - VUS: [src/components/vus/AnalysisResults.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/vus/AnalysisResults.jsx) shows chips, coverage, toxicity, cohort trials panel; provenance bar present in context.
+  - Sessions/caching: [src/context/SessionContext.jsx](mdc:oncology-coPilot/oncology-frontend/src/context/SessionContext.jsx) enables run persistence and replay (extend for Experiment Runner).
+- Reproducibility hooks
+  - Curl examples in doctrines; diagnostics endpoint; JSON schema stability; easy to add `make reproduce` wrapper to call the same endpoints with stored payloads.
+
+## Current state (anchors)
+- Methods/doctrine: [confidence_lift_implementation_doctrine.mdc](mdc:.cursor/rules/MM/confidence_lift_implementation_doctrine.mdc), [mm_slide_deck_content.mdc](mdc:.cursor/rules/MM/mm_slide_deck_content.mdc), [mm_doctrine.mdc](mdc:.cursor/rules/MM/mm_doctrine.mdc)
+- Evo2 foundations: [evo2-paper.txt](mdc:.cursor/concept/evo2-paper.txt), flags/profiles [evo_flags_and_profiles.mdc](mdc:.cursor/rules/evo_flags_and_profiles.mdc)
+- Datasets runbooks: [data_extraction_smoke_test.mdc](mdc:.cursor/rules/data_extraction_smoke_test.mdc)
+- Backend API (S/P/E + insights, efficacy): see references under Always-Applied doctrine
+- Frontend components (VUS, Myeloma, Evidence) and provenance surfacing as noted in repo rules
+
+## Gaps to close for a full Results publication
+1) MM Cohort Outcomes (Data)
+- Acquire labeled MM cohort(s) (e.g., CoMMpass if license permits; otherwise cBioPortal MM studies). Include treatment, line, response/progression or proxy (OS/PFS), and regimens mapped to drug classes.
+- Normalize to GRCh38; de-duplicate samples; document DUA/IRB if applicable.
+
+2) Quantitative MM Results
+- Compute AUROC/AUPRC (or endpoints appropriate to response labels), confidence intervals, p-values, and per-drug class metrics.
+- Confidence calibration curves; decision curves/net benefit (optional) for clinician-facing framing.
+
+3) Baselines and Ablations
+- Baselines: Pathway-only, Literature-only, AM-only (where applicable), clinician heuristic baseline.
+- Ablations: S vs P vs E vs chips vs Fusion; measure lifts with error bars and runtime/cost per profile.
+
+4) Cohort Overlays & Calibration (Real, not stub)
+- Replace stubs with real coverage/response rates; wire confidence lifts via explicit policy.
+- Implement calibration snapshots service for sequence/pathway percentiles with reliability plots.
+
+5) Evidence Agent Hardening
+- Provider fallback (OpenAlex/S2/PubMed), dedup, caching, rate-limit guards; deterministic outputs in dev profile; quantify effect on confidence.
+
+6) Structural Assessment (Roadmap or Small-scale)
+- Either include small N Gauntlet/Boltz runs with pLDDT/pTM plots or clearly state as roadmap; avoid implying structural proof where absent.
+
+7) Reproducibility & Ethics
+- Versioned code/env, API schemas, run_ids for every figure/table, seeds; data availability statement; RUO & safety gates documented.
+
+8) Productization (User Experiments)
+- FE “Experiment Runner” to reproduce paper experiments: select cohort, set profile toggles, run analyses, view figures/tables, export JSON/CSV/PNG, and cite run_id.
+
+## Multi‑Agent Workstreams (roles, tasks, acceptance)
+
+1) Data & Cohort Agent
+- Tasks: Identify MM datasets; extract mutations, treatments, outcomes; normalize to GRCh38; label response; join tables; persist artifacts.
+- Integrations: Backend `/api/datasets/extract_and_benchmark` (extend to MM); storage paths; caching.
+- Acceptance: Dataset card with N, label distribution; artifacts saved; reproducible extraction command.
+
+2) Backend – Efficacy Modularization Agent
+- Tasks: Extract clean services for pathway aggregation, sequence scorers, evidence client, confidence service per [efficacy_modularization_doctrine.mdc](mdc:.cursor/rules/efficacy_modularization_doctrine.mdc). Add explicit ablation toggles (S-only, P-only, E-only, chips/Fusion flags).
+- Integrations: `/api/efficacy/predict` options to enable ablations; add `provenance.lifts` per component; compute calibration snapshot via service.
+- Acceptance: Unit tests for pathway weights, sequence scorers, percentile mapping; ablation outputs match toggles.
+
+3) Backend – Cohort Overlays & Calibration Agent
+- Tasks: Implement `cohort_signals` from real cohort: coverage_by_gene, response_rates per class; apply_lifts policy with caps. Implement `calibration_snapshot` service: percentiles, thresholds, reliability.
+- Integrations: Orchestrator injects signals into efficacy output; provenance includes method/source.
+- Acceptance: Lifts applied deterministically; reliability plots generated; JSON fields stable.
+
+4) Evidence Agent
+- Tasks: Provider clients (OpenAlex/S2/PubMed) with retries/timeouts; MoA-aware queries; caching; deterministic dev profile. Confidence/tier impact quantified.
+- Integrations: `/api/evidence/deep_analysis`; efficacy confidence modulation; FE badges/citations.
+- Acceptance: Stable outputs in dev; unit tests for provider fallback; measured impact delta on confidence.
+
+5) Fusion/AM Agent
+- Tasks: Ensure Fusion AM scoring path enabled for GRCh38 missense with caching; strict coverage gating; provenance.
+- Acceptance: Coverage endpoint responds deterministically; Fusion lifts measured in ablations.
+
+6) Structural (Gauntlet/Boltz) Agent (optional now)
+- Tasks: Small N structural assessment for designed sequences or hotspot variants; collect pLDDT/pTM; add figures; or document as roadmap.
+- Acceptance: Either figures included with run_ids or roadmap clearly stated in paper.
+
+7) Frontend Product/Experiment Agent
+- Tasks: Create “Experiment Runner” (Research Portal) to run: (a) Cohort extraction/benchmark; (b) Efficacy ablations; (c) Fusion ON/OFF; (d) Calibration/overlays ON/OFF.
+- UI: Profile toggles, run queue, progress, result cards (AUPRC/AUROC, reliability plots), export JSON/CSV/PNG; ProvenanceBar with run_id/profile/mode; save to Session.
+- Acceptance: Reproduce all paper figures/tables from UI; exports match backend artifacts.
+
+8) Reproducibility & Docs Agent
+- Tasks: Lock env (requirements.txt, node deps), scripts to run all analyses; notebooks to plot figures; README linking run_ids to plots; DUA/IRB statements if needed.
+- Acceptance: `make reproduce` (or script) generates all tables/figures with identical run_ids; doc bundle ready.
+
+## Hard vs Assistive task split (who does what, where to look)
+
+Hard tasks (Owner: Architecture/Orchestrator lead)
+- MM Cohort outcomes end-to-end
+  - Where: [api/routers/datasets.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/datasets.py), dataset loaders, new `datasets_service`.
+  - Deliver: labeled MM table; treatment→drug class mapping; artifacts persisted.
+- Calibration snapshot service (reliability)
+  - Where: [api/services/efficacy_orchestrator/calibration_snapshot.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/efficacy_orchestrator/calibration_snapshot.py) (extend/replace stub) + confidence service.
+  - Deliver: reliability plots; thresholds; per-gene/pathway percentiles.
+- Ablations & lifts policy
+  - Where: [api/services/efficacy_orchestrator/orchestrator.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/efficacy_orchestrator/orchestrator.py), drug_scorer, confidence service.
+  - Deliver: `ablation_mode` support, `provenance.lifts`, runtime/cost logging.
+- Baselines implementation
+  - Where: efficacy orchestrator; add switches to drop components and re-score; separate baseline runner script.
+  - Deliver: path-only, literature-only, AM-only, clinician heuristic comparators.
+- Evidence hardening policy
+  - Where: [api/routers/evidence.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evidence.py), evidence client service.
+  - Deliver: deterministic dev profile; effect sizes; provider fallback tests.
+
+Assistive tasks (Other agents)
+- Fusion/AM hygiene and caching
+  - Where: [api/routers/fusion.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/fusion.py), fusion_scorer.
+  - Deliver: strict GRCh38 missense guard; cache keys; provenance of coverage.
+- Experiment Runner (FE)
+  - Where: `oncology-frontend/src/components/ResearchPortal/ExperimentRunner.jsx` (new), reuse Myeloma/VUS panels.
+  - Deliver: profile/ablation toggles; run queue; exports (CSV/JSON/PNG); ProvenanceBar; Session save.
+- Cohort overlays UI
+  - Where: `src/components/vus/CohortTrialsPanel.jsx` (extend) and new `CohortOverlayCards.jsx`.
+  - Deliver: coverage_by_gene chips; response rates; provenance method/status.
+- Reproducibility scripts & docs
+  - Where: repo root `scripts/`, `Makefile`, `README_publication.md`.
+  - Deliver: one-command reproduce; figure notebooks with run_ids; data notes.
+
+Testing hints per area
+- Backend unit: add pytest modules under `oncology-backend-minimal/tests/` for pathway weights, percentile mapping, evidence provider fallbacks, Fusion guard.
+- Integration: golden JSON snapshots for efficacy with ablations; run deterministic dev with fixed seeds.
+- FE: Storybook / Cypress (if used) for Experiment Runner panels; ensure exports match backend artifacts (byte-for-byte where applicable).
+
+## Backend contracts (consolidated)
+- Efficacy request options (new/confirmed):
+  - `include_trials_stub`, `include_fda_badges`, `include_cohort_overlays`, `include_calibration_snapshot`, `ablation_mode` ∈ {"S_only","P_only","E_only","SP","SE","PE","SPE"}
+- Efficacy response additions:
+  - `cohort_signals`: {coverage_by_gene, response_rates, cohort_lifts, provenance}
+  - `calibration_snapshot`: {sequence_calibration, pathway_calibration, thresholds, reliability, provenance}
+  - `provenance.lifts`: per-component contributions; `profile`, `mode`, `run_id`
+
+Example curl (ablation):
+```bash
+curl -sS -X POST $API/api/efficacy/predict \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "mutations": [{"gene":"BRAF","hgvs_p":"V600E","chrom":"7","pos":140453136,"ref":"T","alt":"A"}],
+    "options": {"ablation_mode":"S_only","include_cohort_overlays":true,"include_calibration_snapshot":true},
+    "api_base": "'$API'"
+  }'
+```
+
+## Quantitative MM results – target tables/figures
+- T1: Cohort summary (N, label distribution, coverage by gene, response per class)
+- T2: Performance (AUROC/AUPRC) per profile and drug class; CIs; p-values vs baselines
+- T3: Ablation lifts (S,P,E,chips,Fusion) with error bars and runtime/cost
+- F1: Reliability plots (calibration)
+- F2: Decision curves (optional)
+- F3: Fusion coverage vs lift scatter
+- F4: Confidence distribution by tier/badges
+- F5: Chip distributions (Functionality/Regulatory/Essentiality/Chromatin)
+- F6: Provenance schematic (run_id flow, toggles)
+
+## Test plan
+- Unit: pathway weights, percentile mapping, evidence client fallbacks, Fusion gating, calibration math.
+- Integration: efficacy orchestrator with toggles; cohort overlays; calibration snapshot; deterministic dev runs.
+- E2E: “Experiment Runner” reproduces paper results; exports match backend artifacts; run_ids logged.
+- Performance: runtime/cost per profile; cache hit rates; error budget.
+
+## Publication assembly
+- Methods: reuse this doctrine + [mmAbstract.mdc](mdc:.cursor/rules/MM/mmAbstract.mdc)
+- Results: fill T1–T3, F1–F6; embed JSON exemplars and run_ids.
+- Reproducibility: scripts, env files, dataset notes, limitations, RUO/ethics.
+
+## How users will run similar experiments (product flow)
+- Select cohort (or upload), choose profiles (Baseline/Richer/Fusion), set ablations, click Run.
+- View metrics (AUPRC/AUROC), reliability plots, chip distributions, and per‑drug tables.
+- Export figures/tables/JSON; copy run_id for citation; re-run or share Session.
+
+## Acceptance criteria (Go for preprint/journal)
+- Preprint (Methods/System): All methods stable; exemplar included; reproducibility scripts; RUO posture.
+- Journal (Results): MM cohort results with baselines/ablations/stats; figures/tables complete; reproducibility package; ethics/DUA in place.
+
+## Tracking & ownership
+- Create issues per workstream; attach run_ids; log latency/cost; define DRI per agent.
+
+## User experiments (product outcome)
+- Users can: select cohort → run benchmarks → toggle profiles/ablations → view/export figures/tables → cite run_ids. The app becomes a living replica of the paper.

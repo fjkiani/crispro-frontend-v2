@@ -1,0 +1,120 @@
+---
+alwaysApply: false
+description: Redis Doctrine – Business-first guide to caching, memory (short/long), pub-sub, feature store, and insights using Redis Cloud and Redis Vector to speed demos and personalize outcomes
+---
+
+## Redis Doctrine – Personalization, Memory, and Real‑Time Signals (Business‑First)
+
+### The business value (why this matters)
+- **Faster experience**: Responses feel instant because we reuse results (cache) instead of recomputing.
+- **More reliable demos**: External APIs (literature, models) are flaky; caching + request dedupe keeps the story smooth.
+- **Lower costs**: We call expensive models fewer times; savings grow with usage.
+- **Personalized guidance**: Long‑term memory tailors AI explanations and recommendations to each user/team.
+- **Real‑time progress**: Users see live status for long jobs (cohort extraction/benchmarks) instead of staring at spinners.
+
+### What we’re enabling with Redis
+- **Online cache**: Sub‑second reuse of Insights/Efficacy/Literature results.
+- **Request collapsing**: One outbound call per unique query; others wait and reuse.
+- **Rate limits and idempotency**: Stability under spikes and safe retries.
+- **Background work queue**: Slow tasks (literature, large cohorts) move off the hot path.
+- **Pub/Sub**: Push progress updates (Cohort Lab, WIWFM) to the UI immediately.
+- **Feature store**: Online, consistent features (variant signals, pathway scores) for models and UI.
+- **Vector memory**: Personalization via embeddings (Redis Vector) for long‑term AI recall and smarter responses.
+
+### Where it plugs into our code
+- Insights endpoints: [insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py)
+- Efficacy orchestrator: [efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py)
+- Evo proxy: [evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py)
+- Datasets/Cohorts: [datasets.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/datasets.py)
+
+### Redis Cloud (managed)
+- **Why**: High‑availability, auto‑scaling, TLS, backups — no ops burden.
+- **How**: One `REDIS_URL` env for all services (prod/stage/dev separate DBs). We keep PII minimal and apply short TTLs by default.
+
+### Redis Vector (embeddings for long‑term memory)
+- **What**: A vector index to store and retrieve embeddings (user preferences, prior analyses, explanations that worked).
+- **Why**: Personalizes AI responses: when a user asks again, we retrieve the top‑K relevant memories to guide the answer (less repetition, more context‑aware).
+- **How**:
+  - Write: store vectors like `user:{id}:memories` with metadata (topic, task, timestamp, provenance).
+  - Read: KNN search to retrieve relevant memories; include snippets in prompts or post‑rank outputs.
+  - Governance: cap per‑user memory, evict stale items, honor deletions (Right‑to‑be‑Forgotten).
+
+### Long‑term memory (personalization)
+- **Use‑cases**: Preferred variant formats, disease focus (MM, HRD), report tone (executive vs technical), prior decisions (which evidence convinced them).
+- **Storage**: Redis Hash/JSON + Vector side‑by‑side. Keys like `ltm:user:{id}:profile` and vector set `ltm:user:{id}:memories`.
+- **Benefits**: Less onboarding friction, consistent explanations, faster “getting to useful.”
+
+### Short‑term memory (session/context)
+- **Use‑cases**: Current variant list, last WIWFM run, in‑flight locks to avoid duplicate work.
+- **Storage**: TTL‑bound keys like `stm:session:{sid}:analysis`, `lock:insights:{hash}`.
+- **Benefits**: Snappy navigation, no repeated spinners, safe retries, fewer upstream calls.
+
+### Pub‑Sub (live UX)
+- **Approach**: Publish progress events from long tasks to channels like `events:cohort:{job_id}`.
+- **Frontend**: Subscribe via WS/SSE and update progress bars, logs, and “ready to view” notifications.
+- **Benefits**: Users feel in control; support can see stuck jobs in real time.
+
+### Feature store (online, real‑time)
+- **What**: A consistent, fast store for features we compute (e.g., regulatory score bucket, AM coverage, pathway weights) that both UI and models read.
+- **Keys**: `feat:variant:{hash}:{profile}:v1` and `feat:user:{id}:prefs:v1`.
+- **Benefits**: Reuse across endpoints, fewer re‑computes, easier A/B testing (version suffixes `:v1`).
+
+### Insights (faster, clearer)
+- **Cache**: Insights per variant/profile with TTL (e.g., 1–24h). Include provenance (model, inputs) in values.
+- **Collapse**: Only one Evo2/Fusion/Literature call while a key is “hot.” Others await the result.
+- **Explain**: Store rationale bullets and badges so the UI can render instantly on repeat.
+
+### Minimal key schema (illustrative)
+- `insights:{variant_hash}:{profile}:v1` → JSON (chips, scores, provenance) TTL 1–24h
+- `efficacy:{variant_hash}:{profile}:v1` → JSON (drugs, confidence, evidence) TTL 1–24h
+- `lit:q:{hash}:v1` → JSON (citations, manifest) TTL 1–7d
+- `lock:{cache_key}` → string “1” TTL 30–60s (single‑flight)
+- `stm:session:{sid}:analysis` → JSON (current view) TTL 30–120m
+- `ltm:user:{id}:profile` → JSON (preferences, persona) TTL 30–180d
+- `vec:ltm:user:{id}` → vector set (memories with metadata)
+- `feat:variant:{hash}:{profile}:v1` → JSON (online features) TTL 1–24h
+- `events:cohort:{job_id}` → Pub/Sub channel for progress
+
+### Rollout plan (safe, incremental)
+1) **Cache + single‑flight** for Insights/WIWFM (biggest wins) with short TTLs and versioned keys.
+2) **Rate limits + idempotency** on public endpoints to prevent spikes/duplication.
+3) **Pub/Sub** for Cohort Lab progress; add background queue for literature.
+4) **Vector memory** for personalization on VUS/Dossier copy; small pilot with opt‑in.
+
+### How this powers the Self‑Improving Doctrine
+- See: [self_improving_doctrine.mdc](mdc:.cursor/rules/self_improving_doctrine.mdc)
+- **Champion/Challenger isolation**: All caches and features are keyed by `profile` (Baseline/Richer/Fusion) and `:v*` version, so A/B runs never contaminate one another.
+- **Canary flags in Redis**: Feature flags like `ff:profile:champion=current_profile` and `ff:canary:traffic_pct=0.2` drive staged rollouts; flipping a key switches traffic without redeploy.
+- **Metrics pipeline assist**: While final metrics live in Supabase, Redis tracks fast counters (hits/misses, latency buckets) and run health during weekly sweeps.
+- **Job orchestration**: Weekly cohort benchmarks publish progress via Pub/Sub (`events:bench:{job_id}`); dashboards subscribe to show real‑time status.
+- **Budget/rate governance**: Per‑profile rate limits ensure challengers don’t exceed budget; idempotency avoids duplicate bills.
+- **Reproducibility**: Idempotency keys + cached artifacts (manifests/links) make runs repeatable; provenance (run_id, profile, timestamp) stored alongside cached payloads.
+- **Personalization lift tracking**: Vector memory can be A/B’d (enable for a slice); measure changes in task completion rate and time‑to‑insight before promoting.
+
+### Security, privacy, compliance
+- TLS + auth on Redis Cloud; separate DBs per env; namespaced keys.
+- Short TTL defaults; no raw PHI/PII in cache payloads; references over raw ids where possible.
+- Right‑to‑be‑Forgotten: delete ltm keys and associated vectors on request.
+- Audit fields: store minimal provenance (run_id, model, timestamp) alongside cached values.
+
+### Success metrics (what good looks like)
+- P95 latency ↓ 30–60% on Insights/WIWFM routes.
+- Cache hit rate ≥ 60% (steady‑state) on common variants and demo flows.
+- External API errors masked by cache ≥ 80% of the time during spikes.
+- Cost per 1k requests ↓ 40–70% for Evo2/Literature.
+- User satisfaction: fewer timeouts, higher “clarity” NPS for personalized copy.
+- Self‑improving loop: faster weekly runs (≥25% wall‑clock reduction), clean A/B isolation, and canary flips without regressions.
+
+### Demo switches (env)
+- `REDIS_URL` → enable cache/memory/pub‑sub.
+- `CACHE_TTL_INSIGHTS`, `CACHE_TTL_EFFICACY`, `CACHE_TTL_LIT` → tune reuse.
+- `ENABLE_PUBSUB=1` → live progress in Cohort Lab/WIWFM.
+- `ENABLE_VECTOR_LTM=1` → personalization pilot (opt‑in).
+- `FF_PROFILE_CHAMPION=baseline|richer|fusion` → champion selection.
+- `FF_CANARY_TRAFFIC_PCT=0.2` → canary share for challenger during rollout.
+
+### Notes for developers
+- Version keys (e.g., `:v1`) whenever schema/logic changes; rolling migrations are painless.
+- Include `profile` in keys (Baseline/Richer/Fusion) to avoid cross‑profile contamination.
+- Keep payloads compact; store large artifacts off‑store and cache signed URLs/manifests.
+

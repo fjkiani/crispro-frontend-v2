@@ -1,0 +1,492 @@
+---
+alwaysApply: false
+description: Parallel tasks for secondary agent during Week 1-2 metastasis publication sprint - non-blocking enhancements
+---
+
+# ⚔️ PARALLEL AGENT TASKS - WEEK 1-2 METASTASIS SPRINT
+
+**Purpose:** Non-blocking tasks a secondary agent can execute in parallel while primary agent (Zo) focuses on P0 publication blockers  
+**Timeline:** Oct 13-27, 2025  
+**Priority:** P1-P2 (enhances but doesn't block submission)  
+**Status:** Ready for assignment
+
+---
+
+## 🎯 GUIDING PRINCIPLES
+
+**What Makes a Good Parallel Task:**
+1. ✅ **Non-blocking** - Doesn't block Day 1-2 validation or Week 2 AF3 work
+2. ✅ **Self-contained** - Clear inputs/outputs, minimal coordination needed
+3. ✅ **Enhances publication** - Makes manuscript stronger but not critical for acceptance
+4. ✅ **Partner-facing** - Increases demo/partner value
+5. ✅ **Low risk** - Failure doesn't derail main timeline
+
+**What to AVOID:**
+- ❌ Touching core validation scripts (risk breaking tests)
+- ❌ Modifying MASTER_STATUS.md or PUBLICATION_SPEC_LOCKED.md (single source of truth)
+- ❌ Changing API contracts that Zo is actively using
+- ❌ GPU-intensive work that competes with Enformer/AF3 deployments
+
+---
+
+## 📋 TIER 1: HIGH-VALUE PARALLEL TASKS (Pick 2-3)
+
+### **Task A: Frontend Dashboard Polish** ⭐ RECOMMENDED
+**Duration:** 8-12 hours  
+**Value:** Partner demo readiness  
+**Risk:** Low (frontend-only, no backend changes)
+
+**What to Build:**
+- Polish `oncology-coPilot/oncology-frontend/src/pages/MetastasisDashboard.jsx`
+- Add loading skeletons for API calls (better UX during 3-5s waits)
+- Add export buttons (CSV/JSON) for Target-Lock scores and guide rankings
+- Add comparison view (Baseline vs Richer S vs Fusion side-by-side)
+- Add provenance panel showing run_id, profile, model versions
+- Add "Research Use Only" disclaimers to all outputs
+
+**Acceptance Criteria:**
+- [ ] Loading states for all API calls (no blank screens)
+- [ ] Export functionality works for main data tables
+- [ ] Profile comparison renders side-by-side correctly
+- [ ] RUO disclaimer visible on every results page
+- [ ] No linter errors in modified files
+
+**Files to Touch:**
+- `oncology-coPilot/oncology-frontend/src/pages/MetastasisDashboard.jsx`
+- `oncology-coPilot/oncology-frontend/src/components/metastasis/MetastasisReport.jsx`
+- `oncology-coPilot/oncology-frontend/src/components/metastasis/MetastasisInterceptionPanel.jsx`
+- Create new: `oncology-coPilot/oncology-frontend/src/components/common/ExportButton.jsx`
+- Create new: `oncology-coPilot/oncology-frontend/src/components/common/ProvenancePanel.jsx`
+
+**Why This Matters:**
+- Partners will see polished demo during Week 2
+- Export functionality lets them take data for internal evaluation
+- Comparison view demonstrates lift from enhanced profiles
+
+---
+
+### **Task B: Supplementary Figure Generation** ⭐ RECOMMENDED
+**Duration:** 6-10 hours  
+**Value:** Publication supplementary materials  
+**Risk:** Low (doesn't touch main figures)
+
+**What to Build:**
+Python scripts to generate supplementary figures:
+
+1. **Supp Fig S1:** Per-gene Target-Lock heatmap (8 steps × 24 genes)
+2. **Supp Fig S2:** Ablation study bar charts (drop each signal, measure AUROC delta)
+3. **Supp Fig S3:** Confounder analysis scatter plots (gene length vs score, GC% vs score)
+4. **Supp Fig S4:** Bootstrap distribution histograms (show 1000 resamples for each step)
+5. **Supp Fig S5:** Guide design distribution violin plots (efficacy/safety/assassin by step)
+
+**Acceptance Criteria:**
+- [ ] All figures generated at 300 DPI (PNG + SVG)
+- [ ] Consistent color scheme with main figures
+- [ ] Figure legends include provenance (seed=42, n=X, methods)
+- [ ] Scripts documented in `scripts/figures/README.md`
+- [ ] Figures saved to `publication/figures/supplementary/`
+
+**Files to Create:**
+- `scripts/figures/generate_supp_fig_s1_heatmap.py`
+- `scripts/figures/generate_supp_fig_s2_ablation.py`
+- `scripts/figures/generate_supp_fig_s3_confounders.py`
+- `scripts/figures/generate_supp_fig_s4_bootstrap.py`
+- `scripts/figures/generate_supp_fig_s5_distributions.py`
+- `scripts/figures/README.md`
+
+**Why This Matters:**
+- Supplementary figures strengthen manuscript (reviewers love ablations)
+- Shows we checked for confounders (gene length bias, etc.)
+- Demonstrates statistical rigor (bootstrap distributions)
+
+---
+
+### **Task C: Expanded Gene Literature Search** ⭐ RECOMMENDED
+**Duration:** 4-6 hours  
+**Value:** Strengthens 24-gene expansion citations  
+**Risk:** Low (research only, no code)
+
+**What to Deliver:**
+For each of the 10 new genes (AXL, TGFβR1, CLDN4, SRC, FAK, NOTCH1, S100A4, PLOD2, CCL2, ANGPT2):
+
+1. Find 3-5 key papers linking gene to metastasis
+2. Extract key quotes (1-2 sentences per paper)
+3. Note which metastatic step(s) the gene affects
+4. Verify NCT trial IDs are correct and active
+5. Check for any recent Phase 3 results (stronger evidence)
+
+**Deliverable Format:**
+```json
+{
+  "gene": "AXL",
+  "metastatic_steps": ["angiogenesis", "colonization"],
+  "trials": [
+    {
+      "nct_id": "NCT04019288",
+      "title": "AXL Inhibitor Phase 2 in NSCLC",
+      "status": "Active, recruiting",
+      "phase": "Phase 2"
+    }
+  ],
+  "key_papers": [
+    {
+      "pmid": "30867592",
+      "title": "AXL drives metastatic colonization...",
+      "journal": "Cancer Cell",
+      "year": 2019,
+      "key_quote": "AXL overexpression correlates with...",
+      "relevance": "Demonstrates AXL role in colonization"
+    }
+  ]
+}
+```
+
+**Files to Create:**
+- `publication/data/gene_literature_v1.0.0.json` (structured citations)
+- `publication/docs/LITERATURE_SEARCH_METHODS.md` (how you searched)
+
+**Why This Matters:**
+- Strengthens manuscript Introduction/Discussion sections
+- Provides backup if reviewers question gene choices
+- Helps partners understand biological rationale
+
+---
+
+## 📋 TIER 2: MEDIUM-VALUE PARALLEL TASKS (Pick 1-2)
+
+### **Task D: Docker Environment Testing**
+**Duration:** 4-6 hours  
+**Value:** Reproducibility validation  
+**Risk:** Medium (requires GPU access)
+
+**What to Test:**
+- Build all Docker images from scratch on clean machine
+- Test `scripts/reproduce_all.sh` end-to-end
+- Verify checksums match expected outputs
+- Document any missing dependencies or unclear steps
+- Test on both Linux and macOS (if possible)
+
+**Acceptance Criteria:**
+- [ ] Docker build succeeds without manual intervention
+- [ ] Reproduction script completes in <15 minutes (with GPU)
+- [ ] Output checksums match reference values
+- [ ] Any issues documented with fixes in `REPRODUCIBILITY.md`
+
+**Files to Create:**
+- `publication/REPRODUCIBILITY_TEST_REPORT.md`
+
+---
+
+### **Task E: Guide Design Parameter Sweep**
+**Duration:** 6-8 hours  
+**Value:** Shows design space exploration  
+**Risk:** Low (analysis-only, no API changes)
+
+**What to Analyze:**
+Using existing guide validation data, create analysis showing:
+- Effect of window size on efficacy (±50bp vs ±100bp vs ±150bp)
+- GC content distribution vs success rate
+- Position within exon vs efficacy
+- Off-target count distribution by genome region
+
+**Deliverable:**
+- Jupyter notebook with visualizations
+- Summary table of optimal design parameters
+- Recommendations for future parameter tuning
+
+**Files to Create:**
+- `publication/analysis/guide_design_parameter_sweep.ipynb`
+- `publication/analysis/PARAMETER_RECOMMENDATIONS.md`
+
+---
+
+### **Task F: Cost Analysis & Optimization Report**
+**Duration:** 3-4 hours  
+**Value:** Partner budget planning  
+**Risk:** Low (analysis-only)
+
+**What to Calculate:**
+- Cost per guide designed (Evo2 inference)
+- Cost per structure predicted (AF3 on A100)
+- Cost per full 8-step analysis (Target-Lock + guides + structures)
+- Projected cost for 100 genes vs 1000 genes
+- Optimization opportunities (caching, batching, cheaper hardware)
+
+**Deliverable:**
+Markdown report with tables:
+```markdown
+# Cost Analysis
+
+## Per-Guide Cost Breakdown
+- Evo2 efficacy prediction: $0.02
+- Off-target search (minimap2): $0.05
+- AlphaFold3 structure: $1.00
+- **Total per guide:** $1.07
+
+## Optimization Opportunities
+1. Batch Evo2 calls (10x reduction) → $0.002 per guide
+2. Cache off-target results (90% hit rate) → $0.005 per guide
+3. Use ColabFold instead of AF3 Server → $0.50 per structure
+```
+
+**Files to Create:**
+- `publication/docs/COST_ANALYSIS_V1.md`
+
+---
+
+### **Task G: Partner Demo Script & Video Outline**
+**Duration:** 2-3 hours  
+**Value:** Partner onboarding materials  
+**Risk:** Low (documentation-only)
+
+**What to Create:**
+1. **3-minute demo script** (what to show, what to say)
+2. **Video outline** (shot list, screen transitions)
+3. **FAQ document** (10-15 common partner questions with answers)
+4. **One-pager** (PDF summary for email campaigns)
+
+**Deliverable Format:**
+```markdown
+# 3-Minute Demo Script
+
+## Shot 1: The Problem (30s)
+[Screen: 8-step metastatic cascade animation]
+**Narration:** "90% of cancer deaths are caused by metastasis..."
+
+## Shot 2: Our Solution (45s)
+[Screen: MetastasisDashboard.jsx loading]
+**Narration:** "We built the first AI platform to design CRISPR guides..."
+
+## Shot 3: Live Example (90s)
+[Screen: Select BRAF, run analysis, show results]
+**Narration:** "Let's target BRAF in step 1 - primary growth..."
+
+## Shot 4: Partner Value (30s)
+[Screen: Export button, show PDB file download]
+**Narration:** "Export all data, 3D structures, and citations..."
+```
+
+**Files to Create:**
+- `publication/demos/DEMO_SCRIPT_3MIN.md`
+- `publication/demos/VIDEO_OUTLINE.md`
+- `publication/demos/PARTNER_FAQ.md`
+- `publication/demos/ONE_PAGER.pdf` (use Canva or similar)
+
+---
+
+## 📋 TIER 3: NICE-TO-HAVE TASKS (If Time Permits)
+
+### **Task H: Batch Processing Scripts**
+- Create CLI tool for processing multiple genes at once
+- Add progress bars and ETA for long-running jobs
+- Enable resume-from-checkpoint for interrupted runs
+
+### **Task I: API Rate Limiting & Caching**
+- Add Redis caching layer for repeated queries
+- Implement rate limiting (10 requests/min per IP)
+- Add API key authentication for partners
+
+### **Task J: Extended Validation Datasets**
+- Find additional trial-backed genes (24 → 50)
+- Cross-reference with DepMap CRISPR screens
+- Add tissue-specific essentiality data
+
+### **Task K: Documentation Polish**
+- Proofread all READMEs for clarity
+- Add "Quick Start" guides for each major component
+- Create architecture diagrams (system, data flow, deployment)
+
+---
+
+## 🤝 COORDINATION PROTOCOL
+
+### **Daily Sync (15 min)**
+- **When:** End of day (10pm UTC)
+- **Format:** Async update in `PARALLEL_AGENT_STATUS.md`
+- **What to Report:**
+  - Tasks completed today
+  - Blockers encountered
+  - Tasks planned for tomorrow
+  - Questions for primary agent (Zo)
+
+### **Handoff Points**
+- **If you need data from primary agent:** Post request in coordination doc, continue with next task
+- **If you find a bug:** Document in `PARALLEL_AGENT_BUGS_FOUND.md`, notify primary agent, don't fix yourself (risk breaking tests)
+- **If you finish early:** Pick next tier task or polish existing work
+
+### **Files for Coordination**
+- `PARALLEL_AGENT_STATUS.md` - Daily updates
+- `PARALLEL_AGENT_QUESTIONS.md` - Questions for primary agent
+- `PARALLEL_AGENT_BUGS_FOUND.md` - Issues discovered (don't fix, just document)
+
+---
+
+## ✅ ACCEPTANCE CRITERIA (ALL PARALLEL WORK)
+
+Before marking any task complete:
+- [ ] Code follows existing style conventions
+- [ ] All new files have proper headers (purpose, author, date)
+- [ ] No linter errors in modified/created files
+- [ ] Documentation updated (`README.md` files where applicable)
+- [ ] Changes don't break existing tests (run `pytest` to verify)
+- [ ] Git commits have clear messages describing what/why
+- [ ] No merge conflicts with primary agent's work
+
+---
+
+## 🎯 RECOMMENDED TASK SELECTION
+
+**For a 10-hour sprint (Week 1):**
+- Task A (Frontend Polish) - 8 hours
+- Task C (Literature Search) - 2 hours
+
+**For a 20-hour sprint (Week 1-2):**
+- Task A (Frontend Polish) - 8 hours
+- Task B (Supp Figures) - 8 hours
+- Task C (Literature Search) - 4 hours
+
+**For a 30-hour sprint (Full Week 1-2):**
+- Task A (Frontend Polish) - 10 hours
+- Task B (Supp Figures) - 10 hours
+- Task C (Literature Search) - 4 hours
+- Task G (Demo Script) - 3 hours
+- Task F (Cost Analysis) - 3 hours
+
+---
+
+## 🚨 RED FLAGS (STOP AND ASK)
+
+**Stop work immediately if you encounter:**
+1. **Import errors** in existing code after your changes
+2. **Test failures** when running `pytest`
+3. **API contract changes** needed (coordinate with primary agent first)
+4. **GPU resource conflicts** (hitting Modal quotas)
+5. **Merge conflicts** with primary agent's commits
+
+**How to Handle:**
+- Document the issue in `PARALLEL_AGENT_QUESTIONS.md`
+- Revert your changes to last working state
+- Move to next task while waiting for coordination
+
+---
+
+## 📊 SUCCESS METRICS
+
+**Week 1 Target (Oct 13-20):**
+- 2-3 Tier 1 tasks complete
+- Frontend dashboard polished and demo-ready
+- Supplementary figures generated (5 figures)
+
+**Week 2 Target (Oct 20-27):**
+- All Tier 1 tasks complete
+- 1-2 Tier 2 tasks complete
+- Partner demo materials ready
+- Cost analysis delivered
+
+**Overall Impact:**
+- Primary agent (Zo) stays focused on P0 publication blockers
+- Manuscript strengthened with supplementary materials
+- Partner demo quality dramatically improved
+- Reproducibility validated by independent build
+- Zero delays to Oct 27 submission date
+
+---
+
+## 🎯 FINAL NOTES
+
+**Remember:**
+- **Your job is to enhance, not block** - if in doubt, move to next task
+- **Quality over quantity** - 2 polished deliverables > 5 half-done tasks
+- **Document everything** - future agents will thank you
+- **Communicate blockers early** - don't waste time stuck
+
+**You are force multiplier, not blocker.** 🚀⚔️
+
+---
+
+## 🔍 **ARCHITECTURE & IMPLEMENTATION QUESTIONS**
+
+*Added by Zo during onboarding review - these questions help future agents understand the technical implementation details*
+
+### **Frontend-Backend Integration Questions**
+
+**Q1: MetastasisDashboard.jsx Current State**
+- Does `MetastasisDashboard.jsx` already exist, or should it be created from scratch?
+- What's the current API integration pattern? Should I use the modularized backend services?
+- Should I wire it to existing `/api/efficacy/predict` endpoint or are there metastasis-specific endpoints?
+
+**Q2: Data Flow & API Contracts**
+- For "comparison view" (Baseline vs Richer S vs Fusion), how should this work technically?
+  - Make 3 separate API calls with different profile flags?
+  - Single endpoint returning all profiles in one response?
+  - What's the expected data structure for comparison view?
+
+**Q3: Export Functionality**
+- What specific data should be exported in CSV/JSON?
+  - Just Target-Lock scores and guide rankings?
+  - Include full provenance data (run_id, model versions, etc.)?
+  - Any specific CSV format requirements for partner compatibility?
+
+### **Technical Implementation Questions**
+
+**Q4: Component Architecture**
+- Do `MetastasisReport.jsx` and `MetastasisInterceptionPanel.jsx` exist?
+- Should I follow existing component patterns (like `MyelomaDigitalTwin.jsx`)?
+- Are there existing UI component libraries or design systems to use?
+
+**Q5: State Management**
+- How should the dashboard manage state for:
+  - Loading states during API calls?
+  - Comparison view data?
+  - Export functionality?
+- Should I use existing hooks pattern (`useInsights.js`, `useEvidence.js`) or create new ones?
+
+**Q6: Styling & UX**
+- What's the current styling approach? CSS modules, Tailwind, styled-components?
+- Are there existing loading skeleton components I can reuse?
+- Any specific design requirements for RUO disclaimers?
+
+### **Data & Content Questions**
+
+**Q7: Metastasis-Specific Data**
+- What's the "8-step metastatic cascade" exactly? Where is this documented?
+- The 24 genes mentioned - where can I find the complete list and their mappings to metastatic steps?
+- Are there existing datasets or should I create mock data for development?
+
+**Q8: Supplementary Figures**
+- For figure generation scripts, what's the current data source?
+  - Should I use existing API endpoints to generate the data?
+  - Are there existing result files I should process?
+  - What's the expected output format and where should figures be saved?
+
+### **Execution Strategy Questions**
+
+**Q9: Priority & Scope**
+- Given this is parallel work, which tasks should I prioritize first?
+- Should I start with Task A (Frontend Dashboard) since it's marked "RECOMMENDED"?
+- Any specific timeline constraints I should be aware of?
+
+**Q10: Coordination**
+- How should I handle coordination files (`PARALLEL_AGENT_STATUS.md`, etc.)?
+- Should I create these in the same directory structure?
+- Any specific format requirements for status updates?
+
+### **Current State Assessment Questions**
+
+**Q11: Existing Codebase**
+- What's the current state of metastasis-related code?
+- Are there any existing metastasis endpoints or is this all new development?
+- How does this connect to the broader CrisPRO platform architecture?
+
+**Q12: Data Sources & References**
+- Where can I find the 8-step metastatic cascade definition?
+- What are the 24 genes and their step mappings?
+- Are there existing metastasis assessment results I can reference?
+
+---
+
+**Document Version:** 1.1.0  
+**Created:** October 13, 2025  
+**Updated:** October 13, 2025 (Added architecture questions by Zo)  
+**For:** Secondary agent parallel work during metastasis publication sprint  
+**Maintained By:** Primary agent (Zo)

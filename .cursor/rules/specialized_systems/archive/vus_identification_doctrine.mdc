@@ -1,0 +1,121 @@
+---
+description: Doctrine for identifying and resolving VUS (Variants of Uncertain Significance) using S/P/E + SAE, calibration, Fusion, KB priors, and cohort overlays
+alwaysApply: false
+---
+
+## VUS Identification Doctrine (End‑to‑End)
+
+Purpose: A reproducible, evidence‑backed workflow to classify or triage VUS by combining Sequence/Pathway/Evidence (S/P/E), SAE interpretable features, KB priors, AlphaMissense Fusion gating, and cohort overlays.
+
+### 1) Inputs and Normalization
+- Required input: variant with GRCh38 coordinates and REF/ALT or HGVS protein.
+- Normalize and validate:
+  - Ensure GRCh38 build, confirm REF/ALT match reference sequence.
+  - If HGVS only, resolve to genomic coordinates.
+  - Multiple variants allowed; analyze per‑variant and aggregate by pathway when needed.
+
+### 2) Priors (Decide “Already Not VUS?”)
+- ClinVar lookup → if Pathogenic/Likely Pathogenic with adequate review, treat as prior‑resolved (not VUS). If Benign/Likely Benign, treat accordingly.
+- If ClinVar Uncertain/Conflicting/Not Found → continue to VUS pipeline.
+- API references:
+  - Evidence/ClinVar: [oncology-coPilot/oncology-backend-minimal/api/routers/evidence.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evidence.py)
+
+### 3) Triumvirate Protocol Gate
+- Deterministic truncation/frameshift check → if truncating, classify via truncation rule and skip deep Evo scoring.
+- Non‑truncating → proceed to sequence/oracle analyses.
+- Implemented within insights services: [oncology-coPilot/oncology-backend-minimal/api/routers/insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py)
+
+### 4) S/P/E Core Signals
+- Sequence (S):
+  - Evo2 multi/exon deltas, calibrated percentiles, hotspot floor when applicable.
+  - Endpoints: `/api/evo/score_variant_multi`, `/api/evo/score_variant_exon` via insights wrappers.
+  - Router: [insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py)
+- Pathway (P):
+  - Map variant→gene→pathway; aggregate weighted disruptions. Consumed by efficacy orchestrator.
+  - Orchestrator: [oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py) and service: [api/services/efficacy_orchestrator/orchestrator.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/efficacy_orchestrator/orchestrator.py)
+- Evidence (E):
+  - Literature strength, ClinVar review status; MoA‑aware terms; badges.
+  - Evidence router: [evidence.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evidence.py)
+
+### 5) Insights Bundle (Real Signals)
+- Functionality change
+- Chromatin accessibility (heuristic or Enformer/Borzoi when configured)
+- Essentiality (Evo2 magnitudes + calibration)
+- Regulatory/splicing (non‑coding proxy)
+- All via [insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py)
+
+### 6) Fusion Gating (AlphaMissense)
+- If GRCh38 missense and coverage exists, fetch AM score and coverage; otherwise skip.
+- Router (if present): [fusion.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/fusion.py)
+- Frontend coverage chip should gate Fusion compare.
+
+### 7) SAE Interpretable Features (Real Data Only)
+- Source: [api/services/sae_service.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/sae_service.py)
+- Core features:
+  - exon_disruption (Evo2 calibrated percentile + hotspot floor)
+  - hotspot_mutation (AlphaMissense/ClinVar/hotspot)
+  - essentiality_signal (insights)
+  - DNA_repair_capacity (toxicity pathway overlap)
+  - seed_region_quality (off‑target heuristic, when design context exists)
+  - cohort_overlap (coverage across cohorts)
+- Treatment line features (added): line_appropriateness, cross_resistance_risk, sequencing_fitness.
+- Treatment line computation: [.cursor/ayesha/treatment_lines/backend/services/treatment_line_integration.py](mdc:.cursor/ayesha/treatment_lines/backend/services/treatment_line_integration.py)
+
+### 8) VUS Triage Scoring and Decision Rubric
+- Compute a VUS Triage Score (0–1) as transparent composite:
+  - Base = max(S calibrated percentile, hotspot_mutation)
+  - Modulate with P signal (pathway alignment) and E strength (badges/priors)
+  - Lift with positive SAE features; penalize with limiting features
+  - Optional Fusion lift if AM score strong and coverage present
+- Suggested rubric (RUO):
+  - ≥0.85 with strong E or hotspot → “Likely Pathogenic (research)”
+  - ≤0.20 with low S and supportive E (benign) → “Likely Benign (research)”
+  - Else → “VUS (research)” with explicit missing evidence checklist
+- Always include provenance with inputs, feature flags, and run_id.
+
+### 9) Frontend Wiring (VUS Explorer)
+- Components: `src/components/vus/`
+  - `MutationTable.jsx` → input + validation
+  - `AnalysisResults.jsx` → shows InsightChips + CoverageChips
+  - `EfficacyModal.jsx` → WIWFM hypothesis with confidence + evidence
+  - `CrisprReadinessPanel.jsx` → design preview (RUO)
+- Types: `src/types/`
+- Provenance bar: `SessionContext.jsx` for persistence.
+
+### 10) Backend Contracts
+- Efficacy Orchestrator Response carries:
+  - `drugs[*].insights` (functionality/chromatin/essentiality/regulatory)
+  - `confidence`, `evidence_tier`, `badges`, `rationale`, `citations`, `provenance`
+  - `sae_features` bundle (optional) for display
+- Schemas: [api/schemas/insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/schemas/insights.py), [api/schemas/efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/schemas/efficacy.py)
+
+### 11) Calibration & Safety
+- Use gene‑specific calibration for Evo2 deltas; prefer percentiles for cross‑gene comparisons.
+- Enforce truncation/frameshift gates before Evo analyses.
+- Cache expensive calls (Evo2/Fusion/Literature) with TTL and provenance of cache hits.
+
+### 12) Smoke Tests (Minimal)
+Run in local dev with API root `http://127.0.0.1:8000`.
+
+1. ClinVar prior (known pathogenic) → not VUS
+   - BRCA1 pathogenic example → Evidence tab shows non‑VUS
+2. Known hotspot missense (e.g., BRAF V600E) → strong S + hotspot floor → not VUS
+   - Ensure Evo2 scoring not near‑zero; only `evo2_1b` model allowed
+3. True VUS (no prior, moderate S, weak E) → remains VUS
+   - Display InsightChips + Cohort coverage (if any)
+4. Fusion coverage toggle only when GRCh38 missense covered
+5. SAE features show real data only; no mocks
+
+### 13) Operational Notes
+- Evo2 routing: force `evo2_1b`, disable 7B/40B by default for stability.
+- Timeouts & retry logic on all external calls.
+- RUO labeling across UI; never overclaim classification (research‑mode decisions only).
+
+### File References
+- Insights Router: [api/routers/insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py)
+- Efficacy Orchestrator: [api/services/efficacy_orchestrator/orchestrator.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/efficacy_orchestrator/orchestrator.py)
+- SAE Service: [api/services/sae_service.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/sae_service.py)
+- Treatment Line Integration: [.cursor/ayesha/treatment_lines/backend/services/treatment_line_integration.py](mdc:.cursor/ayesha/treatment_lines/backend/services/treatment_line_integration.py)
+- Toxicity Pathways: [api/services/toxicity_pathway_mappings.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/toxicity_pathway_mappings.py)
+- Frontend VUS Components: `oncology-coPilot/oncology-frontend/src/components/vus/`
+

@@ -1,0 +1,96 @@
+# 🎯 PHASE 3: DEPLOY GAUNTLET - STRUCTURAL VALIDATION
+
+**Duration**: 3-5 days  
+**Status**: ✅ **BOLTZ AUTOMATED** (ready when Phase 2 complete)  
+**Goal**: Validate structural viability (pLDDT ≥70)
+
+---
+
+## 🎯 **OBJECTIVE**
+
+Automated structural validation using Boltz service (already deployed)
+
+---
+
+## ✅ **BOLTZ AUTOMATED PIPELINE**
+
+### **Endpoint**: `/v1/predict_structure`
+**URL**: `https://crispro--boltz-service-fastapi-app.modal.run/v1/predict_structure`
+
+**Features**:
+- Fast-mode predictions (2-5 min each, `msa='empty'`)
+- pLDDT scores (0-100)
+- PTM scores (0-1)
+- Fraction disordered (0-1)
+
+**Usage**:
+```python
+import requests
+
+response = requests.post(
+    "https://crispro--boltz-service-fastapi-app.modal.run/v1/predict_structure",
+    json={
+        "protein_sequence": "MKVLWAALLV...",
+        "job_id": "test_001"
+    }
+)
+
+result = response.json()
+# { "plddt_score": 72.5, "ptm_score": 0.85, "status": "complete" }
+```
+
+---
+
+## 📋 **INTEGRATION PLAN**
+
+### **Step 1: Create Validator Service** (1 day)
+```python
+# api/services/structural_validator.py
+
+class StructuralValidator:
+    async def validate(self, dna_sequence: str):
+        # 1. Translate DNA → protein
+        protein_seq = translate_dna(dna_sequence)
+        
+        # 2. Call Boltz API
+        response = await boltz_client.post(
+            "/v1/predict_structure",
+            json={"protein_sequence": protein_seq, "job_id": uuid4()}
+        )
+        
+        # 3. Check threshold
+        plddt = response.json()["plddt_score"]
+        passes = plddt >= 70
+        
+        return {
+            "plddt_score": plddt,
+            "verdict": "PASS" if passes else "FAIL"
+        }
+```
+
+### **Step 2: Test with 10 Known Proteins** (1 day)
+**Acceptance**: pLDDT scores match literature values (±5 points)
+
+### **Step 3: Integrate into Design Router** (1 day)
+**Acceptance**: End-to-end guide design → validation works
+
+---
+
+## ⚠️ **OPTIONAL: MANUAL AF3 WORKFLOW**
+
+**For high-confidence candidates only** (pLDDT >90 from Boltz):
+1. Generate JSON input (Python script)
+2. Upload to https://alphafoldserver.com
+3. Download results (manual)
+4. Parse confidence JSON
+5. Review pLDDT scores
+
+**Decision**: Use Boltz for filtering, AF3 for final validation
+
+---
+
+**GATE 3 CRITERIA**: See `11_ACCEPTANCE_CRITERIA.mdc`
+
+---
+
+**NEXT**: Phase 4 (Lethality - Binding Affinity)

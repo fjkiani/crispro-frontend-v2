@@ -1,0 +1,145 @@
+---
+alwaysApply: false
+description: Toxicity Risk (Germline) – Execution Doctrine (Aug 2025). Plain-language website copy + execution plan for in‑silico toxicity risk hints using insights/evidence (research‑mode).
+globs: 
+---
+
+
+export const coPilotDetailsData: Record<string, CoPilotDetailContent> = {
+  "toxicity-risk": {
+    slug: "toxicity-risk",
+    pageTitle: "Toxicity Risk (Germline): In‑Silico Side‑Effect Hints",
+    heroSubtitle: "See simple, genetics‑aware side‑effect hints to plan conservatively—before treatment (research‑mode).",
+    vision: "Turn germline context into a plain, shareable caution signal with confidence, sources, and provenance—so care teams can plan safer.",
+
+    // Website value props (plain)
+    valueProps: [
+      {
+        audience: 'For Radiation/Medical Oncology',
+        icon: 'Shield',
+        points: [
+          'A simple caution hint when genetics suggest higher risk.',
+          'Short text, confidence, and sources (RUO).',
+          'A one‑page summary to align the team.'
+        ]
+      },
+      {
+        audience: 'For Institutions',
+        icon: 'FileText',
+        points: [
+          'Consistent, auditable outputs with run IDs.',
+          'Reusable artifacts for QA and research.',
+          'Safe path to deeper models when available.'
+        ]
+      }
+    ],
+
+    buildsOn: "What this runs on (today vs roadmap)",
+    buildsOnStackPoints: [
+      "**Today:** Insights + evidence cues mapped to toxicity risk hints.",
+      "**Optional today:** Cohort snippets (when available) to add context.",
+      "**Roadmap:** Disease/regimen‑specific toxicity models and interaction checks."
+    ],
+
+    genomicInsightsOverview: "Our live stack (research‑mode) produces a compact ‘Toxicity Risk’ chip with a short helper, confidence, and sources—plus run ID and profile.",
+    coreProblemIntro: "Toxicities are hard to foresee. We surface a simple, genetics‑aware caution to inform planning—without slowing care.",
+    coreProblemPoints: [
+      "Risk is unclear at baseline.",
+      "Signals are scattered across sources.",
+      "Hard to share a concise, trusted summary."
+    ],
+
+    genomicUseCasesGrid: [
+      { label: "Caution chip (simple)", iconName: "AlertTriangle", color: "text-red-400" },
+      { label: "Short helper text", iconName: "MessageSquare", color: "text-green-400" },
+      { label: "Confidence + sources", iconName: "ShieldCheck", color: "text-purple-400" },
+      { label: "Cohort overlay (optional)", iconName: "Users", color: "text-orange-400" }
+    ],
+
+    keyCapabilities: [
+      {
+        title: "Caution Signal (live)",
+        technical: "We map germline context and evidence to a plain caution chip with a short helper. Output includes confidence, sources, and provenance (run ID, profile).",
+        scientific: "Signals summarize potential sensitivity based on repair/inflammation and related pathways; RUO and transparent.",
+        business: `
+- **Plan safer:** A simple hint that’s easy to act on.
+- **Trustable:** Confidence + sources in a one‑pager.
+`,
+        genomicUseCasesParagraph: "Today: \n1. **Caution chip** with helper and confidence. \n2. **Provenance** visible on the card."
+      },
+      {
+        title: "Context & Evidence (live; optional)",
+        technical: "When extracted, we show a small cohort snippet and citations/badges to anchor the signal.",
+        scientific: "Grounds the hint without overclaiming; still RUO.",
+        business: `
+- **Context:** Helps teams calibrate decisions.
+`,
+        genomicUseCasesParagraph: "Today (when present): \n1. **Cohort snippet** and **key refs** alongside the chip."
+      },
+      {
+        title: "Regimen‑Specific Models (roadmap)",
+        technical: "Planned: regimen/dose‑aware toxicity models and interaction checks layered on top of the basic hint.",
+        scientific: "Future: combine pharmacology and outcomes to refine risk.",
+        business: `
+- **Consistency:** Make safety checks a standard step.
+`,
+        genomicUseCasesParagraph: "Roadmap: regimen‑aware checks surfaced in the same view."
+      }
+    ],
+
+    valuePropositionSections: [
+      {
+        audience: "For the Care Team",
+        points: [
+          "A quick, genetics‑aware caution to guide planning.",
+          "Short, shareable text with confidence and sources (RUO).",
+          "Reusable one‑pager with run ID and profile."
+        ]
+      }
+    ],
+
+    conclusion: "In‑silico toxicity risk that’s simple to read and easy to share. A plain caution chip. Clear confidence. Sources included. Research‑mode by design."
+  },
+};
+
+
+# Toxicity Risk (Germline) – Execution Doctrine (Aug 2025)
+
+This rule describes how to deliver the toxicity caution signal now using insights and evidence with transparent provenance.
+
+## What we can deliver today (research‑grade)
+- A ‘Toxicity Risk’ chip with:
+  - **Helper text:** one sentence in plain language.
+  - **Evidence (core):** Confidence · Evidence Tier (if enabled) · Sources (count + key refs) · Provenance (run_id, profile).
+
+## Where the code lives (reused components)
+- Insights router: `[insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py)`
+- Evidence + ClinVar proxy: `[evidence.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evidence.py)`
+- Efficacy (for shared mapping/logging): `[efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py)`
+
+## How to run toxicity hint now
+Embed toxicity as a small card in VUS/Radiation/Chemo flows when germline context is present. Sources and provenance included.
+
+Example (ClinVar prior):
+```bash
+curl -sS "http://127.0.0.1:8000/api/evidence/clinvar?chrom=7&pos=140453136&ref=T&alt=A"
+```
+
+## Methodology (simple, transparent)
+- **Signals:** Map germline context to a conservative caution (repair/inflammation and related pathways).
+- **Text:** One‑line helper explains why the hint appears.
+- **Evidence:** Citations/badges when enabled; always include provenance.
+
+## Frontend integration (no schema change required)
+- Render a small “Toxicity Risk” chip with helper, confidence, sources, and provenance.
+- Optional: cohort snippet when available.
+
+## Current limitations (transparent)
+- Not a diagnostic; research‑mode only. Signals are conservative and generic.
+- Literature cues may be sparse in dev; keep text short and sourced when enabled.
+
+## Success criteria
+- Clear chip with helper and confidence.
+- Sources and run ID present; easy to export.
+- Optional cohort snippet visible when available.
+

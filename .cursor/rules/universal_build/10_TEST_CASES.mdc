@@ -1,0 +1,70 @@
+# 🧪 TEST CASES - 10 REAL-WORLD SCENARIOS
+
+**Philosophy**: Test before building - see what works, what breaks
+
+---
+
+## **Category 1: Food & Supplements** (Tests 1-4)
+
+### Test 1: Vitamin D → Ovarian Cancer ✅
+- **Expected**: WORKS (existing capability)
+- **Targets**: VDR
+- **Pathways**: TP53 (0.955), inflammation
+- **Output**: CONSIDER (moderate alignment)
+
+### Test 2: Curcumin → Breast Cancer ⚠️
+- **Expected**: May fail (disease not in OLD system)
+- **Targets**: NFκB, COX2
+- **Pathways**: PIK3CA (0.827), inflammation
+
+### Test 3: Resveratrol → Pancreatic Cancer ⚠️
+- **Expected**: May fail (pathways missing)
+- **Targets**: SIRT1, multiple
+- **Pathways**: KRAS (0.854)
+
+### Test 4: Omega-3 → Alzheimer's ❌
+- **Expected**: Will fail (non-cancer)
+- **Targets**: Neuroinflammation
+- **Pathways**: Not in database
+
+---
+
+## **Category 2: Drug Repurposing** (Tests 5-6)
+
+### Test 5: Metformin → Glioblastoma ⚠️
+- **Expected**: May fail (disease missing)
+- **Targets**: AMPK, mTOR
+- **Mechanism**: Activation (not inhibition)
+
+### Test 6: Aspirin → Colorectal Cancer ⚠️
+- **Expected**: May fail (prevention vs treatment)
+- **Targets**: COX1/COX2
+- **Context**: Prevention hypothesis
+
+---
+
+## **Category 3: Therapeutic Design** (Tests 7-8)
+
+### Test 7: Anti-VEGF Nanobody → Ovarian ❌
+- **Expected**: Will fail (endpoint doesn't exist)
+- **Phase**: Requires Phase 2 (Forge)
+
+### Test 8: IL-6 Inhibitor → Multiple Myeloma ❌
+- **Expected**: Will fail (endpoint doesn't exist)
+- **Phase**: Requires Phase 2 (Forge)
+
+---
+
+## **Category 4: CRISPR Design** (Tests 9-10)
+
+### Test 9: KRAS G12D gRNA → Pancreatic ⚠️
+- **Expected**: May partially work (Design Router exists)
+- **Missing**: Boltz validation
+
+### Test 10: TP53 R175H Base Edit → Ovarian ❌
+- **Expected**: Will fail (base editing not implemented)
+
+---
+
+**Test Scripts**: See `AGENT_JR_TESTING_HANDOFF.mdc`
+**Results**: Document in `TEST_WAVE_1_COMPLETE_RESULTS.md`

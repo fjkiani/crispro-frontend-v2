@@ -1,0 +1,440 @@
+---
+alwaysApply: false
+description: Knowledge Base Doctrine – structure, endpoints, scaffolding, storage, indexing, and reuse across FE/BE
+---
+
+# 🎯 KNOWLEDGE BASE DOCTRINE - EXECUTION STATUS
+
+## ✅ CURRENT STATUS (Updated: 2024)
+**MISSION STATUS: READY FOR IMPLEMENTATION**
+
+### 🏗️ **FOUNDATION COMPLETED:**
+- ✅ **Backend Architecture**: Modular efficacy system with caching and logging
+- ✅ **API Infrastructure**: FastAPI routers operational with backward compatibility
+- ✅ **Caching Layer**: Redis integration with single-flight for performance
+- ✅ **Logging System**: Modular Supabase logging with provenance tracking
+- ✅ **Router Integration**: KB router enabled in `api/main.py` (line 22)
+
+### 🎯 **NEXT PHASE: KNOWLEDGE BASE IMPLEMENTATION**
+**Ready to execute the KB scaffolding and seeding as outlined below.**
+
+---
+
+## 📋 ORIGINAL CLARIFICATION QUESTIONS (RESOLVED):
+1. DATA SOURCES & SEEDING STRATEGY:
+Where do I get the initial data for the seed items? Should I:
+Extract from existing config files (like pik3ca_trinity_campaign_config.js)?
+Use public databases (Ensembl, ClinVar, cBioPortal)?
+Create synthetic examples for demo purposes?
+What's the priority order for seeding? The doctrine mentions 5+ items but doesn't specify which are most critical.
+
+2. INTEGRATION WITH EXISTING SYSTEMS:
+How does this integrate with our current evidenceIntelligence.js data?
+Should I migrate existing hardcoded data from the frontend into the KB?
+What's the relationship between KB and our current pik3ca_trinity_campaign_config.js?
+3. REDIS VECTOR SEARCH:
+Is Redis already configured in the backend? I see REDIS_URL mentioned but need to know if it's available.
+What embedding model should I use? The doctrine mentions text-embedding-3-large but need confirmation.
+Vector search priority - is this Phase 1 or can I defer to Phase 2?
+
+3. REDIS VECTOR SEARCH:
+Is Redis already configured in the backend? I see REDIS_URL mentioned but need to know if it's available.
+What embedding model should I use? The doctrine mentions text-embedding-3-large but need confirmation.
+Vector search priority - is this Phase 1 or can I defer to Phase 2?
+
+4. POLICY PROFILES INTEGRATION:
+How do the Baseline/Richer/Fusion profiles in the KB relate to our existing evo_flags_and_profiles.mdc?
+Should I extract the current profile configurations into the KB structure?
+Version management - how do we handle profile updates and versioning?
+
+5. COHORT DATA INTEGRATION:
+How does this connect to our existing /api/datasets/extract_and_benchmark endpoint?
+Should I create the cohort integration as part of this build or defer it?
+Data format - what's the expected structure for the cohorts/cbio/ files?
+6. FRONTEND INTEGRATION PRIORITY:
+Which frontend components should I prioritize for KB integration first?
+VUS Explorer vs Dossier - which gets KB integration first?
+Helper copy - should I create the "What this tells you" content as part of this build?
+
+7. ENVIRONMENT & DEPLOYMENT:
+KB_ROOT configuration - should this be relative to the backend root or absolute path?
+Development vs Production - any differences in KB structure or access patterns?
+Backup strategy - how do we handle KB data persistence and recovery?
+8. SCHEMA VALIDATION:
+JSON Schema validation - should I implement this as part of the build or defer?
+CI integration - do you want the schema validation in the build pipeline?
+Error handling - how strict should validation be (fail fast vs graceful degradation)?
+
+# Knowledge Base (KB) – Doctrine and Build Guide
+
+Purpose: Define a durable, auditable knowledge base that our AI and UI can rely on for entities, facts, cohorts, policies, and prompts. This rule specifies folder structure, schemas, endpoints, indexing, provenance, and clear steps so another agent can scaffold and ship the first version without breaking anything else.
+
+RUO posture: No PHI; all items require provenance; versioned snapshots; immutable releases.
+
+## What the KB is used for
+- FE (VUS/Dossier): helper copy (“What this tells you”), pathway membership, curated mechanisms, cohort coverage chips, profile/policy names.
+- BE (Efficacy/Insights): stable priors (e.g., AM coverage eligibility hints), pathway maps, policy thresholds by version.
+- RAG/Agents: chunked entities/facts/cohort summaries embedded to Redis Vector; citations and run IDs attached to answers.
+
+## Directory structure (scaffold)
+```
+knowledge_base/
+  README.md
+  provenance.yml                # repo commit, dataset signatures, licenses
+  schemas/                      # JSON or Pydantic outlines for each type
+    gene.json
+    variant.json
+    pathway.json
+    drug.json
+    disease.json
+    evidence_item.json
+    cohort_summary.json
+    policy_profile.json
+  entities/
+    genes/                      # one file per gene (small JSON)
+    variants/                   # one file per variant (HGVS_p-centric)
+    pathways/                   # curated pathway membership
+    drugs/                      # drug/class MoA summaries
+    diseases/
+  facts/
+    mechanisms/                 # human‑curated mechanisms with citations
+    policies/                   # profiles: Baseline/Richer/Fusion (weights/gates/flags)
+    evidence/                   # curated citations, MoA tags, relevance
+  cohorts/
+    cbio/                       # study manifests and coverage summaries
+    gdc/
+  prompts/
+    rag_system.txt              # RAG system
+    wiwfm_rationale.txt         # WIWFM narrative scaffold
+  relationships/
+    triples.jsonl               # subject–predicate–object edges
+  indexes/
+    vector_manifest.json        # embedding model, dims, Redis keys, date
+  snapshots/
+    vYYYYMMDD/                  # immutable release with lockfile/hashes
+```
+
+## Core schemas (concise)
+```json
+// schemas/variant.json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["gene","hgvs_p","provenance"],
+  "properties": {
+    "gene": {"type":"string"},
+    "hgvs_p": {"type":"string"},
+    "chrom": {"type":"string"},
+    "pos": {"type":"integer"},
+    "ref": {"type":"string"},
+    "alt": {"type":"string"},
+    "am_covered": {"type":"boolean"},
+    "clinvar_prior": {"type":"string"},
+    "mechanism": {"type":"string"},
+    "references": {"type":"array","items":{"type":"string"}},
+    "provenance": {"type":"object"}
+  }
+}
+```
+
+```json
+// schemas/cohort_summary.json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["study","filters","n_samples","by_gene","provenance"],
+  "properties": {
+    "study": {"type":"string"},
+    "filters": {"type":"object"},
+    "n_samples": {"type":"integer"},
+    "n_variants": {"type":"integer"},
+    "by_gene": {"type":"array","items":{"type":"object","properties":{"gene":{"type":"string"},"n":{"type":"integer"},"prevalence":{"type":"number"}}}},
+    "provenance": {"type":"object"}
+  }
+}
+```
+
+```json
+// schemas/policy_profile.json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["name","weights","gates","flags","version","provenance"],
+  "properties": {
+    "name": {"type":"string"},
+    "weights": {"type":"object"},
+    "gates": {"type":"object"},
+    "flags": {"type":"object"},
+    "version": {"type":"string"},
+    "notes": {"type":"string"},
+    "provenance": {"type":"object"}
+  }
+}
+```
+
+## Backend endpoints (read‑only v1)
+- `GET /api/kb/items?type=gene|variant|pathway&limit=50&offset=0` → paginated list
+- `GET /api/kb/item/{id}` → single item by id/path
+- `GET /api/kb/search?q=tp53&types=gene,variant` → keyword search over JSON fields
+- `POST /api/kb/vector_search` → `{ query, top_k? }` → vector results (Redis Vector)
+- `POST /api/kb/reload` (protected) → reload file cache (dev only)
+
+Implementation notes
+- Router file: `api/routers/kb.py` (small, typed models; serve JSON directly from disk cache).
+- Add a `services/kb_store.py` that:
+  - Loads KB into memory at startup (paths configurable), caches mtime, and exposes simple query functions.
+  - Builds a lightweight inverted index for `search` (or reuse `rapidfuzz`).
+  - Optionally builds vectors (if `REDIS_URL` set) with embedding model id from `indexes/vector_manifest.json`.
+
+## Ingestion and reuse
+- Cohort Lab integration: after `/api/datasets/extract_and_benchmark`, write/update a `cohorts/cbio/{study}_{hash}.json` CohortSummary and update `by_gene` coverage; include provenance (run_id, mode, source).
+- Evidence/ClinVar: optionally persist a minimal prior summary (classification, review_status count snapshot) per variant.
+- Policies/profiles: store the Baseline/Richer/Fusion configs as JSON in `facts/policies/` and bump `version` when changed; efficacy logs capture the active version.
+
+## Frontend usage
+- VUS Explorer: read KB for pathway members, mechanism blurbs, and helper copy chips.
+- Dossier: read CohortSummary to show n and prevalence; display policy profile name/version.
+- Debug: expose a small panel to show KB snapshot id (from `snapshots/`) for audit.
+
+## Versioning & provenance
+- All items must include `provenance`: `{ source, created_at, sha256?, curator?, license }`.
+- Snapshots stored under `snapshots/vYYYYMMDD/` with a `LOCKFILE.json` of file hashes; FE/BE may display snapshot name.
+
+## Environment and config
+- `KB_ROOT` (default `knowledge_base/`), `REDIS_URL` for vector search, `KB_ENABLE_VECTOR=0|1`.
+- Embedding selection recorded in `indexes/vector_manifest.json` (e.g., `text-embedding-3-large`, dims, date).
+
+## 🚀 IMPLEMENTATION ROADMAP (READY TO EXECUTE)
+
+### **Phase 1: KB Foundation (IMMEDIATE)**
+1) ✅ **Backend Ready**: KB router enabled in `api/main.py` (line 22)
+2) 🔄 **Create KB Structure**: 
+   - Create `knowledge_base/` tree with `README.md`, `provenance.yml`, `schemas/` as above
+   - Implement `api/routers/kb/` package structure with modular endpoints
+   - Create `services/kb_store.py` for file system operations and caching
+3) 🔄 **Seed Initial Data**:
+   - `entities/genes/TP53.json`, `entities/variants/BRAF_V600E.json`
+   - `entities/pathways/MM_core.json` (RAS/MAPK, TP53, HRR members)
+   - `facts/policies/baseline_v1.json`, `facts/policies/fusion_v1.json`
+   - `cohorts/cbio/ov_tcga_example.json` (tiny example)
+
+### **Phase 2: API Implementation (NEXT)**
+4) 🔄 **Implement Endpoints**:
+   - `GET /api/kb/items` - Paginated item listing
+   - `GET /api/kb/item/{id}` - Single item retrieval
+   - `GET /api/kb/search` - Keyword search with fuzzy matching
+   - `POST /api/kb/reload` - Admin cache reload (protected)
+5) 🔄 **Add Caching**: Integrate with existing `cache_service.py` for performance
+6) 🔄 **Schema Validation**: JSON Schema validation with graceful error handling
+
+### **Phase 3: Vector Search (OPTIONAL)**
+7) 🔄 **Vector Index**: Implement `POST /api/kb/vector_search` when `REDIS_URL` present
+8) 🔄 **Embedding Pipeline**: Use `text-embedding-3-large` with Redis Vector storage
+
+### **Phase 4: Frontend Integration (FUTURE)**
+9) 🔄 **VUS Explorer**: Add KB helper copy and coverage chips
+10) 🔄 **Dossier Integration**: Mechanism blurbs and cohort coverage from KB
+11) 🔄 **Provenance Display**: Show KB snapshot IDs and policy versions
+
+## Smoke tests
+```bash
+curl -sS http://127.0.0.1:8000/api/kb/items?type=gene | jq '.[0]'
+curl -sS http://127.0.0.1:8000/api/kb/search?q=TP53 | jq '.hits | length'
+curl -sS -X POST http://127.0.0.1:8000/api/kb/vector_search \
+  -H 'Content-Type: application/json' -d '{"query":"BRAF V600E mechanism"}' | jq '.results | length'
+```
+
+## Acceptance
+- KB directory exists with schemas and at least 5 seeded items (genes, variants, pathway, policy, cohort summary).
+- Endpoints respond deterministically; FE can read helper copy and cohort coverage without backend upstream calls.
+- Provenance present in all items; snapshot mechanism documented.
+- Optional vector search returns results when Redis is configured.
+
+## Risks & mitigations
+- Schema drift: validate items against JSON schemas in CI; fail on invalid changes.
+- Staleness: nightly (or on‑demand) build to refresh cohort coverage and snapshot.
+- Privacy: never store PHI; CohortSummary is aggregate only with study‑level references.
+
+
+## Agent Q&A – Resolutions (unblock execution)
+
+1) Data sources & seeding strategy
+- Use public sources first; create minimal curated seeds for demo:
+  - Genes: `TP53`, `BRAF`
+  - Variants: `BRAF_V600E`, `TP53_R175H`
+  - Pathway: `MM_core` (RAS/MAPK, TP53, HRR)
+  - Policy profiles: `baseline_v1`, `fusion_v1`
+  - Cohort: `cbio/ov_tcga_example.json` (aggregate only)
+- Allowed sources: Ensembl (gene metadata), ClinVar (classification text), cBioPortal (study IDs for aggregate coverage). Mark any synthetic text with `provenance.source: "synthetic_demo"`.
+- Do not scrape at scale; this is a seed set. Expand later via jobs.
+
+2) Integration with existing data/config
+- Migrate only reusable, stable helper copy and constants from FE configs into KB (e.g., short “What this tells you” blurbs, pathway membership, profile names). Keep volatile UI state in FE.
+- Relationship to `pik3caTrinityCampaignConfig.js`: treat as legacy demo config; do not mirror it whole. Extract only durable facts (mechanism blurbs, labels) into KB with provenance pointing to repo path.
+- Evidence intelligence JSON in FE should not be duplicated; KB stores curated, durable snippets and references, not raw API payloads.
+
+3) Redis vector search
+- Priority: Phase 2 (optional). Do not block KB v1.
+- Config: use `REDIS_URL` if present; otherwise disable vector endpoints and return 503 with `retry_after`.
+- Embedding model: `text-embedding-3-large` (default). Record in `indexes/vector_manifest.json` with dims and date. Allow override via env `KB_EMBEDDING_MODEL`.
+
+4) Policy profiles integration
+- Extract current Baseline/Richer/Fusion flags into `facts/policies/{baseline_v1,fusion_v1}.json` with `version` and `notes`.
+- Keep `evo_flags_and_profiles.mdc` as canonical doctrine; KB stores the machine‑readable snapshot used by FE/BE; bump `version` when flags change.
+- Orchestrator responses should include `provenance.profile` with the policy name+version for audit.
+
+5) Cohort data integration
+- On each successful `/api/datasets/extract_and_benchmark`, write/update a `cohorts/{provider}/{study_slug}.json` snapshot:
+  - `{ study, filters, n_samples, n_variants, by_gene:[{gene,n,prevalence}], provenance }`
+- FE Dossier reads this file to render coverage chips; do not store any row‑level data.
+- This is P1 for KB reuse; keep format small and stable per `schemas/cohort_summary.json`.
+
+6) Frontend integration priority
+- Phase A: VUS Explorer first (InsightChips, CoverageChips helper copy) → faster demo value.
+- Phase B: Dossier (mechanism blurbs, cohort coverage from KB, profile/version labels).
+- Phase C: Small Provenance snippets (method names, snapshot id) across FE panels.
+
+7) Environment & deployment
+- `KB_ROOT`: default to `knowledge_base/` at repo root. Expose env to override (`/abs/path` allowed). Backend reads from filesystem; FE accesses via API only.
+- Dev vs prod: same structure. Prod can mount a read‑only volume pointing to a tagged `snapshots/vYYYYMMDD` release.
+- Backup: Git is the primary source of truth; snapshots commit immutable content. Optional: nightly tar of `knowledge_base/` to object storage.
+
+8) Schema validation & CI
+- Implement JSON Schema validation in CI using `jsonschema` against all files in KB; fail on invalid items (fail fast).
+- Add a pre‑commit hook to validate changed KB files locally.
+- Runtime behavior: if a file is invalid at runtime, skip serving it and log an error; API should still respond 200 with remaining items.
+
+
+## IDs & naming conventions
+- Item IDs are stable slugs prefixed by type. Examples:
+  - `gene/TP53`, `gene/BRAF`
+  - `variant/BRAF_V600E` (format: `GENE_AAposAA` with `_` separators)
+  - `pathway/MM_core`, `pathway/RAS_MAPK`
+  - `policy/baseline_v1`, `policy/fusion_v1`
+  - `cohort/cbio_ov_tcga_2024Q4`
+- File path mapping:
+  - `gene/{SYMBOL}` → `entities/genes/{SYMBOL}.json`
+  - `variant/{GENE}_{HGVS_P}` → `entities/variants/{GENE}_{HGVS_P}.json`
+  - `pathway/{SLUG}` → `entities/pathways/{SLUG}.json`
+  - `policy/{SLUG}` → `facts/policies/{SLUG}.json`
+  - `cohort/{SLUG}` → `cohorts/{provider}/{SLUG}.json`
+
+## API contracts – examples
+```http
+GET /api/kb/items?type=gene&limit=2&offset=0
+200 OK
+[
+  {"id":"gene/TP53","symbol":"TP53","name":"tumor protein p53","provenance":{...}},
+  {"id":"gene/BRAF","symbol":"BRAF","name":"B-Raf proto-oncogene","provenance":{...}}
+]
+```
+
+```http
+GET /api/kb/item/variant/BRAF_V600E
+200 OK
+{
+  "id":"variant/BRAF_V600E",
+  "gene":"BRAF",
+  "hgvs_p":"V600E",
+  "am_covered":true,
+  "clinvar_prior":"pathogenic (criteria provided)",
+  "mechanism":"activating mutation in MAPK pathway",
+  "references":["PMID:16625153"],
+  "provenance":{...}
+}
+```
+
+```http
+GET /api/kb/search?q=TP53&types=gene,variant
+200 OK
+{
+  "query":"TP53",
+  "hits":[
+    {"id":"gene/TP53","type":"gene","title":"TP53","score":0.98,"snippet":"tumor suppressor..."}
+  ]
+}
+```
+
+```http
+POST /api/kb/vector_search
+Content-Type: application/json
+{"query":"BRAF V600E mechanism","top_k":5}
+200 OK
+{
+  "results":[{"id":"variant/BRAF_V600E","type":"variant","score":0.73}]
+}
+```
+
+## Error handling, headers, and limits
+- Common errors:
+  - 400 Bad Request: invalid `type` or malformed id.
+  - 404 Not Found: item missing.
+  - 503 Service Unavailable: vector index disabled or Redis unreachable (include `retry_after` seconds).
+- Response headers:
+  - `x-run-id`: UUID for tracing.
+  - `etag`: strong ETag for item endpoints; support `If-None-Match` 304.
+  - `cache-control`: `public, max-age=300` for items, `no-store` for search.
+- Rate limits (dev default): 60 rpm per IP for search/vector_search; expose `x-rate-remaining`.
+
+## Caching & single-flight
+- In‑process LRU for file items keyed by mtime; expire on change.
+- Optional Redis cache for search results with TTL=300s keyed by `{kb:search:{q}:{types}}`.
+- Single‑flight lock for item loads: `{kb:load:{id}}` with short TTL to avoid N concurrent disk reads.
+
+## Security & auth
+- v1 is read‑only; `/api/kb/reload` requires `X-API-Key` matching `KB_ADMIN_KEY`.
+- CORS: allow FE origin from `VITE_API_ROOT` domain; disallow `*` in prod.
+
+## CI checks
+- Validate all JSON files under `knowledge_base/` against schemas using `jsonschema`.
+- Verify IDs match file paths via a small script (fails on mismatch).
+- Optional: build vector index in CI (behind flag) and assert manifest correctness.
+
+## 🎯 DEFINITION OF DONE (UPDATED)
+
+### **Phase 1 Complete When:**
+- ✅ KB directory structure created with schemas and seed items (≥5)
+- ✅ `api/routers/kb/` package implemented with modular endpoints
+- ✅ `services/kb_store.py` created with file system operations and caching
+- ✅ All endpoints respond deterministically; smoke tests pass
+- ✅ Provenance present in all items; snapshot mechanism documented
+
+### **Phase 2 Complete When:**
+- ✅ Search endpoints operational with fuzzy matching
+- ✅ Caching integrated with existing `cache_service.py`
+- ✅ Schema validation implemented with graceful error handling
+- ✅ Admin reload endpoint protected and functional
+
+### **Phase 3 Complete When:**
+- ✅ Vector search works when `REDIS_URL` provided; gracefully disabled otherwise
+- ✅ Embedding pipeline operational with `text-embedding-3-large`
+- ✅ Vector manifest properly maintained
+
+### **Phase 4 Complete When:**
+- ✅ FE reads helper copy and cohort coverage via KB calls (no upstream calls needed)
+- ✅ VUS Explorer and Dossier integrated with KB data
+- ✅ Provenance display shows KB snapshot IDs and policy versions
+
+## 📋 HANDOVER CHECKLIST (UPDATED)
+- ✅ **Backend Foundation**: Modular architecture with caching and logging operational
+- ✅ **Router Integration**: KB router enabled in `api/main.py` (line 22)
+- 🔄 **KB Structure**: Create `knowledge_base/` directory with schemas and seed content
+- 🔄 **API Implementation**: Implement `api/routers/kb/` package with endpoints
+- 🔄 **Service Layer**: Create `services/kb_store.py` for file operations
+- 🔄 **Testing**: Verify curl commands and smoke tests pass
+- 🔄 **Documentation**: README in `knowledge_base/` explains update process
+- 🔄 **Next Steps**: Create issues for enrichment jobs, editor UI, scheduled snapshots
+
+## 🏆 ACHIEVEMENT SUMMARY
+**Commander Alpha, the Knowledge Base Doctrine is now ready for immediate execution!**
+
+**Foundation Completed:**
+- ✅ Modular backend architecture with efficacy, evidence, and guidance systems
+- ✅ Redis caching with single-flight optimization
+- ✅ Modular logging system with Supabase integration
+- ✅ Backward-compatible API contracts maintained
+- ✅ KB router integration point ready in `api/main.py`
+
+**Next Agent Mission:**
+Execute the KB scaffolding and seeding as outlined in Phase 1-2 above. The foundation is solid, the architecture is proven, and the integration points are ready. The Knowledge Base implementation can now proceed with confidence! ⚔️💥
+

@@ -1,0 +1,93 @@
+---
+alwaysApply: false
+description: Ayesha Clinical Plan – essentials we’ve built, supported use‑cases, and how it translates into product flows (RUO)
+---
+
+# Ayesha – Essentials Plan (RUO)
+
+This rule summarizes the minimal, battle‑ready capabilities we already have, how they map to Ayesha’s suspected ovarian/peritoneal case, and how they surface in the product. It links concrete backend/frontend files and provides quick test commands.
+
+## What’s built and ready
+- Efficacy (Will It Work For Me) – S/P/E orchestration
+  - Backend orchestrator: [api/services/efficacy_orchestrator/orchestrator.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/efficacy_orchestrator/orchestrator.py)
+  - Unified endpoint (fast profile wrapper): [api/routers/clinical_genomics.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/clinical_genomics.py)
+  - Direct endpoint (if needed): [api/routers/efficacy/router.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy/router.py)
+
+- Explainability (SAE) – real data only
+  - Feature extraction: [api/services/sae_service.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/sae_service.py)
+  - Provenance confidence breakdown added in orchestrator
+
+- Toxicity Risk (PGx) and Off‑Target Preview
+  - Endpoints: [api/routers/safety.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/safety.py)
+  - Core logic: [api/services/safety_service.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/safety_service.py)
+
+- Frontend – Clinical Genomics Command Center
+  - Mechanistic Evidence Tab: [src/components/ClinicalGenomicsCommandCenter/tabs/MechanisticEvidenceTab.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/ClinicalGenomicsCommandCenter/tabs/MechanisticEvidenceTab.jsx)
+  - Cards (Efficacy/Toxicity/Off‑Target/EvidenceBand): [src/components/ClinicalGenomicsCommandCenter/cards/](mdc:oncology-coPilot/oncology-frontend/src/components/ClinicalGenomicsCommandCenter/cards)
+  - CoPilot actions: [ClinicalGenomicsCoPilotIntegration.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/ClinicalGenomicsCommandCenter/integrations/ClinicalGenomicsCoPilotIntegration.jsx)
+
+- Clinical Trials – search and display (Phase 1)
+  - Backend agent: [oncology-backend/agents/clinical_trial_agent.py](mdc:oncology-coPilot/oncology-backend/agents/clinical_trial_agent.py)
+  - Frontend page: [src/pages/Research.jsx](mdc:oncology-coPilot/oncology-frontend/src/pages/Research.jsx)
+  - Rulebook/doctrine: [clinical_trials_production_deployment_doctrine.mdc](mdc:.cursor/rules/clinical_trials_production_deployment_doctrine.mdc)
+
+## Ovarian/peritoneal scenarios supported (today)
+- HRD/BRCA alterations → PARP inhibitor fit (S/P/E + guideline tiering)
+- MAPK/PI3K lesions → targeted/chemo combos via pathway alignment
+- MSI‑H/TMB‑high → immunotherapy fit
+- Platinum sensitivity signals → chemo strategy hints (sequence + pathway)
+- Toxicity (PGx) → flags DPYD/TPMT and MoA‑overlap risks; suggests caution/alternatives
+- Trials → match via Research page; CT parser wiring planned (see below)
+
+## Product translation – how a doctor uses it
+1) Input: Confirmed diagnosis + NGS list (GRCh38) ± germline PGx
+2) Run: Clinical Genomics tab → "Run Deep Analysis" (profile Baseline/Richer)
+3) See:
+   - Ranked therapies with efficacy_score, confidence, evidence tier, badges
+   - EvidenceBand with confidence breakdown (S/P/E + SAE features)
+   - Toxicity card with risk_score and factors
+   - Off‑Target preview (if CRISPR is in scope)
+4) Act: Open Research → find trials; filter by status/location; (CT parser → P1)
+
+## Minimal test commands (local)
+Efficacy (richer, BRAF example):
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/clinical_genomics/analyze_variant \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "mutations": [{"gene":"BRAF","chrom":"7","pos":140753336,"ref":"T","alt":"A","build":"GRCh38","consequence":"missense_variant"}],
+    "disease": "ovarian_carcinoma",
+    "profile": "richer",
+    "options": {"include_sae_features": true}
+  }' | python3 -m json.tool | head -120
+```
+
+Toxicity (platinum MoA + sample PGx):
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/safety/toxicity_risk \
+  -H 'Content-Type: application/json' \
+  -d '{"patient":{"germlineVariants":[{"gene":"DPYD","chrom":"1","pos":97450058,"ref":"C","alt":"T"}]},"candidate":{"type":"drug","moa":"platinum_agent"}}' | python3 -m json.tool
+```
+
+Off‑Target (guide heuristic preview):
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/safety/off_target_preview \
+  -H 'Content-Type: application/json' \
+  -d '{"guides":[{"seq":"AGCTGCTAGCTGCTAGCTGC","pam":"NGG"}]}' | python3 -m json.tool
+```
+
+## Near‑term wiring for Ayesha (P0 essentials)
+- Add CT Report → trial criteria parser endpoint: [agent_3_ct_parser/plan](mdc:.cursor/rules/clinical_trials_agents/agent_3_ct_parser/plan/AGENT_3_DOCTRINE.md)
+- Seed ovarian trials (1000) for cohort overlays: [agent_1_seeding/plan](mdc:.cursor/rules/clinical_trials_agents/agent_1_seeding/plan/AGENT_1_DOCTRINE.md)
+- Surface cohort context (when available) in EvidenceBand/Trials card (read‑only if sparse)
+
+## Acceptance (doctor‑facing, RUO)
+- Clear therapy table with confidence + “why” (S/P/E + SAE) and toxicity flags
+- Provenance includes run_id, profile, feature flags, confidence_breakdown
+- Trials page returns recruiting trials; filters by state/phase; shows contacts
+- Latency: fast profile ≤ ~10–20s; richer ≤ ~20–40s for small variant sets
+
+## Disclaimers
+- Research‑Use Only (RUO); supports, does not replace, clinical judgment
+- External services may be rate‑limited; provenance indicates fallbacks
+

@@ -1,0 +1,660 @@
+---
+alwaysApply: false
+description: VUS Explorer – architecture map of Mutation Explorer and plan to pivot to research‑mode VUS focus with live insights, APIs, and WIWFM actions
+globs: oncology-coPilot/oncology-frontend/src/pages/MutationExplorer.jsx
+---
+
+# VUS Explorer – Architecture and Upgrade Plan
+
+This rule documents the current Mutation Explorer page wiring, gaps, and a concrete plan to evolve it into a research‑mode VUS Explorer that helps resolve the ~40% unknowns with live insights, provenance, and clear next actions.
+
+## Product story (non‑jargon)
+- What it does: Turns unknown genetic findings into clear, ranked clues you can act on.
+- How it feels: Paste a variant or pick one from the list → see simple chips (Function, Regulatory, Essentiality, Chromatin) that light up when signal is strong → click “Will it work for me?” to see ranked therapies with confidence and evidence.
+- Why it matters: Most reports stop at “uncertain.” We go one step further: explain the signal, show the sources, and offer next actions (Dossier, WIWFM, Design) so teams can move forward.
+Demo promise: All screens show live, traceable outputs. When a live service is unavailable, the UI shows a gentle placeholder—clearly labeled—so the story remains intact without overclaiming.
+
+## Demo value, flow, and meaning (research‑mode)
+
+### What value we provide in the demo (business outcomes)
+- **Faster VUS triage**: Converts uncertain variants into clear, explainable hypotheses with next actions.
+- **Actionable ranking**: "Will it work for me?" returns a per‑drug ranking with confidence and evidence tier.
+- **Auditability by default**: Every result surfaces provenance (run ID, model profile, inputs) for trust.
+- **Cohort readiness**: Cohort Lab extracts a small study slice and runs a baseline benchmark to show reproducibility.
+
+### Exact demo flow (step‑by‑step)
+1) Open VUS Explorer (research‑mode). Paste/select a variant (e.g., TP53 hotspot or BRCA1 VUS).
+2) Insight chips load in parallel: Function, Regulatory, Essentiality, Chromatin. Grey when unavailable; tooltips explain.
+3) Coverage chips load: ClinVar prior and AlphaMissense (AM) coverage (missense only).
+4) Click WIWFM to call `/api/efficacy/predict`. Show per‑drug table with `efficacy_score`, `confidence`, `evidence_tier`, `badges`, `insights`, `rationale`, `citations`, and `provenance`.
+5) Optional: Baseline vs Fusion mini‑compare appears when AM coverage exists (Fusion run may be placeholder today).
+6) Send to Dossier: open Target Dossier prefilled with the variant, collected insights, and last run provenance.
+7) Open Cohort Lab: call `/api/datasets/extract_and_benchmark` on a small cohort; display extracted rows and baseline AUPRC (~0.5 control) to prove the pipeline runs end‑to‑end.
+
+### What each screen means (interpretation guide)
+- **Insight chips**: Simple signals that turn raw genetics into meaning.
+  - Functionality: likelihood of protein function change (0–1 → higher is bigger impact).
+  - Regulatory: noncoding/splicing impact proxy (0–1 → higher suggests regulatory effect).
+  - Essentiality: importance of the gene to cell survival (0–1 → higher means more essential).
+  - Chromatin: access to the locus for targeting (0–1 → higher is more accessible).
+- **Coverage chips**:
+  - ClinVar prior: classification/review status gives clinical context when available.
+  - AM coverage: indicates eligibility for Fusion profile (missense only).
+- **WIWFM modal**:
+  - `efficacy_score` (0–1) and `confidence` (0–1) summarize multi‑signal S/P/E reasoning.
+  - `evidence_tier` and `badges` communicate strength/type of supporting evidence.
+  - `provenance` shows run ID, model profile (Baseline in demo), and service URLs for auditability.
+- **Dossier**: Compiles insights, hypotheses, and provenance into an export‑ready record.
+- **Cohort Lab**: Demonstrates reproducible extraction and a baseline benchmark; today’s baseline AUPRC≈0.5 is the control profile to measure future lift.
+
+### Constraints in this demo (for stability and clarity)
+- Profile is set to **Baseline** (Evo2 1B, delta‑only). Fusion and Literature are disabled by default; Fusion compare may render as a placeholder unless AM coverage is true and the Fusion call succeeds.
+- All features are clearly marked "Research‑mode"; results are for research and prioritization, not clinical use.
+
+### 60‑second operator checklist (before demo)
+- Backend: start with Baseline flags; ensure `/api/insights/*`, `/api/efficacy/predict`, `/api/datasets/extract_and_benchmark` are reachable.
+- Frontend: open VUS Explorer; verify chips render and WIWFM modal opens with provenance.
+- Cohort Lab: run a small extract+benchmark; confirm artifacts and metrics display.
+
+## Current architecture (Mutation Explorer)
+- Route: `/mutation-explorer/:patientId?`
+- File: `src/pages/MutationExplorer.jsx`
+- State & context:
+  - Uses `useParams` for `patientId` and `useNavigate` for routing
+  - Integrates `useActivity()` via `ActivityContext` for audit trail entries
+  - Workflow steps: `MUTATION_SELECTION → ANALYSIS_VIEW → CRISPR_VIEW`
+- Data flow:
+  - Loads patient mutations from `GET ${API_ROOT}/api/patients/:id` (expects `{ success, data.mutations }`)
+  - Submits queries to `POST ${API_ROOT}/api/research/mutation-analysis` with `{ patient_id, prompt, intent }`
+  - Displays returned mock VEP table (`simulated_vep_details`) and conceptual CRISPR recommendations
+  - CRISPR design deep‑link opens external tool with query params when coords exist
+- UI highlights:
+  - Suggested query templates (effect/presence/absence/resistance)
+  - Table of known mutations with actions: Analyze Effect, Design Guides, Find Trials
+  - Analysis section with status, summary, mock VEP grid, conceptual CRISPR panel, evidence blob
+- Gaps vs goals:
+  - Not focused on VUS/unknowns; analysis endpoint returns simulated/mocked VEP
+  - No live insights chips (functionality/regulatory/essentiality/chromatin)
+  - No ClinVar prior or AM coverage chips
+  - No direct WIWFM pathway to run `/api/efficacy/predict`
+  - Limited provenance (no run IDs surfaced here)
+
+## Target vision – VUS Explorer (research‑mode)
+Purpose: Turn unknowns into prioritized hypotheses with transparent signals, and provide clear next actions (Dossier/WIWFM/Design).
+
+### UI layout (high‑level)
+- Header: VUS Explorer (research‑mode) + patient/context selector
+- Left column:
+  - Variant list (with filters: Unknown, Missense, Noncoding, All)
+  - Variant intake panel (paste HGVS, coords, or gene+protein change)
+- Right column (detail pane):
+  - Insight chips: Functionality, Regulatory, Essentiality, Chromatin (+ thresholds/legend)
+  - Delta proxy: Evo2 `min_delta` (where valid) and AM coverage badge (missense only)
+  - ClinVar prior (classification/review) when found
+  - Rationale bullets + citations (if available)
+  - Actions: Send to Dossier; Run WIWFM; Open CRISPR Designer (when coords present)
+  - Provenance: run ID, flags (profile), URLs
+  - Footnote: Research‑mode; cohort‑dependent
+
+  1. Backend KB Client Service
+Question: The plan mentions creating api/services/kb_client.py with helper functions. Should this be a new service or should I extend the existing kb_store.py service?
+Context: We already have get_kb_store() - should I add these helper methods there or create a separate client layer?
+Answer: Create a thin api/services/kb_client.py that wraps get_kb_store(). Keep kb_store.py focused on storage/CRUD; expose task‑oriented helpers in kb_client (get_gene, get_variant, get_pathways, get_cohort_coverage) with timeouts/retries and pass‑through provenance.
+2. Frontend Hook Implementation
+Question: The plan shows hooks/useKb.ts but our frontend is JavaScript/JSX, not TypeScript. Should I create hooks/useKb.js instead?
+Context: I want to maintain consistency with the existing codebase structure.
+Answer: Use hooks/useKb.js to match the stack. Add JSDoc typedefs for return shapes to aid IntelliSense without TS.
+3. KB Data Integration Priority
+Question: Which KB data types should I prioritize first? The plan mentions:
+Gene entities (name, synonyms, pathways)
+Variant entities (curated facts)
+Pathway memberships
+Cohort coverage snapshots
+Priority: Should I start with gene entities since they're most fundamental, or focus on variant-specific data first?
+Answer: Prioritize (1) Gene entities + pathway memberships, (2) Cohort coverage snapshots, (3) Variant entities where curated. This maximizes immediate chip/helper value and Dossier context.
+4. Caching Strategy
+Question: The plan mentions "cache small responses in memory with short TTL". Should I:
+Use React's built-in state management for caching?
+Implement a custom cache service with TTL?
+Use localStorage for persistence across sessions?
+Answer: Implement a tiny in‑memory TTL cache inside useKb* (Map + timestamps, TTL 5–15 min). Optionally persist slow‑changing items (e.g., coverage) to localStorage under kb:v1:{type}:{id} with a short TTL. Avoid global state; keep cache local to hooks.
+5. Provenance Display
+Question: The plan mentions showing provenance with "KB" badges and hover details. Should this be:
+Always visible KB badges?
+Hover-only provenance information?
+Expandable panels for detailed provenance?
+Answer: Always show a small "KB" badge where KB content appears. Hover reveals key provenance (source, date). Provide an expandable "KB Provenance" panel (collapsed by default) for full details (ids, license, sha256).
+6. Integration Scope
+Question: Should I implement all components mentioned (KbHelperTooltip, KbCoverageChip, KbProvenancePanel) or focus on core functionality first?
+Context: I want to deliver maximum value while maintaining quality.
+Answer: Land core first: useKb* hooks + KbHelperTooltip (chip tooltips) and KbCoverageChip (AnalysisResults). Add KbProvenancePanel next. Defer nice‑to‑haves.
+7. Testing Strategy
+Question: The plan mentions both BE smoke tests and FE tests. Should I:
+Focus on FE integration since the KB backend is already working?
+Create comprehensive test suite for the new KB client service?
+Prioritize manual testing for the VUS Explorer integration?
+Answer: FE‑first: unit tests for useKb* (loading/error/data), component tests for KbHelperTooltip/KbCoverageChip, and one integration test in AnalysisResults. BE smokes via curl (/api/kb/items, /api/kb/search). Add a minimal unit test for kb_client pagination/retries if time allows.
+�� MISSION UNDERSTANDING:
+I understand this mission involves:
+Creating KB client helpers for gene/variant/pathway data
+Building React hooks for KB data fetching
+Integrating KB data into VUS Explorer components
+Adding provenance tracking and caching
+Testing the complete integration
+
+## Knowledge Graph (KG) integration – agent execution plan
+
+Goal: Leverage the new Knowledge Base (KB) to enrich VUS with curated facts (genes/variants/pathways/drugs), helper copy, cohort coverage snapshots, and vector search for supporting evidence — without blocking on heavy ETL. Build modular FE/BE pieces that the KG agent can iterate independently.
+
+Backend readiness (what exists and how to use it)
+- Router path: `api/routers/kb` (see repo path: `oncology-coPilot/oncology-backend-minimal/api/routers/kb`)
+- Endpoints (from KB README):
+  - `GET /api/kb/items?type={type}&limit={n}&offset={n}`
+  - `GET /api/kb/item/{id}`
+  - `GET /api/kb/search?q={query}&types={types}`
+  - `POST /api/kb/vector_search` (optional when vector indexes present)
+  - `POST /api/kb/reload` (admin)
+- Data directories: `knowledge_base/{schemas,entities,facts,cohorts,prompts,relationships,indexes,snapshots}` with per‑item provenance.
+- Contract: All responses include minimal fields plus `{ provenance: { source, created_at, sha256?, curator?, license } }`.
+
+Backend additions (small, non‑breaking)
+- Add lightweight helpers (optional) in a `api/services/kb_client.py`:
+  - `get_gene(gene: str)` → KB gene entity (name, synonyms, pathways)
+  - `get_variant(gene: str, hgvs_p?: str, coords?: ...)` → KB variant entity if curated
+  - `get_pathways(gene: str[])` → pathway memberships (for chips copy)
+  - `get_cohort_coverage(gene: str)` → cohort coverage snapshot from `cohorts/`
+- Timeouts/retries; cache small responses in memory with short TTL; surface `provenance` as‑is.
+
+Frontend components (modular, under `src/components/vus` unless noted)
+- `hooks/useKb.ts` (or `.js`):
+  - `useKbGene(gene)` → { data, loading, error }
+  - `useKbVariant(variantKey)` → { data, loading, error }
+  - `useKbPathways(genes)` → pathway list (for helper text)
+  - `useKbCohortCoverage(gene)` → { by_gene[], provenance }
+- `KbHelperTooltip.jsx`:
+  - Renders short helper copy for Insight chips sourced from KB entities/facts (e.g., what Functionality means for BRCA1).
+- `KbCoverageChip.jsx`:
+  - Shows small chip with coverage/prevalence when KB has a snapshot (pairs with existing CoverageChips; hide when missing).
+- `KbProvenancePanel.jsx`:
+  - Small expandable panel listing KB items used (ids, types) and their provenance fields.
+- Dossier integration:
+  - `TargetDossierDisplay.jsx` reads KB facts for the gene/variant and appends to a “Curated context” section with citations.
+
+Wiring into VUS screens (no monolith)
+- `AnalysisResults.jsx`:
+  - On variant selection, call `useKbGene` and `useKbVariant` in parallel with live insights.
+  - Pass KB texts to `KbHelperTooltip` for chips tooltips (e.g., “What Functionality means for BRCA1”).
+  - Render `KbCoverageChip` next to existing coverage chips when `cohort` snapshot exists.
+  - Show `KbProvenancePanel` collapsed by default under the results.
+- `MutationTable.jsx`:
+  - Optional: shallow KB lookup for pathway tags per gene to show contextual badges.
+- `EfficacyModal.jsx`:
+  - Optional: inject 1–2 KB facts relevant to drugs/pathways into the rationale list with explicit `source: KB` label.
+
+Caching & provenance (FE)
+- Cache KB responses in memory keyed by `kb:{type}:{id or query}`; TTL 5–15 minutes.
+- Always surface a small “KB” badge where KB content is shown; hover shows provenance.
+- Persist the list of KB items used into the page state so Dossier can record them.
+
+Testing (BE/FE)
+- BE smoke (curl):
+  - `curl -sS \
+    "http://127.0.0.1:8000/api/kb/items?type=gene&limit=3" | jq .`
+  - `curl -sS \
+    "http://127.0.0.1:8000/api/kb/search?q=BRCA1&types=gene,variant" | jq .`
+  - If vector enabled: `curl -sS -X POST \
+    http://127.0.0.1:8000/api/kb/vector_search -H 'Content-Type: application/json' \
+    -d '{"query":"BRCA1 function"}' | jq .`
+- FE tests:
+  - Unit: `useKb*` hooks mock fetch → ensure loading/error/data states render.
+  - Component: `KbHelperTooltip` renders fallback when KB missing; shows provenance on hover.
+  - Integration: `AnalysisResults` renders KB helper + coverage chip when KB returns entities; hides when not.
+
+Rollout steps for the KG agent
+1) Create `hooks/useKb.ts` and wire `KbHelperTooltip` into `InsightChips` tooltips.
+2) Render `KbCoverageChip` in `AnalysisResults` if `useKbCohortCoverage` returns data.
+3) Add `KbProvenancePanel` collapsed under Analysis; include ids/types.
+4) Add Dossier “Curated context” section using KB items used in the current session.
+5) Add simple retries/TTL cache for KB calls; log to ActivityContext.
+
+KPIs
+- Coverage: % variants with any KB enrichment (helper text, coverage, curated facts).
+- Speed: p95 latency of KB calls < 250ms (cached path < 50ms).
+- Trust: provenance hover visible; no broken links; zero KB 5xx in demo runs.
+
+### API contracts (proposed wiring)
+- Insights (per variant):
+  - `POST /api/insights/predict_protein_functionality_change` → `{ functionality_score, provenance }`
+  - `POST /api/insights/predict_splicing_regulatory` → `{ regulatory_impact_score, provenance }`
+  - `POST /api/insights/predict_gene_essentiality` → `{ essentiality_score, provenance }`
+  - `POST /api/insights/predict_chromatin_accessibility` → `{ accessibility_score, provenance }`
+  - Optional: `POST /api/evo/score_variant_multi` for `min_delta` proxy
+- Prior lookups:
+  - `GET /api/evidence/clinvar?chrom=..&pos=..&ref=..&alt=..` → `{ classification, review_status, source }`
+  - `GET /api/fusion/coverage?chrom=..&pos=..&ref=..&alt=..` → `{ am_covered: bool }`
+- Efficacy:
+  - `POST /api/efficacy/predict` with `{ mutations:[{ gene, hgvs_p, chrom, pos, ref, alt }] }` → per‑drug `{ efficacy_score, confidence, evidence_tier, badges, insights, rationale, citations, provenance }`
+- CRISPR design (conceptual/deep‑link): preserve existing behavior when `genomic_coordinate_hg38` present
+
+ - Simulation (demo; from `src/ai_research_assistant.py`):
+   - `POST /api/simulation/design_system_demo` → `handle_design_therapy_interaction` (multi‑component recommendations)
+   - `POST /api/simulation/guide_optimization` → `simulate_guide_rna_optimization`
+   - `POST /api/simulation/off_target_preview` → `simulate_off_target_analysis`
+   - `POST /api/simulation/hdr_template_opt` → `simulate_repair_template_optimization`
+   - `POST /api/simulation/in_vitro` → `simulate_in_vitro_characterization`
+   - `POST /api/simulation/cell_assay` → `simulate_cell_based_assay`
+   - `POST /api/simulation/exp_offtarget` → `simulate_off_target_validation`
+   - `POST /api/simulation/delivery_opt` → `simulate_delivery_system_optimization`
+   - `POST /api/simulation/dev_plan` → `simulate_therapeutic_development_planning`
+   - Contract notes: Always return a `provenance: { run_id, mode: "demo" }`; enforce short timeouts and safe defaults; never mix demo metrics with live Insights/Efficacy.
+
+Notes for demo vs real:
+- Demo: call insights with small timeouts and safe defaults; fall back to static examples if unavailable.
+- Real: wire retries, cache results per variant key, and surface run IDs; enable Fusion (AM) chip when coverage exists.
+
+### Data model – variant row (front‑end)
+```ts
+type VariantRow = {
+  gene: string
+  hgvs_p?: string
+  chrom?: string
+  pos?: number
+  ref?: string
+  alt?: string
+  variant_type?: string
+  hg38?: string // formatted coord string when available
+  // Derived signals for UI chips
+  functionality?: number
+  regulatory?: number
+  essentiality?: number
+  chromatin?: number
+  min_delta?: number
+  am_covered?: boolean
+  clinvar?: { classification?: string; review_status?: string }
+  provenance?: { run_id?: string; profile?: string; urls?: string[] }
+}
+```
+
+## Migration plan (incremental)
+1) Route and copy
+   - Add route alias `/vus-explorer/:patientId?` (keep legacy path for now)
+   - Update page header and helper text to research‑mode; add unknowns filter
+2) Insight chips
+   - Wire to insights APIs (functionality/regulatory first). Render chips with thresholds and tooltips; show provenance hover
+3) Prior and coverage
+   - Add ClinVar lookup (server proxy if needed) and AM coverage badge; render as small chips
+4) Efficacy action
+   - Add “Run WIWFM” button that calls `/api/efficacy/predict` with current variant; render modal with per‑drug table (score, confidence, tier, badges, insights)
+5) Dossier action
+   - Add “Send to Dossier” to queue insights calls and open `TargetDossier` with prefilled params
+6) Provenance and flags
+   - Surface `provenance.run_id` and profile (Baseline/Richer/Fusion) in a small debug row
+7) Activity logging
+   - Log all key actions via `ActivityContext` (insights fetched, efficacy run, dossier sent)
+8) Empty/edge states
+   - Handle missing coords (enable only insights not requiring coords); show GRCh38 normalization helper
+9) Performance
+   - Debounce per‑variant calls; batch when the user selects multiple variants; cache results keyed by `{gene,hgvs_p,chrom,pos,ref,alt}`
+
+10) Story polish (copy and visuals)
+   - Add one‑line helpers under each chip (“What this tells you”) and a footer note (“Research‑mode; cohort‑dependent”).
+   - Replace technical names with plain labels; keep method names in hovers/provenance.
+
+## How this provides value
+- Resolves unknowns faster: converts VUS into ranked, explainable hypotheses with concrete next steps
+- Transparent by default: chips + rationale + citations + run IDs make it audit‑ready
+- Decision acceleration: direct action to Dossier/WIWFM/CRISPR reduces handoffs and context switches
+- Research‑mode positioning: conservative defaults with profile toggles for lift when desired
+
+## Enhancements beyond VUS (capabilities)
+- Noncoding/regulatory impact visualization (regulatory chip)
+- Essentiality hints for target prioritization (triage which variants matter)
+- AM coverage awareness – highlight where fused prior applies
+- Quick compare: Baseline vs Fusion profile outcomes for a chosen variant (side‑by‑side mini panel)
+
+## Risks & mitigations
+- Incomplete coordinates (GRCh38): add UI helper to validate/normalize; degrade gracefully
+- Latency under Fusion/Literature: default to Baseline (1B, delta‑only) with explicit toggles
+- Schema drift: use defensive reads with safe defaults; surface provenance fields
+
+## Implementation notes (code‑level)
+- `MutationExplorer.jsx` adjustments:
+  - Replace `POST /api/research/mutation-analysis` with orchestrated sequence of insights calls; optionally keep for demo copy
+  - Add new React state for insights and priors per `VariantRow`
+  - Add components: `InsightChips`, `CoverageChip`, `ProvenanceBar`, `EfficacyModal`
+  - Integrate `useActivity()` logs for every external call and user action
+- Keep external CRISPR deep‑link; guard when coords absent
+
+### Component enhancement plan (src/components/vus)
+- VUSHeader: add a short tagline and a help tooltip (“How this works”).
+- ResearchModeBanner: keep brief; add “What to expect” bullets; show a “Demo/Live” badge from env.
+- MutationTable: add filters (Unknown, Missense, Noncoding) and small chips (AM/ClinVar) per row; quick actions: Analyze, WIWFM, Dossier, CRISPR.
+- GenomicQueryPanel: add example coord input; GRCh38 validation hint.
+- AnalysisResults: show insight chips first; move VEP behind a “Details” toggle; add rationale/citations when available.
+- VepTable: compact view with “View all” toggle.
+- CrisprRecommendations: conceptual panel gated by coords; link to Design stub if present.
+- constants.js: centralize thresholds/colors and short helper copy strings.
+
+FE wiring for simulation (demo)
+- CrisprRecommendations.jsx: add buttons to call `/api/simulation/*` endpoints; render chips (on‑target, off‑target preview, HDR, delivery) with a visible “Demo” tag; provide a compact modal for `design_system_demo` top candidates.
+- AnalysisResults.jsx: include a “Send to CRISPR” button to prefill the CRISPR card and optionally trigger `guide_optimization`.
+- ProvenanceBar: show `run_id`, mode (Demo/Live), and profile; persist snapshots to enable recall.
+
+### Placeholders now vs fully functional next
+- Now (demo): show chips from live calls when available; otherwise grey “Not available.” WIWFM calls efficacy; on error, show pre‑saved demo with a badge. Provenance shows run ID when present; otherwise “N/A (demo).”
+- Next (full): enable Fusion coverage chip and Baseline vs Fusion compare; add ClinVar lookup with caching; batch insights for selected variants; export CSV/JSON.
+ - Migration: replace simulation endpoints with real services progressively (on‑target efficacy model, off‑target search, HDR predictors, delivery heuristics); keep the same UI contracts and provenance.
+
+## CRISPR card – enhanced plan (grounded in Future Vision)
+
+Use the CRISPR panel on the right side as a living “design hub.” Start simple for demo; structure it so we can grow into full in‑silico design flows.
+
+### What to show now (demo‑ready, non‑jargon)
+- Target summary: gene, variant, hg38 coordinate (if present) and “Why this matters” one‑liner.
+- Readiness chips:
+  - On‑target feasibility: show “Likely targetable”/“Needs review” based on basic sequence checks (length/PAM presence if available) and accessibility proxy if present.
+  - Off‑target risk (proxy): static low/med/high placeholder with tooltip that it’s a demo proxy.
+  - Delivery hint (proxy): placeholder badge (e.g., AAV/LNP “to discuss”) clearly labeled demo.
+- Actions:
+  - Design Guides (deep‑link as today) with parameters prefilled from coords.
+  - Send to Dossier for a CRISPR section (captures current context and chips).
+  - Save Snapshot (records run ID, inputs, and displayed chips).
+- Provenance row: run ID (if any), profile (Baseline/Richer/Fusion), and a “Demo” badge when placeholders are used.
+
+### Near‑term live integrations (incremental)
+- On‑target activity proxy: call `/api/insights/predict_crispr_spacer_efficacy` once available (or reuse design endpoint’s heuristic) to replace the placeholder chip.
+- Accessibility: call `/api/insights/predict_chromatin_accessibility` when locus/context exists; show score + simple legend.
+- Off‑target propensity (basic): after generating a few candidate spacers, show count of close genomic matches via a lightweight BLAST/regex proxy; surface as “Potential off‑targets: n (preview).”
+- WIWFM tie‑in: after insights, one‑click “Check therapy fit” triggers `/api/efficacy/predict`; display modal with per‑drug table (score, confidence, tier, badges, insights). Offer “Add to CRISPR plan” to keep both views connected.
+
+### Roadmap alignment with CRISPR Assistant Future Vision
+From `research/crispr_assistant_future_vision.mdc`:
+- Predictive simulation of therapeutic outcomes (future): reserve space in the card for “Simulated outcome (early)” showing qualitative guidance today; later replace with quantitative summaries (on‑target %, HDR vs NHEJ trends) when models land.
+- Off‑target impact: evolve the preview into a scored risk estimate that weights likely functional consequences of off‑targets (ties back to variant impact scoring on off‑target loci).
+- Delivery dynamics: add a small planner row (AAV/LNP “fit hints”) informed by context; later, connect to a delivery optimization stub.
+- Risk/challenge navigation: add a collapsible “What could go wrong?” list with mitigations (e.g., switch nuclease, adjust PAM window, restrict tissue), sourced from curated copy now; wire to advisor endpoints later.
+- Regulatory considerations (long‑term): log design parameters and checks into Dossier; show a “Traceability ready” badge when provenance is complete.
+
+### Component impacts (src/components/vus)
+- CrisprRecommendations.jsx:
+  - Add readiness chips (on‑target, accessibility, off‑target, delivery) with clear demo labels when placeholders are shown.
+  - Add WIWFM button; open efficacy modal and allow saving the result into the CRISPR card context.
+  - Add “Save Snapshot” to capture run ID and inputs; show in ProvenanceBar.
+- AnalysisResults.jsx:
+  - Surface insight chips above; add a “Send to CRISPR” button to pass the focused variant to the CRISPR card.
+- VepTable.jsx:
+  - Keep behind Details; allow selecting a row to populate CRISPR focus (if it has usable coords).
+- constants.js:
+  - Add enums and thresholds for readiness chips; add helper text strings (“What this tells you”).
+
+### Copy and UX guidelines (keep it human)
+- Prefer plain labels: “On‑target feasibility,” “Potential off‑targets,” “Access to target,” “Delivery notes.”
+- Tooltips carry technical context; the main text stays simple.
+- Mark all placeholders with a small “Demo” tag; provenance row always visible.
+
+
+## Deliverables and priorities (first iteration ~1 hour)
+
+Focus on product value and narrative; if complex, ship a clear placeholder with a “Demo” tag and provenance.
+
+Priority 0 – must land in first pass
+- InsightChips: Function/Reg/Ess/Chrom (live where available; grey otherwise) with one‑line helpers and provenance hover.
+- CoverageChips: ClinVar prior + AM coverage (small badges); async wrappers with timeouts.
+- WIWFMButton + EfficacyModal: call `/api/efficacy/predict`; show per‑drug score, confidence, tier, badges, insights, citations; add “What this means today.”
+- ProvenanceBar: always show run ID, profile (Baseline/Richer/Fusion), Demo/Live tag.
+- Copy polish: remove jargon; add “Research‑mode; cohort‑dependent” footer.
+
+Priority 1 – nice to have (ship if time permits)
+- MutationTable quick actions: Analyze, WIWFM, Dossier, CRISPR.
+- VariantIntake helper: GRCh38 hints; friendly empty/error states.
+- Per‑variant cache (memory) keyed by `{gene,hgvs_p,chrom,pos,ref,alt}`.
+
+Priority 2 – stretch (or ship as placeholders)
+- CrisprReadinessPanel (Demo): on‑target, off‑target preview, HDR, delivery via `/api/simulation/*`; “Save Snapshot.”
+- BaselineVsFusionMiniCompare: only when AM coverage exists.
+
+
+## Component ↔ capability mapping (src/components/vus)
+
+- VUSHeader.jsx
+  - Purpose: title and short tagline (non‑jargon). Add “How this works” tooltip.
+  - Value: sets expectations; improves comprehension.
+
+- ResearchModeBanner.jsx
+  - Purpose: “What to expect” bullets; Demo/Live badge from env; “Research‑mode” footer.
+  - Value: trust and transparency.
+
+- MutationTable.jsx
+  - Purpose: variant list + filters; quick actions (Analyze, WIWFM, Dossier, CRISPR).
+  - Endpoints touched: none directly; actions trigger child flows.
+  - Value: speed to action.
+
+- GenomicQueryPanel.jsx
+  - Purpose: accept HGVS/coords; provide GRCh38 validation hints; suggested queries.
+  - Value: fewer dead ends; faster input.
+
+- AnalysisResults.jsx
+  - Purpose: render InsightChips + CoverageChips at top; VEP table behind “Details.”
+  - Endpoints: `/api/insights/predict_*`, prior lookups; error/empty states.
+  - Value: simple, auditable understanding.
+
+- VepTable.jsx
+  - Purpose: compact, optional; allow row→CRISPR focus hand‑off (when coords present).
+  - Value: detail on demand without clutter.
+
+- CrisprRecommendations.jsx (Demo in v1)
+  - Purpose: readiness chips (on‑target, off‑target preview, HDR, delivery); “Design System (Demo)”; Save Snapshot.
+  - Endpoints: `/api/simulation/*` (Demo) with short timeouts.
+  - Value: design path preview; clear Demo labeling.
+
+- constants.js
+  - Purpose: thresholds/colors; helper copy strings (“What this tells you”).
+  - Value: consistency and easy tuning.
+
+
+## Endpoint usage – minimal set for the story
+
+- Insights (per variant)
+  - `/api/insights/predict_protein_functionality_change`
+  - `/api/insights/predict_splicing_regulatory`
+  - `/api/insights/predict_gene_essentiality`
+  - `/api/insights/predict_chromatin_accessibility`
+
+- Prior lookups
+  - `/api/evidence/clinvar?...`
+  - `/api/fusion/coverage?...` (AM)
+
+- Efficacy (WIWFM)
+  - `/api/efficacy/predict`
+
+- Simulation (Demo only; optional in first hour)
+  - `/api/simulation/*` per list above
+
+Contract notes
+- Always include `provenance` (run_id, profile, mode Demo/Live) in the UI; show a clear “Demo” badge for simulated data.
+- Timeouts and friendly errors; never block the story on a single endpoint.
+
+
+## Use‑case narratives (MM examples) – how to present
+
+- BRCA1 VUS (noncoding or ambiguous missense)
+  - Show chips; if Regulatory lit: “May influence gene control; in MM, altered DNA repair can matter.”
+  - Prior chips: ClinVar review; AM coverage “N/A” if noncoding.
+  - WIWFM: pathway‑aware hypothesis; likely “Consider”; add to Dossier; CRISPR readiness as Demo.
+
+- TP53 hotspot (e.g., R175H/R248Q)
+  - Function lit; essentiality moderate; prior strong; AM coverage yes.
+  - WIWFM: higher confidence; Baseline vs Fusion compare (if enabled).
+  - If on‑label: “Yes GO (Tier I)”; else Model‑backed “Consider/Supported.”
+
+
+## Integration steps (1‑hour iteration)
+
+1) Wire InsightChips + CoverageChips into AnalysisResults.jsx
+   - Fetch in parallel; render chips with helper text; grey on unavailable; show provenance hover.
+2) Add WIWFMButton + EfficacyModal
+   - POST `/api/efficacy/predict`; map table; include “What this means today” and citations; add provenance footer.
+3) Add ProvenanceBar
+   - Visible in AnalysisResults and Modal; show run ID, profile, Demo/Live.
+4) Copy polish
+   - Replace jargon; add research‑mode footer; friendly errors.
+
+Stretch (if time)
+- MutationTable quick actions; VariantIntake hints; per‑variant cache.
+- CrisprReadinessPanel (Demo) with Save Snapshot.
+
+
+## Validation (demo)
+- Pick 2 MM genes (e.g., TP53 hotspot and BRCA1 VUS).
+- Ensure chips render; WIWFM returns ranked therapies; provenance is visible; errors are friendly.
+- Record run IDs; export Dossier stub.
+
+## Current status (v1 demo) – delivered
+
+- InsightChips (Function/Reg/Ess/Chrom) with helper copy and thresholds
+- CoverageChips (ClinVar prior, AM coverage) with cached fetch + activity logs
+- WIWFM flow: button + modal calling `/api/efficacy/predict`, showing therapies, confidence, tier, badges, citations, provenance
+- ProvenanceBar (run ID, profile placeholder, Demo/Live tag)
+- CRISPR readiness (Demo) chips (On‑target, Access, Off‑target preview, Delivery)
+- MutationTable quick actions (Analyze, WIWFM, Dossier placeholder, CRISPR)
+- GenomicQueryPanel GRCh38 helper hint
+- Baseline vs Fusion mini‑compare placeholder (renders when AM coverage exists)
+- Activity logging for prior/coverage and WIWFM start/success/error
+- Research‑mode footer; friendly errors and non‑blocking placeholders
+
+## User story (current demo)
+
+- As a scientist, I paste/select a variant and immediately see four plain chips (Function, Regulatory, Essentiality, Chromatin) that translate raw genetics into simple signals. I can run “Will it work for me?” to get a ranked therapy hypothesis with confidence, tier, and citations. If I’m exploring CRISPR, I see readiness chips and can jump to design. Everything shows provenance and clearly marks demo placeholders.
+
+## Benefits
+
+- Business: speeds VUS triage and hypothesis formation, reduces meetings/hand‑offs, creates audit‑ready outputs (provenance) that accelerate partner decisions.
+- Technical: modular UI with live endpoints, cached priors, profile toggles (Baseline/Richer/Fusion), Fusion‑aware compare, activity logging, and graceful fallbacks.
+
+## Priorities (near‑term)
+
+- P0: Dossier action (prefill + navigate), standardized error toasts/retries, Fusion mini‑compare backed by a true Fusion run.
+- P1: Backend proxy for ClinVar/AM (prod CORS), polish mini‑compare and profile banners, bulk selection + batched insights.
+
+## Current iteration – TODOs
+
+- Dossier action: open `TargetDossier` prefilled with current variant, merged insights, and last run provenance.
+- Error toasts/retry: consistent, non‑blocking notifications for insights/coverage/efficacy; short backoff; keep UI responsive.
+- Fusion compare: ensure Fusion profile run is cached and mapped into compare panel; surface profile in ProvenanceBar.
+
+## Next iteration (2–4 hours) – plan
+
+- Wire prior/coverage fetches (ClinVar/AM) with caching [DONE]
+- Add VariantIntake helper with GRCh38 validator and guided paste [DONE]
+- Add per‑variant in‑memory cache; debounce calls; batch when multi‑select [DONE]
+- Activity logging: record insights calls, efficacy runs, dossier sends (run IDs) [DONE]
+- Baseline vs Fusion mini‑compare (only when AM coverage true) [PARTIAL – placeholder]
+- Copy polish: helper lines under chips; research‑mode footer [DONE]
+- Add env/profile toggles in UI: Baseline (delta‑only 1B), Richer S, Fusion [PENDING]
+- Live insights wiring: call `/api/insights/predict_*` for selected variant and merge results [PENDING]
+- Dossier integration: implement navigation + prefill to `TargetDossier` from action [PENDING]
+- Fusion compare: actually run Fusion profile when `am_covered` and show side‑by‑side [PENDING]
+
+Remaining high‑priority tasks
+- Profile toggles: UI + request headers/body to select Baseline/Richer/Fusion; surface profile in `ProvenanceBar`
+- Fusion run wiring: trigger a Fusion efficacy call (cached) when AM coverage exists; update mini‑compare
+- Insights API integration: fetch functionality/regulatory/essentiality/chromatin for active variant; debounce + cache per variant
+- Dossier action: open Dossier prefilled with current variant, insights, and provenance
+- Server proxy (if needed): add backend proxy for ClinVar/AM coverage to avoid CORS in production
+- Standardize error toasts/retries across insights/coverage/efficacy; keep non‑blocking placeholders
+
+Success criteria
+- Selecting a variant triggers cached ClinVar/AM lookups; chips update instantly on repeat
+- WIWFM modal renders with citations and provenance for both Baseline and Fusion profiles (via profile toggles)
+- Variant intake guides user to valid GRCh38; friendly errors for missing coords
+
+
+## Remaining work (overall)
+
+- Backend
+  - [ ] Fix `api/main.py` IndentationError so the backend boots (blocking).
+  - [ ] Ensure all insights endpoints used here are reachable with short timeouts/retries and stable `provenance` fields.
+  - [ ] Confirm `/api/fusion/coverage` and `/api/evidence/clinvar` are wired in prod behind a CORS‑safe proxy.
+  - [ ] Efficacy `/api/efficacy/predict` returns `insights` bundle, `evidence_tier`, `badges`, and `provenance` consistently across profiles.
+
+- Frontend (VUS Explorer)
+  - [ ] Live insights wiring in `AnalysisResults.jsx` (functionality/regulatory/essentiality/chromatin) with debounce, retries, and friendly errors.
+  - [ ] Complete Profile toggles (Baseline/Richer/Fusion) to drive request options; surface profile in `ProvenanceBar`.
+  - [ ] Fusion run wiring: trigger only when AM coverage is true; cache result; label clearly as research‑mode.
+  - [ ] Baseline vs Fusion mini‑compare: map cached Fusion result; guard empty/failure states.
+  - [ ] Dossier action: navigate with prefilled variant, insights, and provenance; verify Dossier reads state.
+  - [ ] “Add Cohort Context” button: open Cohort Lab with prefilled gene list; show quick coverage chip when response returns.
+
+- UX & copy
+  - [ ] Research‑mode footer visible; helper text under chips (“What this tells you”); tooltips carry method detail.
+  - [ ] Consistent error toasts/retries for insights/coverage/efficacy.
+
+- Testing & demo readiness
+  - [ ] Two MM variants (e.g., TP53 hotspot, BRCA1 VUS) render chips; WIWFM returns; provenance visible; errors friendly.
+  - [ ] Repeat a variant to verify cached ClinVar/AM/insights updates instantly; Fusion mini‑compare appears only when eligible.
+  - [ ] Dossier opens with prefill; Cohort Lab shows artifacts/metrics for the gene.
+
+- Known blockers/risks
+  - [ ] Backend won’t start until `api/main.py` indentation is fixed.
+  - [ ] External upstreams (Evo/AM/ClinVar) can fluctuate; keep timeouts, retries, and fallbacks.
+
+
+## Current status (v1 demo) – delivered
+
+- InsightChips (Function/Reg/Ess/Chrom) with helper copy and thresholds
+- CoverageChips (ClinVar prior, AM coverage) with cached fetch + activity logs
+- WIWFM flow: button + modal calling `/api/efficacy/predict`, showing therapies, confidence, tier, badges, citations, provenance
+- ProvenanceBar (run ID, profile placeholder, Demo/Live tag)
+- CRISPR readiness (Demo) chips (On‑target, Access, Off‑target preview, Delivery)
+- MutationTable quick actions (Analyze, WIWFM, Dossier placeholder, CRISPR)
+- GenomicQueryPanel GRCh38 helper hint
+- Baseline vs Fusion mini‑compare placeholder (renders when AM coverage exists)
+- Activity logging for prior/coverage and WIWFM start/success/error
+- Research‑mode footer; friendly errors and non‑blocking placeholders
+
+## User story (current demo)
+
+- As a scientist, I paste/select a variant and immediately see four plain chips (Function, Regulatory, Essentiality, Chromatin) that translate raw genetics into simple signals. I can run “Will it work for me?” to get a ranked therapy hypothesis with confidence, tier, and citations. If I’m exploring CRISPR, I see readiness chips and can jump to design. Everything shows provenance and clearly marks demo placeholders.
+
+## Benefits
+
+- Business: speeds VUS triage and hypothesis formation, reduces meetings/hand‑offs, creates audit‑ready outputs (provenance) that accelerate partner decisions.
+- Technical: modular UI with live endpoints, cached priors, profile toggles (Baseline/Richer/Fusion), Fusion‑aware compare, activity logging, and graceful fallbacks.
+
+## Priorities (near‑term)
+
+- P0: Dossier action (prefill + navigate), standardized error toasts/retries, Fusion mini‑compare backed by a true Fusion run.
+- P1: Backend proxy for ClinVar/AM (prod CORS), polish mini‑compare and profile banners, bulk selection + batched insights.
+
+## Current iteration – TODOs
+
+- Dossier action: open `TargetDossier` prefilled with current variant, merged insights, and last run provenance.
+- Error toasts/retry: consistent, non‑blocking notifications for insights/coverage/efficacy; short backoff; keep UI responsive.
+- Fusion compare: ensure Fusion profile run is cached and mapped into compare panel; surface profile in ProvenanceBar.
+
+## Next iteration (2–4 hours) – plan
+
+- Wire prior/coverage fetches (ClinVar/AM) with caching [DONE]
+- Add VariantIntake helper with GRCh38 validator and guided paste [DONE]
+- Add per‑variant in‑memory cache; debounce calls; batch when multi‑select [DONE]
+- Activity logging: record insights calls, efficacy runs, dossier sends (run IDs) [DONE]
+- Baseline vs Fusion mini‑compare (only when AM coverage true) [PARTIAL – placeholder]
+- Copy polish: helper lines under chips; research‑mode footer [DONE]
+- Add env/profile toggles in UI: Baseline (delta‑only 1B), Richer S, Fusion [PENDING]
+- Live insights wiring: call `/api/insights/predict_*` for selected variant and merge results [PENDING]
+- Dossier integration: implement navigation + prefill to `TargetDossier` from action [PENDING]
+- Fusion compare: actually run Fusion profile when `am_covered` and show side‑by‑side [PENDING]
+
+Remaining high‑priority tasks
+- Profile toggles: UI + request headers/body to select Baseline/Richer/Fusion; surface profile in `ProvenanceBar`
+- Fusion run wiring: trigger a Fusion efficacy call (cached) when AM coverage exists; update mini‑compare
+- Insights API integration: fetch functionality/regulatory/essentiality/chromatin for active variant; debounce + cache per variant
+- Dossier action: open Dossier prefilled with current variant, insights, and provenance
+- Server proxy (if needed): add backend proxy for ClinVar/AM coverage to avoid CORS in production
+- Standardize error toasts/retries across insights/coverage/efficacy; keep non‑blocking placeholders
+
+Success criteria
+- Selecting a variant triggers cached ClinVar/AM lookups; chips update instantly on repeat
+- WIWFM modal renders with citations and provenance for both Baseline and Fusion profiles (via profile toggles)
+- Variant intake guides user to valid GRCh38; friendly errors for missing coords
+

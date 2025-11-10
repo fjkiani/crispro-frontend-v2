@@ -1,0 +1,175 @@
+---
+description: End-to-end plan to implement Metastasis Interception (weapon design) using existing intervention signals and services
+---
+# Metastasis Interception Plan (End-to-End)
+
+Purpose: Implement the actionable “interception” layer on top of the completed 8-step Metastatic Intervention assessment. This adds a patient/variant → target lock → design candidates → safety/efficacy scoring → RUO blueprint output.
+
+References
+- Intervention (assessment) is complete: [metastatic-intervention.md](mdc:.cursor/rules/use-cases/metastatic-intervention.md)
+- Interception doctrine: [metastatis-interception.md](mdc:.cursor/rules/use-cases/metastatis-interception.md)
+- Backend services already available:
+  - Insights: `/api/insights/predict_protein_functionality_change`, `/predict_gene_essentiality`, `/predict_splicing_regulatory`, `/predict_chromatin_accessibility`
+  - Design: `/api/design/generate_guide_rna`
+  - Safety: `api/services/safety_service.py` (off-target preview)
+
+## Scope (v1 RUO)
+- Build a thin orchestrator that, for a chosen metastasis step (e.g., angiogenesis/EMT/invasion), selects a validated target gene (target lock), generates candidate guides, previews safety, and produces a ranked “Assassin List” with full provenance.
+- No new low-level ML endpoints; reuse existing services. Keep all weights, step→gene-set maps, and scoring coefficients in config (JSON), versioned.
+
+## Backend – New Endpoint
+- Path: `POST /api/metastasis/intercept`
+- File locations:
+  - Router: `oncology-backend-minimal/api/routers/metastasis_interception.py`
+  - Schemas: `oncology-backend-minimal/api/schemas/metastasis_interception.py`
+  - Service: `oncology-backend-minimal/api/services/metastasis_interception_service.py`
+  - Config: `oncology-backend-minimal/api/config/metastasis_interception_rules.json`
+
+### Request (Pydantic)
+```
+{
+  "mission_step": "angiogenesis" | "EMT" | "invasion" | "intravasation" | "homing_extravasation" | "dormancy" | "reactivation" | "primary_growth",
+  "mutations": [ { "gene": "BRAF", "hgvs_p": "p.Val600Glu", "chrom?": "7", "pos?": 140453136, "ref?": "T", "alt?": "A" } ],
+  "disease?": "MM" | "OV" | string,
+  "options?": { "profile": "baseline" | "richer_s" | "fusion", "enable_cohort_priors": false }
+}
+```
+
+### Response (Pydantic)
+```
+{
+  "mission_step": "angiogenesis",
+  "validated_target": { "gene": "VEGFA", "rank_score": 0.72, "rationale": ["Essentiality≥0.6", "Pathway match: ANGIO"] },
+  "candidates": [
+    {
+      "sequence": "ACGT...20bp",
+      "pam": "NGG",
+      "gc": 0.45,
+      "efficacy_proxy": 0.61,
+      "safety_preview": { "off_target_hits": 2, "red_flags": [] },
+      "assassin_score": 0.58,
+      "provenance": { "method": "interception_v1", "design": "generate_guide_rna", "safety": "safety_preview_v1" }
+    }
+  ],
+  "rationale": ["mission→gene_set: ANGIO→VEGF axis", "VEGFA essentiality and functionality passes thresholds"],
+  "provenance": { "run_id": "...", "ruleset_version": "metastasis_interception_v0.1", "methods": ["target_lock_v1","design_v1","safety_preview_v1"], "profile": "baseline" }
+}
+```
+
+## Service Orchestration (metastasis_interception_service.py)
+1) Target Lock
+- Map `mission_step` → gene_set via `metastasis_interception_rules.json` (e.g., angiogenesis→VEGF/FGF axis; EMT→EMT_TF/adhesion; invasion→MMPs; etc.).
+- For each candidate gene in the set:
+  - Compute signals using existing endpoints (functionality, essentiality, regulatory; chromatin when coords exist).
+  - Score with configurable weights; apply thresholds (e.g., ≥0.6).
+- Select top-ranked `validated_target` (ties: prefer genes present in `mutations`).
+
+2) Design Candidates
+- Retrieve or construct a deterministic 30–100bp window around target locus (if coords available) or default transcript exon sequence.
+- Call `/api/design/generate_guide_rna` with `{ target_sequence, pam: "NGG", num: K, model_id: "evo2_1b" }`.
+
+3) Safety Preview
+- For each candidate, call safety preview (existing `safety_service` helper) to estimate off-target hits and return concise flags. Handle timeouts gracefully; return placeholders if unavailable.
+
+4) Scoring & Ranking
+- Compute `assassin_score = w_eff*efficacy_proxy + w_safe*safety_score + w_fit*mission_fit`, weights from config.
+- Clip to [0,1]. Include rationale notes.
+
+5) Provenance & RUO
+- Attach `run_id`, `ruleset_version`, `methods`, `profile`, `feature_flags`. Always RUO copy.
+
+## Config – `metastasis_interception_rules.json`
+- `version`: string
+- `mission_to_gene_sets`: map mission_step→[gene_set_keys]
+- `weights`: { target_lock: { functionality, essentiality, regulatory, chromatin }, assassin: { efficacy, safety, mission_fit } }
+- `thresholds`: per-signal gating
+- `disease_overrides`: optional weights/gene_sets per disease
+
+## Tests
+- Unit: target ranking determinism (synthetic signals), threshold gating, assassin score calculation
+- Service: end-to-end orchestration with mocked insights/design/safety
+- API: contract validation, options passthrough, provenance completeness, graceful failure paths
+
+## Frontend
+- Hook: `useMetastasisInterception({ mission_step, mutations, disease, options })` with TTL cache
+- Component: `MetastasisInterceptionPanel.jsx`
+  - Inputs: mission_step selector; shows validated target
+  - Table: candidates with efficacy_proxy, safety_preview, assassin_score
+  - Provenance chips and RUO label
+- Integration: add panel to VUS Explorer and `TargetDossierRunner.jsx` (action: “Design interception”) – non-blocking, RUO
+
+## Execution Order (pragmatic)
+1. Schemas + router + empty service with stubbed responses → API tests
+2. Implement target lock using existing insights → unit/service tests
+3. Wire design (`/api/design/generate_guide_rna`) and safety preview → service tests
+4. Config JSON + weights + thresholds → finalize service logic
+5. Frontend hook + panel → smoke test in VUS & Dossier
+
+## Acceptance (v1)
+- `POST /api/metastasis/intercept` returns validated target and at least 2 ranked candidates with assassin_score and provenance
+- Tests pass (unit/service/API)
+- FE panel renders; RUO and provenance shown
+- All weights/mappings live in JSON config; no hardcoding
+
+---
+
+## APIs Utilized (Now)
+- Orchestrator (new): `POST /api/metastasis/intercept` (this plan)
+- Intervention (existing): `POST /api/metastasis/assess`, `GET /api/metastasis/health`
+- Insights (existing):
+  - `POST /api/insights/predict_gene_essentiality`
+  - `POST /api/insights/predict_protein_functionality_change`
+  - `POST /api/insights/predict_splicing_regulatory`
+  - `POST /api/insights/predict_chromatin_accessibility`
+- Design (existing):
+  - `POST /api/design/generate_guide_rna` (NGG, 20bp windows, heuristics)
+- Safety (existing):
+  - `api/services/safety_service.py` (off-target preview summary)
+
+## Generative API Focus
+- v1 (fast, reliable, demo-ready)
+  - Use only `generate_guide_rna` for candidate forging
+  - Score with efficacy_proxy (heuristics), safety_preview, mission_fit ⇒ `assassin_score`
+- v2 (expanded)
+  - `generate_repair_template` (HDR correction)
+  - `generate_optimized_regulatory_element` (expression control)
+  - `generate_epigenome_optimized_sequence` (context-aware regulatory)
+  - Optional: `generate_therapeutic_protein_coding_sequence` + structure validation (AF3)
+  - Discriminative support: add `/predict_crispr_spacer_efficacy` for on‑target activity (not implemented yet)
+
+## Intervention → Interception Handoff
+- Consume `POST /api/metastasis/assess` outputs:
+  - Step scores + drivers to bias `mission_step` → gene_set selection
+  - Prefer genes present in `mutations` when ranking targets
+- If intervention is unavailable, fall back to config-only mapping (`mission_to_gene_sets`)
+
+## Test Matrix (v1)
+- Unit
+  - Target lock ranking determinism (synthetic insights)
+  - Threshold gating behavior (≥0.6 by default)
+  - Assassin score weighting/clipping
+- Service (with mocks)
+  - Full orchestration happy path (insights → design → safety → ranked list)
+  - Graceful degradation on design/safety timeouts (placeholders, still returns 200)
+  - Options passthrough (`profile`, `enable_cohort_priors` forwarded to provenance)
+- API
+  - Contract shape (request/response validation)
+  - Provenance completeness (run_id, ruleset_version, methods, profile)
+  - Error handling (bad mission_step, empty mutations)
+
+## Provenance Schema (minimum)
+```
+provenance: {
+  run_id: string,
+  ruleset_version: "metastasis_interception_v0.1",
+  methods: ["target_lock_v1","design_v1","safety_preview_v1"],
+  profile: "baseline" | "richer_s" | "fusion",
+  feature_flags?: object
+}
+```
+
+## Non‑Blocking Tech Debt (track separately)
+- Pydantic v2: migrate `request.dict()` → `model_dump()` in legacy routers
+- FastAPI events: move `@app.on_event` to lifespan handlers in backend main app
+- Add real `predict_crispr_spacer_efficacy` endpoint to firm up efficacy proxies (v2)
+- Wire cohort priors (coverage.by_gene) to influence target lock (bounded lifts); default OFF

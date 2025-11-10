@@ -1,0 +1,298 @@
+Badge system – context an agent needs to build the slide (and the badges)
+• Purpose: concise, auditable evidence/context signals attached to each ranked therapy to explain “why” it appears and how strong the backing is. Badges never override scores; they annotate and nudge tiers/confidence within conservative bounds.
+• Where they come from:
+• S (Sequence): calibrated percentiles (seq_pct) and pathway alignment (path_pct) from the efficacy orchestrator.
+• P (Pathway): gene→pathway ruleset and drug MoA mapping.
+• E (Evidence): guideline/RCT lookups, ClinVar deep analysis, optional clinical trial presence by disease.
+• Coverage/context: AlphaMissense coverage for Fusion, calibration snapshots available, RUO mode.
+• How they’re used:
+• Display: to the right of each therapy row; brief label with color/icon.
+• Tier nudges: only specific badges can lift from “insufficient”→“consider” or solidify “supported”; lifts are small, transparent, and logged in provenance.
+• RUO: all outputs are research‑mode; badges never imply clinical recommendation.
+
+
+Badge taxonomy (what each badge means and when it triggers)
+• Guideline
+• Meaning: therapy/class appears in a relevant professional guideline for the disease.
+• Trigger: guideline lookup returns a matching class for the selected disease and setting.
+• Effect: supports “supported” tier when aligned with S/P.
+• RCT
+• Meaning: randomized controlled trial shows benefit for the class/regimen in the disease context.
+• Trigger: evidence client finds ≥1 RCT with positive outcome for the disease+class.
+• Effect: supports “supported” tier when aligned with S/P.
+• FDA-OnLabel-MM (or FDA-OnLabel-<Disease>)
+• Meaning: class is FDA‑approved for the disease (non‑biomarker specific).
+• Trigger: label database confirms on‑label for disease (not biomarker‑specific).
+• Effect: may solidify “supported” for standard‑of‑care entries; does not claim biomarker endorsement.
+
+ClinVar-Strong / ClinVar-Moderate
+• Meaning: patient variant classified Pathogenic/Likely Pathogenic with strong/moderate review.
+• Trigger: ClinVar deep analysis returns classification + review status; applies to variant, not drug.
+• Effect: small confidence bump when S/P align; can help move “insufficient”→“consider”.
+• PathwayAligned
+• Meaning: calibrated pathway percentile (path_pct) passes threshold for the drug’s MoA.
+• Trigger: path_pct ≥ configured threshold (e.g., 0.6–0.7) for the drug’s target pathway(s).
+• Effect: modest lift to confidence; never by itself upgrades to “supported”.
+• ClinicalTrial-MM (or ClinicalTrial-<Disease>)
+• Meaning: disease‑specific clinical trial exists for class/regimen (signal, not label).
+• Trigger: trial registry hit (e.g., NCT id) matching disease+class; optional outcome parsing.
+• Effect: remains “consider” unless guideline/RCT also support.
+
+ FusionEligible
+• Meaning: AlphaMissense coverage exists for variant (missense, GRCh38).
+• Trigger: fusion coverage endpoint returns true for at least one variant.
+• Effect: provenance/context chip; no tier change.
+• CalibrationAvailable
+• Meaning: per‑gene calibration snapshot used for S/P normalization.
+• Trigger: orchestrator indicates calibration active.
+• Effect: provenance/context only.
+• RUO
+• Meaning: research‑mode.
+• Trigger: always on in current profile.
+• Effect: display only; compliance copy.
+
+Trigger rules (concise)
+• PathwayAligned: path_pct ≥ threshold_for_moa (e.g., 0.6) AND seq_pct ≥ seq_floor (e.g., 0.5).
+• Guideline: disease_guideline_map[class] == true.
+• RCT: evidence_db.rct[disease][class].count ≥ 1 and result == positive.
+• FDA-OnLabel-<Disease>: fda_label_db[disease].includes(class).
+• ClinVar-Strong/Moderate: clinvar.classification in {P/LP} with review ∈ {strong/moderate}.
+• ClinicalTrial-<Disease>: trials_db[disease].some(t => t.class == class).
+• FusionEligible: fusion.covered == true.
+• CalibrationAvailable: provenance.calibration == true.
+• RUO: profile.research_mode == true.
+
+Display and styling (for the slide and app)
+• Icons/colors (suggested):
+• Guideline: BookOpen, blue
+• RCT: FlaskConical, teal
+• FDA-OnLabel-<Disease>: ShieldCheck, green
+• ClinVar-Strong/Moderate: Beaker/Database, purple
+• PathwayAligned: Target, indigo
+• ClinicalTrial-<Disease>: Microscope, amber
+• FusionEligible: Layers, cyan
+• CalibrationAvailable: Gauge, slate
+• RUO: AlertTriangle, yellow
+
+ Ordering: show guideline/RCT/FDA first, then ClinVar, PathwayAligned, Trial, then Fusion/Calibration/RUO.
+• Tooltips: short “Meaning + Source + Trigger” for each badge; link to provenance pane.
+Safe lifts (tie to tiers/confidence)
+• Can lift “insufficient”→“consider”: Guideline, RCT, FDA-OnLabel-<Disease> when S/P aligned.
+• Cannot by itself lift to “supported”: PathwayAligned, ClinicalTrial-<Disease>, ClinVar‑Moderate.
+• Confidence nudges (typical): PathwayAligned +0.02–0.04; ClinVar‑Strong +0.02–0.03; RCT/Guideline/FDA +0.03–0.06. All lifts capped; exact values in config.
+
+Provenance and audit
+• Every badge decision should record: badge_id, source, trigger_data, ts, run_id.
+• Surface in provenance.badges[] and per‑drug badges[].
+Minimal config schema (for FE/BE alignment)
+
+type BadgeConfig = {
+  id: string;                 // "guideline", "rct", "fda_onlabel_mm", "clinvar_strong", ...
+  label: string;              // "Guideline", "RCT", "FDA-OnLabel-MM", ...
+  description: string;        // 1-line meaning for tooltip
+  icon: string;               // 'BookOpen' | 'FlaskConical' | ...
+  color: string;              // tailwind color token
+  tierHint?: "supported" | "consider"; // optional tier nudge
+  confidenceNudge?: number;   // 0.0–0.06 typical
+  triggers: {
+    type: "guideline" | "rct" | "fda" | "clinvar" | "pathway" | "trial" | "fusion" | "calibration" | "ruo";
+    params?: Record<string, any>;
+  }[];
+};
+
+export const BADGES: BadgeConfig[] = [
+  {
+    id: "guideline",
+    label: "Guideline",
+    description: "Endorsed in disease-relevant professional guidelines",
+    icon: "BookOpen",
+    color: "text-blue-400",
+    tierHint: "supported",
+    confidenceNudge: 0.05,
+    triggers: [{ type: "guideline", params: { diseaseField: "disease" } }]
+  },
+  {
+    id: "rct",
+    label: "RCT",
+    description: "Randomized controlled trial shows benefit",
+    icon: "FlaskConical",
+    color: "text-teal-400",
+    tierHint: "supported",
+    confidenceNudge: 0.04,
+    triggers: [{ type: "rct" }]
+  },
+  {
+    id: "pathway_aligned",
+    label: "PathwayAligned",
+    description: "Calibrated pathway percentile supports this MoA",
+    icon: "Target",
+    color: "text-indigo-400",
+    confidenceNudge: 0.03,
+    triggers: [{ type: "pathway", params: { pathPctMin: 0.6, seqPctMin: 0.5 } }]
+  },
+  {
+    id: "clinvar_strong",
+    label: "ClinVar-Strong",
+    description: "Variant classified P/LP with strong/moderate review",
+    icon: "Database",
+    color: "text-purple-400",
+    confidenceNudge: 0.03,
+    triggers: [{ type: "clinvar", params: { review: ["strong", "moderate"] } }]
+  },
+  {
+    id: "fda_onlabel_mm",
+    label: "FDA-OnLabel-MM",
+    description: "Class is FDA-approved for Multiple Myeloma (not biomarker-specific)",
+    icon: "ShieldCheck",
+    color: "text-green-400",
+    tierHint: "supported",
+    confidenceNudge: 0.04,
+    triggers: [{ type: "fda", params: { disease: "MM" } }]
+  },
+  {
+    id: "trial_mm",
+    label: "ClinicalTrial-MM",
+    description: "Disease-specific trial exists (investigational signal)",
+    icon: "Microscope",
+    color: "text-amber-400",
+    confidenceNudge: 0.02,
+    triggers: [{ type: "trial", params: { disease: "MM" } }]
+  },
+  {
+    id: "fusion",
+    label: "FusionEligible",
+    description: "AlphaMissense coverage available for variant",
+    icon: "Layers",
+    color: "text-cyan-400",
+    triggers: [{ type: "fusion" }]
+  },
+  {
+    id: "calibration",
+    label: "CalibrationAvailable",
+    description: "Calibrated percentiles applied to S/P signals",
+    icon: "Gauge",
+    color: "text-slate-300",
+    triggers: [{ type: "calibration" }]
+  },
+  {
+    id: "ruo",
+    label: "RUO",
+    description: "Research Use Only",
+    icon: "AlertTriangle",
+    color: "text-yellow-400",
+    triggers: [{ type: "ruo" }]
+  }
+];
+
+
+Slide copy (drop‑in)
+• Badge definitions: “Guideline, RCT, FDA-OnLabel, ClinVar-Strong, PathwayAligned, ClinicalTrial‑MM, FusionEligible, CalibrationAvailable, RUO”
+• What they mean: one‑line “Meaning” + “Source” + “Trigger”
+• How they affect tiers: only Guideline/RCT/FDA can support “supported” when S/P align; others are informative/nudges
+• Guardrails: RUO; no biomarker‑specific FDA claims unless explicitly verified; small capped lifts
+• Provenance: every badge is recorded with run_id and trigger details; audit‑friendly
+Acceptance for the badge slide
+• Shows taxonomy with icon/color and one‑liners
+• Includes trigger logic summary and nudge policy
+• States RUO and no biomarker inference
+• Links badges to tiers/confidence rules
+• Mentions provenance (run_id; trigger details) for auditability
+
+
+How to use badges in MM S/P/E slides (speaker + implementation guide)
+--------------------------------------------------------------------
+• Where to introduce badges in the deck
+• After S (Sequence) and P (Pathway) slides, before therapy ranking.
+• Show a compact “Badge Key” once (icons + one‑liners), then rely on tooltips.
+• Keep RUO visible anywhere badges influence interpretation.
+
+• What to display on therapy ranking slides
+• Each therapy row shows: Class → efficacy_score → confidence → evidence_tier → badges (ordered: Guideline, RCT, FDA‑OnLabel‑<Disease>, ClinVar, PathwayAligned, ClinicalTrial‑<Disease>, FusionEligible, CalibrationAvailable, RUO).
+• Tooltips: “Meaning + Source + Trigger” from the config for every badge.
+• MM BRAF example: BRAF/MEK rows typically include PathwayAligned (and ClinicalTrial‑MM if found); PI row includes FDA‑OnLabel‑MM (and Guideline) as class‑level standard‑of‑care (not BRAF‑specific).
+
+• Copy to use (one‑liners)
+• Guideline: “Endorsed in disease‑relevant professional guidelines.”
+• RCT: “Randomized controlled trial shows benefit in this disease.”
+• FDA‑OnLabel‑<Disease>: “Class is FDA‑approved for this disease (not biomarker‑specific).”
+• ClinVar‑Strong/Moderate: “Variant is P/LP with strong/moderate review.”
+• PathwayAligned: “Calibrated pathway percentile supports this MoA.”
+• ClinicalTrial‑<Disease>: “Disease‑specific trial exists (investigational signal).”
+• FusionEligible: “AlphaMissense coverage available for variant.”
+• CalibrationAvailable: “Per‑gene calibration applied to S/P signals.”
+• RUO: “Research Use Only.”
+
+• Do’s and don’ts (MM BRAF context)
+• Do only show ClinVar‑Strong/Moderate when the patient variant meets that review status.
+• Do not infer biomarker‑specific FDA endorsement; FDA‑OnLabel‑<Disease> is class‑level.
+• Do keep lifts conservative; badges annotate and nudge, never override S/P.
+• Do show RUO on any slide that displays badges.
+
+• Narration (speaker notes)
+• “Badges annotate why a therapy appears and how strong the backing is. Biology (PathwayAligned) pairs with clinical context (Guideline/RCT/FDA). They are auditable and never override calibrated S and P.”
+
+• Provenance placement
+• Footer/sidebar chips: run_id (short), profile (e.g., SPE), fusion_enabled, calibration=true.
+• Add a small provenance drawer: list each badge with source and trigger data (ts, provider, params).
+
+• Recommended slide structure
+1) S/P/E for MM (calibrated seq_pct/path_pct concepts)
+2) Badge Key (icons + one‑liners; link to provenance pane)
+3) BRAF V600E in MM – Ranked Therapies (table + badges)
+4) What moved the needle (callouts tying badges + rationale to top rows)
+5) Provenance (RUO) (run_id, profile, methods; badge triggers list)
+
+• Implementation helpers (slides/app)
+```ts
+// helpers/badges.ts
+import { BADGES } from '@/rules/use-cases/badgeSystem.mdc';
+
+export function resolveBadgeMeta(id: string) {
+  return BADGES.find(b => b.id === id);
+}
+
+export function sortBadges(ids: string[]) {
+  const order = [
+    'guideline','rct','fda_onlabel_mm',
+    'clinvar_strong','clinvar_moderate',
+    'pathway_aligned','trial_mm',
+    'fusion','calibration','ruo'
+  ];
+  return [...ids].sort((a, b) => order.indexOf(a) - order.indexOf(b));
+}
+```
+
+```tsx
+// In TherapyRow component
+const ordered = sortBadges(row.badges || []);
+<div className="flex gap-2">
+  {ordered.map(id => {
+    const meta = resolveBadgeMeta(id);
+    if (!meta) return null;
+    const Icon = Icons[meta.icon as keyof typeof Icons];
+    return (
+      <span key={id} title={`${meta.label} — ${meta.description}`} className="inline-flex items-center gap-1 text-xs">
+        <Icon size={14} className={meta.color} />
+        <span className="text-gray-300">{meta.label}</span>
+      </span>
+    );
+  })}
+  <span className="text-[10px] text-yellow-400 ml-1">RUO</span>
+  {/* Add small RUO chip on slides using badges */}
+</div>
+```
+
+• Binding rules for live demos
+• Populate `drugs[*].badges` from backend; if the FE enriches (e.g., ClinicalTrial‑MM), mark provenance with `source: frontend_enrichment` and include trigger data.
+
+• QA checklist before presenting
+• Every badge shown has a valid trigger in provenance.
+• Badge order consistent; icons readable; tooltips render.
+• RUO label visible; run_id and profile present.
+• No biomarker‑specific FDA claims without explicit verification.
+
+• Acceptance for MM S/P/E slides using badges
+• Badge legend shown once; badges on each therapy row with tooltips.
+• BRAF/MEK rows include PathwayAligned (and ClinicalTrial‑MM when applicable); PI row shows FDA‑OnLabel‑MM (and Guideline if applicable).
+• Provenance drawer lists every badge with source and trigger data.
+• RUO present on all slides using badges.

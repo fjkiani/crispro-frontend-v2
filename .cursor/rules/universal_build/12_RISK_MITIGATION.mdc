@@ -1,0 +1,74 @@
+# 🚨 RISKS & MITIGATIONS
+
+---
+
+## **Risk 1: External API Latency** ⚠️
+
+**Impact**: PubChem, ChEMBL, LLM APIs may be slow/fail  
+**Probability**: High  
+**Severity**: Medium
+
+**Mitigations**:
+- ✅ Retry logic (2x, exponential backoff)
+- ✅ Timeouts (5s for PubChem, 60s for LLM)
+- ✅ Circuit breakers (disable after 3 failures)
+- ✅ Caching (in-memory for aliases, Redis for results)
+- ✅ Fallbacks (original name, neutral S scores)
+
+---
+
+## **Risk 2: GPU Infrastructure** ✅ **RESOLVED**
+
+**Original Concern**: Need A100 GPUs for AF3/DiffDock  
+**Impact**: Would have been High cost, High complexity
+
+**Resolution**:
+- ✅ Boltz already deployed on Modal (H100 GPU)
+- ✅ No additional GPU infrastructure needed
+- ✅ Automated pipeline (no manual workflows)
+
+---
+
+## **Risk 3: Evidence Variability** ⚠️
+
+**Impact**: Literature results vary by query/provider  
+**Probability**: Medium  
+**Severity**: Low
+
+**Mitigations**:
+- ✅ Keep literature OFF by default (deterministic demos)
+- ✅ Allow opt-in via `ENABLE_LITERATURE=True` flag
+- ✅ Cache results for consistency
+- ✅ Multi-provider fallback (PubMed → OpenAlex → S2)
+
+---
+
+## **Risk 4: Evo2 Service Stability** ⚠️
+
+**Impact**: Evo2 endpoints may timeout or return errors  
+**Probability**: Medium  
+**Severity**: High
+
+**Mitigations**:
+- ✅ Force model routing to 1B (`EVO_FORCE_MODEL`)
+- ✅ Neutral S=0.5 fallback when Evo2 unavailable
+- ✅ Retry logic with exponential backoff
+- ✅ Graceful degradation (continue with P/E only)
+
+---
+
+## **Risk 5: TCGA Data Quality** ⚠️
+
+**Impact**: Mutation frequencies may not match literature  
+**Probability**: Low  
+**Severity**: Medium
+
+**Mitigations**:
+- ✅ Agent Jr validating 5 pathway weights against literature
+- ✅ Provenance tracking (source, sample size, date)
+- ✅ Literature-based fallback weights when TCGA unavailable
+- ✅ Confidence annotations when data quality questionable
+
+---
+
+**Overall Risk**: LOW (most risks mitigated, GPU resolved)

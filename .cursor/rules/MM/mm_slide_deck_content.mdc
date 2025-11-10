@@ -1,0 +1,409 @@
+---
+alwaysApply: false
+description: Multiple Myeloma – Slide Deck Content (non‑technical, scientific, RUO). Drop‑in copy + structured JSON for building presentations quickly.
+globs: 
+---
+
+# Multiple Myeloma – In‑Silico Co‑Pilot (RUO)
+
+## Slide 1 – Title
+- Title: Multiple Myeloma Digital Twin
+- Subtitle: In‑silico guidance you can read, trust, and share (research‑mode)
+- Tagline: Plain signals → ranked therapies → trials → Dossier (with run IDs)
+
+## Slide 2 – The Numbers That Matter (Research‑Mode)
+- Comprehensive Variant Coverage (ClinVar):
+  - Coding SNVs: 95.7% AUROC (14,319)
+  - Non‑coding SNVs: 95.8% AUROC (34,761) – state‑of‑the‑art
+  - Coding non‑SNVs: 93.9% AUROC (1,236) – state‑of‑the‑art
+  - Non‑coding non‑SNVs: 91.8% AUROC (3,894)
+  - Total: 53,210 variants with 95.7% AUROC
+- Oncology‑Specific Accuracy:
+  - BRCA1 supervised (coding SNV): 94.0% AUROC, 84.0% AUPRC
+  - BRCA1 supervised (all SNVs): 95.0% AUROC, 86.0% AUPRC
+  - BRCA1 zero‑shot: 89.1% AUROC (up from 79.3%)
+  - BRCA2 zero‑shot: 90.1% AUROC (combined coding/noncoding) | n=3,893 (BRCA1/2)
+- Splice Variant Prediction (SpliceVarDB):
+  - Exonic: 82.6% AUROC (1,181)
+  - Intronic: 82.5% AUROC (3,769)
+  - Total: 4,950 variants
+- Business Impact (target): reduce VUS from 40% → 15% with validated predictions; save ~$2.1M per program via focused wet‑lab.
+- Evo2 Context Window: up to 1M tokens (single‑nucleotide resolution) supporting noncoding/regulatory reasoning.
+- MM Research Signals (observed): Baseline WIWFM (BRAF V600E) confidence ~0.45–0.51; efficacy ~0.17–0.26. Live example with lifts ON & Fusion eligible: confidences up to ~0.79–0.89 (RUO). Fusion used only when AM coverage exists; all runs have run_id/profile.
+
+Note: Metrics are research‑mode; not clinical claims.
+
+### Slide 2 – What these metrics mean for us (MM)
+- Comprehensive Variant Coverage (ClinVar AUROC): Strong discriminative foundation for our insight chips (Function/Regulatory/Essentiality/Chromatin). It reduces false positives, lets us trust S signals, and improves pathway aggregation.
+- BRCA1/2 Oncology Benchmarks: Show that Evo2 embeddings can reach high AUROC on hard, clinical datasets. We leverage this by calibrating sequence disruption (S) and gating evidence tiers conservatively.
+- SpliceVarDB AUROC: Directly supports our Regulatory/Chromatin chips. It means we can flag RNA processing effects credibly and surface them as part of the “why”.
+- Evo2 1M‑token context: Enables long‑range non‑coding/regulatory reasoning; we use bounded windows in practice to avoid dilution while keeping context for regulatory signals.
+- MM research signals (live): Complement the global benchmarks with concrete MM outputs (scores, confidence, badges, toxicity, trials) tied to run_id for auditability.
+## Slide 2b – Discriminative AI (Validated Accuracy)
+- Comprehensive Variant Coverage (ClinVar, n=53,210):
+  - Coding SNVs: 95.7% AUROC (14,319)
+  - Non‑coding SNVs: 95.8% AUROC (34,761) – state‑of‑the‑art
+  - Coding non‑SNVs: 93.9% AUROC (1,236) – state‑of‑the‑art
+  - Non‑coding non‑SNVs: 91.8% AUROC (3,894)
+- Oncology Benchmarks (BRCA1/2, n=3,893):
+  - BRCA1 supervised (coding SNV): 94.0% AUROC, 84.0% AUPRC
+  - BRCA1 supervised (all SNVs): 95.0% AUROC, 86.0% AUPRC
+  - BRCA1 zero‑shot: 89.1% AUROC (up from 79.3%)
+  - BRCA2 zero‑shot: 90.1% AUROC (combined coding/noncoding)
+- Business Impact: Reduce VUS from ~40% → ~15% with validated predictions; ≈$2.1M saved/program by focusing wet‑lab.
+
+## Slide 2c – Splice Variant Prediction (Functional Impact)
+- SpliceVarDB (n=4,950):
+  - Exonic splice variants: 82.6% AUROC (1,181)
+  - Intronic splice variants: 82.5% AUROC (3,769)
+- Why it matters: credible Regulatory/Access chips; better triage of variants that alter RNA processing.
+
+## Slide 2d – Generative AI (High‑Fidelity Genome Generation)
+- Mitochondrial genomes: Correct feature counts; diverse homology; AF3 multimers fold plausibly.
+- Minimal prokaryote: ~70% Pfam‑hit rate vs ~18% prior models (large lift in functional content).
+- Yeast chromosome: Eukaryote‑like genes, introns, tRNAs, promoters.
+- Context window: up to 1M tokens (single‑nucleotide resolution) for long‑range design prompts.
+
+## Slide 2e – Predictable Epigenomic Design (Control & Scaling)
+- Guided epigenomic design: beam‑searched proposals with configurable quality scaling.
+- Inference‑time scaling: predictable, log‑linear relationship between beam width and AUROC.
+- Precise control: open/closed chromatin patterns with validated quality metrics.
+- Business Impact: predictable quality scaling and transparent methodology for precision design.
+
+## Slide 2f – Oncology Extensions (Melanoma and Beyond)
+- Melanoma (BRAF/NRAS/KRAS): same S/P/E + chips yield stable MAPK pathway alignment; WIWFM confidence typically ~0.45–0.55; tier promotions when literature/priors present.
+- Solid tumors with DDR/TP53 burden: pathway view highlights DDR; therapy fit surfaces aligned classes; cohort overlays add +0.05–0.12 confidence when available.
+- Trials: shortlist compression similar to MM (50+ → ~5–12) with clear Likely/Potential/Unlikely labels and “why.”
+- RUO: transparent provenance and sources across diseases.
+
+## Slide 2g – Live Outputs (MM, RUO)
+- Purpose: Ground the story with real, recent outputs (subset shown). Use these as slide callouts.
+- How to read (simple):
+  - Efficacy table: efficacy_score (fit), confidence (certainty), evidence_tier (strength), badges (why).
+  - Toxicity chip: a caution with helper text, confidence, and sources; RUO.
+  - Cohort/Trials: context that nudges confidence (with provenance).
+
+### Efficacy (subset)
+```json
+{
+  "drugs": [
+    {"name":"Proteasome inhibitor","efficacy_score":0.53,"confidence":0.89,"evidence_tier":"supported","badges":["FDA-OnLabel","PathwayAligned"]},
+    {"name":"BRAF inhibitor","efficacy_score":0.75,"confidence":0.79,"evidence_tier":"consider","badges":["PathwayAligned"]},
+    {"name":"MEK inhibitor","efficacy_score":0.75,"confidence":0.79,"evidence_tier":"consider","badges":["PathwayAligned"]}
+  ],
+  "provenance": {
+    "run_id": "a4370e86-6bd0-4e9f-9ddd-2eaaa427b9a2",
+    "profile": "baseline",
+    "sequence_scoring": {"mode": "fusion_am_local"}
+  }
+}
+```
+
+### Toxicity Risk (germline hint)
+```json
+{
+  "chip":"Toxicity Risk",
+  "helper":"Germline repair context suggests cautious planning under DNA‑damaging exposure (RUO).",
+  "confidence":0.55,
+  "regimen":"platinum",
+  "sources":[{"label":"ClinVar (coordinates)","url":"https://www.ncbi.nlm.nih.gov/clinvar/?term=17%3A43045729%20A%3ET"}],
+  "provenance":{"run_id":"cfe27210-e0e5-47c7-903e-e554dc206c87","profile":"baseline","method":"toxicity_hint_v1"}
+}
+```
+
+### Cohort signals (stub today; lift-ready)
+```json
+{
+  "cohort_signals": {
+    "cohorts_analyzed": [],
+    "coverage_by_gene": {"BRAF": {"tcga_coverage": 0.0, "response_rate": 0.0, "sample_count": 0}},
+    "provenance": {"method": "cohort_overlay_stub_v1"}
+  }
+}
+```
+
+### Trials summary (from provenance)
+```json
+{
+  "trials": {
+    "shortlist_compression":"50+ → 7",
+    "categories": {"likely": 3, "potential": 4, "unlikely": 0}
+  }
+}
+```
+
+### Fusion coverage and ClinVar prior
+```json
+{"fusion_coverage": {"coverage": true, "reason": "GRCh38 missense variant"}}
+```
+```json
+{"clinvar": {"classification": "pathogenic", "url": "https://www.ncbi.nlm.nih.gov/clinvar/?term=7%3A140453136%20T%3EA"}}
+```
+
+Notes (RUO): Numbers vary with inputs and toggles; cite run_id on slides. Cohort overlays are stubbed here; literature was not contributing in this run.
+
+
+### Semantic alignment annotations (stakeholder → in‑silico outputs)
+```json
+{
+  "alignment": {
+    "safety": [
+      {"theySay": "Cytotoxicity", "weSay": "Computational cytotoxicity prediction", "source": "toxicity_hint (/api/toxicity/hint)", "status": "live"},
+      {"theySay": "Off-target editing", "weSay": "Genome-wide off-target profiling", "source": "CRISPR Readiness (demo)", "status": "demo"}
+    ],
+    "efficacy": [
+      {"theySay": "Target engagement", "weSay": "Computationally validated target binding", "source": "S/P fit (Functionality + PathwayAligned + sequence disruption)", "status": "partial"},
+      {"theySay": "Biomarker response", "weSay": "AI-predicted biomarker modulation", "source": "Regulatory/Chromatin + pathway impact", "status": "partial"}
+    ],
+    "moa": [
+      {"theySay": "Target validation", "weSay": "Computational target validation", "source": "Essentiality + truncation/frameshift gate", "status": "live"},
+      {"theySay": "Pathway modulation", "weSay": "AI-guided pathway engineering", "source": "Pathway percentile + PathwayAligned", "status": "live"}
+    ],
+    "trials_regulatory": [
+      {"theySay": "Patient stratification", "weSay": "AI-driven patient stratification", "source": "ranked therapies + confidence + cohort_signals", "status": "partial"},
+      {"theySay": "IND", "weSay": "AI-enhanced IND package", "source": "Dossier export + provenance", "status": "partial"}
+    ]
+  }
+}
+```
+
+
+## Slide 2h – Semantic Alignment (Stakeholder → In‑Silico Outputs)
+- Safety
+  - Off‑target effects → Genome‑wide off‑target profiling (demo)
+  - Cytotoxicity → Computational cytotoxicity prediction (Toxicity Risk chip)
+  - PK/PD/DLT/Multi‑organ toxicity → Roadmap (surface as chips with provenance)
+- Efficacy
+  - Target engagement → Computationally validated binding (S/P fit: Functionality + PathwayAligned + sequence disruption)
+  - Biomarker response → AI‑predicted biomarker modulation (Regulatory/Chromatin + pathway impact)
+  - Response/PFS/OS/ORR → Predictive stratification now; endpoints roadmap
+- MOA
+  - Target validation → Computational target validation (Essentiality + Triumvirate gate)
+  - Pathway modulation → AI‑guided pathway engineering (Pathway percentile + PathwayAligned)
+- Trials & Regulatory
+  - Patient stratification → Ranked therapies + confidence + cohort_signals; trials counts in provenance
+  - IND package → Dossier export + provenance (RUO); trial design agent roadmap
+
+
+### Slide 2 – Explainer (what this means)
+- Comprehensive Variant Coverage: These AUROC scores show strong foundations across coding and non‑coding changes. High AUROC means we separate real effects from noise reliably, improving every downstream module (chips, pathway, therapy fit).
+- BRCA1/2 Accuracy: On hard, real‑world datasets, performance is at or near state‑of‑the‑art. This signals dependable genetics underpinnings for MM flows.
+- Splice Prediction: ~82.5–82.6% AUROC means we can flag variants that alter RNA processing. In MM, this supports the Regulatory/Access chips.
+- Business Impact: Reducing unknowns (VUS) from ~40% to ~15% means fewer stalled cases and fewer exploratory experiments—saving time and cost.
+- Evo2 Context: A 1M‑token window enables broader genomic context for non‑coding reasoning—important for Regulatory and Chromatin.
+- MM Signals: Confidence ~0.45–0.51 sets expectations: honest, research‑mode certainty with transparent provenance (run IDs, profiles).
+
+## Slide 3 – What We Built for MM (Live Today)
+- Variant Insight (VUS): four chips (Function, Regulatory, Essentiality, Chromatin) in plain language.
+- Therapy Fit (Chemo): ranked classes with confidence, short “why,” and citations.
+- Pathway View: top 3 MM pathways (e.g., MAPK, TP53/DDR, Proteostasis/CRBN) with a one‑line “why.”
+- Toxicity Risk (Germline): simple caution chip to plan conservatively.
+- CRISPR Readiness (demo): feasibility, access, off‑target preview, delivery notes (demo labels visible).
+- Clinical Trials Co‑Pilot: fast shortlist with Likely / Potential / Unlikely and a shareable one‑pager.
+- Knowledge Base + Evidence: helper text, coverage chips, citations, and badges with provenance.
+
+### Slide 3 – Explainer
+- Four Chips: Each chip turns complex methods into one clear signal (Function, Regulatory, Essentiality, Chromatin) with plain labels and helper text.
+- Therapy Fit: Ranked drug classes aligned to biology (S/P/E) with confidence, tier, badges, and short “why” bullets.
+- Pathway View: Top 3 pathways with one‑line explanations connect biology to therapy choices.
+- Toxicity Risk: A small germline‑aware caution helps plan conservatively.
+- Trials: A shortlist labeled Likely/Potential/Unlikely with a short “why,” ready to share.
+- Knowledge/Evidence: Coverage chips, citations, and provenance make every page traceable.
+## Slide 4 – Evidence & Confidence (How to Read It)
+- Confidence (0–1): our certainty in the current result.
+- Evidence Tier: Supported / Consider / Insufficient (research‑mode labels).
+- Badges: Guideline / RCT / ClinVar‑Strong / Pathway‑Aligned (when available).
+- Provenance: run_id and profile (Baseline / Richer S / Fusion); inputs snapshot.
+
+### Slide 4 – Explainer
+- Confidence is a 0–1 certainty hint; Evidence Tier converts raw signals into a simple label (Supported/Consider/Insufficient).
+- Badges quickly communicate strength sources (Guideline, RCT, ClinVar‑Strong, Pathway‑Aligned).
+- Provenance (run_id, profile) ensures results are reproducible and auditable.
+## Slide 5 – From VUS to Actionable Biology
+- Paste MM variants → see four chips with thresholds and plain helpers.
+- Add Pathway View → top 3 pathways + one‑line “why.”
+- Export a one‑pager for the tumor board with citations and run ID.
+
+### Slide 5 – Explainer
+- Instant understanding: Chips turn unknowns into simple signals with thresholds and helper text.
+- Pathway context: Top pathways explain the story behind the biology.
+- One‑pager: Export lets teams share a clean, auditable summary quickly.
+## Slide 6 – Will‑It‑Work‑For‑Me (Therapy Fit)
+- Ranked drug classes (PI, IMiD, Anti‑CD38, MAPK‑aligned agents when RAS/RAF).
+- Confidence and rationale shown; citations attached when literature is on.
+- Fusion profile used only when AM coverage exists; labeled.
+
+### Slide 6 – Explainer
+- Ranked classes: The table is explainable—score, confidence, tier, badges, and rationale are visible.
+- Fusion eligibility: When AlphaMissense coverage exists, Fusion is enabled and clearly labeled; otherwise Baseline remains deterministic.
+- MAPK‑aligned: When RAS/RAF appears, MAPK‑aligned agents are surfaced with rationale.
+## Slide 7 – Two‑Hit Hypothesis (MM)
+- Hit 1 (Driver): MAPK activation (BRAF / NRAS / KRAS) → growth advantage.
+- Hit 2 (Cooperation): TP53/17p, MYC, or proteostasis dependency → survival under stress.
+- Microenvironment: marrow niche supports residual/resistant clones.
+- Implication: align therapy to driver pathway; anticipate resistance on PI/CRBN axis; consider combinations.
+
+### Slide 7 – Explainer
+- Driver + cooperation: MM often shows a signaling driver (e.g., MAPK) plus cooperating alterations (e.g., TP53/17p, MYC, proteostasis). We make that pattern visible.
+- Clinical implication: Align therapy to the driver and anticipate resistance/sensitivity from the second hit; consider combinations.
+## Slide 8 – Clinical Trials Co‑Pilot
+- Shortlist in minutes with Likely / Potential / Unlikely labels.
+- A short “why” per trial; one‑pager export to brief patients/boards.
+- Fresh results when connected; reliable snapshot otherwise.
+
+### Slide 8 – Explainer
+- Minutes to shortlist: Smart search, synonyms/biomarkers, and structured eligibility cut trial search from 50+ to ~5–12 items with a clear “why.”
+- Shareable: One‑pager per shortlist accelerates patient/board discussions.
+## Slide 9 – Dossier (Blueprint for the Next Step)
+- Includes: variants, chips, ranked therapies, pathway view, toxicity hint, trials, citations, confidence, run IDs.
+- Purpose: wet‑lab and clinical teams start from a clear, auditable plan.
+- RUO: research‑mode labels; no clinical claims.
+
+### Slide 9 – Explainer
+- Everything in one place: Variants → chips → therapy ranking → trials → citations → confidence → provenance.
+- Purpose: A clear, research‑mode starting point for wet‑lab and clinical next steps.
+## Slide 10 – What’s Next (Roadmap)
+- Imaging‑aware radiation view; regimen safety & interactions (chemo).
+- Deeper off‑target and HDR scoring for CRISPR.
+- Trial connectors and guideline cues; cohort overlays to lift confidence.
+
+### Slide 10 – Explainer
+- Imaging + regimen safety: Add radiation and chemotherapy regimen‑aware checks to lift confidence and safety.
+- CRISPR depth: Deeper off‑target and HDR scoring improve design readiness.
+- Trials + guidelines: More connectors and cues make decisions faster and more consistent.
+
+## Metrics Glossary (for speakers and reviewers)
+- AUROC: Measures how well we separate true effects from false ones (1.0 is perfect). High AUROC in ClinVar benchmarks indicates robust signal.
+- AUPRC: Focused on positive cases—useful when positives are rare. High AUPRC in BRCA1 shows strong focus on true pathogenic variants.
+- VUS: Variant of Uncertain Significance. Our goal is to turn unknowns into simple, explainable signals.
+- Profiles: Baseline (deterministic), Richer S (bounded multi/exon), Fusion (AlphaMissense when eligible).
+---
+
+## JSON – Slide Data (drop‑in)
+```json
+{
+  "slidesData": [
+    {
+      "title": "Multiple Myeloma Digital Twin",
+      "subtitle": "In‑silico guidance you can read, trust, and share (RUO)",
+      "type": "title"
+    },
+    {
+      "title": "The Numbers That Matter (Live, RUO)",
+      "bullets": [
+        "MM live (BRAF V600E): PI confidence 0.89 (supported); MAPK 0.79 (consider)",
+        "Fusion coverage: true (GRCh38 missense); Fusion mode used when eligible",
+        "Toxicity hint (platinum): confidence 0.55 with ClinVar source (RUO)",
+        "Trials summary: 50+ → 7 (likely:3, potential:4, unlikely:0)",
+        "Provenance: run_id present; cite on slides"
+      ],
+      "footnote": "Research‑mode; varies with inputs and toggles; cite run_id"
+    },
+    {
+      "title": "Foundations & Outputs (RUO)",
+      "bullets": [
+        "Live JSON: drugs (score, confidence, tier, badges, rationale) + provenance",
+        "Four insight chips: Function, Regulatory, Essentiality, Chromatin",
+        "Pathway story: percentile + PathwayAligned badge (rationale)",
+        "Toxicity Risk chip: helper + confidence + sources",
+        "Trials summary in provenance (counts + compression)"
+      ]
+    },
+    {
+      "title": "Live Outputs (examples)",
+      "bullets": [
+        "PI: efficacy 0.53, confidence 0.89, badges [FDA‑OnLabel, PathwayAligned]",
+        "BRAF/MEK: efficacy 0.75, confidence 0.79, badge [PathwayAligned]",
+        "Fusion coverage: true; ClinVar prior: pathogenic",
+        "Cohort signals: stub today; lift‑ready",
+        "All items carry run_id (provenance)"
+      ]
+    },
+    {
+      "title": "Semantic Alignment (Stakeholder → In‑Silico)",
+      "bullets": [
+        "Cytotoxicity → Computational cytotoxicity prediction (toxicity chip)",
+        "Target engagement → Computationally validated binding (S/P fit)",
+        "Pathway modulation → AI‑guided pathway engineering (PathwayAligned)",
+        "Patient stratification → Ranked therapies + confidence + cohorts",
+        "IND package → Dossier export with provenance (RUO)"
+      ]
+    },
+    
+    {
+      "title": "Oncology Extensions (Melanoma & Others)",
+      "bullets": [
+        "Melanoma MAPK alignment stable; WIWFM confidence ~0.45–0.55",
+        "DDR/TP53 burden: pathway highlights DDR; class hints align",
+        "Trials: 50+ → ~5–12 with clear labels and ‘why’",
+        "RUO: provenance and sources across diseases"
+      ]
+    },
+    {
+      "title": "What We Built for MM",
+      "bullets": [
+        "VUS chips; Pathway View; Toxicity (germline) chip",
+        "Therapy Fit: ranked PI / IMiD / Anti‑CD38 / MAPK agents when signal",
+        "CRISPR readiness (demo); Trials shortlist + one‑pager",
+        "Knowledge Base + Evidence: helper text, coverage, citations"
+      ]
+    },
+    {
+      "title": "Evidence & Confidence",
+      "bullets": [
+        "Confidence (0–1); Evidence Tier (Supported/Consider/Insufficient)",
+        "Badges (Guideline/RCT/ClinVar‑Strong/Pathway‑Aligned)",
+        "Provenance: run_id, profile (Baseline/Richer/Fusion)"
+      ]
+    },
+    {
+      "title": "VUS → Actionable Biology",
+      "bullets": [
+        "Four chips with plain helpers and thresholds",
+        "Top pathways + one‑line ‘why’",
+        "Export one‑pager with citations and run ID"
+      ]
+    },
+    {
+      "title": "Will‑It‑Work‑For‑Me",
+      "bullets": [
+        "Ranked drug classes with confidence and rationale",
+        "Fusion mode when AM coverage exists (labeled)",
+        "MAPK‑aligned agents when RAS/RAF signal"
+      ]
+    },
+    {
+      "title": "Two‑Hit Hypothesis (MM)",
+      "bullets": [
+        "Hit 1: MAPK driver (BRAF/NRAS/KRAS)",
+        "Hit 2: TP53/17p, MYC, proteostasis dependency",
+        "Niche: marrow support → persistence/resistance"
+      ]
+    },
+    {
+      "title": "Clinical Trials Co‑Pilot",
+      "bullets": [
+        "Shortlist: Likely / Potential / Unlikely with a short ‘why’",
+        "One‑pager export; refresh when connected"
+      ]
+    },
+    {
+      "title": "Dossier (Blueprint)",
+      "bullets": [
+        "Variants, chips, therapies, trials, citations, confidence",
+        "Provenance on every page (run IDs, profiles)",
+        "RUO: research‑mode labels"
+      ]
+    },
+    {
+      "title": "What’s Next",
+      "bullets": [
+        "Imaging‑aware radiation; regimen safety & interactions",
+        "Deeper CRISPR off‑target/HDR; trial/guideline cues",
+        "Cohort overlays to lift confidence"
+      ]
+    }
+  ]
+}
+```
+

@@ -1,0 +1,168 @@
+---
+alwaysApply: false
+description: Therapy Fit – Execution Doctrine (Aug 2025). Plain-language website copy + execution plan for in‑silico drug ranking using S/P/E + insights (research‑mode).
+globs: 
+---
+
+
+export const coPilotDetailsData: Record<string, CoPilotDetailContent> = {
+  "therapy-fit": {
+    slug: "therapy-fit",
+    pageTitle: "Therapy Fit: In‑Silico Drug Ranking",
+    heroSubtitle: "See which drug classes may fit a patient’s genetics—before treatment. Clear ranking, confidence, and sources (research‑mode).",
+    vision: "Turn genetics into a plain, ranked therapy view you can act on: top classes, a short ‘why,’ confidence, and a shareable, source‑backed one‑pager.",
+
+    // Website value props (plain)
+    valueProps: [
+      {
+        audience: 'For Medical Oncologists',
+        icon: 'ListChecks',
+        points: [
+          'A quick, explainable ranked list of drug classes.',
+          'Short “why,” confidence, and citations (RUO).',
+          'A one‑page summary you can share with the team.'
+        ]
+      },
+      {
+        audience: 'For Pharmacists',
+        icon: 'Beaker',
+        points: [
+          'Simple biology signals alongside standard criteria.',
+          'Consistent outputs with run IDs and sources.',
+          'Roadmap: interaction/toxicity enrichment.'
+        ]
+      }
+    ],
+
+    buildsOn: "What this runs on (today vs roadmap)",
+    buildsOnStackPoints: [
+      "**Today:** S/P/E fusion (Sequence, Pathway, Evidence) with insight chips.",
+      "**Optional today:** Cohort extracts/benchmarks to add context.",
+      "**Roadmap:** Regimen safety/interaction checks; guideline/on‑label cues."
+    ],
+
+    genomicInsightsOverview: "Our live stack (research‑mode) produces a compact ranked therapy table: class, score, confidence, short rationale, and citations—plus run ID and profile.",
+    coreProblemIntro: "Picking a therapy is slow when the biology is unclear. We make the starting point clear and shareable.",
+    coreProblemPoints: [
+      "Too many options, unclear fit.",
+      "Difficult to explain ‘why’ without sources.",
+      "Hard to create a one‑pager everyone can trust."
+    ],
+
+    genomicUseCasesGrid: [
+      { label: "Rank MoA‑aligned classes", iconName: "ListChecks", color: "text-blue-400" },
+      { label: "Short ‘why’ + confidence", iconName: "MessageSquare", color: "text-green-400" },
+      { label: "Citations & badges (RUO)", iconName: "ShieldCheck", color: "text-purple-400" },
+      { label: "Cohort context (optional)", iconName: "Users", color: "text-orange-400" }
+    ],
+
+    keyCapabilities: [
+      {
+        title: "Biology‑Aware Drug Ranking (live)",
+        technical: "We fuse Sequence (Evo‑based disruption), Pathway (gene→pathway burden), and Evidence (ClinVar + literature when enabled) to rank drug classes. Output includes confidence, evidence tier, badges, and rationale.",
+        scientific: "Signals translate variant biology into therapy fit with auditable provenance (run ID, profile).",
+        business: `
+- **Faster decisions:** A clear starting point backed by sources.
+- **Explainable:** Short rationale and confidence for tumor boards.
+`,
+        genomicUseCasesParagraph: "Today: \n1. **Rank MoA‑aligned classes** from S/P/E with insight chips. \n2. **Explainers**: bullets and citations show ‘why’. \n3. **Confidence** reflects evidence and supportive insights (RUO)."
+      },
+      {
+        title: "Biomarkers & Cohort Context (live; optional)",
+        technical: "Genomics‑first scoring with chips and priors; Cohort Lab adds extracts/benchmarks to ground findings.",
+        scientific: "Context strengthens confidence when present; still RUO.",
+        business: `
+- **Research acceleration:** Better shortlists with reproducible context.
+`,
+        genomicUseCasesParagraph: "Today: \n1. **Chemo class hypothesis** informed by pathway biology. \n2. **Cohort hint** when extracted data aligns."
+      },
+      {
+        title: "Regimen Safety & Interactions (roadmap)",
+        technical: "Planned: regimen‑aware interaction/toxicity checks layered on top of baseline guidance.",
+        scientific: "Future: incorporate pharmacology and prior toxicity to refine fit.",
+        business: `
+- **Reduce rework:** Early safety signals in the same view.
+`,
+        genomicUseCasesParagraph: "Roadmap: enrich the summary with interaction/toxicity checks per regimen."
+      },
+      {
+        title: "Knowledge & Provenance (live, expanding)",
+        technical: "Co‑Pilot + Evidence provide citations/badges; every table shows run ID and profile; export is available.",
+        scientific: "Audit‑ready outputs for internal review and reproducibility.",
+        business: `
+- **Trust & reuse:** Shareable, repeatable summaries.
+`,
+        genomicUseCasesParagraph: "Today: \n1. **Provenance on every result**; one‑click export to JSON/CSV."
+      }
+    ],
+
+    valuePropositionSections: [
+      {
+        audience: "For the Medical Oncologist",
+        points: [
+          "A quick, plain ranked list of drug classes to consider.",
+          "Short ‘why’ with confidence and citations (RUO).",
+          "A one‑page summary you can share and discuss."
+        ]
+      },
+      {
+        audience: "For the Institution",
+        points: [
+          "Faster, more consistent planning with provenance.",
+          "Reusable, auditable outputs for QA and research.",
+          "A safe path to deeper safety/interaction checks when ready."
+        ]
+      }
+    ],
+
+    conclusion: "In‑silico therapy fit that’s simple to read and easy to share. Plain ranking. Clear confidence. Sources included. Research‑mode by design."
+  },
+};
+
+
+# Therapy Fit – Execution Doctrine (Aug 2025)
+
+This rule describes how to deliver drug ranking now using our existing Oncology Co‑Pilot stack with transparent provenance.
+
+## What we can deliver today (research‑grade)
+- Per‑case therapy ranking using S/P/E + insights:
+  - **Sequence (S):** Evo‑based disruption magnitudes + gene calibration (hotspot aware).
+  - **Pathway (P):** Gene→pathway burden aligned to drug MoA.
+  - **Evidence (E):** ClinVar prior + literature (when enabled) with badges + tier.
+  - **Insights:** Functionality, Chromatin (heuristic unless Enformer/Borzoi configured), Essentiality, Regulatory.
+- Output: `drugs[]` with `efficacy_score`, `confidence`, `evidence_tier`, `badges`, `insights`, `rationale`, `citations`, `provenance`.
+
+## Where the code lives (reused components)
+- Efficacy orchestrator: `[efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py)`
+- Insights router: `[insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py)`
+- Evidence + ClinVar proxy: `[evidence.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evidence.py)`
+
+## How to run therapy fit now
+Use `/api/efficacy/predict` and display `drugs[]` as a ranked therapy view with confidence, rationale, citations, and provenance.
+
+Example:
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/efficacy/predict \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "mutations":[{"gene":"BRAF","hgvs_p":"V600E","chrom":"7","pos":140453136,"ref":"T","alt":"A"}],
+    "disease":"multiple myeloma",
+    "options":{"adaptive":true,"ensemble":true}
+  }'
+```
+
+## Methodology (S/P/E + mapping)
+- **S:** Multi/exon absolute magnitudes; hotspot‑aware functionality lift.
+- **P:** MoA‑aligned pathway weighting per class.
+- **E:** Disease/MoA‑scoped literature and ClinVar prior; badges and tier for transparency.
+- **Lifts:** modest when insights exceed thresholds.
+
+## Frontend integration (no schema change required)
+- Render per‑drug table with score, confidence, tier, badges, insights chips, rationale, citations, provenance.
+- Provide export (JSON/CSV) and compact “What this means today” footer (RUO).
+
+## Roadmap (backwards compatible)
+1) Guidance endpoint `POST /api/guidance/chemo` → focused object with on‑label/guideline gates.
+2) Regimen safety & interactions: enrich table with interaction/toxicity checks.
+3) Evidence hardening: provider keys + caching; curated guideline/label stubs to lift tiers.
+

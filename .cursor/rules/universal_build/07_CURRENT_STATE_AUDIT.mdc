@@ -1,0 +1,85 @@
+# 📊 CURRENT STATE - WHAT WE HAVE NOW
+
+**Date**: November 5, 2025
+
+---
+
+## ✅ **PHASE I: HUNT** (90% Complete)
+
+**Files**:
+- `api/services/dynamic_food_extraction.py` (330 lines)
+- `api/services/enhanced_evidence_service.py` (1,200+ lines)
+- `api/services/food_spe_integration.py` (400 lines)
+- `api/routers/hypothesis_validator.py` (150 lines)
+- `api/resources/universal_disease_pathway_database.json` (1,669 lines)
+
+**Capabilities**:
+- ✅ ChEMBL (2.1M compounds) + PubChem (110M compounds)
+- ✅ LLM extraction for novel compounds
+- ✅ S/P/E scoring with SAE features
+- ✅ Treatment line intelligence
+- ✅ 50+ diseases in database
+- ✅ 9/10 cancers with real TCGA weights
+
+**Limitations**:
+- ⚠️ ~30 hardcoded compound aliases
+- ⚠️ Neutral S=0.5 fallback (no Evo2 for compounds yet)
+- ⚠️ No calibration system
+- ⚠️ 1 cancer (MM) missing TCGA data
+
+---
+
+## ⚠️ **PHASE II: FORGE** (30% Complete)
+
+**Files**:
+- `api/routers/evo.py` (500 lines)
+- `api/routers/design.py` (300 lines)
+- `src/services/evo_service/main.py` (Modal, 1B only)
+
+**Capabilities**:
+- ✅ `/api/evo/generate` endpoint
+- ✅ Viral content blocklist
+- ✅ `/api/design/generate_guide_rna`
+- ✅ PAM windowing, GC scoring
+
+**Limitations**:
+- ❌ Therapeutic protein generation disabled
+- ❌ No context-aware prompting
+- ❌ No iterative optimization
+- ❌ No binding site targeting
+
+---
+
+## ✅ **PHASE III: GAUNTLET** (Boltz Ready)
+
+**Files**:
+- `src/services/boltz_service/main.py` (Modal, deployed)
+
+**Capabilities**:
+- ✅ Boltz `/v1/predict_structure` (AUTOMATED)
+- ✅ Fast-mode predictions (2-5 min)
+- ✅ H100 GPU on Modal
+
+**Limitations**:
+- ❌ Not integrated with Food Validator yet
+- ❌ No validation pipeline service
+
+---
+
+## ✅ **PHASE IV: LETHALITY** (Boltz Ready)
+
+**Files**:
+- `src/services/boltz_service/main.py` (Modal, deployed)
+
+**Capabilities**:
+- ✅ Boltz `/v1/predict_interaction` (AUTOMATED)
+- ✅ SMILES handling
+- ✅ iPTM scoring
+
+**Limitations**:
+- ❌ Not integrated with Food Validator yet
+- ❌ No lethality assessor service
+
+---
+
+**GAP**: Integration and feature completeness

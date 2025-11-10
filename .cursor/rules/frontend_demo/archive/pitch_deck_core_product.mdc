@@ -1,0 +1,163 @@
+---
+alwaysApply: false
+description: Core Product Pitch Deck – slide outline, messages, assets, demo plan, endpoint map
+---
+
+# Core Product Pitch Deck – Doctrine & Build Guide
+
+Purpose: Provide a slide-by-slide outline for a core product pitch deck, with the exact messages, proof points, visuals, and live-demo hooks. Another agent should be able to assemble the deck and run the live demo using this rule.
+
+RUO posture: Research-use only. No clinical claims. Provenance and disclaimers must be visible.
+
+## Audience and Goal
+- Audience: Investors, strategic partners, biotech R&D leaders
+- Goal: Show a credible, demo-complete in‑silico therapeutic design and validation platform with clear value, traction path, and moats.
+
+## Narrative Arc (30–35 min)
+1) The Problem → 2) The Solution → 3) How It Works → 4) Live Demo → 5) Evidence & Metrics → 6) Business & Moats → 7) Roadmap & Ask
+
+## Slide Outline (with assets & demo hooks)
+
+1. Title – CrisPRO.ai: In‑Silico Therapeutic Co‑Pilot (Research‑mode)
+- Message: Predict, generate, and validate therapeutic hypotheses in software.
+- Visual: Product hero screenshot (Myeloma Digital Twin). RUO disclaimer.
+- Hook: “We’ll run a live demo in a few slides.”
+
+2. The Problem – Slow, expensive, low‑signal validation
+- Message: Drug response hypotheses take months; data is fragmented; results are brittle.
+- Proof: Cite high-level industry stats (time/cost), absence of cohort context in tooling.
+- Visual: Before/after timeline.
+
+3. Our Solution – In‑Silico Co‑Pilot
+- Message: One orchestrated flow from variant → insight → efficacy → cohort support.
+- Visual: S/P/E diagram + Orchestrator block.
+- Hook: “We turn DNA into clear guidance with audit trails.”
+
+4. How It Works (System)
+- Message: S/P/E fusion with Evo2 and AlphaMissense, session and caching, provenance.
+- Visual: Architecture map: FE pages ↔ FastAPI ↔ Evo/Fusion ↔ Redis/Supabase.
+- Links: [insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py), [efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py), [fusion.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/fusion.py)
+
+5. Live Demo Setup – What you’ll see
+- Message: 3-part demo – MM WIWFM → VUS Explorer → Dossier + Cohort Lab.
+- Technical: Local backend at `http://127.0.0.1:8000`, `VITE_API_ROOT` configured, Redis optional.
+- Endpoints: `/api/efficacy/predict`, `/api/insights/*`, `/api/datasets/extract_and_benchmark`.
+
+6. Demo Part 1 – “Will It Work For Me?” (Myeloma)
+- Message: Ranked therapies with score, confidence, evidence tier, insights chips.
+- Visual: Live UI with badges and rationale.
+- Hook: Confidence reflects evidence + sequence disruption; provenance visible.
+- Endpoint: `POST /api/efficacy/predict`
+
+7. Demo Part 2 – VUS Explorer
+- Message: Unknown variants → four clear signals (Functionality, Regulatory, Essentiality, Chromatin).
+- Visual: InsightChips + CoverageChips; Fusion eligibility chip (AM coverage).
+- Endpoint: `/api/insights/predict_*`, `/api/fusion/coverage`, `/api/evidence/clinvar`
+
+8. Demo Part 3 – Target Dossier
+- Message: Simple, auditable dossier: insights, rationale, provenance, cohort context.
+- Visual: Dossier with CohortSummary.
+- Endpoint: `/api/datasets/extract_and_benchmark` (coverage-by-gene)
+
+9. Cohort Lab – Extract, Label, Benchmark
+- Message: In-product cohort creation and HRD AUPRC benchmarks.
+- Visual: CohortLab panel + metrics card.
+- Scripts/Endpoint: [hrd_platinum_auprc.py](mdc:tools/benchmarks/hrd_platinum_auprc.py), `/api/datasets/extract_and_benchmark`
+
+10. Evidence & Provenance – Trust by design
+- Message: Every result has run_id, feature flags, methods, citations.
+- Visual: ProvenanceBar; response snippet showing `provenance`.
+- Feature: Literature is toggleable; deep-analysis path still yields confident rankings.
+
+11. Accuracy & KPIs – What we measure
+- Message: Report AUPRC/AUROC for HRD baseline; show lift plan with Fusion + richer S.
+- KPIs: time-to-result, cache hit rate, $/1k variants, confidence distribution.
+- Acceptance: Deterministic results under baseline profile.
+
+12. Security, Compliance, RUO
+- Message: Research‑use only; audit trails; no PHI; aggregate cohort stats only.
+- Visual: Compliance checklist.
+
+13. Business Model & IP Royalty Doctrine (Brief)
+- Message: Platform co‑invention and royalty rails (future phases).
+- Visual: 2‑slide summary; full doctrine in appendix.
+- Details:
+  - Platform royalty: 2–5% of licensing revenue when AI contribution is substantial.
+  - Co‑inventor ownership: 10–30% patent ownership for AI‑generated compositions (case‑dependent).
+  - Service + royalty hybrid: $50K–$200K filing assistance + 1–3% backend.
+  - Clear disclosure of AI assistance; provenance and inventor contribution tracking.
+  - RUO: all capabilities shown as research‑mode; no clinical claims.
+  - Note: Full doctrine captured in internal rules; summarize only in deck.
+
+14. Competitive Landscape & Moats
+- Message: Orchestrated S/P/E with auditability; cohort integration; session + caching.
+- Visual: Capability matrix; our moats (data, orchestration, provenance).
+
+15. Go‑To‑Market
+- Message: Research labs and biotech pilots; onboarding with demo-complete MM flow.
+- Visual: Pilot timeline; success criteria.
+
+16. Roadmap
+- Message: Expand to HRD/DDR; enrich evidence; knowledge base; session persistence; Web3 provenance.
+- Visual: Quarter-by-quarter map; feature flags/profiles.
+
+17. Traction & Partnerships (if available)
+- Message: Early pilots, datasets processed, benchmarks run.
+- Visual: Logos / anonymized study stats.
+
+18. Ask & Next Steps
+- Message: Funding/partner asks, milestones, hiring.
+- CTA: “See extended demo or schedule technical deep‑dive.”
+
+## Demo Runbook (1‑pager)
+- Backend: `uvicorn api.main:app --host 127.0.0.1 --port 8000` (ensure `api/main.py` indentation fixed)
+- Env flags: `EVO_FORCE_MODEL=evo2_1b`, `EVO_USE_DELTA_ONLY=1`, `DISABLE_LITERATURE=1`, optional `DISABLE_FUSION=1`
+- Redis (optional): `docker run -p 6379:6379 redis:7`
+- Sanity checks:
+  - `GET /openapi.json` → 200
+  - `POST /api/efficacy/predict` (BRAF V600E example) → ranked drugs returned
+  - `POST /api/insights/predict_gene_essentiality` → score ∈ [0,1], `provenance` present
+  - `POST /api/datasets/extract_and_benchmark` → metrics JSON
+
+## Endpoint Map (Deck → Live)
+- WIWFM: `POST /api/efficacy/predict`
+- Insights: `POST /api/insights/predict_*`
+- Fusion coverage (AM): `GET /api/fusion/coverage`
+- ClinVar prior: `GET /api/evidence/clinvar`
+- Cohort Lab: `POST /api/datasets/extract_and_benchmark`
+- Knowledge Base (optional): `GET /api/kb/*`
+- Design (optional demo): `POST /api/design/generate_guide_rna`
+
+## Visual Assets Checklist
+- Architecture diagram (S/P/E + Orchestrator + Caching)
+- Screenshots: Myeloma, VUS Explorer, Dossier, Cohort Lab
+- Provenance snippet and chips (Functionality/Chromatin/Essentiality/Regulatory)
+- KPI cards (AUPRC/AUROC, confidence)
+
+## Speaker Notes (per demo section)
+- Emphasize RUO and auditability (provenance)
+- Call out safety gates and deterministic checks (Triumvirate)
+- Explain profiles: Baseline vs Richer S vs Fusion
+- Connect to business value: faster hypotheses, cheaper iteration, clearer confidence
+
+## Failover Plan (Live)
+- If Evo upstream is unavailable: keep Baseline profile; show cached responses and provenance
+- If Redis down: disable vector search/caching; inform via developer banner
+- If dataset endpoint slow: show precomputed CohortSummary artifact
+
+## Metrics & Logging (for answers during Q&A)
+- Cache hit rate, response times, error rate
+- Model profile used (1B baseline)
+- Upstream dependency reachability (Evo/Fusion)
+
+## Appendix (Links)
+- Backend routers: [insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py), [efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py), [datasets.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/datasets.py), [fusion.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/fusion.py)
+- Doctrines: [self_improving_doctrine.mdc](mdc:.cursor/rules/self_improving_doctrine.mdc), [redis_doctrine.mdc](mdc:.cursor/rules/redis_doctrine.mdc), [knowledge_base_doctrine.mdc](mdc:.cursor/rules/knowledge_base_doctrine.mdc)
+- Benchmarks: [data_extraction_smoke_test.mdc](mdc:.cursor/rules/data_extraction_smoke_test.mdc)
+
+## Definition of Done (Deck)
+- Slides assembled with consistent plain-language copy and RUO disclaimers
+- Live demo tested under Baseline profile with deterministic outputs
+- Endpoint screenshots or snippets included with provenance
+- KPI slide populated with current baseline results and plan for lift
+

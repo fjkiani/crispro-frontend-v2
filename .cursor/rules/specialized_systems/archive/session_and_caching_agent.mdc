@@ -1,0 +1,252 @@
+---
+alwaysApply: false
+description: Mission Control – Session persistence and caching agent. Implement user sessions, Redis caching, deep-analysis surfacing, and cross-page resume flows.
+---
+
+# Session Persistence + Caching – Agent Implementation Guide
+
+Goal: Enable users to save, resume, and build on analyses across pages (MM → VUS Explorer → Dossier), while adding robust caching to cut latency and duplicate upstream calls. This doc gives exact files to touch, APIs to add, data models, and acceptance tests. RUO posture throughout.
+
+## Scope (deliverables)
+- Backend
+  1) Session persistence API (create/update/get/list; append items; idempotency keys)
+  2) Redis caching helpers + integration into insights/efficacy/datasets routers
+  3) Provenance logging (Supabase) for session events
+- Frontend
+  4) SessionContext (autosave, resume, recent sessions)
+  5) “Save Session”/“Add to Session” actions wired in MM, VUS, Dossier
+  6) Local cache for per‑variant insights (debounced, keyed by variant)
+- UX copy (non‑jargon) and small badges
+- Smoke tests (curl + UI flows) and acceptance checklist
+
+## Backend implementation
+
+Entry points
+- App entry: [api/main.py](mdc:oncology-coPilot/oncology-backend-minimal/api/main.py)
+- Existing routers: [insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py), [efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py), [datasets.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/datasets.py), [evidence.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evidence.py), [evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py)
+- Supabase logging: [services/supabase_service.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/supabase_service.py)
+- Config/flags: [api/config.py](mdc:oncology-coPilot/oncology-backend-minimal/api/config.py)
+
+### 1) Sessions API
+- Add router: `api/routers/sessions.py`
+  - POST `/api/sessions` → create or update session (supports `{ id? }` upsert). Idempotency via header `X-Idempotency-Key`.
+  - GET `/api/sessions/{id}` → fetch session with summary + last updated
+  - GET `/api/sessions` → list recent sessions for current user (paginate)
+  - POST `/api/sessions/{id}/items` → append session item (insight|efficacy|dataset|note)
+  - GET `/api/sessions/{id}/items` → list items (filter by `type` optional)
+- Data model (store in Supabase via existing client):
+  - user_sessions: `{ id, user_id, title, created_at, updated_at, context: { page?, patient_id? }, profile }`
+  - session_items: `{ id, session_id, type, input, output, provenance: { run_id, flags }, created_at }`
+- Wire in `main.py`: `app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])`
+- Logging: call `log_evidence_run`-style helper (add `log_session_event`) to snapshot flags and ids.
+
+### 2) Redis caching
+- Add `services/cache_service.py` with helpers:
+  - `get_cache(key)`, `set_cache(key, value, ttl)`, `with_singleflight(key, ttl_lock, fn)`
+  - Keys (profile‑segmented):
+    - `insights::{variantKey}::{profile}` TTL 24h
+    - `efficacy::{variantKey}::{profile}` TTL 6h
+    - `datasets::{studyHash}::{profile}` TTL 24h
+    - Locks: `lock::{key}` TTL 30–60s
+- Update routers to use cache:
+  - insights.py: wrap compute in `with_singleflight`; return cached JSON when present
+  - efficacy.py: cache response by variantKey+profile; include provenance flags
+  - datasets.py: cache artifacts+metrics by (study, filters, profile)
+- Config: add `REDIS_URL`, `CACHE_TTLS_*` to [api/config.py](mdc:oncology-coPilot/oncology-backend-minimal/api/config.py); safe defaults if absent.
+
+### 3) Deep analysis definition (server)
+- “Deep analysis” (literature off): structured prior/context only.
+  - ClinVar classification + review status (via `evidence.py` proxy)
+  - Transcript context and consequence flags (reuse existing helpers if available)
+  - Discordance flag when our call vs ClinVar differs (expose in `provenance`)
+- Ensure efficacy and insights responses include a compact `provenance.deep_analysis` summary when context was read.
+
+## Frontend implementation
+
+Key files
+- VUS constants and config: [src/components/vus/constants.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/vus/constants.jsx)
+- VUS page and components: [pages/MutationExplorer.jsx](mdc:oncology-coPilot/oncology-frontend/src/pages/MutationExplorer.jsx), [components/vus/AnalysisResults.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/vus/AnalysisResults.jsx)
+- Cohort Lab: [components/research/CohortLab.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/research/CohortLab.jsx)
+- Dossier: [components/dossier/TargetDossierDisplay.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/dossier/TargetDossierDisplay.jsx)
+- MM page (save icon source): [pages/MyelomaDigitalTwin.jsx](mdc:oncology-coPilot/oncology-frontend/src/pages/MyelomaDigitalTwin.jsx) if present; otherwise the current MM page analog
+
+### 4) SessionContext + hooks
+- Add `src/context/SessionContext.jsx` with:
+  - `session` state: `{ id, title, profile, context }`
+  - `appendItem(type, input, output, provenance)` → POST `/api/sessions/{id}/items`
+  - `saveSession(meta)` → POST `/api/sessions`
+  - Autosave draft to `localStorage` every 10–20s (fallback when offline)
+- Add `src/hooks/useSession.js` thin wrapper to consume context across pages.
+- Header menu: “Resume last session” and “Recent sessions” (GET `/api/sessions`)
+
+### 5) Wire actions in pages
+- MM page (existing save icon): call `saveSession` (create/update) and append current WIWFM result as an item; toast with session link.
+- VUS AnalysisResults: after Insights or WIWFM success, show “Add to Session”.
+- Cohort Lab: on successful extract/benchmark, append a `dataset` item with artifacts+metrics.
+- Dossier: show session link in header and allow “Add note to Session”.
+
+### 6) Client caching (per‑variant)
+- In `constants.jsx` (or a new `utils/api.js`), memoize insights and prior lookups keyed by `{gene,hgvs_p,chrom,pos,ref,alt}` with short TTL; respect profile.
+- Avoid re‑requests when the same variant is selected again in the same session.
+
+### 7) Deep analysis in UI (literature off)
+- Definition copy (tooltips): “Deep analysis” = ClinVar + transcript context + consequence; no web literature.
+- Surfaces: WIWFM rationale list, Evidence tier badges, Dossier Evidence panel; show a small `Discordance` badge when applicable.
+
+## API contracts (summary)
+- Sessions
+  - POST `/api/sessions` body `{ id?, title?, context?, profile? }` → `{ id, ... }`
+  - GET `/api/sessions/{id}` → session
+  - GET `/api/sessions` → `{ items: [session...] }`
+  - POST `/api/sessions/{id}/items` body `{ type, input, output, provenance }` → `{ id }`
+- Caching is transparent to FE; provenance includes `profile`, `run_id`, `cache: hit|miss` (optional).
+
+## Copy (non‑jargon labels)
+- Buttons: Save Session, Add to Session, Resume, Recent Sessions
+- Badges: Research‑mode, Deep analysis, Discordance (when ClinVar vs ours differ)
+
+## Smoke tests (backend)
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/sessions -H 'Content-Type: application/json' \
+  -d '{"title":"MM run","context":{"page":"MM","patient_id":"demo"},"profile":"baseline"}' | jq .
+
+curl -sS -X POST http://127.0.0.1:8000/api/sessions/<ID>/items -H 'Content-Type: application/json' \
+  -d '{"type":"efficacy","input":{},"output":{},"provenance":{"run_id":"r1","flags":{"profile":"baseline"}}}' | jq .
+```
+
+## Acceptance criteria
+- Users can save a session in MM, add items in VUS and Cohort Lab, and resume from the header across pages.
+- Redis caches insights/efficacy/datasets; logs show cache hits; duplicate concurrent calls are single‑flighted.
+- Deep analysis appears (without literature) in WIWFM rationale and Dossier Evidence.
+- All actions write provenance (run_id, profile flags) to Supabase; sessions list returns recent work.
+
+## Risks & safeguards
+- Privacy: never store PHI; redact secrets from logs; keep RUO labels.
+- Determinism: Baseline profile is default; Fusion remains opt‑in and clearly labeled.
+- Failure modes: graceful fallbacks (localStorage for draft sessions, cached FE insights when server unavailable).
+
+## Nice‑to‑have (phase 2)
+- On‑chain attestation for sessions/items per [.cursor/rules/web3_doctrine.mdc](mdc:.cursor/rules/web3_doctrine.mdc)
+- Export session to JSON/CSV; “Duplicate session” action for what‑if exploration.
+
+
+## Mission assessment – answers and defaults (for the executing agent)
+
+### Current platform state (as of last check)
+- Backend not listening on 127.0.0.1:8000 by default; start it locally:
+```bash
+cd oncology-coPilot/oncology-backend-minimal
+source venv/bin/activate
+export EVO_FORCE_MODEL=evo2_1b DEFAULT_EVO_MODEL=evo2_1b EVO_USE_DELTA_ONLY=1 EVO_SPAM_SAFE=1 DISABLE_LITERATURE=1 DISABLE_FUSION=1
+PYTHONPATH=. uvicorn api.main:app --host 127.0.0.1 --port 8000 --log-level warning
+```
+- Expected routers (wired via `api/main.py`): `insights.py`, `efficacy.py`, `datasets.py`, `evidence.py`, `evo.py`.
+- Redis: assume NOT provisioned. For dev, run Redis via Docker:
+```bash
+docker run -d --name crispro-redis -p 6379:6379 redis:7-alpine
+```
+  Then set `REDIS_URL=redis://127.0.0.1:6379/0` in backend env.
+
+### Priority implementation order (confirm)
+1) Backend sessions API (`api/routers/sessions.py` + Supabase logging).
+2) Frontend `SessionContext` + wiring in MM → VUS → Dossier (save/resume/add).
+3) Redis caching in `insights.py` → `efficacy.py` → `datasets.py` with single‑flight locks.
+
+### User authentication and identification
+- Default to anonymous sessions. Identify via a generated `session_id` returned on first POST `/api/sessions`.
+- Clients send `X-Session-Id` on subsequent calls; if the user later authenticates, attach `user_id` to the session record.
+- Optional headers supported by BE:
+  - `X-Idempotency-Key` (create/append safety)
+  - `X-User-Id` (when available; do not rely on it)
+
+### Data persistence scope
+- Supabase schema (recommended DDL):
+```sql
+create table if not exists user_sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid null,
+  title text null,
+  profile text not null default 'baseline',
+  context jsonb null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists user_sessions_user_id_idx on user_sessions(user_id);
+
+create table if not exists session_items (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid not null references user_sessions(id) on delete cascade,
+  type text not null,
+  input jsonb null,
+  output jsonb null,
+  provenance jsonb null,
+  created_at timestamptz not null default now()
+);
+create index if not exists session_items_session_id_idx on session_items(session_id);
+create index if not exists session_items_type_idx on session_items(type);
+```
+- Retention: default 30 days; cap ~100 sessions per user; store artifact paths instead of large blobs.
+
+### Deployment environment
+- Target local development first; staging/prod later.
+- Redis hosting: local Docker for dev; Redis Cloud/Upstash for staging/prod with `REDIS_URL` provided.
+
+### Verification (health + routers)
+```bash
+curl -sS http://127.0.0.1:8000/openapi.json | jq '.info.title, (.paths|keys|length)'
+for p in /api/efficacy/predict /api/insights/predict_gene_essentiality /api/datasets/extract_and_benchmark /api/evidence/clinvar; do \
+  echo $p; curl -sS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000$p; done
+```
+
+### Troubleshooting
+- If the server fails to start with an `IndentationError` in `api/main.py`, open the file and correct the offending block’s indentation near the reported line. Then re‑run uvicorn.
+- If Redis is unavailable, the backend should continue without caching; log a warning and skip cache calls.
+
+## Remaining tasks (updated)
+- Backend
+  - [ ] Fix `api/main.py` indentation error so backend boots.
+  - [ ] Implement `api/routers/sessions.py` (create/get/list/append) with idempotency and Supabase logging.
+  - [ ] Add `services/cache_service.py`; integrate caches + single‑flight into `insights.py`, then `efficacy.py`, then `datasets.py`.
+  - [ ] Add env flags and TTLs in `api/config.py`: `REDIS_URL`, `SESSION_TTL_DAYS`, `CACHE_TTLS_INSIGHTS`, `CACHE_TTLS_EFFICACY`, `CACHE_TTLS_DATASETS`.
+  - [ ] Include `provenance.cache = hit|miss` when responses are served from cache.
+  - [ ] Supabase: create `user_sessions` and `session_items` tables; enable RLS (owner policy); service role for server writes.
+
+- Frontend
+  - [ ] Create `src/context/SessionContext.jsx` and `src/hooks/useSession.js`.
+  - [ ] Wire MM page save icon to `POST /api/sessions`; append current WIWFM result as a session item.
+  - [ ] Add “Add to Session” in VUS `AnalysisResults.jsx` for Insights/WIWFM results.
+  - [ ] Dossier: show session link and allow “Add note to Session”.
+  - [ ] Persist per‑variant FE cache and respect profile key; autosave draft to localStorage.
+
+- Testing/docs
+  - [ ] Smoke tests: sessions create/append/list; router health; cache hit path via repeated calls.
+  - [ ] Update `crispro_ai_doctrine_101.mdc` quickstart with session + caching snippet.
+
+## Immediate next steps (execution order)
+1) Fix `api/main.py` indentation so backend boots.
+2) Implement `sessions.py` + OpenAPI + smoke tests; verify with curl.
+3) Add `SessionContext` and wire MM save icon.
+4) Integrate Redis cache for `insights.py` (largest impact) with single‑flight and TTLs; log cache status in provenance.
+5) VUS “Add to Session” and Dossier session link; then cache `efficacy.py` → `datasets.py`.
+
+## Expanded acceptance
+- Save/Resume session from MM; visible in “Recent Sessions”.
+- From VUS, “Add to Session” appends insights and WIWFM results with provenance; Dossier can add a note/item.
+- Re‑running the same insights/efficacy (same variant + profile) returns `provenance.cache: hit` and avoids duplicate upstream requests (verified in logs).
+- Sessions stored in Supabase with correct ownership; RLS prevents cross‑user access.
+
+## Command cheat‑sheet
+```bash
+# Start backend (after fixing indentation)
+cd oncology-coPilot/oncology-backend-minimal && source venv/bin/activate
+export EVO_FORCE_MODEL=evo2_1b DEFAULT_EVO_MODEL=evo2_1b EVO_USE_DELTA_ONLY=1 EVO_SPAM_SAFE=1 DISABLE_LITERATURE=1 DISABLE_FUSION=1 REDIS_URL=redis://127.0.0.1:6379/0
+PYTHONPATH=. uvicorn api.main:app --host 127.0.0.1 --port 8000 --log-level warning
+
+# Redis (dev)
+docker run -d --name crispro-redis -p 6379:6379 redis:7-alpine
+
+# Sessions smoke
+curl -sS -X POST http://127.0.0.1:8000/api/sessions -H 'Content-Type: application/json' \
+  -d '{"title":"MM analysis","profile":"baseline","context":{"page":"MM"}}' | jq .
+```
+

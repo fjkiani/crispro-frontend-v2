@@ -1,0 +1,289 @@
+---
+alwaysApply: true
+description: S/P/E Framework Master Doctrine - Complete consolidation of all S/P/E framework files
+---
+
+# 🧬 S/P/E FRAMEWORK MASTER DOCTRINE
+
+**Last Updated:** 2025-01-XX  
+**Status:** ✅ **CONSOLIDATED SOURCE OF TRUTH**  
+**Consolidated From:**
+- `spe_framework_doctrine.mdc` - S/P/E framework core
+- `spe_frontend_utilization_plan.mdc` - Frontend S/P/E integration
+- `operational_improvements_doctrine_aug_2025.mdc` (partial - S/P/E integration)
+
+---
+
+## 📚 TABLE OF CONTENTS
+
+1. [Executive Summary](#executive-summary)
+2. [What is S/P/E?](#what-is-spe)
+3. [Backend APIs & Endpoints](#backend-apis--endpoints)
+4. [Frontend Integration](#frontend-integration)
+5. [Profiles & Feature Flags](#profiles--feature-flags)
+6. [Best Practices](#best-practices)
+7. [Known Limitations](#known-limitations)
+8. [References to Archived Files](#references-to-archived-files)
+
+---
+
+## 🎯 EXECUTIVE SUMMARY
+
+### **What is S/P/E?**
+- **S (Sequence)**: Variant impact/sequence signals (Evo2 proxies, insights bundle)
+- **P (Pathway)**: Aggregation of variant effects into pathway-level signals
+- **E (Evidence)**: Literature/ClinVar priors and citations
+
+The primary orchestrator combines S/P/E to return per-therapy efficacy hypotheses with scores, confidence, evidence tiers, badges, and provenance.
+
+### **Mission**
+Provide a unified framework for variant analysis that combines sequence-level signals, pathway-level aggregation, and evidence-based validation to deliver transparent, auditable therapeutic recommendations.
+
+### **Core Principles**
+- **Multi-Modal Integration**: Never rely on single metrics
+- **Transparent Confidence**: All rationale and provenance tracked
+- **Evidence-Based**: Literature + ClinVar + pathway alignment
+- **Research Use Only**: All outputs clearly labeled RUO
+
+---
+
+## 🧬 WHAT IS S/P/E?
+
+### **S (Sequence) - Variant Impact Signals**
+- **Evo2 Multi-Window Scoring**: `score_variant_multi` for `min_delta` (zero-shot sequence impact proxy)
+- **Evo2 Exon-Context Scoring**: `score_variant_exon` with adaptive flanks (4096-25000bp) for exon-context signal
+- **Gene-Specific Calibration**: Converts deltas to percentile-like measures to avoid cross-gene scale drift
+- **Insights Bundle**: Functionality, Chromatin, Essentiality, Regulatory
+
+### **P (Pathway) - Pathway-Level Aggregation**
+- **Variant-to-Pathway Mapping**: Map disrupted genes to disease pathways (e.g., RAS/MAPK, TP53)
+- **Weighted Impact Aggregation**: Aggregate pathway contributions with disease-specific weights
+- **Pathway Alignment**: Determine pathway overlap with drug mechanisms of action
+
+### **E (Evidence) - Literature & ClinVar**
+- **Literature Strength**: PubMed/OpenAlex/S2 search with MoA-aware term targeting
+- **ClinVar Priors**: Expert/practice boosts from ClinVar classification and review status
+- **Evidence Tiers**: Supported/Consider/Insufficient based on evidence strength
+- **Badges**: RCT/Guideline/ClinVar-Strong/PathwayAligned
+
+### **Confidence Modulation**
+- **Evidence Gates**: Strong literature or ClinVar-Strong + pathway alignment → higher tier
+- **Insights Lifts**: Modest boosts from supportive insights (functionality≥0.6, chromatin≥0.5, essentiality≥0.7, regulatory≥0.6)
+- **Transparent Scoring**: All rationale and provenance tracked
+
+---
+
+## 🔌 BACKEND APIS & ENDPOINTS
+
+### **One-Call S/P/E Orchestrator (Recommended)**
+**Endpoint**: `POST /api/efficacy/predict`
+
+**Minimal Example**:
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/efficacy/predict \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model_id":"evo2_1b",
+    "mutations":[{"gene":"BRAF","hgvs_p":"V600E","chrom":"7","pos":140453136,"ref":"T","alt":"A"}],
+    "options":{"adaptive":true,"ensemble":true}
+  }'
+```
+
+**Response (Abridged)**:
+```json
+{
+  "drugs": [
+    {
+      "name": "ExampleDrug",
+      "efficacy_score": 0.23,
+      "confidence": 0.51,
+      "evidence_tier": "consider",
+      "badges": ["PathwayAligned"],
+      "insights": {
+        "functionality": 0.6,
+        "chromatin": 0.5,
+        "essentiality": 0.35,
+        "regulatory": 0.12
+      },
+      "rationale": [
+        "S: calibrated sequence impact ...",
+        "P: pathway mapping ...",
+        "E: literature/ClinVar ..."
+      ],
+      "provenance": {
+        "run_id": "...",
+        "profile": "baseline"
+      }
+    }
+  ]
+}
+```
+
+### **Using S (Insights) Directly**
+For chips/feature engineering or UI panels:
+- **Functionality**: `POST /api/insights/predict_protein_functionality_change`
+- **Essentiality**: `POST /api/insights/predict_gene_essentiality`
+- **Regulatory (splicing/noncoding proxy)**: `POST /api/insights/predict_splicing_regulatory`
+- **Chromatin (heuristic unless Enformer/Borzoi configured)**: `POST /api/insights/predict_chromatin_accessibility`
+
+**Example (Functionality)**:
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/insights/predict_protein_functionality_change \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "gene": "ERBB2",
+    "variants": [{"chrom":"17","pos":39724851,"ref":"C","alt":"T","hgvs_p":"V777L"}],
+    "model_id": "evo2_1b"
+  }'
+```
+
+### **Using E (Evidence) Directly**
+- **ClinVar lookup**: `GET /api/evidence/clinvar?gene=...&variant=...`
+- **Literature aggregation**: `POST /api/evidence/deep_analysis`
+
+**Notes**:
+- Evidence services are best-effort and degrade gracefully under rate limits
+- Do not block on them
+
+### **Optional: Fusion (AlphaMissense)**
+- **Coverage (GRCh38 missense only)**: `GET /api/fusion/coverage?chrom=...&pos=...&ref=...&alt=...`
+- **Score**: `POST /api/fusion/score_variant`
+
+**Gates**:
+- Enforce GRCh38 coordinates and missense
+- Show a Fusion coverage badge in UI before using
+
+### **Evo Proxy (Low-Level S Scoring)**
+- `POST /api/evo/score_variant_multi` - Multi-window delta proxy
+- `POST /api/evo/score_variant_exon` - Exon-context delta proxy
+
+**Use these only if building your own S features; otherwise prefer insights or the orchestrator.**
+
+---
+
+## 🎨 FRONTEND INTEGRATION
+
+### **Hooks (New)**
+- `useEfficacyPredict({ mutations, profile })` → `{ drugs[], run_id, provenance }`
+- `useInsightsBundle({ variant })` → `{ functionality, chromatin, essentiality, regulatory, provenance }`
+- `useClinVar({ coords|hgvs })` → `{ classification, review_status }`
+- `useFusionCoverage({ chrom,pos,ref,alt })` → `{ eligible:boolean }`
+
+### **Components**
+
+#### **Myeloma Digital Twin (WIWFM)**
+- **Use**: `/api/efficacy/predict`
+- **Why**: Provide ranked drug classes per variant set with confidence and evidence tier
+- **Render**: Rank table, badges (PathwayAligned/ClinVar-Strong when present), insights summary per drug, provenance bar
+- **Profile Toggles**: Baseline/SP, Full/SPE, Fusion when eligible
+
+#### **Target Dossier (Single-Variant Deep Dive)**
+- **Use**: 4 insights endpoints; optional ClinVar context for helper copy
+- **Why**: Convert complexity into 4 simple chips with rationale and provenance; prime the user for WIWFM
+- **Render**: Chips (Functionality/Chromatin/Essentiality/Regulatory) + expandable rationale; CTA: Run WIWFM
+
+#### **VUS Explorer**
+- **Use**: Insights bundle + ClinVar lookup + Fusion coverage; WIWFM modal on demand
+- **Why**: Fast triage from unknown to actionable with minimal clicks; show coverage context
+- **Render**: Chips, coverage badges (ClinVar class, Fusion eligible), WIWFM button, provenance bar (run_id/profile)
+
+#### **Evidence Intelligence (Read-Only for v1)**
+- **Use**: ClinVar deep analysis response attached to efficacy result
+- **Why**: Surface prior strength and review status when available to justify tiers/badges
+- **Render**: Classification, review status, and citations (if present) with RUO label
+
+#### **Shared Components**
+- **EfficacyModal**: Ranked table; row details show insights and rationale array
+- **ProvenanceBar**: Cross-page audit trail and quick debugging; add Save/Load session
+- **InsightChip**: Plain signal abstraction with thresholds and transparent source
+
+### **Flows & State**
+
+#### **Profiles & Flags**
+- Profiles widget controls request payload: `{ ablation_mode: "SP" | "SPE", enable_fusion: boolean }`
+- Persist current profile in session/localStorage and include in provenance UI
+
+#### **Run Lifecycle**
+1. User submits variants → call insights (optional) → call efficacy → render results
+2. Store `run_id`, profile, and request snapshot in session
+3. On rerun with different profile, diff the results (optional v2) and keep both runs in session history
+
+#### **Error/Empty Handling**
+- Insights down: show disabled chips with tooltip (service unavailable) and allow WIWFM to proceed
+- Efficacy down: show empty table with retry and copy the error to console for debugging
+- ClinVar/Lit sparse: keep tiers conservative; display placeholders
+
+---
+
+## 🎛️ PROFILES & FEATURE FLAGS
+
+### **Profiles**
+- **Baseline (SP)**: Sequence + Pathway only (no Evidence)
+- **Full (SPE)**: Sequence + Pathway + Evidence (complete framework)
+- **Fusion (when eligible)**: Add AlphaMissense scoring when GRCh38 missense coverage exists
+
+### **Feature Flags**
+- `DISABLE_LITERATURE`: Turn off literature search (deterministic demos)
+- `DISABLE_FUSION`: Turn off Fusion Engine integration
+- `EVO_USE_DELTA_ONLY`: Use delta-only scoring (spam prevention)
+- `EVO_FORCE_MODEL`: Force specific Evo2 model (evo2_1b, evo2_7b, evo2_40b)
+- `GUIDANCE_FAST`: Fast-path guidance with DDR shortcut
+
+### **Safety & Configuration**
+- Default model: `evo2_1b` (stable, cost-controlled)
+- Avoid viral/forbidden content in generation routes; guardrails exist in Evo/Design endpoints
+- Triumvirate doctrine: truncation/frameshift gate → Evo analysis → structural assessment (roadmap)
+- Keep coordinates GRCh38; validate `REF/ALT` against reference when possible
+
+---
+
+## 📋 BEST PRACTICES
+
+### **API Usage**
+- **Prefer the orchestrator** for end-to-end S/P/E; call insights only for chips/ablations
+- **Keep GRCh38 normalization strict**; Fusion only when coverage is true (missense)
+- **Treat Evidence as additive**; do not block flows on sparse literature
+- **Expose `run_id`, `profile`, and flags** in UI for provenance/audit
+- **Label clearly as Research Use Only (RUO)**
+
+### **Performance**
+- Debounce variant input; avoid redundant calls on unchanged payloads
+- Cache last insights per variant in memory for the session
+- Use single-flight protection for concurrent requests
+
+### **Error Handling**
+- Graceful degradation when services unavailable
+- Retry logic with exponential backoff
+- Placeholder values with provenance tracking
+- User-friendly error messages
+
+---
+
+## ⚠️ KNOWN LIMITATIONS
+
+- **Evidence services can be sparse** due to provider limits; responses degrade gracefully
+- **Chromatin endpoint uses heuristics** unless Enformer/Borzoi services are configured
+- **Upstream Evo services may intermittently fail**; orchestrator handles fallback with conservative defaults
+- **Fusion coverage limited** to GRCh38 missense variants only
+
+---
+
+## 📖 REFERENCES TO ARCHIVED FILES
+
+All original files have been preserved in `spe_framework/archive/`:
+
+- **S/P/E Framework**: `archive/spe_framework_doctrine.mdc`
+  - Original: Complete S/P/E framework documentation
+  
+- **Frontend Utilization**: `archive/spe_frontend_utilization_plan.mdc`
+  - Original: Frontend integration plan with hooks, components, and flows
+
+---
+
+## ⚔️ DOCTRINE STATUS: ACTIVE
+
+**LAST UPDATED:** 2025-01-XX  
+**APPLIES TO:** All S/P/E framework usage, backend APIs, and frontend integration  
+**ENFORCEMENT:** Mandatory across all development and operational activities
+
+**This master doctrine represents the complete consolidation of all S/P/E framework knowledge. Every endpoint, pattern, and best practice is preserved and organized for maximum clarity and actionability.**

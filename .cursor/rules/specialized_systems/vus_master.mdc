@@ -1,0 +1,237 @@
+---
+alwaysApply: true
+description: VUS Identification & Explorer Master Doctrine - Complete consolidation of all VUS-related files
+---
+
+# 🧬 VUS IDENTIFICATION & EXPLORER MASTER DOCTRINE
+
+**Last Updated:** 2025-01-XX  
+**Status:** ✅ **CONSOLIDATED SOURCE OF TRUTH**  
+**Consolidated From:**
+- `vus_identification_doctrine.mdc` - VUS identification end-to-end workflow
+- `vus_explorer_plan.mdc` - VUS Explorer architecture and upgrade plan
+- `vus_testing_doctrine.mdc` (if exists) - VUS testing protocols
+
+---
+
+## 📚 TABLE OF CONTENTS
+
+1. [Executive Summary](#executive-summary)
+2. [VUS Identification Workflow](#vus-identification-workflow)
+3. [VUS Explorer Architecture](#vus-explorer-architecture)
+4. [Backend Contracts](#backend-contracts)
+5. [Frontend Integration](#frontend-integration)
+6. [Testing & Validation](#testing--validation)
+7. [References to Archived Files](#references-to-archived-files)
+
+---
+
+## 🎯 EXECUTIVE SUMMARY
+
+### **Mission**
+Transform the platform into the fastest way to turn "unknown" variants into "understood and actionable" insights, with clear signals, simple story, and one-click next steps.
+
+### **Core Principles**
+- **Triumvirate Protocol**: Truncation/frameshift gates before scoring
+- **S/P/E Framework**: Multi-modal validation with transparent confidence
+- **Insights Bundle**: Functionality, chromatin, essentiality, regulatory
+- **Provenance Tracking**: Complete audit trails with run IDs
+
+---
+
+## 🔍 VUS IDENTIFICATION WORKFLOW
+
+### **End-to-End Process**
+
+#### **Step 1: Inputs and Normalization**
+- **Input Formats**: HGVS, VCF, coordinates (GRCh38)
+- **Validation**: GRCh38 normalization, REF/ALT validation
+- **Output**: Normalized variant coordinates
+
+#### **Step 2: Priors (Decide "Already Not VUS?")**
+- **ClinVar Lookup**: Check for existing classification
+- **AlphaMissense Coverage**: Check Fusion Engine eligibility
+- **Output**: Prior classification status (if available)
+
+#### **Step 3: Triumvirate Protocol Gate**
+- **Deterministic Check**: Truncation/frameshift detection
+- **Gate Logic**: If truncating → FAIL, else continue
+- **Output**: Pass/fail verdict
+
+#### **Step 4: S/P/E Core Signals**
+- **Sequence (S)**: Evo2 delta scores, multi-window analysis
+- **Pathway (P)**: Variant-to-pathway mapping, weighted aggregation
+- **Evidence (E)**: Literature strength, ClinVar priors, MoA highlighting
+- **Output**: S/P/E scores with rationale
+
+#### **Step 5: Insights Bundle (Real Signals)**
+- **Functionality**: Protein function change prediction
+- **Chromatin**: Accessibility and regulatory impact
+- **Essentiality**: Gene dependency scoring
+- **Regulatory**: Splicing and non-coding impact
+- **Output**: 4 insight scores with thresholds
+
+#### **Step 6: Fusion Gating (AlphaMissense)**
+- **Coverage Check**: GRCh38 missense variants only
+- **Fusion Integration**: AlphaMissense scores when available
+- **Output**: Fused S scores with provenance
+
+#### **Step 7: SAE Interpretable Features (Real Data Only)**
+- **Feature Extraction**: Sparse autoencoder features from Evo2
+- **Interpretation**: Feature attribution and activation steering
+- **Output**: SAE features with interpretation
+
+#### **Step 8: VUS Triage Scoring and Decision Rubric**
+- **Confidence Calculation**: S/P/E + insights + Fusion + SAE
+- **Tier Classification**: Supported/Consider/Insufficient
+- **Decision Logic**: Clear pass/fail/conditional verdicts
+- **Output**: Final VUS triage verdict with confidence
+
+---
+
+## 🎨 VUS EXPLORER ARCHITECTURE
+
+### **Product Story (Non-Jargon)**
+Turn "unknown" variants into "understood and actionable" insights with clear signals, simple story, and one-click next steps.
+
+### **Demo Value, Flow, and Meaning (Research-Mode)**
+
+#### **What Value We Provide (Business Outcomes)**
+- **Faster VUS Triage**: Reduce handoffs and delays
+- **Clear Signals**: Plain-English, color-coded signals replace opaque scores
+- **Actionable Insights**: One-click WIWFM/Dossier/Design paths
+- **Audit-Ready Outputs**: Complete provenance tracking
+
+#### **Exact Demo Flow (Step-by-Step)**
+1. User pastes/uploads variants → Parse and validate
+2. Display InsightChips (Functionality, Regulatory, Essentiality, Chromatin)
+3. Display CoverageChips (ClinVar prior, AlphaMissense coverage)
+4. User clicks "Will It Work For Me?" → WIWFM modal
+5. Display per-drug ranking with confidence, tier, badges
+6. User clicks "Design Guides" → CRISPR readiness panel (Demo)
+7. Display ProvenanceBar with run_id, profile, mode
+
+#### **What Each Screen Means (Interpretation Guide)**
+- **InsightChips**: Immediate comprehension of variant impact
+- **CoverageChips**: Context awareness and Fusion eligibility
+- **WIWFM Modal**: Decisions with evidence-backed recommendations
+- **CRISPR Readiness**: Design path preview (Demo mode)
+- **ProvenanceBar**: Auditability and reproducibility
+
+### **Current Architecture (Mutation Explorer)**
+- **Location**: `oncology-coPilot/oncology-frontend/src/components/vus/`
+- **Components**: MutationTable, AnalysisResults, VEP table
+- **Status**: Functional scaffold, needs live API integration
+
+### **Target Vision – VUS Explorer (Research-Mode)**
+
+#### **UI Layout (High-Level)**
+- **Top Section**: Variant input (paste/upload)
+- **Middle Section**: InsightChips + CoverageChips + ProvenanceBar
+- **Bottom Section**: WIWFM button + CRISPR readiness panel
+- **Sidebar**: Detailed rationale and citations (expandable)
+
+#### **Component Plan (Modular)**
+- **InsightChips**: Function/Reg/Ess/Chrom with thresholds
+- **CoverageChips**: ClinVar prior + AM coverage
+- **WIWFMButton + EfficacyModal**: One-click therapy fit
+- **CrisprReadinessPanel**: On-target, off-target preview (Demo)
+- **ProvenanceBar**: Run ID, profile, mode
+- **MutationTable**: Quick actions (Analyze, WIWFM, Dossier, CRISPR)
+
+---
+
+## 🔌 BACKEND CONTRACTS
+
+### **Endpoints**
+- **Insights Bundle**: `/api/insights/predict_*` (functionality, chromatin, essentiality, regulatory)
+- **Efficacy**: `/api/efficacy/predict` (WIWFM integration)
+- **Evidence**: `/api/evidence/clinvar` (ClinVar lookup)
+- **Fusion**: `/api/fusion/coverage` (AlphaMissense coverage check)
+
+### **Response Schemas**
+```json
+{
+  "insights": {
+    "functionality": 0.6,
+    "chromatin": 0.5,
+    "essentiality": 0.35,
+    "regulatory": 0.12
+  },
+  "coverage": {
+    "clinvar": {"status": "reviewed", "classification": "Pathogenic"},
+    "alphamissense": {"eligible": true, "coverage": "full"}
+  },
+  "provenance": {
+    "run_id": "...",
+    "profile": "baseline"
+  }
+}
+```
+
+---
+
+## 🎨 FRONTEND INTEGRATION
+
+### **Components**
+- **MutationTable.jsx**: Variant input and validation
+- **AnalysisResults.jsx**: Insight chips and coverage display
+- **EfficacyModal.jsx**: WIWFM integration
+- **CrisprReadinessPanel.jsx**: Design path preview (Demo mode)
+- **ProvenanceBar.jsx**: Run ID, profile, mode display
+
+### **Hooks**
+- **useKb.js**: KB hooks with TTL caching
+- **useEfficacy.js**: Efficacy prediction hook
+- **useInsights.js**: Insights bundle hook
+
+### **State Management**
+- **SessionContext**: Session persistence and cross-page resume
+- **ActivityContext**: Activity logging and provenance tracking
+
+---
+
+## 🧪 TESTING & VALIDATION
+
+### **Smoke Tests (Minimal)**
+```bash
+# VUS identification
+curl -X POST http://127.0.0.1:8000/api/vus/identify \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "variant": {"gene": "BRCA1", "hgvs_p": "C64R", "chrom": "17", "pos": 43044295, "ref": "T", "alt": "G"}
+  }'
+
+# Insights bundle
+curl -X POST http://127.0.0.1:8000/api/insights/predict_protein_functionality_change ...
+
+# ClinVar lookup
+curl http://127.0.0.1:8000/api/evidence/clinvar?gene=BRCA1&variant=C64R
+```
+
+### **Calibration & Safety**
+- **Gene-Specific Calibration**: Percentile conversion for cross-gene comparison
+- **Triumvirate Protocol**: Mandatory truncation/frameshift gates
+- **RUO Labels**: All outputs clearly labeled Research Use Only
+
+---
+
+## 📖 REFERENCES TO ARCHIVED FILES
+
+All original files have been preserved in `specialized_systems/archive/`:
+
+- **VUS Identification**: `archive/vus_identification_doctrine.mdc`
+  - Original: Complete VUS identification end-to-end workflow
+  
+- **VUS Explorer**: `archive/vus_explorer_plan.mdc`
+  - Original: VUS Explorer architecture and upgrade plan
+
+---
+
+## ⚔️ DOCTRINE STATUS: ACTIVE
+
+**LAST UPDATED:** 2025-01-XX  
+**APPLIES TO:** All VUS identification and explorer functionality  
+**ENFORCEMENT:** Mandatory across all development and operational activities
+
+**This master doctrine represents the complete consolidation of all VUS knowledge. Every workflow, component, and integration detail is preserved and organized for maximum clarity and actionability.**

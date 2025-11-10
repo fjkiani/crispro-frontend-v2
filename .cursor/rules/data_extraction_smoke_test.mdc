@@ -1,0 +1,277 @@
+---
+description: Smoke test and scalable guide for cBioPortal treatments extraction and HRD label building
+---
+
+## cBioPortal Treatments – Smoke Test and Scalable Extraction Guide
+
+This rule documents a minimal, reproducible path to extract patient-level Treatments from cBioPortal, label a BRCA1/2 cohort for platinum exposure, and run the HRD AUPRC benchmark. It also sketches how to scale this approach to larger cohorts/studies.
+
+### Quick smoke test (TCGA‑OV PanCan) – 3 steps
+
+1) Fetch Treatments via pyBioPortal
+
+- Notebook reference: [treatments_nb.ipynb](mdc:oncology-coPilot/oncology-backend/tests/pyBioPortal-master/examples/treatments_nb.ipynb)
+- One‑liner used (already in repo venv):
+```bash
+python - << 'PY'
+import sys
+from pathlib import Path
+sys.path.insert(0, 'oncology-coPilot/oncology-backend/tests/pyBioPortal-master')
+from pybioportal import treatments as trt
+study_id = 'ov_tcga_pan_can_atlas_2018'
+df = trt.fetch_all_patient_level_treatments(study_view_filter={"studyIds":[study_id]})
+Path('tools/benchmarks/data').mkdir(parents=True, exist_ok=True)
+df.to_csv('tools/benchmarks/data/treatments_ov_tcga_pan_can.csv', index=False)
+print(len(df))
+PY
+```
+
+2) Build labeled BRCA1/2 cohort by joining Treatments + Mutations
+
+- Script path used for reference logic: [extract_cbioportal_hrd_cohort.py](mdc:tools/benchmarks/extract_cbioportal_hrd_cohort.py)
+- Minimal Python to produce `hrd_tcga_ov_labeled.csv` (pos=1 if any of “carboplatin/cisplatin/oxaliplatin/platinum” present in patient Treatments):
+```bash
+python - << 'PY'
+import httpx, pandas as pd
+from pathlib import Path
+BASE='https://www.cbioportal.org/api'
+study='ov_tcga_pan_can_atlas_2018'
+profs = httpx.get(f"{BASE}/molecular-profiles", params={"studyId":study}, timeout=60).json()
+mut_prof = next(p['molecularProfileId'] for p in profs if p.get('studyId')==study and p.get('molecularAlterationType') in ('MUTATION_EXTENDED','MUTATION'))
+samples = httpx.get(f"{BASE}/studies/{study}/samples", timeout=60).json()
+map_s2p = {s['sampleId']: s.get('patientId') for s in samples}
+sl = httpx.get(f"{BASE}/sample-lists", params={"studyId":study}, timeout=60).json()
+all_list = next((s['sampleListId'] for s in sl if s.get('sampleListId')==f"{study}_all"), f"{study}_all")
+muts = httpx.get(f"{BASE}/molecular-profiles/{mut_prof}/mutations", params={'sampleListId':all_list,'hugoGeneSymbols':['BRCA1','BRCA2'],'projection':'DETAILED','pageSize':10000}, timeout=120).json()
+df_trt = pd.read_csv('tools/benchmarks/data/treatments_ov_tcga_pan_can.csv')
+pid_col = next((c for c in df_trt.columns if c.lower() in ('patientid','patient_id','patient id')), next(c for c in df_trt.columns if 'patient' in c.lower()))
+text_cols=[c for c in df_trt.columns if isinstance(c,str)]
+df_trt[text_cols]=df_trt[text_cols].astype(str).fillna('')
+agg = df_trt.groupby(pid_col)[text_cols].apply(lambda g: ' '.join(' '.join(r) for r in g.values)).str.lower()
+terms=('carboplatin','cisplatin','oxaliplatin','platinum')
+label = {pid:int(any(t in txt for t in terms)) for pid,txt in agg.items()}
+rows=[]
+for m in muts:
+    gene=(m.get('gene') or {}).get('hugoGeneSymbol','')
+    s=m.get('sampleId'); p=m.get('patientId') or map_s2p.get(s)
+    if not p: continue
+    rows.append({'disease':'ovarian cancer','gene':gene,'hgvs_p':(m.get('proteinChange') or '').replace('p.',''),'chrom':str(m.get('chromosome') or ''),'pos':str(m.get('startPosition') or ''),'ref':(m.get('referenceAllele') or '').upper(),'alt':(m.get('variantAllele') or m.get('tumorSeqAllele2') or '').upper(),'build':'GRCh38','outcome_platinum':label.get(p,0)})
+out='tools/benchmarks/data/hrd_tcga_ov_labeled.csv'
+pd.DataFrame(rows).to_csv(out,index=False)
+print(out,len(rows),sum(r['outcome_platinum'] for r in rows))
+PY
+```
+
+3) Run HRD AUPRC (backend on evo2_1b)
+
+```bash
+# Ensure backend is running on evo2_1b and spam‑safe
+# (see [evo_flags_and_profiles.mdc](mdc:.cursor/rules/evo_flags_and_profiles.mdc))
+source venv/bin/activate && python tools/benchmarks/hrd_platinum_auprc.py \
+  --csv tools/benchmarks/data/hrd_tcga_ov_labeled.csv \
+  --api_base http://127.0.0.1:8000 \
+  --out tools/benchmarks/hrd_tcga_ov_results.json | cat
+```
+
+### What we implemented (summary)
+- Treatments fetched with pyBioPortal (patient‑level) and saved to CSV.
+- Mutations pulled via cBioPortal REST (`{study}_mutations`, `{study}_all`) for BRCA1/2.
+- Labeled positives by keyword scan per patient, joined by patientId.
+- Produced a single benchmark‑ready CSV for HRD AUPRC.
+
+### How to scale this approach
+- Multi‑study: set `study_view_filter={"studyIds":[... ]}` in pyBioPortal to fetch treatments across cohorts.
+- Drug families: extend keyword sets (e.g., PARP: olaparib/niraparib/rucaparib/talazoparib) and emit multiple label columns.
+- Robust joins: persist a patientId/sampleId mapping table; handle duplicates and harmonize IDs early.
+- Performance: stream large REST pulls (pageSize/chunking); cache intermediate CSVs in `tools/benchmarks/data/`.
+- Reliability: if public API lacks Treatments for a study, fall back to pyBioPortal or UI downloads; document gaps.
+
+### What to test quickly
+- Label sanity: count positives > 0; spot‑check a few patient rows contain platinum terms.
+- Join rate: fraction of BRCA1/2 mutation rows with a treatment label.
+- Benchmark run time: completes under a few minutes with evo2_1b + spam‑safe flags.
+- Sensitivity to keyword set: AUPRC change when adding/removing drug synonyms.
+
+### Files touched/produced
+- Treatments CSV: `tools/benchmarks/data/treatments_ov_tcga_pan_can.csv`
+- Labeled cohort CSV: `tools/benchmarks/data/hrd_tcga_ov_labeled.csv`
+- Benchmark script: [hrd_platinum_auprc.py](mdc:tools/benchmarks/hrd_platinum_auprc.py)
+
+### Notes
+- Treatments often aren’t exposed in the basic public endpoints; pyBioPortal wrappers use the Web Public API routes under `treatments` to retrieve them reliably.
+- Prefer patient‑level Treatments for exposure labels; sample‑level pre/post can be added later for temporal analyses.
+
+## Why this matters (business value)
+
+- **For partners (biopharma/biotech):**
+  - Rapid, reproducible cohort labeling from public/private studies for outcome proxies (e.g., platinum exposure).
+  - A benchmark harness to quantify lift from new model features (richer S, Fusion/AM, literature) with cost controls.
+  - Drop‑in integration for partner cohorts to evaluate responder enrichment and mechanism hypotheses with audit trails.
+- **For patient care research:**
+  - Transparent per‑variant efficacy hypotheses in HRD/DDR contexts with provenance.
+  - Faster loop from hypothesis → validation → guidance to inform prioritization studies.
+
+## Partner offering (service blueprint)
+
+- **Inputs:** Study IDs (or files), target drugs/families (e.g., platinum, PARP), gene lists, assembly (GRCh38 preferred).
+- **Process:**
+  1) Extract Treatments (patient‑level) and Mutations; build patient↔sample map.
+  2) Label exposures via keyword families; produce benchmark‑ready CSV(s).
+  3) Run benchmarks (AUPRC/AUROC) under multiple model profiles; compare lifts.
+  4) Deliver report + artifacts (CSV, JSON results, configs, logs, provenance).
+- **Outputs:** KPI summary, per‑sample scores, configuration bundle for reruns, reproducible command log.
+
+## Pipeline integration (where this fits)
+
+- Data layer: pyBioPortal Treatments + cBioPortal REST Mutations → CSV in `tools/benchmarks/data/`.
+- Model layer: Backend Evo proxy (see `api/routers/evo.py`) with flags documented in `[evo_flags_and_profiles.mdc](mdc:.cursor/rules/evo_flags_and_profiles.mdc)`.
+- Orchestration: Bench scripts `[hrd_platinum_auprc.py](mdc:tools/benchmarks/hrd_platinum_auprc.py)` and (optional) guidance endpoints.
+- Feature toggles: `DISABLE_FUSION`, `DISABLE_LITERATURE`, `EVO_USE_DELTA_ONLY`, `EVO_FORCE_MODEL`, etc.
+
+## Operational profiles (partner‑ready)
+
+- **Cost‑safe baseline (control):**
+```bash
+export DEFAULT_EVO_MODEL=evo2_1b
+export EVO_USE_DELTA_ONLY=1 EVO_SPAM_SAFE=1 EVO_MAX_FLANKS=1 EVO_MAX_MODELS=1 
+export EVO_DISABLE_TRANSCRIPT_SWEEP=1 EVO_DISABLE_SYMMETRY=1 
+export DISABLE_LITERATURE=1 DISABLE_FUSION=1
+```
+- **Richer S (bounded fan‑out):**
+```bash
+export EVO_USE_DELTA_ONLY=0 EVO_MAX_FLANKS=2 EVO_DISABLE_SYMMETRY=1
+```
+- **Fusion on (GRCh38 missense only):**
+```bash
+unset DISABLE_FUSION; export FUSION_AM_URL=<fusion_service_url>
+```
+
+## Runbook (smoke → 1k → full)
+
+- Smoke (200):
+```bash
+python - << 'PY'
+import pandas as pd
+df=pd.read_csv('tools/benchmarks/data/hrd_tcga_ov_labeled.csv')
+df['outcome_platinum']=df['outcome_platinum'].astype(str).str.lower().map({'1':1,'true':1,'0':0,'false':0}).fillna(0).astype(int)
+pos=df[df.outcome_platinum==1].head(100); neg=df[df.outcome_platinum==0].head(100)
+sample=pd.concat([pos,neg]); sample.to_csv('tools/benchmarks/data/hrd_tcga_ov_labeled_sample.csv',index=False)
+print(len(sample))
+PY
+source venv/bin/activate && python tools/benchmarks/hrd_platinum_auprc.py \
+  --csv tools/benchmarks/data/hrd_tcga_ov_labeled_sample.csv \
+  --api_base http://127.0.0.1:8000 \
+  --out tools/benchmarks/hrd_tcga_ov_labeled_sample_results.json | cat
+```
+- Scale (1k):
+```bash
+# create 1k balanced sample then run hrd_platinum_auprc.py similarly
+```
+- Full cohort: run the same script on the full labeled CSV.
+
+## KPIs and reporting
+
+- Data readiness: positives count, join rate patient↔sample, % rows with GRCh38 coords.
+- Model: AUPRC/AUROC, Confidence distribution, runtime and cost per 1k variants.
+- Lift table: Baseline vs +richer S vs +Fusion (delta and relative %).
+- Provenance: model/flag profile, service URLs, versions, timestamps.
+
+## Data policy and reproducibility
+
+- No PII used; patient IDs handled as opaque tokens; all artifacts versioned.
+- Store raw pulls and derived CSVs under `tools/benchmarks/data/`; keep command logs.
+- Prefer GRCh38 coordinates to enable Fusion; document any liftover.
+
+## Extensibility
+
+- Add drug families by extending keyword sets (e.g., PARP: olaparib, niraparib, rucaparib, talazoparib).
+- Multi‑study labeling by setting `study_view_filter` with multiple IDs in pyBioPortal call.
+- Temporal analyses: incorporate sample‑level pre/post treatment when needed.
+
+
+
+- **For partners (biopharma/biotech):**
+  - Rapid, reproducible cohort labeling from public/private studies for outcome proxies (e.g., platinum exposure).
+  - A benchmark harness to quantify lift from new model features (richer S, Fusion/AM, literature) with cost controls.
+  - Drop‑in integration for partner cohorts to evaluate responder enrichment and mechanism hypotheses with audit trails.
+- **For patient care research:**
+  - Transparent per‑variant efficacy hypotheses in HRD/DDR contexts with provenance.
+  - Faster loop from hypothesis → validation → guidance to inform prioritization studies.
+
+## Partner offering (service blueprint)
+
+- **Inputs:** Study IDs (or files), target drugs/families (e.g., platinum, PARP), gene lists, assembly (GRCh38 preferred).
+- **Process:**
+  1) Extract Treatments (patient‑level) and Mutations; build patient↔sample map.
+  2) Label exposures via keyword families; produce benchmark‑ready CSV(s).
+  3) Run benchmarks (AUPRC/AUROC) under multiple model profiles; compare lifts.
+  4) Deliver report + artifacts (CSV, JSON results, configs, logs, provenance).
+- **Outputs:** KPI summary, per‑sample scores, configuration bundle for reruns, reproducible command log.
+
+## Pipeline integration (where this fits)
+
+- Data layer: pyBioPortal Treatments + cBioPortal REST Mutations → CSV in `tools/benchmarks/data/`.
+- Model layer: Backend Evo proxy (see `api/routers/evo.py`) with flags documented in `[evo_flags_and_profiles.mdc](mdc:.cursor/rules/evo_flags_and_profiles.mdc)`.
+- Orchestration: Bench scripts `[hrd_platinum_auprc.py](mdc:tools/benchmarks/hrd_platinum_auprc.py)` and (optional) guidance endpoints.
+- Feature toggles: `DISABLE_FUSION`, `DISABLE_LITERATURE`, `EVO_USE_DELTA_ONLY`, `EVO_FORCE_MODEL`, etc.
+
+## Operational profiles (partner‑ready)
+
+- **Cost‑safe baseline (control):**
+```bash
+export DEFAULT_EVO_MODEL=evo2_1b
+export EVO_USE_DELTA_ONLY=1 EVO_SPAM_SAFE=1 EVO_MAX_FLANKS=1 EVO_MAX_MODELS=1 
+export EVO_DISABLE_TRANSCRIPT_SWEEP=1 EVO_DISABLE_SYMMETRY=1 
+export DISABLE_LITERATURE=1 DISABLE_FUSION=1
+```
+- **Richer S (bounded fan‑out):**
+```bash
+export EVO_USE_DELTA_ONLY=0 EVO_MAX_FLANKS=2 EVO_DISABLE_SYMMETRY=1
+```
+- **Fusion on (GRCh38 missense only):**
+```bash
+unset DISABLE_FUSION; export FUSION_AM_URL=<fusion_service_url>
+```
+
+## Runbook (smoke → 1k → full)
+
+- Smoke (200):
+```bash
+python - << 'PY'
+import pandas as pd
+df=pd.read_csv('tools/benchmarks/data/hrd_tcga_ov_labeled.csv')
+df['outcome_platinum']=df['outcome_platinum'].astype(str).str.lower().map({'1':1,'true':1,'0':0,'false':0}).fillna(0).astype(int)
+pos=df[df.outcome_platinum==1].head(100); neg=df[df.outcome_platinum==0].head(100)
+sample=pd.concat([pos,neg]); sample.to_csv('tools/benchmarks/data/hrd_tcga_ov_labeled_sample.csv',index=False)
+print(len(sample))
+PY
+source venv/bin/activate && python tools/benchmarks/hrd_platinum_auprc.py \
+  --csv tools/benchmarks/data/hrd_tcga_ov_labeled_sample.csv \
+  --api_base http://127.0.0.1:8000 \
+  --out tools/benchmarks/hrd_tcga_ov_labeled_sample_results.json | cat
+```
+- Scale (1k):
+```bash
+# create 1k balanced sample then run hrd_platinum_auprc.py similarly
+```
+- Full cohort: run the same script on the full labeled CSV.
+
+## KPIs and reporting
+
+- Data readiness: positives count, join rate patient↔sample, % rows with GRCh38 coords.
+- Model: AUPRC/AUROC, Confidence distribution, runtime and cost per 1k variants.
+- Lift table: Baseline vs +richer S vs +Fusion (delta and relative %).
+- Provenance: model/flag profile, service URLs, versions, timestamps.
+
+## Data policy and reproducibility
+
+- No PII used; patient IDs handled as opaque tokens; all artifacts versioned.
+- Store raw pulls and derived CSVs under `tools/benchmarks/data/`; keep command logs.
+- Prefer GRCh38 coordinates to enable Fusion; document any liftover.
+
+## Extensibility
+
+- Add drug families by extending keyword sets (e.g., PARP: olaparib, niraparib, rucaparib, talazoparib).
+- Multi‑study labeling by setting `study_view_filter` with multiple IDs in pyBioPortal call.
+- Temporal analyses: incorporate sample‑level pre/post treatment when needed.
+

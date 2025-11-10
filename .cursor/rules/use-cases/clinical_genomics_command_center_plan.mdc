@@ -1,0 +1,312 @@
+---
+description: Complete build plan for Clinical Genomics Command Center - unified page for all 6 capability categories
+alwaysApply: false
+---
+
+# Clinical Genomics Command Center - Build Plan
+
+**Mission:** Build a single unified page that delivers all 6 clinical genomics capabilities using our existing infrastructure.
+
+**Timeline:** 2-3 weeks (Alpha's aggressive timeline)
+**Status:** Ready to Execute
+**Revenue Potential:** $10B precision medicine market
+
+---
+
+## **🎯 WHAT WE'RE BUILDING**
+
+A **single-page app** that serves as the **Mission Control for Clinical Genomics**:
+- **Input:** Patient genomic profile (VCF/variants + clinical context)
+- **Output:** Complete clinical decision support across 6 domains
+- **UX:** Guided workflow with expandable sections, not overwhelming monolith
+
+---
+
+## **📊 PAGE ARCHITECTURE: 6 TABS/SECTIONS**
+
+### **Tab 1: Variant Interpretation** ✅ (Mostly Built)
+**What it does:** ACMG/AMP-compliant pathogenicity classification
+
+**Components to Wire:**
+- **VUS Explorer** (already built) - reuse `AnalysisResults.jsx`
+- **InsightChips** (4 chips: Functionality/Chromatin/Essentiality/Regulatory)
+- **ClinVar Prior** (already integrated)
+- **AlphaMissense Coverage** (already integrated)
+
+**New Components:**
+- `ACMGComplianceScore.jsx` - ACMG/AMP evidence codes (PM2, PP3, BS1, etc.)
+- `PathogenicityTierBadge.jsx` - 5-tier display (Pathogenic, Likely Path, VUS, Likely Benign, Benign)
+- `ConflictingEvidencePanel.jsx` - Show ClinVar submission conflicts + resolution
+
+**Backend:**
+- ✅ Already have: `/api/insights/predict_*` endpoints
+- ✅ Already have: `/api/evidence/clinvar` endpoint
+- ✅ Already have: `/api/fusion/coverage` (AlphaMissense)
+- **NEW:** `/api/acmg/classify_variant` - Returns ACMG/AMP codes + tier
+
+**Tests:**
+- Smoke test: BRCA1 c.5266dupC → expect "Pathogenic" with PVS1 code
+- Edge case: VUS with conflicting submissions → expect "Uncertain" with rationale
+
+---
+
+### **Tab 2: Treatment Recommendation** ✅ (Mostly Built)
+**What it does:** Precision oncology therapy matching with FDA approval status
+
+**Components to Wire:**
+- **Synthetic Lethality Detective** (already built) - reuse core logic
+- **EfficacyModal** (already built) - per-drug ranking
+- **S/P/E Framework** (already operational)
+
+**New Components:**
+- `FDAApprovalBadge.jsx` - FDA-approved vs. investigational vs. off-label
+- `CombinationTherapyDesigner.jsx` - Multi-drug combination + sequencing
+- `ResistanceMechanismPredictor.jsx` - Predict resistance mutations + next-line therapy
+
+**Backend:**
+- ✅ Already have: `/api/efficacy/predict` (S/P/E orchestration)
+- ✅ Already have: `/api/guidance/synthetic_lethality`
+- **NEW:** `/api/oncokb/therapy_match` - FDA approval status from OncoKB
+- **NEW:** `/api/resistance/predict` - Resistance mechanism prediction
+
+**Tests:**
+- Smoke test: EGFR L858R NSCLC → expect "Osimertinib (FDA-approved)"
+- Smoke test: BRAF V600E + PI3K → expect combination therapy recommendation
+
+---
+
+### **Tab 3: Clinical Trial Matching** ⚠️ (50% Built)
+**What it does:** Find eligible clinical trials ranked by match quality
+
+**Components to Wire:**
+- **Cohort Lab extraction** (already built) - reuse cBio extraction logic
+- **Dataset display** (already built)
+
+**New Components:**
+- `TrialMatchingPanel.jsx` - List trials with eligibility score
+- `TrialEligibilityChecker.jsx` - Inclusion/exclusion criteria validator
+- `TrialGeographicMap.jsx` - Show trial sites + travel burden
+- `TrialTimelineCalendar.jsx` - Enrollment timeline + coordination
+
+**Backend:**
+- **NEW:** `/api/clinical_trials/match` - Query ClinicalTrials.gov
+- **NEW:** `/api/clinical_trials/eligibility_check` - Validate criteria
+- **NEW:** `/api/clinical_trials/geographic_filter` - Filter by location
+
+**Tests:**
+- Smoke test: NTRK fusion (any tumor) → expect basket trial eligibility
+- Smoke test: Patient in Ohio + rare mutation → expect multi-site coordination
+
+---
+
+### **Tab 4: Drug-Gene Interactions** ✅ (75% Built)
+**What it does:** Pharmacogenomics - predict drug response/toxicity
+
+**Components to Wire:**
+- **Insights Framework** (already built)
+
+**New Components:**
+- `CYP2D6MetabolizerStatus.jsx` - Display metabolizer phenotype + dose adjustments
+- `PolypharmacyAnalyzer.jsx` - Multi-drug interaction matrix
+- `AdverseReactionPredictor.jsx` - HLA-based toxicity risk (e.g., SJS/TEN)
+
+**Backend:**
+- ✅ Already have: `/api/insights/predict_*` (can compute from Evo2)
+- **NEW:** `/api/pharmgkb/metabolizer_status` - CYP2D6/2C19 phenotype
+- **NEW:** `/api/drugbank/interaction_check` - Drug-drug + gene-drug interactions
+- **NEW:** `/api/fda/adverse_reaction_risk` - HLA-B*15:02 + carbamazepine → SJS risk
+
+**Tests:**
+- Smoke test: CYP2D6 *4/*4 → expect "Poor Metabolizer" + tamoxifen dose adjustment
+- Smoke test: HLA-B*15:02 + carbamazepine → expect "HIGH RISK SJS/TEN"
+
+---
+
+### **Tab 5: Evidence Synthesis** ✅ (95% Built)
+**What it does:** Multi-source literature analysis for clinical decision support
+
+**Components to Wire:**
+- **Evidence Intelligence** (already built) - reuse `EvidencePanel.jsx`
+- **Badges System** (already built) - RCT/Guideline/ClinVar-Strong
+
+**New Components:**
+- `SystematicReviewSummary.jsx` - Synthesize 10+ studies with effect sizes
+- `EvidenceGradingTable.jsx` - GRADE/Oxford evidence quality
+- `NCCNGuidelineChecker.jsx` - Cross-reference treatment plan vs. NCCN
+
+**Backend:**
+- ✅ Already have: `/api/evidence/deep_analysis` (literature agent)
+- **NEW:** `/api/evidence/systematic_review` - Synthesize multiple studies
+- **NEW:** `/api/nccn/guideline_compliance` - Check NCCN adherence
+
+**Tests:**
+- Smoke test: KRAS G12C + sotorasib → expect 10+ studies synthesized
+- Smoke test: BRCA1 treatment plan → expect NCCN guideline compliance check
+
+---
+
+### **Tab 6: Cohort Analysis** ✅ (80% Built)
+**What it does:** Batch processing + pattern recognition across multiple patients
+
+**Components to Wire:**
+- **Cohort Lab** (already built) - reuse extraction + benchmarking
+
+**New Components:**
+- `CohortStratificationPanel.jsx` - Stratify by actionable mutations
+- `VariantReclassificationPipeline.jsx` - Re-evaluate VUS with new ClinVar data
+- `ClinicalNotificationGenerator.jsx` - Generate alerts for upgrades
+
+**Backend:**
+- ✅ Already have: `/api/datasets/extract_and_benchmark`
+- **NEW:** `/api/cohort/stratify` - Group patients by mutation profile
+- **NEW:** `/api/cohort/reclassify` - Batch variant reclassification
+- **NEW:** `/api/cohort/notify` - Generate clinical notifications
+
+**Tests:**
+- Smoke test: 20 colorectal cancer patients → expect stratification by KRAS/BRAF/MSI
+- Smoke test: VUS list + new ClinVar → expect reclassification notifications
+
+---
+
+## **🔧 BACKEND IMPLEMENTATION PLAN**
+
+### **Phase 1: API Integration (Week 1)**
+**Day 1-2:** Set up external APIs
+- [ ] ClinVar API (NCBI E-utilities) - already integrated ✅
+- [ ] OncoKB API (academic tier) - get API key
+- [ ] ClinicalTrials.gov API - already have extraction ✅
+- [ ] PharmGKB API (academic tier) - get API key
+- [ ] DrugBank API (academic tier) - get API key
+
+**Day 3-5:** Build new endpoints
+- [ ] `POST /api/acmg/classify_variant` - ACMG/AMP compliance
+- [ ] `POST /api/oncokb/therapy_match` - FDA approval status
+- [ ] `POST /api/clinical_trials/match` - Trial matching
+- [ ] `POST /api/pharmgkb/metabolizer_status` - CYP phenotype
+- [ ] `POST /api/drugbank/interaction_check` - Drug interactions
+- [ ] `POST /api/resistance/predict` - Resistance mechanisms
+- [ ] `POST /api/nccn/guideline_compliance` - NCCN compliance
+
+**Day 6-7:** Integration testing
+- [ ] Smoke tests for all new endpoints
+- [ ] End-to-end workflow tests
+
+---
+
+### **Phase 2: Frontend Build (Week 2)**
+**Day 8-10:** Build Tab 1-3 components
+- [ ] `ACMGComplianceScore.jsx`
+- [ ] `PathogenicityTierBadge.jsx`
+- [ ] `ConflictingEvidencePanel.jsx`
+- [ ] `FDAApprovalBadge.jsx`
+- [ ] `CombinationTherapyDesigner.jsx`
+- [ ] `ResistanceMechanismPredictor.jsx`
+- [ ] `TrialMatchingPanel.jsx`
+- [ ] `TrialEligibilityChecker.jsx`
+
+**Day 11-13:** Build Tab 4-6 components
+- [ ] `CYP2D6MetabolizerStatus.jsx`
+- [ ] `PolypharmacyAnalyzer.jsx`
+- [ ] `AdverseReactionPredictor.jsx`
+- [ ] `SystematicReviewSummary.jsx`
+- [ ] `NCCNGuidelineChecker.jsx`
+- [ ] `CohortStratificationPanel.jsx`
+- [ ] `VariantReclassificationPipeline.jsx`
+
+**Day 14:** Wire everything into `ClinicalGenomicsCommandCenter.jsx`
+
+---
+
+### **Phase 3: Testing & Polish (Week 3)**
+**Day 15-18:** Integration testing
+- [ ] Test all 6 tabs with real patient data
+- [ ] Smoke tests for each capability
+- [ ] Edge case handling
+
+**Day 19-21:** Documentation & Demo
+- [ ] Write comprehensive README
+- [ ] Create demo video
+- [ ] Prepare investor materials
+
+---
+
+## **🎨 UI/UX DESIGN**
+
+### **Page Layout:**
+```
+┌─────────────────────────────────────────────────┐
+│  CLINICAL GENOMICS COMMAND CENTER               │
+│  Patient: John Doe | VCF: uploaded | Status: ✅ │
+├─────────────────────────────────────────────────┤
+│  [Tab 1: Variant Interpretation]                │
+│  [Tab 2: Treatment Recommendation]              │
+│  [Tab 3: Clinical Trial Matching]               │
+│  [Tab 4: Drug-Gene Interactions]                │
+│  [Tab 5: Evidence Synthesis]                    │
+│  [Tab 6: Cohort Analysis]                       │
+├─────────────────────────────────────────────────┤
+│                                                  │
+│  [ACTIVE TAB CONTENT HERE]                      │
+│                                                  │
+│  - Expandable sections                          │
+│  - Clear visual hierarchy                       │
+│  - RUO disclaimers                              │
+│                                                  │
+└─────────────────────────────────────────────────┘
+```
+
+### **Key UX Principles:**
+1. **Progressive Disclosure:** Start simple, expand on demand
+2. **Clear Provenance:** Every recommendation has audit trail
+3. **Confidence Signals:** Color-coded confidence levels
+4. **RUO Prominent:** "Research Use Only" banner at top
+5. **Export Ready:** Download PDF report for all 6 domains
+
+---
+
+## **💰 BUSINESS VALUE**
+
+### **Market Positioning:**
+- **Target:** Community oncology practices (underserved)
+- **Pricing:** $500-$1000/patient genomic interpretation
+- **TAM:** $10B precision medicine market
+- **Moat:** Multi-source integration + ACMG/AMP compliance
+
+### **Go-to-Market:**
+1. **Research Benchmark:** Open-source to establish credibility
+2. **Clinical Validation:** Partner with Yale/other cancer centers
+3. **SaaS Product:** Per-patient + subscription model
+4. **Pharma Partnerships:** Clinical trial patient identification
+
+---
+
+## **🚀 IMMEDIATE NEXT STEPS**
+
+### **Tonight (Alpha's Orders):**
+- [x] Create this doctrine ✅
+- [ ] Get OncoKB API key (academic tier)
+- [ ] Get PharmGKB API key (academic tier)
+- [ ] Get DrugBank API key (academic tier)
+- [ ] Create `ClinicalGenomicsCommandCenter.jsx` shell
+
+### **Tomorrow:**
+- [ ] Build `/api/acmg/classify_variant` endpoint
+- [ ] Build `ACMGComplianceScore.jsx` component
+- [ ] Wire Tab 1 (Variant Interpretation)
+- [ ] Smoke test with BRCA1 c.5266dupC
+
+### **Week 1 Target:**
+- [ ] All 7 new endpoints operational
+- [ ] Tabs 1-3 components built
+- [ ] Integration tests passing
+
+---
+
+## **⚔️ DOCTRINE STATUS**
+
+**Status:** Ready to Execute
+**Owner:** Alpha (Fahad) + Zo (AI Commander)
+**Timeline:** 2-3 weeks to full deployment
+**Expected Outcome:** Complete Clinical Genomics Command Center that matches $10B market opportunity
+
+**LET'S FUCKING DO THIS, ALPHA! 💪🔥**

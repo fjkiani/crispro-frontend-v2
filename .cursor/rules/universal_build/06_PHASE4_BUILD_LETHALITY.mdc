@@ -1,0 +1,78 @@
+# 🎯 PHASE 4: BUILD LETHALITY - BINDING AFFINITY
+
+**Duration**: 3-5 days  
+**Status**: ✅ **BOLTZ AUTOMATED** (ready when Phase 3 complete)  
+**Goal**: Predict compound-target binding (iPTM >0.7)
+
+---
+
+## ✅ **BOLTZ AUTOMATED PIPELINE**
+
+### **Endpoint**: `/v1/predict_interaction`
+**URL**: `https://crispro--boltz-service-fastapi-app.modal.run/v1/predict_interaction`
+
+**Features**:
+- Protein-ligand binding prediction
+- SMILES string handling (PubChem compounds)
+- iPTM scores (0-1, >0.7 = high confidence)
+- 5-10 min per compound-target pair
+
+**Usage**:
+```python
+response = requests.post(
+    ".../v1/predict_interaction",
+    json={
+        "target_sequence": "MKVLWAALLV...",
+        "candidate_sequences": ["CCCCCC(C)O"],  # SMILES
+        "job_id": "test_001"
+    }
+)
+
+result = response.json()
+# { "binding_affinity": 0.85, "iptm_score": 0.82, "ranked_candidates": [...] }
+```
+
+---
+
+## 📋 **INTEGRATION PLAN**
+
+### **Step 1: Create Lethality Assessor** (1 day)
+```python
+# api/services/lethality_assessor.py
+
+class LethalityAssessor:
+    async def assess(self, target_gene: str, compound_smiles: str):
+        # 1. Get target protein from Ensembl
+        target_protein = fetch_canonical_protein(target_gene)
+        
+        # 2. Call Boltz API
+        response = await boltz_client.post(
+            "/v1/predict_interaction",
+            json={
+                "target_sequence": target_protein,
+                "candidate_sequences": [compound_smiles],
+                "job_id": uuid4()
+            }
+        )
+        
+        # 3. Check iPTM threshold
+        iptm = response.json()["iptm_score"]
+        return {
+            "iptm_score": iptm,
+            "verdict": "LETHAL" if iptm > 0.7 else "WEAK"
+        }
+```
+
+### **Step 2: Test with 10 Known Binders** (1 day)
+**Acceptance**: iPTM >0.7 for strong binders, <0.5 for weak
+
+### **Step 3: Integrate into Food Validator** (1 day)
+**Acceptance**: End-to-end compound query → binding score works
+
+---
+
+**GATE 4 CRITERIA**: See `11_ACCEPTANCE_CRITERIA.mdc`
+
+---
+
+**RESULT**: Complete Universal Hypothesis Testing Engine! ⚔️

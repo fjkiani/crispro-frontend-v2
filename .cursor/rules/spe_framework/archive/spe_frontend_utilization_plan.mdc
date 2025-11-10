@@ -1,0 +1,153 @@
+---
+alwaysApply: false
+description: Frontend S/P/E Utilization Plan – APIs, hooks, components, flags, and acceptance criteria
+---
+
+# S/P/E Frontend Utilization – Concise Plan
+
+## Scope
+Wire the S/P/E framework across the frontend using existing backend endpoints and artifacts, with RUO labeling and provenance.
+
+## Purpose & Value
+- Turn raw variant inputs into plain, auditable signals (chips) and a ranked therapy hypothesis (WIWFM) backed by S/P/E.
+- Make confidence and evidence transparent (tiers, badges, provenance).
+- Allow users to switch operational profiles (Baseline/SP, Full/SPE, Fusion when eligible) to balance cost vs. confidence.
+
+## APIs (existing)
+- POST `/api/efficacy/predict` (S/P/E aggregation)
+- POST `/api/insights/predict_protein_functionality_change`
+- POST `/api/insights/predict_chromatin_accessibility`
+- POST `/api/insights/predict_gene_essentiality`
+- POST `/api/insights/predict_splicing_regulatory`
+- GET/POST `/api/evidence/clinvar` (context/deep analysis)
+- GET `/api/fusion/coverage` (when eligible)
+
+## Hooks (new)
+- `useEfficacyPredict({ mutations, profile })` → { drugs[], run_id, provenance }
+- `useInsightsBundle({ variant })` → { functionality, chromatin, essentiality, regulatory, provenance }
+- `useClinVar({ coords|hgvs })` → { classification, review_status }
+- `useFusionCoverage({ chrom,pos,ref,alt })` → { eligible:boolean }
+
+## Types
+Align FE types to backend schemas (drugs[*], insights, badges, tiers, provenance). Add guards for optional fields.
+
+## Components
+- `MyelomaDigitalTwin` → calls `useEfficacyPredict`; profile toggles (Baseline/SP, Full/SPE, Fusion when eligible)
+- `EfficacyModal` → table (drug, confidence, tier, badges); row expand → insights + rationale
+- `TargetDossier` → 4 insight chips + rationale + provenance; “Run WIWFM” CTA
+- `VUS Explorer` → chips + coverage (ClinVar, Fusion) + WIWFM modal; `ProvenanceBar`
+- `ProvenanceBar` (global) → run_id, profile, flags; Save/Load session
+
+## Feature Flags & Labels
+- Profiles: Baseline (SP), Full (SPE), Fusion (eligible only)
+- RUO labels in headers/footers; Fusion banner when active
+
+## Cohort Overlays (future-ready)
+- If present in efficacy response, show overlay card (n, response rate) and confidence lift badge on affected drugs
+
+## UX/States
+- Loading/skeleton; error toasts; empty safe states
+- Deterministic ordering; consistent number formatting; confidence as 0–1 chips
+
+## Tests
+- Hook response shape guards
+- Component render with empty/error states
+- Snapshot of `EfficacyModal` table with badges/tiers
+
+## Acceptance Criteria
+- MDT shows ranked drugs with confidence/tier/badges; toggles switch profiles
+- Dossier shows 4 chips with rationale and provenance
+- VUS Explorer: chips + WIWFM modal + ProvenanceBar visible
+- RUO labels shown; Fusion only when eligible
+- All calls include/run_id surfaced; no console errors
+
+---
+
+# Application Map – Where and Why S/P/E is Used
+
+## Pages
+- Myeloma Digital Twin (WIWFM)
+  - Use: `/api/efficacy/predict`
+  - Why: Provide ranked drug classes per variant set with confidence and evidence tier. Profile toggles to demonstrate SP vs SPE impact.
+  - Render: Rank table, badges (PathwayAligned/ClinVar-Strong when present), insights summary per drug, provenance bar.
+
+- Target Dossier (single‑variant deep dive)
+  - Use: 4 insights endpoints; optional ClinVar context for helper copy.
+  - Why: Convert complexity into 4 simple chips with rationale and provenance; prime the user for WIWFM.
+  - Render: Chips (Functionality/Chromatin/Essentiality/Regulatory) + expandable rationale; CTA: Run WIWFM.
+
+- VUS Explorer
+  - Use: Insights bundle + ClinVar lookup + Fusion coverage; WIWFM modal on demand.
+  - Why: Fast triage from unknown to actionable with minimal clicks; show coverage context.
+  - Render: Chips, coverage badges (ClinVar class, Fusion eligible), WIWFM button, provenance bar (run_id/profile).
+
+- Evidence Intelligence (read‑only for v1)
+  - Use: ClinVar deep analysis response attached to efficacy result.
+  - Why: Surface prior strength and review status when available to justify tiers/badges.
+  - Render: Classification, review status, and citations (if present) with RUO label.
+
+- Cohort Lab (future‑ready wiring)
+  - Use: When overlays appear in efficacy response, show overlay card and small confidence lift indicator on affected drugs.
+  - Why: Provide real‑world prevalence/response hints without changing ranking logic in v1.
+
+## Shared Components
+- EfficacyModal
+  - Input: `useEfficacyPredict` result.
+  - Output: Ranked table; row details show insights and rationale array.
+  - Purpose: Consistent drug ranking experience across pages.
+
+- ProvenanceBar
+  - Input: `run_id`, profile, flags.
+  - Purpose: Cross‑page audit trail and quick debugging; add Save/Load session.
+
+- InsightChip
+  - Input: score ∈ [0,1], label, helper, provenance.
+  - Purpose: Plain signal abstraction with thresholds and transparent source.
+
+---
+
+# Flows & State
+
+## Profiles & Flags
+- Profiles widget controls request payload: { ablation_mode: "SP" | "SPE", enable_fusion: boolean }.
+- Persist current profile in session/localStorage and include in provenance UI.
+
+## Run Lifecycle
+1) User submits variants → call insights (optional) → call efficacy → render results.
+2) Store `run_id`, profile, and request snapshot in session.
+3) On rerun with different profile, diff the results (optional v2) and keep both runs in session history.
+
+## Error/Empty Handling
+- Insights down: show disabled chips with tooltip (service unavailable) and allow WIWFM to proceed.
+- Efficacy down: show empty table with retry and copy the error to console for debugging.
+- ClinVar/Lit sparse: keep tiers conservative; display placeholders.
+
+---
+
+# Non‑Functional Requirements
+
+## Performance
+- Debounce variant input; avoid redundant calls on unchanged payloads.
+- Cache last insights per variant in memory for the session.
+
+## Accessibility
+- Use semantic tables, ARIA labels on chips/badges, and keyboard navigation in modals.
+
+## Observability (Dev‑only)
+- Log latency, response size, and error rate per endpoint to console (behind a dev flag).
+
+---
+
+# Rollout Plan
+1) Hooks + types + EfficacyModal (used by MDT) [day 1–2]
+2) Dossier insight chips + rationale [day 2–3]
+3) VUS Explorer: chips + WIWFM modal + ProvenanceBar [day 3–4]
+4) RUO labels, profile toggles, Fusion eligible banner [day 4]
+5) QA + Tests + polish [day 5]
+
+---
+
+# Open Questions (track in issues)
+- Should insight chips display thresholds or raw values only?
+- Do we pin profile defaults per page (e.g., MDT = SPE by default)?
+- Which badges are shown when literature is empty but ClinVar present?

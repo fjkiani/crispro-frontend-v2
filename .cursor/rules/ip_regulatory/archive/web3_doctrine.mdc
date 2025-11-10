@@ -1,0 +1,131 @@
+---
+alwaysApply: false
+description: Web3 Doctrine – On-chain provenance, IP/royalty rails, bounties, and roadmap to deliver partner value
+---
+
+# Web3 Doctrine – Why, What, How (plain‑language overview)
+
+## Why Web3 (in simple terms)
+- Trust: Partners should be able to click a result and verify "what was run" without asking us. Web3 gives a tamper‑evident receipt for every important action.
+- Fair sharing: If our platform helps invent something valuable, the royalty and co‑inventor split should be automatic and transparent.
+- c
+- Smooth handoffs: Standard "receipts" (attestations) make it easy to replicate results, cite them in dossiers, and license assets.
+
+## Our unique approach (how it works day‑to‑day)
+- Every important run (insight, efficacy, benchmark) can mint a short "receipt" on‑chain with a run ID, the profile used (e.g., Baseline/Fusion), and a cryptographic hash of inputs/outputs.
+- When our engine contributes to a new design, we can register an IP/royalty agreement (aligned with our co‑inventor doctrine) so value sharing is automated later.
+- Cohorts and benchmarks get a public registry entry with their hash and metrics. People can replicate runs and earn bounties for verification.
+- Privacy‑first: never put patient data on‑chain. Only short hashes and public metadata; the actual data stays in secure storage.
+
+## Capabilities – what we will ship
+1) Provenance Attestations
+   - For: `/api/insights/predict_*`, `/api/efficacy/predict`, `/api/datasets/extract_and_benchmark`.
+   - Include: `{ run_id, profile, api, inputs_hash, outputs_hash, timestamp }`.
+   - Display in FE Provenance bars.
+
+2) IP/royalty contracts (doctrine‑aligned)
+   - Co‑inventor shares based on contribution metrics (endpoints used, novelty flags, AI‑authored rationale share).
+   - Mirrors platform terms (2–5% royalty, contribution %), links to Dossier and blueprint IDs.
+
+3) Dataset and Benchmark Registry
+   - Register dataset manifests (hash‑only) with study/source metadata; publish benchmark metrics (e.g., AUROC/AUPRC) and profile.
+   - Support replication bounties; store verifier attestations.
+
+4) Curation and Replication Bounties
+   - Literature MoA‑targeted curation bounties; reputation scoring for curators.
+   - Benchmark replication bounties to increase trust in metrics.
+
+## Integration points (where it shows up in the app)
+- VUS Explorer and Dossier
+  - Show “Verified on‑chain” badge near `ProvenanceBar` when attestation exists.
+  - Link to transaction/explorer; show profile used (Baseline/Richer/Fusion).
+
+- cBio Data Lab
+  - Register extraction manifest (hash + study/filters) and benchmark result hash.
+  - Expose “Request replication” button; display verifier attestations count.
+
+- TherapeuticBlueprint/ConquestStages
+  - Add IP royalty disclosure and contribution widget; show contract address or claim link.
+  - Surface `provenance.contribution` from backend.
+
+References to files:
+- [TherapeuticBlueprint.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/dossier/canisters/TherapeuticBlueprint.jsx)
+- [ConquestStages.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/dossier/canisters/ConquestStages.jsx)
+- [AnalysisResults.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/vus/AnalysisResults.jsx)
+- [TargetDossierRunner.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/dossier/TargetDossierRunner.jsx)
+- [cbio_data_lab.mdc](mdc:.cursor/rules/cbio_data_lab.mdc)
+
+## Backend surfaces (plain‑language API)
+- `POST /api/web3/attest` { run_id, profile, api, inputs_hash, outputs_hash } → { tx, url }
+  - Create a provenance receipt for a run.
+- `POST /api/web3/ip/register` { dossier_id, contribution } → { contract, url }
+  - Register an IP/royalty entry tied to a dossier and contribution split.
+- `POST /api/web3/dataset/register` { dataset_hash, meta } → { tx, url }
+  - Register a dataset manifest (hash‑only) with public metadata.
+- `POST /api/web3/benchmark/register` { dataset_hash, metrics, profile } → { tx, url }
+  - Register benchmark results for a dataset and profile.
+
+Notes
+- Backend implements chain adapters; FE only calls our API.
+- All hashes computed server‑side; no raw data leaked.
+
+## Roadmap (phased, with impact)
+Phase 1 (4–6 weeks)
+- Ship attestation flow for insights/efficacy/benchmarks (run provenance).
+- Add “Verified on‑chain” badges and links in `ProvenanceBar`.
+  Impact: immediate auditability; partner trust lift; faster diligence.
+
+Phase 2 (6–12 weeks)
+- IP/royalty contract registration from Dossier; contribution widget reads contract state.
+- Dataset/benchmark registry + replication bounties.
+  Impact: automated revenue sharing; growing public benchmark credibility.
+
+Phase 3 (12+ weeks)
+- Compute‑to‑Data integrations for partner cohorts.
+- Token‑gated access to validated artifacts; marketplace for design assets.
+  Impact: privacy‑preserving external validation; new monetization channels.
+
+## Partner‑value metrics (investor‑focused)
+- Provenance coverage: ≥90% of insights/efficacy/benchmark runs attested on‑chain by Q2.
+- Time‑to‑audit: <30s to verify run provenance (hash match + profile flags) from UI.
+- Royalty pipeline: ≥20 co‑inventor filings in year 1; platform contribution ≥30% on average; target royalty rate 2–5%.
+- Cohort growth: ≥10 public datasets registered; ≥5 partner/private manifests; replication attestations ≥2 per benchmark.
+- Benchmark marketplace: ≥50 registered benchmark entries; ≥30% replicated at least once; median AUROC/AUPRC lift documented per profile.
+- Evidence velocity: ≥200 curated MoA‑targeted citations with reputation scores; 70% reused across dossiers.
+- SaaS metrics: pilot ARR $250–500k in 6–9 months; gross margin ≥80%; payback <6 months.
+- Attach rates: ≥60% of VUS users run WIWFM; ≥30% generate Dossier; ≥20% request cohort extraction.
+- Time‑to‑value: <1 day to first attested run; <1 week to first cohort benchmark; <30 days to first co‑inventor claim.
+
+## Risk & safeguards
+- Privacy: PHI never on‑chain; only cryptographic digests and public metadata.
+- Compliance: RUO maintained; on‑chain is provenance and licensing, not clinical claims.
+- Quality: curation reputation + replication attestations mitigate low‑quality submissions.
+
+## Quick examples (how, why, what)
+- How do I verify a result?
+  - Click the “Verified on‑chain” link in the Provenance bar → compare the run hash + profile; the explorer shows when it was recorded.
+- Why should I register an IP/royalty contract?
+  - It locks in fair, contribution‑based economics now, so there is no ambiguity if the asset succeeds later.
+- What if I have a private cohort?
+  - We post only a hash and public metadata. The data stays private; replication can run via Compute‑to‑Data later.
+
+## Acceptance
+- A run in VUS/Dossier shows an on‑chain attestation; link is visible; hash verifies.
+- A benchmark registered from Data Lab appears in registry with metrics and profile.
+- A Dossier can create an IP/royalty registration and display its contribution breakdown.
+
+
+
+## Quick examples (how, why, what)
+- How do I verify a result?
+  - Click the “Verified on‑chain” link in the Provenance bar → compare the run hash + profile; the explorer shows when it was recorded.
+- Why should I register an IP/royalty contract?
+  - It locks in fair, contribution‑based economics now, so there is no ambiguity if the asset succeeds later.
+- What if I have a private cohort?
+  - We post only a hash and public metadata. The data stays private; replication can run via Compute‑to‑Data later.
+
+## Acceptance
+- A run in VUS/Dossier shows an on‑chain attestation; link is visible; hash verifies.
+- A benchmark registered from Data Lab appears in registry with metrics and profile.
+- A Dossier can create an IP/royalty registration and display its contribution breakdown.
+

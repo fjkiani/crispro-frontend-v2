@@ -1,0 +1,885 @@
+---
+alwaysApply: true
+description: Complete platform evolution doctrine - captures our entire journey from high delta scores to junk DNA, shark cartilage to AlphaFold2, and all lessons learned
+---
+
+# 🏛️ COMPLETE PLATFORM EVOLUTION DOCTRINE
+## **The Full Journey: From High Delta Scores to Junk DNA to Precision Medicine**
+
+### **🎯 MISSION OVERVIEW**
+
+This doctrine documents our complete evolution from naive high delta score assumptions to sophisticated multi-modal validation systems. It captures every major breakthrough, failure, and lesson learned in building a precision medicine platform that can predict, design, and validate therapeutic interventions.
+
+---
+
+## **📚 CHAPTER 1: THE DELTA SCORE DELUSION**
+
+### **The Original Sin: High Delta = High Impact**
+- **Initial Assumption**: High `delta_likelihood_score` from Zeta Oracle meant high biological impact
+- **Reality Check**: High delta scores often indicated catastrophic mutations (frameshifts, nonsense) that the Oracle couldn't properly assess
+- **The Wake-Up Call**: We discovered the Oracle had a fundamental blind spot for truncating mutations
+
+### **The Triumvirate Protocol Birth**
+- **Problem**: Single-metric assessment was insufficient and dangerous
+- **Solution**: Multi-layered validation system:
+  1. **Deterministic Truncation Check**: Bioinformatic translation of CDS to catch catastrophic mutations
+  2. **Oracle Deep Analysis**: Only for non-truncating variants
+  3. **Structural Validation**: 3D protein structure assessment
+- **Impact**: Prevented false positives from high delta scores on meaningless mutations
+
+---
+
+## **📚 CHAPTER 2: THE SHARK CARTILAGE BREAKTHROUGH**
+
+### **The Use Case That Changed Everything**
+- **Target**: Shark cartilage protein sequences for anti-angiogenic therapy
+- **Challenge**: Designing novel proteins with specific biological functions
+- **Approach**: 
+  - Used Evo2 for sequence generation with biological context
+  - Integrated AlphaFold2 for structural validation
+  - Applied multi-modal scoring (sequence + structure + function)
+
+### **Key Lessons from Shark Cartilage**
+- **Context Matters**: Providing rich biological context to Evo2 improved generation quality
+- **Structure-Function Relationship**: High sequence likelihood doesn't guarantee proper protein folding
+- **The "Wet Noodle" Problem**: Sequences that score well in 1D can fail catastrophically in 3D
+- **Validation Pipeline**: Need both sequence-level and structure-level validation
+
+### **Technical Implementation**
+- **Evo2 Integration**: Used prompt-guided generation with biological context
+- **AlphaFold2 Pipeline**: Structural prediction and pLDDT scoring
+- **Multi-Modal Scoring**: Combined sequence likelihood, structural confidence, and functional predictions
+
+---
+
+## **📚 CHAPTER 3: THE BOLTZ INTEGRATION REVOLUTION**
+
+### **The Structural Validation Breakthrough**
+- **Problem**: Sequence-level scoring was insufficient for protein design
+- **Solution**: Integrated Boltz (AlphaFold2) for structural validation
+- **Implementation**: 
+  - Generated sequences with Evo2
+  - Validated structures with Boltz
+  - Scored based on pLDDT confidence and structural integrity
+
+### **The Command Center Architecture**
+- **Orchestration**: Central service managing complex multi-stage workflows
+- **Parallel Processing**: Used `asyncio.gather` for batch validation steps
+- **Error Handling**: Graceful degradation when services unavailable
+- **Provenance Tracking**: Complete audit trail of all operations
+
+### **Key Technical Patterns**
+- **Service Communication**: Modal service-to-service calls using `modal.Cls.lookup()`
+- **Resource Scaling**: Proper CPU/memory allocation for ML workloads
+- **Build Dependencies**: Including `build-essential` for complex ML libraries
+- **Container Strategy**: Using NVIDIA CUDA base images for stability
+
+---
+
+## **📚 CHAPTER 4: THE JUNK DNA EPIPHANY**
+
+### **The Generation Quality Crisis**
+- **Problem**: Evo2 was generating biologically meaningless sequences
+- **Root Cause**: Poor prompt quality and inappropriate generation tasks
+- **The "Pathological Attractor"**: Low-complexity, repetitive sequences forced model into failure states
+
+### **The Oracle's Dual Nature Discovery**
+- **As a Scorer (The Sniper)**: Precision instrument for variant effect prediction
+- **As a Generator (The Poet)**: Long-form sequence author requiring substantial context
+- **Critical Insight**: Oracle is NOT a tool for single-nucleotide prediction or short-form in-filling
+
+### **The Pathological Prompt Doctrine**
+- **High-Quality Context → High-Quality Output**: Complex, biologically relevant prompts produce coherent results
+- **Low-Quality Context → Pathological Output**: Repetitive sequences create failure states
+- **Mission Imperative**: Always pose biologically reasonable questions
+
+---
+
+## **📚 CHAPTER 5: THE MULTI-MODAL VALIDATION SYSTEM**
+
+### **The S/P/E Framework**
+- **Sequence (S)**: Evo2 delta scores, multi-window analysis, gene-specific calibration
+- **Pathway (P)**: Variant-to-pathway mapping, weighted impact aggregation
+- **Evidence (E)**: Literature strength, ClinVar priors, MoA-aware highlighting
+
+### **The Insights Bundle**
+- **Functionality**: Protein function change prediction
+- **Chromatin**: Accessibility and regulatory impact
+- **Essentiality**: Gene dependency scoring
+- **Regulatory**: Splicing and non-coding impact
+
+### **Confidence Modulation**
+- **Evidence Gates**: Strong literature or ClinVar-Strong + pathway alignment
+- **Insights Lifts**: Modest boosts from supportive insights
+- **Transparent Scoring**: All rationale and provenance tracked
+
+---
+
+## **📚 CHAPTER 6: THE OPERATIONAL IMPROVEMENTS**
+
+### **Evo2 Stabilization**
+- **Model Routing**: Dynamic routing with `EVO_FORCE_MODEL` fallbacks
+- **Safety Hardening**: Viral content guardrails, length checks
+- **Spam Prevention**: `EVO_USE_DELTA_ONLY` default, caps on fan-out
+- **Calibration**: Gene-specific calibration snapshots for percentile conversion
+
+### **Fusion Engine Integration**
+- **AlphaMissense Coverage**: GRCh38 missense variant scoring
+- **Caching Strategy**: Redis-based result caching
+- **Fallback Logic**: Graceful degradation when services unavailable
+- **Coverage Gating**: Only enable Fusion when AM coverage exists
+
+### **Data Pipeline Hardening**
+- **ClinVar Sources**: `variant_summary.txt.gz` as primary source (not VCF)
+- **Coordinate Validation**: GRCh38 normalization, REF/ALT validation
+- **Error Handling**: Defensive parsing, retry logic, timeout management
+
+---
+
+## **📚 CHAPTER 7: THE CLINICAL VALIDATION CAMPAIGNS**
+
+### **Known Enemies Campaign**
+- **Objective**: Validate Oracle against known pathogenic variants
+- **Result**: Revealed Oracle's blind spot for truncating mutations
+- **Intelligence Victory**: Failure revealed critical system weakness
+- **Doctrine Update**: Triumvirate Protocol became mandatory
+
+### **HRD Benchmark Campaign**
+- **Target**: Homologous Recombination Deficiency prediction
+- **Data**: TCGA-OV cohort with platinum exposure labels
+- **Baseline**: AUPRC ≈ 0.498, AUROC ≈ 0.495 (near random as expected)
+- **Lift Strategy**: Richer S signals + Fusion Engine integration
+
+### **Multiple Myeloma WIWFM**
+- **Framework**: Will It Work For Me - drug efficacy prediction
+- **Output**: Per-drug ranking with confidence, evidence tier, badges
+- **Integration**: S/P/E + insights bundle for comprehensive assessment
+
+---
+
+## **📚 CHAPTER 8: THE PLATFORM ARCHITECTURE**
+
+### **Backend Services - Complete Code Inventory**
+
+#### **Core API Infrastructure**
+- **Main Application**: `oncology-coPilot/oncology-backend-minimal/api/main.py`
+  - FastAPI app initialization, CORS configuration, health endpoints
+  - Router registration and middleware setup
+  - Environment variable management and logging configuration
+
+#### **Insights Router - The Intelligence Engine**
+- **File**: `oncology-coPilot/oncology-backend-minimal/api/routers/insights.py`
+- **Endpoints**:
+  - `POST /api/insights/predict_gene_essentiality` - Evo2 multi/exon magnitudes + calibration
+  - `POST /api/insights/predict_splicing_regulatory` - Noncoding impact via Evo2 min_delta
+  - `POST /api/insights/predict_protein_functionality_change` - Domain-aware functionality scoring
+  - `POST /api/insights/predict_chromatin_accessibility` - Regulatory impact assessment
+- **Key Features**:
+  - Triumvirate Protocol compliance (truncation/frameshift gates)
+  - Gene-specific calibration snapshots
+  - Provenance tracking with method signatures
+  - Graceful degradation with placeholder values
+
+#### **Efficacy Orchestrator - The Decision Engine**
+- **File**: `oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py` (1,429 lines)
+- **Core Method**: `predict_drug_efficacy()` - The heart of our S/P/E framework
+- **Integration Points**:
+  - Sequence (S): Evo2 delta scores, multi-window analysis
+  - Pathway (P): Variant-to-pathway mapping, weighted aggregation
+  - Evidence (E): Literature strength, ClinVar priors, MoA highlighting
+  - Insights Bundle: Functionality, chromatin, essentiality, regulatory
+- **Output Schema**: Per-drug ranking with `efficacy_score`, `confidence`, `evidence_tier`, `badges`, `insights`, `rationale`, `citations`, `provenance`
+
+#### **Evo Proxy - The Sequence Oracle**
+- **File**: `oncology-coPilot/oncology-backend-minimal/api/routers/evo.py`
+- **Endpoints**:
+  - `POST /api/evo/score_variant_multi` - Multi-window variant scoring
+  - `POST /api/evo/score_variant_exon` - Exon-context scoring with adaptive flanks
+  - `POST /api/evo/generate` - Prompt-guided sequence generation (with viral content safety)
+- **Safety Features**:
+  - Viral content guardrails (HIV/SARS/EBOLA/INFLUENZA blocklist)
+  - Length validation and spam prevention
+  - Model routing with `EVO_FORCE_MODEL` fallbacks
+
+#### **Design Router - The Weapon Forge**
+- **File**: `oncology-coPilot/oncology-backend-minimal/api/routers/design.py`
+- **Endpoints**:
+  - `POST /api/design/generate_guide_rna` - Evo2 prompt-guided guide generation
+- **Features**:
+  - PAM windowing (NGG sites, 20bp windows)
+  - Heuristic scoring (GC content, homopolymer penalties, efficacy estimates)
+  - Safety gates and viral content checks
+
+#### **Fusion Engine - The AlphaMissense Integration**
+- **File**: `oncology-coPilot/oncology-backend-minimal/api/routers/fusion.py`
+- **Endpoints**:
+  - `POST /api/fusion/score_variant` - AlphaMissense variant scoring
+  - `GET /api/fusion/coverage` - Coverage checking for GRCh38 missense variants
+- **Features**:
+  - GRCh38-only guardrails
+  - Redis caching for performance
+  - Graceful degradation when service unavailable
+
+#### **Datasets API - The Cohort Intelligence**
+- **File**: `oncology-coPilot/oncology-backend-minimal/api/routers/datasets.py`
+- **Endpoints**:
+  - `POST /api/datasets/extract_and_benchmark` - Cohort extraction and HRD benchmarking
+  - `GET /api/datasets/studies` - Available study listings
+- **Integration**:
+  - cBioPortal extraction via pyBioPortal
+  - GDC API integration (with chunked POST fixes)
+  - TCGA-OV platinum exposure labeling
+  - HRD AUPRC/AUROC benchmarking
+
+#### **Evidence Services - The Literature Intelligence**
+- **File**: `oncology-coPilot/oncology-backend-minimal/api/routers/evidence.py`
+- **Endpoints**:
+  - `POST /api/evidence/deep_analysis` - ClinVar + literature integration
+  - `GET /api/evidence/clinvar` - ClinVar variant lookup
+- **Features**:
+  - Multi-provider literature search (PubMed, OpenAlex, S2)
+  - MoA-aware term targeting
+  - Citation deduplication and ranking
+
+### **Frontend Integration - Complete Component Inventory**
+
+#### **Core Demo Applications**
+- **Myeloma Digital Twin**: `oncology-coPilot/oncology-frontend/src/components/MyelomaDigitalTwin.jsx`
+  - Live API integration with `/api/efficacy/predict`
+  - Per-drug ranking display with confidence, badges, insights
+  - Profile toggles (Baseline/Richer S/Fusion)
+  - Variant input validation and GRCh38 normalization
+
+- **Target Dossier**: `oncology-coPilot/oncology-frontend/src/components/dossier/TargetDossier.jsx`
+  - Variant insights with provenance tracking
+  - 4-chip display (Functionality/Chromatin/Essentiality/Regulatory)
+  - Rationale arrays and calibration snapshots
+  - IND Package generation integration
+
+#### **Analysis and Exploration Tools**
+- **VUS Explorer**: `oncology-coPilot/oncology-frontend/src/components/vus/`
+  - `MutationTable.jsx` - Variant input and validation
+  - `AnalysisResults.jsx` - Insight chips and coverage display
+  - `EfficacyModal.jsx` - WIWFM integration
+  - `CrisprReadinessPanel.jsx` - Design path preview (Demo mode)
+
+- **Cohort Lab**: `oncology-coPilot/oncology-frontend/src/components/ResearchPortal/`
+  - Dataset extraction interface
+  - Benchmark execution and metrics display
+  - Artifact download and coverage analysis
+
+#### **Supporting Components**
+- **Evidence Intelligence**: `oncology-coPilot/oncology-frontend/src/components/EvidenceIntelligence/`
+  - Multi-tab evidence analysis
+  - Citation management and provenance display
+  - Badge system (RCT/Guideline/ClinVar-Strong/PathwayAligned)
+
+- **Session Management**: `oncology-coPilot/oncology-frontend/src/context/SessionContext.jsx`
+  - Analysis persistence and cross-page resume
+  - Profile management and caching
+  - Provenance tracking with run IDs
+
+### **Data Flow Architecture - Technical Implementation**
+
+#### **Config → Display Pipeline**
+- **Backend**: Pydantic models in `oncology-coPilot/oncology-backend-minimal/api/schemas/`
+  - `insights.py` - Insight response schemas
+  - `efficacy.py` - Drug efficacy response schemas
+  - `datasets.py` - Cohort and benchmark schemas
+- **Frontend**: TypeScript interfaces in `oncology-coPilot/oncology-frontend/src/types/`
+  - Seamless type safety from API to UI
+  - Automatic validation and error handling
+
+#### **Provenance Tracking System**
+- **Run ID Generation**: UUID-based tracking across all operations
+- **Profile Management**: Feature flags for Baseline/Richer S/Fusion modes
+- **Audit Trails**: Complete operation history with timestamps and parameters
+- **Caching Strategy**: Redis for backend, localStorage for frontend persistence
+
+#### **Error Handling and Resilience**
+- **Graceful Degradation**: Placeholder values when services unavailable
+- **Retry Logic**: Exponential backoff for transient failures
+- **Circuit Breakers**: Automatic service health monitoring
+- **User Feedback**: Toast notifications and loading states
+
+---
+
+## **📚 CHAPTER 8.5: THE LEGACY CODEBASE - FOUNDATION COMPONENTS**
+
+### **Original CRISPR Assistant Infrastructure**
+
+#### **Core Analysis Tools**
+- **ChopChop Integration**: `chopchop/chopchop.py` and `tools/chopchop/chopchop.py`
+  - Guide RNA design and off-target prediction
+  - Multiple scoring algorithms (Doench, uCRISPR, CRISPRoff)
+  - PAM site identification and efficiency scoring
+  - Integration with Bowtie for alignment validation
+
+- **CRISPResso2 Analysis**: `CRISPResso2/` directory
+  - Post-editing analysis and quantification
+  - Batch processing capabilities
+  - Comprehensive reporting with HTML outputs
+  - Integration with our analysis pipeline
+
+#### **Data Management and Storage**
+- **Gene Database**: `gene_database/` containing FASTA sequences
+  - `BRAF.fasta`, `BRCA1.fasta` - Key target genes
+  - Reference sequences for analysis and validation
+
+- **Reference Data**: `data/reference/` directory
+  - `hg19.fa` and `hg19.fa.fai` - Human genome reference
+  - `mutated_runx1.fa` - Custom mutated sequences for testing
+  - Annotation files (`gencode.v19.annotation.gtf.gz`)
+
+- **Database Systems**: `data/databases/`
+  - `driver_genes.db` - Cancer driver gene database
+  - `threat_matrix.db` - Threat assessment matrix
+  - SQLite-based storage for variant and pathway data
+
+#### **Analysis Scripts and Utilities**
+- **Evo2 Integration**: `scripts/evo2/evo2/` - Complete Evo2 model implementation
+  - Model loading and inference capabilities
+  - Scoring and generation functions
+  - Configuration management for different model sizes
+
+- **MSA Client**: `tools/msa_client.py` (1,133 lines) - Multiple Sequence Alignment client
+  - Comprehensive MSA analysis capabilities
+  - Integration with various alignment algorithms
+  - Result processing and visualization
+
+- **Gauntlet Client**: `tools/gauntlet_client.py` - Structural validation client
+  - AlphaFold2 integration for protein structure prediction
+  - pLDDT scoring and confidence assessment
+  - Structural integrity validation
+
+#### **Testing and Validation Framework**
+- **Unit Tests**: `tests/unit_tests/` directory
+  - `test_CRISPResso2Align.py` - Alignment algorithm testing
+  - `test_CRISPRessoBatchCORE.py` - Batch processing validation
+  - Comprehensive test coverage for core algorithms
+
+- **Integration Tests**: `tests/integration/`
+  - `test_forge_and_boltz_protocol.py` (413 lines) - End-to-end protocol testing
+  - Forge and Boltz service integration validation
+  - Multi-modal scoring system testing
+
+#### **Service Architecture (Legacy)**
+- **Command Center**: `services/command_center/main.py` - Central orchestration service
+  - Multi-stage workflow management
+  - Service-to-service communication
+  - Error handling and provenance tracking
+
+- **Oracle Service**: `services/oracle/main.py` - Zeta Oracle implementation
+  - Variant effect prediction
+  - Delta score calculation
+  - Integration with Evo2 models
+
+- **Forge Service**: `services/forge/` - Sequence generation service
+  - Evo2-based sequence generation
+  - Prompt-guided design capabilities
+  - Safety validation and filtering
+
+#### **Analysis Results and Reports**
+- **Known Mutation Validation**: `results/known_mutation_validation/`
+  - Validation reports against known pathogenic variants
+  - Performance metrics and accuracy assessments
+  - Timestamped analysis results
+
+- **Threat Reports**: `results/threat_reports/`
+  - Comprehensive threat assessment outputs
+  - Tissue-specific analysis results
+  - JSON-formatted reports with full provenance
+
+- **Tissue Profiles**: `results/tissue_profiles/`
+  - Organ-specific expression and vulnerability profiles
+  - Stressed condition modeling
+  - Comparative analysis datasets
+
+### **Legacy to Modern Migration Path**
+
+#### **Preserved Components**
+- **Core Algorithms**: ChopChop, CRISPResso2, Evo2 integration
+- **Data Structures**: Gene databases, reference sequences, annotation files
+- **Testing Framework**: Unit and integration test suites
+- **Analysis Results**: Historical validation and benchmark data
+
+#### **Modernized Components**
+- **API Architecture**: Migrated from service-based to FastAPI router-based
+- **Frontend Integration**: React components replacing Streamlit pages
+- **Data Flow**: RESTful APIs replacing direct service calls
+- **Provenance**: Enhanced tracking and audit capabilities
+
+#### **Deprecated Components**
+- **Streamlit Pages**: `pages/` directory - Replaced by React frontend
+- **Legacy Services**: Direct Modal service calls - Replaced by API proxies
+- **Manual Analysis**: Command-line tools - Replaced by web interfaces
+
+---
+
+## **📚 CHAPTER 9: THE LESSONS LEARNED**
+
+### **Technical Lessons**
+
+#### **Modal Service Communication Patterns**
+- **Sync vs Async Context**: Use `.call()` for sync, `.remote()` for async
+- **Service Discovery**: `modal.Cls.lookup("app-name")` for service-to-service calls
+- **Resource Scaling**: ML workloads need 64GB+ RAM for large models
+- **Build Dependencies**: Always include `build-essential` for complex libraries
+- **Container Strategy**: NVIDIA CUDA base images for stability
+- **Error Handling**: Graceful degradation with placeholder values
+
+#### **Code Architecture Patterns**
+- **Router-Based APIs**: FastAPI routers for modular endpoint organization
+- **Pydantic Schemas**: Type-safe request/response validation
+- **Provenance Tracking**: UUID-based run IDs with complete audit trails
+- **Feature Flags**: Environment-based toggles for different operational profiles
+- **Caching Strategy**: Redis for backend, localStorage for frontend persistence
+
+#### **Data Pipeline Patterns**
+- **Triumvirate Protocol**: Truncation check → Oracle analysis → Structural validation
+- **Multi-Modal Scoring**: S/P/E framework with insights bundle integration
+- **Calibration Systems**: Gene-specific percentile conversion for cross-gene comparison
+- **Coordinate Validation**: GRCh38 normalization and REF/ALT validation
+- **Error Recovery**: Retry logic with exponential backoff and circuit breakers
+
+### **Scientific Lessons**
+- **Multi-Modal Validation**: Single metrics are insufficient
+- **Context Dependency**: Generation quality depends on prompt quality
+- **Structure-Function Relationship**: Sequence likelihood ≠ structural viability
+- **Evidence Integration**: Literature + ClinVar + pathway alignment
+- **Calibration Importance**: Gene-specific calibration for cross-gene comparison
+
+### **Operational Lessons**
+- **Incremental Development**: Build and test components individually
+- **Mock-Driven Enhancement**: Use mocks for frontend development
+- **Profile Management**: Feature flags for different risk/cost profiles
+- **Provenance Tracking**: Complete audit trails for reproducibility
+- **Graceful Degradation**: System works even when components fail
+
+---
+
+## **📚 CHAPTER 10: THE CURRENT STATE**
+
+### **Operational Capabilities**
+- **Variant Analysis**: Complete S/P/E + insights bundle
+- **Drug Efficacy**: Per-drug ranking with confidence and evidence
+- **Cohort Analysis**: Dataset extraction and benchmark execution
+- **CRISPR Design**: Guide RNA generation with safety checks
+- **Structural Validation**: AlphaFold2 integration for protein design
+
+### **Demo Readiness**
+- **MM WIWFM**: Live drug efficacy prediction
+- **VUS Explorer**: Unknown variant triage and analysis
+- **Cohort Lab**: Dataset extraction and benchmarking
+- **Evidence Intelligence**: Multi-modal evidence analysis
+- **IND Package**: Regulatory documentation generation
+
+### **Technical Maturity**
+- **API Stability**: All endpoints operational with proper error handling
+- **Data Pipeline**: Robust extraction and validation workflows
+- **Frontend Integration**: Live API calls with fallback handling
+- **Provenance System**: Complete audit trails and reproducibility
+- **Performance**: Caching and optimization for production use
+
+---
+
+## **🎯 STRATEGIC IMPLICATIONS**
+
+### **Competitive Advantage**
+- **Multi-Modal Validation**: Beyond single-metric approaches
+- **Clinical Integration**: Real-world evidence and validation
+- **Platform Co-Invention**: IP royalty model for AI contributions
+- **Rapid Iteration**: Hypothesis → validation → design cycles
+
+### **Market Position**
+- **Precision Medicine**: Personalized therapeutic design
+- **Research Acceleration**: Faster hypothesis validation
+- **Clinical Decision Support**: Evidence-based recommendations
+- **Regulatory Compliance**: FDA-grade documentation and validation
+
+### **Future Roadmap**
+- **Expanded Drug Classes**: PARP inhibitors, immunotherapy
+- **Cross-Study Validation**: Multi-cohort benchmarking
+- **Real-Time Updates**: Live evidence integration
+- **Global Deployment**: International regulatory compliance
+
+---
+
+## **📚 CHAPTER 11: STRATEGIC IMPLEMENTATION QUESTIONS FOR AGENT REVIEW**
+
+### **🔬 CONFIDENCE LIFT & KNOWLEDGE BASE INTEGRATION**
+
+#### **Q1: KB System Integration with Confidence Lift** 🤔
+**Context**: We have a complete KB system (gene/variant/pathway entities, hooks, components) and a Confidence Lift Plan (calibration, evidence tiers, SAE features).
+
+**Critical Questions**:
+1. Should confidence-related data be stored as KB entities (`confidence_snapshots`, `calibration_data`) or calculated dynamically?
+2. How should the existing KB provenance system integrate with confidence calculation provenance?
+3. Should pathway weights be stored in KB (`pathway_weights` entity) or separate `api/resources/` directory?
+4. How should calibration snapshots integrate with existing KB caching and TTL system?
+5. Should evidence tiers be KB entities or calculated from existing evidence data?
+
+#### **Q2: Component Architecture Decisions** 🤔
+**Context**: Current components: `AnalysisResults.jsx`, `InsightChips.jsx`, `CoverageChips.jsx` with KB integration. Confidence Lift Plan: `EvidenceBand.tsx`, `CohortContextPanel.tsx`, `FeatureChips.tsx`.
+
+**Critical Questions**:
+1. Should I extend existing `AnalysisResults.jsx` or create new `EvidenceBand.tsx` component?
+2. How should `CohortContextPanel.tsx` integrate with existing `KbCoverageChip.jsx`?
+3. Should confidence/tier/badges display be integrated into existing components or separate UI?
+4. How should `FeatureChips.tsx` (SAE features) integrate with existing `InsightChips.jsx`?
+5. Where should the confidence lift visualization appear in the current VUS Explorer layout?
+
+#### **Q3: Data Flow & Calculation Strategy** 🤔
+**Context**: KB data fetching with caching, existing `efficacy.py` S/P/E orchestration. Confidence Lift Plan: calibration, evidence gating, Fusion integration.
+
+**Critical Questions**:
+1. Should confidence lifts be calculated in backend (`efficacy.py`) or frontend display layer?
+2. How should calibration snapshots be stored (JSON files, database, in-memory cache)?
+3. Should evidence gating logic be in `efficacy.py` or separate `evidence_service.py`?
+4. How should Fusion coverage gating integrate with existing `fusion.py` service?
+5. Should confidence calculations be cached separately or integrated with KB caching?
+
+### **🔧 BACKEND SERVICE ARCHITECTURE**
+
+#### **Q4: Backend Service Architecture** 🤔
+**Context**: Modular KB router, existing `insights.py`, `efficacy.py`, `evidence.py`. Confidence Lift Plan: new services for calibration, SAE, confidence calculation.
+
+**Critical Questions**:
+1. Should I create new `calibration.py` service or extend existing `insights.py`?
+2. How should `sae.py` service integrate with existing insights endpoints?
+3. Should confidence calculation be a separate service or integrated into `efficacy.py`?
+4. How should pathway weights service integrate with existing KB client?
+5. Should evidence gating be in `evidence.py` or separate `confidence_service.py`?
+
+#### **Q5: Data Storage & Schema Questions** 🤔
+**Context**: KB schemas for gene/variant/pathway, JSON file storage. Confidence Lift Plan: new schemas for confidence, calibration, evidence tiers.
+
+**Critical Questions**:
+1. What's the exact schema for calibration snapshots (gene→percentile→confidence mapping)?
+2. How should pathway weights be structured (gene→pathway→disease→weight hierarchy)?
+3. What's the schema for evidence tiers (tier→confidence→badges→citations)?
+4. Should confidence data be versioned (snapshots with timestamps)?
+5. How should SAE feature data be stored (feature→activation→interpretation)?
+
+#### **Q6: API Endpoint Design** 🤔
+**Context**: KB endpoints, existing insights/efficacy/evidence endpoints. Confidence Lift Plan: new endpoints for confidence, calibration, SAE.
+
+**Critical Questions**:
+1. Should confidence calculation be a new endpoint or integrated into existing `/api/efficacy/predict`?
+2. How should calibration endpoints integrate with existing KB client endpoints?
+3. Should SAE features be separate endpoints or integrated into insights?
+4. How should evidence gating be exposed via API (query params, separate endpoint)?
+5. Should confidence lifts be calculated on-demand or pre-computed?
+
+### **🎨 FRONTEND INTEGRATION**
+
+#### **Q7: UI Component Integration** 🤔
+**Context**: KB hooks (`useKb.js`), KB components (`KbHelperTooltip`, `KbCoverageChip`). Confidence Lift Plan: new components for confidence display, cohort overlays.
+
+**Critical Questions**:
+1. How should confidence visualization integrate with existing KB components?
+2. Should cohort overlays be separate panels or integrated into existing coverage chips?
+3. How should evidence tier display integrate with existing `KbProvenancePanel`?
+4. Should confidence lifts be displayed as separate chips or integrated into existing insight chips?
+5. How should SAE feature display integrate with existing tooltip system?
+
+#### **Q8: State Management & Caching** 🤔
+**Context**: KB hooks with TTL caching, ActivityContext for logging. Confidence Lift Plan: confidence state, calibration caching, evidence state.
+
+**Critical Questions**:
+1. How should confidence state integrate with existing KB caching system?
+2. Should calibration data be cached separately or integrated with KB cache?
+3. How should evidence state integrate with existing ActivityContext logging?
+4. Should confidence calculations be cached with different TTL than KB data?
+5. How should confidence lifts be persisted across component re-renders?
+
+#### **Q9: User Experience & Interaction** 🤔
+**Context**: VUS Explorer with KB integration, tooltips, coverage chips. Confidence Lift Plan: confidence visualization, cohort overlays, evidence tiers.
+
+**Critical Questions**:
+1. How should confidence visualization be displayed (progress bars, chips, numbers)?
+2. Should cohort overlays be hover tooltips or expandable panels?
+3. How should evidence tiers be displayed (badges, colors, icons)?
+4. Should confidence lifts be shown as deltas or absolute values?
+5. How should SAE features be displayed (tooltips, expandable sections)?
+
+### **🔬 SCIENTIFIC & DOMAIN**
+
+#### **Q10: Confidence Calculation Logic** 🤔
+**Context**: S/P/E framework with insights bundle. Confidence Lift Plan: calibration, evidence gating, Fusion integration.
+
+**Critical Questions**:
+1. What's the exact formula for confidence calculation (S+P+E+insights weights)?
+2. How should calibration percentiles be calculated (gene-specific vs. global)?
+3. What's the evidence gating logic (tier→confidence mapping)?
+4. How should Fusion coverage affect confidence calculations?
+5. What's the SAE feature contribution to confidence scores?
+
+#### **Q11: Calibration System Design** 🤔
+**Context**: Some calibration logic in `insights.py`. Confidence Lift Plan: comprehensive calibration with snapshots.
+
+**Critical Questions**:
+1. What's the calibration methodology (percentile ranking, z-score normalization)?
+2. How should calibration snapshots be generated (per-gene, per-disease, global)?
+3. What's the calibration update frequency (real-time, batch, manual)?
+4. How should calibration data be validated and quality-controlled?
+5. What's the fallback strategy when calibration data is unavailable?
+
+#### **Q12: Evidence Integration Strategy** 🤔
+**Context**: Literature service, ClinVar lookup, evidence endpoints. Confidence Lift Plan: evidence gating, tier classification, provider fallback.
+
+**Critical Questions**:
+1. What's the evidence tier classification (supported/consider/insufficient criteria)?
+2. How should evidence gating work (tier→confidence boost/penalty)?
+3. What's the provider fallback chain (PubMed→OpenAlex→S2 timeout/retry logic)?
+4. How should evidence badges be generated (RCT/Guideline/ClinVar-Strong)?
+5. What's the evidence caching strategy (TTL, invalidation, updates)?
+
+### **🚀 EXECUTION & DEPLOYMENT**
+
+#### **Q13: Phase 0 Implementation Priority** 🤔
+**Context**: KB system complete, existing VUS Explorer functional. Confidence Lift Plan: Phase 0 components (EvidenceBand, CohortContextPanel).
+
+**Critical Questions**:
+1. Which Phase 0 component should I implement first (EvidenceBand vs. CohortContextPanel)?
+2. Should I start with backend services or frontend components?
+3. How should I test confidence calculations without breaking existing functionality?
+4. What's the rollback strategy if confidence implementation fails?
+5. How should I handle backward compatibility with existing KB system?
+
+#### **Q14: Testing & Validation Strategy** 🤔
+**Context**: KB smoke tests, frontend integration tests. Confidence Lift Plan: confidence calculation tests, calibration validation.
+
+**Critical Questions**:
+1. How should I test confidence calculations (unit tests, integration tests, smoke tests)?
+2. What's the validation strategy for calibration snapshots?
+3. How should I test evidence gating (mock data, real data, edge cases)?
+4. What's the performance testing strategy for confidence calculations?
+5. How should I validate confidence lifts (baseline vs. enhanced comparisons)?
+
+#### **Q15: Monitoring & Observability** 🤔
+**Context**: KB performance monitoring, ActivityContext logging. Confidence Lift Plan: confidence calculation monitoring, calibration tracking.
+
+**Critical Questions**:
+1. How should I monitor confidence calculation performance (latency, accuracy, errors)?
+2. What metrics should I track for calibration system (coverage, accuracy, updates)?
+3. How should I log confidence calculations (provenance, inputs, outputs)?
+4. What's the alerting strategy for confidence calculation failures?
+5. How should I monitor confidence lift effectiveness (before/after comparisons)?
+
+### **🎯 STRATEGIC & BUSINESS**
+
+#### **Q16: User Experience & Adoption** 🤔
+**Context**: VUS Explorer with KB integration, contextual help. Confidence Lift Plan: confidence visualization, evidence tiers, cohort overlays.
+
+**Critical Questions**:
+1. How should confidence visualization be intuitive for users (progress bars, colors, numbers)?
+2. Should confidence lifts be prominently displayed or subtle indicators?
+3. How should evidence tiers be explained to users (tooltips, help text, documentation)?
+4. What's the user onboarding strategy for confidence features?
+5. How should I handle user feedback on confidence calculations?
+
+#### **Q17: Performance & Scalability** 🤔
+**Context**: KB system with <250ms response times, caching. Confidence Lift Plan: additional calculations, calibration, evidence processing.
+
+**Critical Questions**:
+1. How should confidence calculations maintain <250ms response times?
+2. What's the caching strategy for calibration snapshots?
+3. How should I handle high-volume confidence calculation requests?
+4. What's the memory usage strategy for confidence data?
+5. How should I optimize confidence calculation performance?
+
+#### **Q18: Future Extensibility** 🤔
+**Context**: Modular KB architecture, extensible components. Confidence Lift Plan: confidence system as foundation for future features.
+
+**Critical Questions**:
+1. How should confidence system be designed for future extensions?
+2. What's the API versioning strategy for confidence endpoints?
+3. How should I handle schema evolution for confidence data?
+4. What's the migration strategy for confidence system updates?
+5. How should I design for future confidence calculation methods?
+
+### **🚨 CRITICAL DECISION POINTS**
+
+#### **Q19: Implementation Approach** 🤔
+**Question**: Should I implement confidence lift as:
+- **A) Extension of existing KB system** (add confidence entities, extend KB hooks)
+- **B) Separate confidence service** (new backend service, separate frontend components)
+- **C) Hybrid approach** (confidence calculations in backend, display in existing components)
+
+#### **Q20: Data Storage Strategy** 🤔
+**Question**: Should confidence-related data be stored as:
+- **A) KB entities** (confidence_snapshots, calibration_data entities)
+- **B) Separate JSON files** (api/resources/calibration.json, pathway_weights.json)
+- **C) Database tables** (PostgreSQL/MySQL for structured data)
+
+#### **Q21: Component Integration Strategy** 🤔
+**Question**: Should new confidence components be:
+- **A) Integrated into existing components** (extend AnalysisResults.jsx, InsightChips.jsx)
+- **B) Separate new components** (EvidenceBand.tsx, CohortContextPanel.tsx)
+- **C) Hybrid approach** (new components that consume existing KB hooks)
+
+### **🩺 TOXICITY RISK & OFF-TARGET PREVIEW IMPLEMENTATION**
+
+#### **Q22: Pharmacogene Detection & Pathway Mapping** 🤔
+**Context**: Need to identify germline variants in pharmacogenes and assess their impact on drug metabolism/toxicity.
+
+**Critical Questions**:
+1. Should pharmacogene detection be a separate endpoint (`/api/pharmgkb/detect_variants`) or integrated into existing insights?
+2. How should pathway overlap mapping work (variant pathways ∩ drug mechanism pathways)?
+3. Should germline filtering be automatic or require explicit user flag?
+4. What's the schema for pharmacogene variant results (gene, diplotype, phenotype, drugs_affected)?
+5. How should we integrate PharmGKB diplotype calling with our variant analysis?
+
+#### **Q23: Toxicity Scoring & Confidence Calibration** 🤔
+**Context**: Need to compute toxicity risk scores with proper calibration and confidence bounds.
+
+**Critical Questions**:
+1. What's the exact formula for toxicity risk score (pathway_overlap + germline_impact + prior_evidence)?
+2. How should confidence be calibrated (variant-level confidence → toxicity-level confidence)?
+3. Should toxicity scores be on same 0-1 scale as efficacy or separate scale?
+4. How should we handle conflicting evidence (protective vs. risk variants)?
+5. What's the minimum evidence threshold to report a toxicity risk?
+
+#### **Q24: Off-Target Preview Heuristics** 🤔
+**Context**: Need fast, heuristic-based off-target safety assessment for CRISPR guides.
+
+**Critical Questions**:
+1. Should off-target preview use actual BLAST/minimap2 or pure heuristics (GC content, homopolymers)?
+2. How should we score off-target risk (exponential decay by mismatch count)?
+3. What's the display format (chips, progress bars, traffic lights)?
+4. Should we show estimated off-target counts or just risk level (low/medium/high)?
+5. How should off-target preview integrate with existing CrisprReadinessPanel?
+
+#### **Q25: Frontend Integration & User Flow** 🤔
+**Context**: Need to surface toxicity risks and off-target previews in VUS Explorer and WIWFM flows.
+
+**Critical Questions**:
+1. Should toxicity risk be a separate card or integrated into EfficacyModal per-drug?
+2. How should germline context be displayed (banner, tooltip, dedicated section)?
+3. Where should off-target preview appear (CrisprReadinessPanel, separate tab, modal)?
+4. Should toxicity warnings block WIWFM recommendations or just add disclaimers?
+5. How should we handle missing germline data (infer from tumor variants, require explicit input)?
+
+#### **Q26: Testing & Validation for Toxicity** 🤔
+**Context**: Need robust testing for pharmacogene detection, toxicity scoring, and off-target heuristics.
+
+**Critical Questions**:
+1. What are the golden test cases for pharmacogene detection (CYP2D6, TPMT, DPYD variants)?
+2. How should we validate toxicity scoring (known adverse drug reactions, clinical annotations)?
+3. What's the performance benchmark for off-target preview (<100ms for heuristics)?
+4. Should we mock PharmGKB API or use real calls in tests?
+5. How should we track false positive/negative rates for toxicity predictions?
+
+---
+
+## **⚔️ DOCTRINE STATUS: ACTIVE**
+**LAST UPDATED:** 2024
+**APPLIES TO:** All platform development, validation, and deployment
+**ENFORCEMENT:** Mandatory across all development and operational activities
+
+---
+
+---
+
+## **📚 APPENDIX: COMPLETE FILE INVENTORY**
+
+### **Backend API Files**
+```
+oncology-coPilot/oncology-backend-minimal/
+├── api/
+│   ├── main.py                           # FastAPI app initialization
+│   ├── routers/
+│   │   ├── insights.py                   # Intelligence engine endpoints
+│   │   ├── efficacy.py                   # Decision engine (1,429 lines)
+│   │   ├── evo.py                        # Sequence oracle proxy
+│   │   ├── design.py                     # Weapon forge endpoints
+│   │   ├── fusion.py                     # AlphaMissense integration
+│   │   ├── datasets.py                   # Cohort intelligence
+│   │   └── evidence.py                   # Literature intelligence
+│   └── schemas/
+│       ├── insights.py                   # Insight response schemas
+│       ├── efficacy.py                   # Drug efficacy schemas
+│       └── datasets.py                   # Cohort and benchmark schemas
+```
+
+### **Frontend Component Files**
+```
+oncology-coPilot/oncology-frontend/src/
+├── components/
+│   ├── MyelomaDigitalTwin.jsx            # Core MM demo
+│   ├── dossier/
+│   │   └── TargetDossier.jsx             # Variant insights
+│   ├── vus/
+│   │   ├── MutationTable.jsx             # Variant input
+│   │   ├── AnalysisResults.jsx           # Insight display
+│   │   ├── EfficacyModal.jsx             # WIWFM integration
+│   │   └── CrisprReadinessPanel.jsx      # Design preview
+│   ├── ResearchPortal/
+│   │   └── CohortLab.jsx                 # Dataset extraction
+│   └── EvidenceIntelligence/
+│       └── EvidencePanel.jsx             # Multi-tab analysis
+├── context/
+│   └── SessionContext.jsx                # Session management
+└── types/
+    ├── insights.ts                       # Insight type definitions
+    ├── efficacy.ts                       # Efficacy type definitions
+    └── datasets.ts                       # Dataset type definitions
+```
+
+### **Legacy Foundation Files**
+```
+crispr-assistant-main/
+├── chopchop/
+│   ├── chopchop.py                       # Guide RNA design
+│   ├── chopchop_query.py                 # Query interface
+│   └── models/                           # Scoring algorithms
+├── CRISPResso2/
+│   ├── CRISPResso2.py                    # Post-editing analysis
+│   └── CRISPRessoReports/                # HTML reporting
+├── tools/
+│   ├── msa_client.py                     # MSA analysis (1,133 lines)
+│   ├── gauntlet_client.py                # Structural validation
+│   └── chopchop/                         # ChopChop integration
+├── services/
+│   ├── command_center/main.py            # Legacy orchestration
+│   ├── oracle/main.py                    # Legacy Oracle service
+│   └── forge/                            # Legacy Forge service
+├── scripts/evo2/evo2/                    # Evo2 model implementation
+├── data/
+│   ├── databases/                        # SQLite databases
+│   ├── reference/                        # Genome references
+│   └── annotations/                      # GTF annotations
+└── tests/
+    ├── unit_tests/                       # Algorithm testing
+    └── integration/                      # End-to-end testing
+```
+
+### **Key Configuration Files**
+```
+oncology-coPilot/oncology-backend-minimal/
+├── .env                                  # Environment variables
+├── requirements.txt                      # Python dependencies
+└── docker-compose.yml                    # Service orchestration
+
+oncology-coPilot/oncology-frontend/
+├── package.json                          # Node dependencies
+├── vite.config.js                        # Build configuration
+└── .env.local                            # Frontend environment
+```
+
+### **Documentation and Rules**
+```
+.cursor/rules/
+├── complete_platform_evolution_doctrine.mdc    # This comprehensive doctrine
+├── efficacy_modularization_doctrine.mdc        # Efficacy refactoring plan
+├── msa_modularization_doctrine.mdc             # MSA client refactoring
+├── gauntlet_doctrine.mdc                       # Structural validation
+└── forge_boltz_failure_analysis_doctrine.mdc   # Failure analysis
+```
+
+---
+
+**This doctrine represents our complete journey from naive assumptions to sophisticated precision medicine platform. Every failure taught us something, every breakthrough built on previous lessons. We stand on the shoulders of our mistakes, stronger and wiser for having made them.**
+
+**The codebase is a living testament to our evolution - from simple delta scores to multi-modal validation, from junk DNA to precision medicine. Every file, every component, every line of code tells the story of our conquest.**

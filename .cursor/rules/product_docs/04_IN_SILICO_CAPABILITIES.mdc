@@ -1,0 +1,99 @@
+---
+alwaysApply: false
+description: In‑Silico Capabilities – Doctrine. Plain‑language overview of live and roadmap capabilities with consistent card metrics and quick execution notes (Aug 2025).
+globs: 
+---
+
+# In‑Silico Capabilities – Doctrine (Website + Execution)
+
+One place to keep labels, card content, evidence metrics, audiences, and quick links for all in‑silico modules. RUO by design.
+
+## Card labels (use across pages)
+- Core Capability: what it does in one line
+- Evidence (core): Confidence (0–1) · Evidence Tier (Supported/Consider/Insufficient) · Sources (count + key refs) · Provenance (run_id, profile)
+- Target Audience: who benefits and how in one sentence
+
+## Available now (research‑mode)
+
+### Variant Insight (VUS)
+- Core Capability: Turn “unknowns” into plain signals with a one‑page summary
+- Evidence (core): Confidence · Tier · Sources · Provenance
+- Target Audience: Researchers/Clinicians – faster triage and a clear story to share
+- Endpoint: [insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py)
+- Quick test:
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/insights/predict_protein_functionality_change \
+  -H 'Content-Type: application/json' -d '{"gene":"TP53","variants":[{"gene":"TP53","hgvs_p":"R175H"}]}'
+```
+
+### Therapy Fit (Chemo)
+- Core Capability: Ranked chemo classes with confidence, short “why,” and sources
+- Evidence (core): Confidence · Tier · Sources · Provenance
+- Target Audience: Medical Oncologists/Pharmacists – clearer shortlists
+- Doctrine: [chemotherapy_copilot_concept.mdc](mdc:.cursor/rules/research/chemotherapy_copilot_concept.mdc)
+- Endpoint: [efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py)
+- Quick test:
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/efficacy/predict \
+  -H 'Content-Type: application/json' \
+  -d '{"mutations":[{"gene":"BRAF","hgvs_p":"V600E","chrom":"7","pos":140453136,"ref":"T","alt":"A"}],"disease":"multiple myeloma"}'
+```
+
+### Radiation Readiness
+- Core Capability: Radiosensitivity and toxicity risk hints for planning
+- Evidence (core): Confidence · Tier · Sources · Provenance
+- Target Audience: Radiation Oncologists/Physicists – quick signals to align the team
+- Doctrine: [precisionrad_copilot_concept.mdc](mdc:.cursor/rules/research/precisionrad_copilot_concept.mdc)
+- Endpoint: [efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py) + insights
+- Quick test: see doctrine example (TP53 R175H)
+
+### CRISPR Readiness
+- Core Capability: On‑target feasibility, access, off‑target preview (demo), delivery notes (demo)
+- Evidence (core): Confidence · Sources · Provenance
+- Target Audience: Genome Engineers – faster kickoff with auditable snapshots
+- Doctrine: [crispr_copilot_concept.mdc](mdc:.cursor/rules/research/crispr_copilot_concept.mdc)
+- Endpoints: [design.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/design.py), [insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py)
+- Quick tests: see doctrine (guide candidates, chromatin proxy)
+
+### Evidence Intelligence
+- Core Capability: Citations and badges with provenance for quick trust
+- Evidence (core): Sources · Tier (when enabled) · Provenance
+- Target Audience: All – clarity and trust in one view
+- Endpoint: [evidence.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evidence.py)
+
+### Cohort Context
+- Core Capability: Small study extracts and baseline benchmarks to ground findings
+- Evidence (core): Baseline AUPRC/AUROC + artifact link · Provenance
+- Target Audience: Researchers/Institutions – reproducible context
+- Endpoint: [datasets.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/datasets.py)
+
+### Pathway View
+- Core Capability: Simple “what biology is driving this?” view tied to therapy choices
+- Evidence (core): Sources · Provenance
+- Target Audience: Clinicians/Researchers – quick mechanism alignment
+- Implementation: part of [efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py)
+
+### Toxicity Risk (Germline)
+- Core Capability: Simple side‑effect risk hints to plan conservatively
+- Evidence (core): Confidence · Sources · Provenance
+- Target Audience: Radiation/Medical Oncology – plan safer when hints are present
+- Implementation: via insights + evidence where available
+
+## Near‑term roadmap (keep labels ready)
+- Imaging‑Aware Radiation: on‑treatment change detection and dose‑painting hooks
+- Regimen Safety & Interactions: enrich chemo with interaction/toxicity checks
+- Trial Readiness: curated guideline/on‑label signals and trial stubs
+- Deeper Off‑Target & HDR (CRISPR): full search and scoring
+- Radiomics: CT/PET/MRI feature integration
+
+## Evidence (core) – card metrics (use everywhere)
+- Confidence: 0–1
+- Evidence Tier: Supported / Consider / Insufficient
+- Sources: citations (count + key refs)
+- Provenance: run_id and profile (Baseline/Richer/Fusion)
+
+## Quick links
+- Chemo: [chemotherapy_copilot_concept.mdc](mdc:.cursor/rules/research/chemotherapy_copilot_concept.mdc)
+- Radiation: [precisionrad_copilot_concept.mdc](mdc:.cursor/rules/research/precisionrad_copilot_concept.mdc)
+- CRISPR: [crispr_copilot_concept.mdc](mdc:.cursor/rules/research/crispr_copilot_concept.mdc)
+

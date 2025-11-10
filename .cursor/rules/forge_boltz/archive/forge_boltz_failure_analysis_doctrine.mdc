@@ -1,0 +1,130 @@
+---
+alwaysApply: false
+description: Forge→Boltz Failure Analysis – how to audit prior pipeline, pinpoint causes, and fix non‑breaking
+---
+
+# Forge → Boltz Failure Analysis Doctrine
+
+Purpose: Provide a crisp, repeatable playbook to audit our prior Forge (Evo2) → Boltz pipeline, identify why results failed (delta chasing, input hygiene, missing gates), and land non‑breaking fixes. Use this when code is shared to produce a root‑cause report and a remediated, reproducible pipeline.
+
+RUO posture: All outputs are research‑mode. No clinical claims. Keep provenance everywhere.
+
+## What to read first (code map)
+- `tools/test_oracle_boltz_loop.py` – end‑to‑end harness used previously (what we looped over, thresholds, logs)
+- `tools/boltz_client.py` – how we call Boltz (structure/affinity), payloads built, options used
+- `boltz-main/docs/prediction.md` – authoritative spec for YAML/FASTA, affinity outputs, options
+- Any Evo/Forge generator used (prompting, T/temperature, diversity control)
+- Any orchestration (CommandCenter) that sequences generate→filter→validate
+- [tests/integration/test_forge_and_boltz_protocol.py](mdc:tests/integration/test_forge_and_boltz_protocol.py) – current Forge→Boltz integration test
+- [src/services/hunter_analyst/main.py](mdc:src/services/hunter_analyst/main.py) – target acquisition (Hunt) heuristics and Modal wiring
+- [oncology-coPilot/oncology-backend-minimal/api/routers/command_center.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/command_center.py) – slim orchestrator composing evidence/design
+- [tools/brca1_recon.py](mdc:tools/brca1_recon.py) – BRCA1 reconnaissance utility and path setup
+
+## Failure signatures (what to look for)
+1) Metric mismatch
+  - Selection optimized for `delta_likelihood_score` alone (sequence likelihood), no binding/structure gate.
+  - No composite score combining pLDDT/interface + affinity.
+2) Input hygiene gaps
+  - No MSA or inconsistent MSA policy; no record of `--use_msa_server` or `msa: empty` decisions.
+  - No pocket constraints/templates where known; poor conditioning for realistic binding poses.
+  - Lack of prompt quality (low‑context bait, repetitive sequences) → junk proposals.
+3) Diversity & dedup
+  - Candidates are near‑duplicates or mode‑collapsed; no clustering/dedup before Boltz.
+4) Resource and reproducibility
+  - No seeds, sampling parameters, or profile logged; runs not reproducible.
+  - Unbounded batch sizes; GPU contention; timeouts.
+
+## Code‑grounded findings (from attached code)
+- test harness: [tests/integration/test_forge_and_boltz_protocol.py](mdc:tests/integration/test_forge_and_boltz_protocol.py)
+  - Uses a short 20‑mer motif (`TARGET_MOTIF`) and its reverse complement as bait, which is low‑context for generative quality.
+  - Temperature sweep `[0.2, 0.7, 1.2]` with `15` candidates per T, no sieve/dedup before Boltz; sends raw candidates directly.
+  - No structural or affinity gate applied client‑side; no composite scoring; printing only affinity and commentary.
+  - Duplicated code blocks repeated many times → brittle, hard to maintain; installs BioPython inline via `os.system`.
+- hunter analyst: [src/services/hunter_analyst/main.py](mdc:src/services/hunter_analyst/main.py)
+  - Heuristic target selection: central 300bp window aligned to codons; pragmatic but blind to domains/pockets.
+  - Exposes `@modal.web_endpoint` but later calls `hunter.hunt.remote(...)` in a local `main` – architectural mismatch. Webhooks must be called over HTTP, not `.remote()`.
+  - Good: retrieves both DNA and protein sequences; returns full context for downstream use. Needs provenance and seed logging.
+- command center: [oncology-coPilot/oncology-backend-minimal/api/routers/command_center.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/command_center.py)
+  - Async `httpx` orchestration with `_gather_safe`; composes efficacy + essentiality.
+  - `follow_redirects=True` can mask upstream 3xx issues; doctrine recommends `False` and explicit handling.
+  - Missing `x-run-id` and cache provenance; no single‑flight or retries/timeouts per subcall beyond global.
+- brca1 recon: [tools/brca1_recon.py](mdc:tools/brca1_recon.py)
+  - Corrects `PYTHONPATH` and uses `NCBIClient` to cache sequences; file contains duplicated blocks that should be deduped.
+
+## Evidence to collect (before changing code)
+- For one target run, capture per‑candidate:
+  - Generator settings: model, temperature, prompt summary, seed; candidate sequence.
+  - Sieve filters: GC/length/stopcodon; similarity cluster id.
+  - Boltz structure: complex_plddt, interface metrics, PAE summary; CIF path.
+  - Boltz affinity: `affinity_pred_value`, `affinity_probability_binary`.
+  - Timing: per phase durations; any timeouts/errors.
+  - Provenance: profile (fast/standard/thorough), MSA mode, flags, run_id.
+
+## Minimal experiments (controlled)
+- T‑sweep at fixed prompt (e.g., T=0.2/0.4/0.6) with N=32 candidates each; measure structure pass‑rate and top‑5 affinity.
+- MSA modes: single‑seq vs `--use_msa_server`; compare structure confidence and affinity.
+- Pocket/template on vs off (when target pockets/templates exist).
+- Diffusion/ensemble budgets: fast vs standard; report wall‑clock vs quality.
+
+## Non‑breaking remediation plan
+1) Orchestration layer (adapter)
+  - Add `forge_boltz_orchestrator.py` with phases: Generate → Sieve → Structure → Affinity → Select.
+  - Profiles: fast (no MSA), standard (MSA server), thorough (MSA + potentials/templates).
+2) YAML builder
+  - Centralize YAML/FASTA creation; record MSA choice, templates, constraints in provenance.
+3) Gates & scoring
+  - Structure gate: pLDDT/complex_plddt ≥ 70; interface metric optional.
+  - Affinity gate: probability ≥ 0.7; composite score = 0.6*prob + 0.2*norm(−value) + 0.2*plddt.
+4) Diversity
+  - Dedupe by sequence hash; cluster by MinHash/Levenshtein; select diverse top‑K for Boltz.
+5) Reproducibility
+  - Log seeds, flags, versions, batch size, MSA mode; emit `build.json` per run.
+6) Resource safety
+  - Cap batch sizes; `--max_parallel_samples`; timeouts/retries; surface per‑phase timings.
+
+## Code fixes to apply (surgical, minimal blast radius)
+- tests/integration
+  - Refactor `test_forge_and_boltz_protocol.py` to a single implementation; add sieve and composite scoring; remove inline pip install.
+  - Increase bait context (≥300bp or domain‑aware sequence) and document T profile; cap total N.
+- hunter_analyst
+  - Replace `.remote()` call for `@modal.web_endpoint` with an HTTP client call; keep `.remote()` only for `@modal.method`.
+  - Return provenance: window indices, MSA policy (if any), sequence lengths; log seeds.
+- command_center
+  - Set `follow_redirects=False`; add `x-run-id`, retries with budgets, and `provenance.cache` fields; wire cache/single‑flight when available.
+- tools
+  - Deduplicate `brca1_recon.py`; keep one function, one `__main__`.
+
+## Interfaces and contracts
+- Keep existing CLI/HTTP entry points; add a new orchestrator entry instead of changing Boltz client API.
+- All additions are optional flags; default behavior remains compatible.
+
+## Smoke tests (copy/paste)
+```bash
+# One target, fast profile (single-seq)
+python tools/test_oracle_boltz_loop.py --target VEGFA --profile fast --n 32 --out out/fast
+
+# Standard profile (MSA server)
+python tools/test_oracle_boltz_loop.py --target VEGFA --profile standard --n 32 --out out/standard --use_msa_server
+
+# Report: pass-rate, top-5 composite, wall-clock
+python tools/aggregate_report.py --runs out/fast out/standard | jq
+```
+
+## Root‑cause report template (deliverable)
+- Target & profile; generator settings (T, seeds, prompt summary).
+- Pass‑rate (structure), top‑5 affinity probability/value, composite scores.
+- Failure modes observed (input hygiene, diversity, gate misses).
+- Remediation applied & effect size (before→after metrics) with runtime deltas.
+- Artifacts: CIFs, confidence/affinity JSON, `summary.csv`, `build.json`.
+
+## Enhancement backlog (post‑fix)
+- Pocket conditioning and templates from KB/PDB manifests where available.
+- Cohort‑aware target priors (cBioPortal) for selection; not for training.
+- Template/potential sweeps for thorough profile; budgeted.
+- UI export: zip slate + summary, show provenance and resource usage.
+
+## Definition of Done
+- Reproducible runs with per‑phase timings and artifacts.
+- Clear lift vs prior (structure pass‑rate and top‑5 affinity probability).
+- Conservative, RUO‑framed outputs; provenance everywhere; no API breaks.
+

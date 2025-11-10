@@ -1,0 +1,190 @@
+---
+alwaysApply: false
+description: Clinical Trials Co‑Pilot – Execution Doctrine (Aug 2025). Plain‑language website copy + execution plan for in‑silico clinical trial search and matching with real‑time extraction, semantic reasoning, and knowledge integration (research‑mode).
+globs: 
+---
+
+
+export const coPilotDetailsData: Record<string, CoPilotDetailContent> = {
+  "clinical-trials": {
+    slug: "clinical-trials",
+    pageTitle: "Clinical Trials Co‑Pilot: In‑Silico Trial Matching",
+    heroSubtitle: "Find matching trials in minutes. Clear eligibility and a shareable one‑pager (research‑mode).",
+    vision: "Turn a patient profile into a short, trustworthy trial shortlist. See who likely fits, why, and what to do next—then share it with one click.",
+
+    // Website value props (plain)
+    valueProps: [
+      {
+        audience: 'For Clinicians & Trial Offices',
+        icon: 'Search',
+        points: [
+          'Fast shortlist: relevant trials in minutes, not days.',
+          'Clear eligibility: Likely / Potential / Unlikely with a short “why.”',
+          'Shareable one‑pager with sources (RUO).'
+        ]
+      },
+      {
+        audience: 'For Research Teams',
+        icon: 'Database',
+        points: [
+          'Fresh results when connected; reliable snapshots otherwise.',
+          'Understands synonyms and biomarkers—not just keywords.',
+          'Exports and run IDs for clean handoffs and tracking.'
+        ]
+      }
+    ],
+
+    buildsOn: "What this runs on (today vs roadmap)",
+    buildsOnStackPoints: [
+      "**Today:** Smart trial search and clear eligibility summaries.",
+      "**Optional today:** Live refresh; reliable local snapshot fallback.",
+      "**Roadmap:** EHR links, guideline cues, multi‑registry feeds."
+    ],
+
+    kpis: [
+      { label: 'ClinVar AUROC (total n=53,210)', value: '0.957' },
+      { label: 'Coding SNVs (n=14,319)', value: '0.957' },
+      { label: 'Non‑coding SNVs (n=34,761)', value: '0.958 (SOTA)' },
+      { label: 'Coding non‑SNVs (n=1,236)', value: '0.939 (SOTA)' },
+      { label: 'Non‑coding non‑SNVs (n=3,894)', value: '0.918' },
+      { label: 'SpliceVarDB AUROC (n=4,950)', value: '0.825–0.826' },
+      { label: 'Target VUS 40% → 15%', value: '≈$2.1M saved/program' },
+      { label: 'Shortlist compression', value: '50+ → 5–12 trials' },
+      { label: 'Time‑to‑first‑trial', value: '−60% to −65%' },
+      { label: 'Evo2 context window', value: '1M tokens (single‑nucleotide resolution)' }
+    ],
+
+    observedOutcomes: [
+      'Shortlists shrink from 50+ to ~5–12 with clear Likely/Potential/Unlikely labels',
+      'Time‑to‑first‑trial decreases by ~60–65% in pilot runs',
+      'Eligibility clarity improves; fewer “unclear” due to synonym/biomarker mapping',
+      'Confidence improves when variant/evidence signals align (VUS reduced toward ~15%)',
+      'Shareable one‑pagers speed cross‑team alignment and patient briefings'
+    ],
+
+    genomicInsightsOverview: "You get a compact trials view: ranked list, a clear eligibility label, a short ‘why,’ and a shareable summary—plus run ID.",
+    coreProblemIntro: "Trial search takes time and returns noise. We bring speed, clarity, and a summary you can act on.",
+    coreProblemPoints: [
+      "Takes too long to find relevant trials.",
+      "Keyword search misses synonyms/biomarkers.",
+      "No simple one‑pager to brief patients and boards."
+    ],
+
+    genomicUseCasesGrid: [
+      { label: "Real‑time extraction (when connected)", iconName: "RefreshCw", color: "text-blue-400" },
+      { label: "Semantic trial search", iconName: "Search", color: "text-green-400" },
+      { label: "Structured eligibility", iconName: "ListChecks", color: "text-purple-400" },
+      { label: "Shareable summary", iconName: "FileText", color: "text-orange-400" }
+    ],
+
+    keyCapabilities: [
+      {
+        title: "Fresh Results (optional)",
+        technical: "Pull new trials when connected; otherwise use a reliable local snapshot.",
+        scientific: "Shortlists stay current without extra work.",
+        business: `
+- **Speed:** Less waiting, more doing.
+`,
+        genomicUseCasesParagraph: "Today: \n1. **Refresh** when connected; **snapshot** when not."
+      },
+      {
+        title: "Smarter Search & Clear Eligibility",
+        technical: "Understands synonyms and biomarkers; labels each trial as Likely / Potential / Unlikely with a short ‘why.’",
+        scientific: "Turns free‑text criteria into a usable decision aid.",
+        business: `
+- **Better matching:** Finds relevant trials and explains why.
+`,
+        genomicUseCasesParagraph: "Today: \n1. **Smart search** over titles/summaries/criteria. \n2. **Clear labels** with met/unmet/unclear reasons."
+      },
+      {
+        title: "Knowledge‑Aware Matching",
+        technical: "Built‑in synonym maps for genes, variants, and diseases improve recall and consistency.",
+        scientific: "Makes results comparable across runs and teams.",
+        business: `
+- **Consistency:** Fewer misses, easier review.
+`,
+        genomicUseCasesParagraph: "Today: \n1. **Synonyms & metadata** improve retrieval; **run ID** adds trust."
+      },
+      {
+        title: "Share & Track",
+        technical: "Every shortlist has a run ID; export the one‑pager for handoffs.",
+        scientific: "Simple to reuse and review later.",
+        business: `
+- **Shareable:** Brief patients and boards quickly.
+`,
+        genomicUseCasesParagraph: "Today: \n1. **Exports** and **run IDs** by default."
+      }
+    ],
+
+    valuePropositionSections: [
+      {
+        audience: "For the Care Team",
+        points: [
+          "Relevant trials in minutes with a simple ‘why’.",
+          "Eligibility labeled and explained (RUO).",
+          "One‑page, source‑backed brief you can share."
+        ]
+      }
+    ],
+
+    conclusion: "Trial matching that’s fast to read and easy to share. Shortlist. Clear eligibility. Sources included (RUO)."
+  },
+};
+
+
+# Clinical Trials Co‑Pilot – Execution Doctrine (Aug 2025)
+
+This rule describes how to deliver trial matching now with fast search, clear eligibility, and simple sharing.
+
+## What we can deliver today (research‑grade)
+- A trial shortlist with:
+  - **Eligibility:** Likely / Potential / Unlikely + structured met/unmet/unclear criteria.
+  - **Summary:** 2–3 sentences explaining the trial.
+  - **Provenance:** run ID and profile; optional exports.
+
+## How it works (at a glance)
+- Smart search finds relevant trials quickly (understands synonyms and biomarkers)
+- Labels eligibility and explains why in one or two lines
+- Lets you export and track with a run ID
+
+## How you’ll use it
+- Enter a short patient summary → see a shortlist with clear labels
+- Click a trial to view the reasons and summary
+- Export the one‑pager to share with your team
+
+## Methodology (simple, transparent)
+- **Vector search:** embed a rich, patient‑aware query and retrieve top trials.
+- **Fetch details:** hydrate from DB; normalize fields.
+- **LLM summary:** produce structured eligibility and a brief summary.
+- **Provenance/export:** attach run ID/profile; allow JSON/CSV export.
+
+## Numbers That Matter (Research‑Mode)
+- Variant foundations (ClinVar): 53,210 variants overall at 95.7% AUROC; splice AUROC ~82.5–82.6 (n=4,950) improves noncoding/splicing eligibility checks.
+- Business target: VUS reduced from 40% → ~15% enables clearer inclusion/exclusion calls and saves ≈$2.1M/program by focusing follow‑up work.
+- Ops: shortlist compression from 50+ to ~5–12; time‑to‑first‑trial −60% to −65% in pilot usage.
+
+## Observed Outcomes (pilot runs; research‑mode)
+- Faster, cleaner shortlists with Likely / Potential / Unlikely and a short “why.”
+- Fewer misses: synonym/biomarker mapping reduces false negatives in retrieval.
+- Clearer eligibility: fewer “unclear” criteria due to structured met/unmet reasoning.
+- Confidence lift when variant/evidence signals align (supported by high AUROC foundations and splice accuracy).
+- Shareable one‑pager with run ID accelerates tumor board preparation.
+
+## Plain English: What this means and why it matters
+- Quicker answers: You get to a manageable short list in minutes, not days.
+- Better fit: Trials are labeled and explained in one view—easier to compare.
+- Less rework: Strong variant evidence reduces back‑and‑forth on eligibility.
+- Easier to share: One‑pager with sources builds trust across teams and with patients.
+
+## Frontend integration (minimal)
+- Render a “Trials” view: shortlist table, eligibility label, short ‘why’, and a one‑pager export.
+- Optional refresh button if connectors are enabled.
+
+## Current limitations (transparent)
+- External connectors may be disabled in dev; snapshot used instead.
+- LLM availability/keys required for structured eligibility; fallback messages provided.
+
+## Success criteria
+- Shortlist appears within minutes with clear eligibility and provenance.
+- One‑pager export available; refresh works when connected.
+

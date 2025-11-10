@@ -1,0 +1,168 @@
+# T-CELL RECRUITMENT ENGINEERING: DOCTRINE STATUS
+
+**Last Updated:** October 2024  
+**Partner:** Dr. Kristen Pauken, MD Anderson Cancer Center  
+**Status:** 🟢 **PARTNERSHIP-READY**
+
+---
+
+## **QUICK SUMMARY**
+
+**The Discovery:** Dr. Pauken invented IV antibody "timestamp" tool—tracks T-cell recruitment in real-time. Proved anti-PD-1 DOUBLES fresh T-cell recruitment (not just "waking up" exhausted cells). Problem: 70% of tumors have collapsed recruitment—don't know WHY.
+
+**Our Solution:** Diagnose bottleneck (RNA-seq → Type A/B/C/D), design precision rescue (4 different interventions), predict who responds to PD-1 blockade.
+
+**The Pilot:** 8 weeks, $0 cost, 30 tumors (RNA-seq + timestamp data). Test if bulk RNA predicts bottleneck (target: r > 0.60). Design interventions. Co-author publications.
+
+---
+
+## **DOCUMENT ECOSYSTEM**
+
+### **1. Main Doctrine (`tcell.mdc`)** - 753 lines
+- **Purpose:** Complete technical education (18-min read)
+- **Content:** Dr. Pauken's findings, recruitment biology, bottleneck classification, 4 intervention designs, APIs, usage guide
+- **Audience:** Internal team, technical partners, immunology researchers
+- **Status:** ✅ Complete
+
+### **2. Partnership Blueprint (`TCELL_MD_ANDERSON_PARTNERSHIP.mdc`)** - 471 lines
+- **Purpose:** Executive positioning for MD Anderson leadership
+- **Content:** Value proposition, 8-week pilot details, IP terms, stakeholder messaging, objection handling
+- **Audience:** MD Anderson Leadership, Dr. Pauken Lab, Clinical Trial PIs
+- **Status:** ✅ Complete
+
+### **3. Intel Source (`intel.mdc`)** - 67 lines
+- **Purpose:** Raw presentation notes from Dr. Pauken's talk
+- **Content:** Transcript summary, core findings, unanswered questions
+- **Audience:** Internal reference
+- **Status:** 🟡 Needs Part II update (replace hypothetical with refined positioning)
+
+---
+
+## **KEY FINDINGS (DR. PAUKEN'S DATA)**
+
+**✅ Validated:**
+1. IV antibody timestamp tool works (distinguishes fresh recruits from residents)
+2. Fresh recruits are less exhausted (LOW PD-1/TIM-3/LAG-3)
+3. Recruitment collapses over time (Day 10 HIGH → Day 25 LOW)
+4. Anti-PD-1 doubles recruitment (primary mechanism = logistics, not exhaustion reversal)
+5. Same highways for cancer & autoimmunity (PD-1 worsens checkpoint-induced diabetes)
+
+---
+
+## **OUR SOLUTION (3 WEAPONS)**
+
+### **Weapon #1: Recruitment Collapse Diagnostic**
+- **What:** RNA-seq → identify bottleneck (Type A: Chemokine, B: Barrier, C: Suppressor, D: Vascular)
+- **Status:** ✅ Operational (design tools ready)
+- **Confidence:** ⚠️ MEDIUM (needs validation; literature baseline r = 0.3-0.5)
+- **API:** `/api/recruitment/diagnose_bottleneck`
+
+### **Weapon #2: Precision Intervention Designs**
+- **Type A (Chemokine Desert):** CXCL9/CXCL10/CCL5 overexpression cassette
+- **Type B (Physical Barrier):** CRISPRi (FAP/COL1A1) + MMP overexpression
+- **Type C (Suppressor):** Anti-TGFβ/VEGF bispecific OR CRISPRi
+- **Type D (Vascular):** VEGF normalization + ANGPT1
+- **Status:** ✅ Operational (design tools validated)
+- **Confidence:** ✅ HIGH (Evo2, CRISPRi operational)
+- **APIs:** `/api/design/generate_chemokine_cassette`, `/api/design/generate_stromal_cassette`, etc.
+
+### **Weapon #3: Autoimmunity Blocker**
+- **What:** Selective recruitment inhibitor (block pancreas WITHOUT blocking tumor)
+- **Status:** 🔴 Pre-clinical (requires NOD data)
+- **Confidence:** 🔴 LOW (untested hypothesis)
+- **API:** `/api/design/generate_autoimmunity_blocker`
+
+---
+
+## **8-WEEK PILOT STRUCTURE**
+
+**Input:** 20-30 mouse tumors (HIGH vs LOW recruitment) with RNA-seq + timestamp flow data
+
+**Week 1-2:** Data transfer, QC, feature extraction  
+**Week 3-4:** Correlation analysis, bottleneck classifier training (TEST: r > 0.60?)  
+**Week 5-6:** Design 5 interventions (one per bottleneck + combination)  
+**Week 7-8:** Deliverables package (heatmap, designs, validation protocol, calibration report)
+
+**Deliverables:**
+1. Bottleneck heatmap for all 30 tumors
+2. Gene signature (top 20 genes predicting recruitment collapse)
+3. Anti-PD-1 response predictor (baseline biomarker)
+4. 5 intervention designs with validation protocols
+5. Calibration report (r-value, performance metrics)
+
+**Success:** r > 0.60 → HIGH confidence  
+**Partial:** r = 0.50-0.60 → recommend spatial RNA-seq  
+**Pivot:** r < 0.50 → document why, partner keeps all code
+
+---
+
+## **CONFIDENCE ASSESSMENT**
+
+| **Capability** | **Status** | **Confidence** | **Why** |
+|---------------|----------|---------------|---------|
+| Design chemokine cassettes | ✅ Operational | ✅ HIGH | Evo2 validated, CRISPRi operational |
+| Design stromal remodelers | ✅ Operational | ⚠️ MEDIUM | MMP safety requires testing |
+| Design suppressor neutralizers | ✅ Operational | ✅ HIGH | Antibody design validated |
+| Design vascular normalizers | ✅ Operational | ⚠️ MEDIUM | VEGF dosing tricky |
+| RNA-seq → bottleneck prediction | ✅ Operational | ⚠️ MEDIUM | Similar to TLS problem (r = 0.3-0.5 lit baseline) |
+| Autoimmunity blocker | 🔴 Pre-clinical | 🔴 LOW | Requires NOD data, untested |
+
+---
+
+## **BUSINESS MODEL**
+
+**Market:** $50B checkpoint inhibitor market, 70% failure rate = $35B addressable
+
+**Revenue Streams:**
+1. **Diagnostic Tool:** $500/sample or $50K institutional license (bottleneck classifier)
+2. **Intervention IP:** 3-5% royalty on licensed products (recruitment enhancers)
+3. **Autoimmunity Blocker:** 3-5% royalty (checkpoint safety product)
+
+**Competitive Moat:**
+- Timestamp data advantage (no one else has this)
+- Multi-modal approach (4 solutions, not one-size-fits-all)
+- Learning system (partner data trains proprietary models)
+
+---
+
+## **FAILURE MODES & PIVOTS**
+
+**Scenario A: RNA r < 0.50**
+- **Pivot:** Recommend spatial RNA-seq, re-train classifier
+- **Deliverable:** Intervention designs still useful
+
+**Scenario B: Multiple bottlenecks per tumor**
+- **Pivot:** Design combination cassettes
+- **Timeline:** +2-4 weeks
+
+**Scenario C: Bottleneck rescue fails**
+- **Pivot:** Identify non-druggable bottlenecks
+- **Deliverable:** Stratification tool (who WON'T respond)
+
+**Scenario D: All assumptions correct**
+- **Outcome:** Validate all weapons, co-author Nature papers, clinical translation
+
+---
+
+## **NEXT ACTIONS**
+
+**Immediate:**
+1. Schedule 60-min call with Dr. Pauken lab
+2. Finalize pilot protocol (which 30 tumors, data format)
+3. Execute Data Sharing Agreement
+
+**3-Month:**
+1. Complete 8-week pilot
+2. Validate intervention designs (measure IV+ influx)
+3. Co-author manuscript (bottleneck classification)
+
+**6-12 Month:**
+1. Clinical trial integration (bottleneck classifier as biomarker)
+2. IND planning (combination product)
+3. Autoimmunity blocker validation (if NOD data available)
+
+---
+
+**DOCTRINE STATUS:** 🟢 **COMPLETE & PARTNER-READY**  
+**CONFIDENCE:** ⚠️ **MEDIUM** (awaiting validation data to move to HIGH)  
+**NEXT MILESTONE:** 8-week pilot execution with MD Anderson

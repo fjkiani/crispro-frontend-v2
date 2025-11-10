@@ -1,0 +1,577 @@
+# 🎯 PHASE 1: EXPAND HUNT - EXECUTION PLAN
+
+**Duration**: 1-2 weeks  
+**Status**: 🔄 **IN PROGRESS (60% complete)**  
+**Goal**: Make Food Validator work for 50+ diseases + ANY compound
+
+---
+
+## ✅ **WHAT'S ALREADY DONE**
+
+### **Task 1.1: Disease Coverage Expansion** ✅ **COMPLETE**
+- ✅ Created `api/resources/universal_disease_pathway_database.json`
+- ✅ 50+ diseases defined (cancers + neurodegenerative)
+- ✅ 9/10 top cancers have real TCGA weights
+- ✅ Pathway mappings for each disease
+
+**File**: `oncology-coPilot/oncology-backend-minimal/api/resources/universal_disease_pathway_database.json`
+```json
+{
+  "version": "1.0.0",
+  "diseases": {
+    "ovarian_cancer_hgs": {...},  // TCGA weights ✅
+    "breast_cancer": {...},        // TCGA weights ✅
+    "lung_cancer": {...},          // TCGA weights ✅
+    // ... 47 more diseases
+  }
+}
+```
+
+**Agent Jr**: Fix MM extraction (0 samples issue)
+
+---
+
+## 🔄 **TASK 1.2: REMOVE HARDCODED ALIASES** - **IN PROGRESS**
+
+**Current Problem**:
+- `api/services/dynamic_food_extraction.py` has ~30 hardcoded compound aliases
+- Fails for any compound not in the hardcoded list
+- PubChem has 110M compounds - we need dynamic resolution
+
+### **Implementation (2 days)**
+
+#### **Step 1: Create Alias Resolver Service** (4 hours)
+
+**File to Create**: `oncology-coPilot/oncology-backend-minimal/api/services/compound_alias_resolver.py`
+
+```python
+import requests
+import time
+import logging
+from typing import Optional
+
+logger = logging.getLogger(__name__)
+
+class CompoundAliasResolver:
+    """
+    Dynamically resolve compound aliases using PubChem API.
+    
+    Features:
+    - In-memory cache for speed
+    - Exponential backoff retry logic
+    - Rate limit handling (429 errors)
+    - Fallback to original name if resolution fails
+    """
+    
+    def __init__(self):
+        self._cache = {}  # Simple in-memory cache
+        self.base_url = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
+    
+    def resolve_compound_alias(
+        self, 
+        compound: str, 
+        retries: int = 2,
+        timeout: int = 5
+    ) -> str:
+        """
+        Query PubChem for compound synonyms with retry logic.
+        
+        Args:
+            compound: Compound name (e.g., "Vitamin D", "Curcumin")
+            retries: Number of retry attempts on failure
+            timeout: Request timeout in seconds
+            
+        Returns:
+            Canonical compound name (or original if resolution fails)
+        """
+        # Normalize input
+        compound_normalized = compound.lower().strip()
+        
+        # Check cache first (fast path)
+        if compound_normalized in self._cache:
+            logger.info(f"Cache hit for compound: {compound}")
+            return self._cache[compound_normalized]
+        
+        # Retry with exponential backoff
+        for attempt in range(retries + 1):
+            try:
+                # PubChem synonyms endpoint
+                url = f"{self.base_url}/compound/name/{compound}/synonyms/JSON"
+                response = requests.get(url, timeout=timeout)
+                
+                # Success case
+                if response.ok:
+                    data = response.json()
+                    synonyms = data['InformationList']['Information'][0]['Synonym']
+                    
+                    # Return first canonical name (most specific)
+                    canonical_name = synonyms[0]
+                    
+                    # Cache result
+                    self._cache[compound_normalized] = canonical_name
+                    logger.info(f"Resolved '{compound}' → '{canonical_name}'")
+                    return canonical_name
+                
+                # Rate limit hit - exponential backoff
+                if response.status_code == 429:
+                    wait_time = 2 ** attempt
+                    logger.warning(f"Rate limited, waiting {wait_time}s")
+                    time.sleep(wait_time)
+                    continue
+                
+                # Other errors - log and continue
+                logger.warning(f"PubChem returned {response.status_code}")
+                
+            except requests.exceptions.Timeout:
+                logger.warning(f"Timeout on attempt {attempt + 1}")
+                if attempt < retries:
+                    time.sleep(2 ** attempt)
+                    
+            except Exception as e:
+                logger.error(f"PubChem resolution failed: {e}")
+                if attempt < retries:
+                    time.sleep(2 ** attempt)
+        
+        # All retries failed - fallback to original name
+        logger.warning(f"Failed to resolve '{compound}', using original name")
+        return compound
+    
+    def resolve_batch(
+        self, 
+        compounds: list[str], 
+        max_parallel: int = 5
+    ) -> dict[str, str]:
+        """
+        Resolve multiple compounds with rate limit control.
+        
+        Args:
+            compounds: List of compound names
+            max_parallel: Max concurrent requests
+            
+        Returns:
+            Dictionary of {original: canonical} mappings
+        """
+        results = {}
+        for compound in compounds:
+            results[compound] = self.resolve_compound_alias(compound)
+            # Add small delay to avoid rate limits
+            time.sleep(0.2)
+        
+        return results
+```
+
+**Acceptance**: 
+- ✅ Test with 100 random compounds
+- ✅ <5% failure rate (fallback to original name)
+- ✅ Cache hit rate >80% on repeated queries
+
+---
+
+#### **Step 2: Integrate into Food Validator** (2 hours)
+
+**File to Modify**: `oncology-coPilot/oncology-backend-minimal/api/services/dynamic_food_extraction.py`
+
+**Changes**:
+```python
+# OLD CODE (REMOVE)
+compound_aliases = {
+    "Green Tea Extract": "Epigallocatechin gallate",
+    "Turmeric": "Curcumin",
+    # ... 28 more hardcoded aliases
+}
+
+# NEW CODE (ADD)
+from api.services.compound_alias_resolver import CompoundAliasResolver
+
+class DynamicFoodExtractor:
+    def __init__(self):
+        self.alias_resolver = CompoundAliasResolver()
+        # ... existing init code
+    
+    def extract_targets(self, compound: str):
+        # Dynamically resolve compound alias
+        canonical_name = self.alias_resolver.resolve_compound_alias(compound)
+        
+        # Rest of extraction logic unchanged
+        # Use canonical_name for ChEMBL/PubChem queries
+        ...
+```
+
+**Acceptance**:
+- ✅ Test with 10 novel compounds (not in old hardcoded list)
+- ✅ All resolve correctly
+- ✅ No breaking changes to existing functionality
+
+---
+
+#### **Step 3: Add Configuration** (1 hour)
+
+**File to Create**: `oncology-coPilot/oncology-backend-minimal/api/config/compound_resolution.py`
+
+```python
+from pydantic import BaseSettings
+
+class CompoundResolutionConfig(BaseSettings):
+    """Configuration for compound alias resolution"""
+    
+    # PubChem API settings
+    pubchem_base_url: str = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
+    pubchem_timeout: int = 5
+    pubchem_max_retries: int = 2
+    
+    # Rate limiting
+    requests_per_second: int = 5
+    
+    # Caching
+    cache_ttl_seconds: int = 86400  # 24 hours
+    cache_max_size: int = 10000
+    
+    # Feature flags
+    enable_alias_resolution: bool = True
+    fallback_to_original_on_failure: bool = True
+    
+    class Config:
+        env_prefix = "COMPOUND_RESOLUTION_"
+```
+
+**Environment Variables** (add to `.env`):
+```bash
+COMPOUND_RESOLUTION_ENABLE_ALIAS_RESOLUTION=true
+COMPOUND_RESOLUTION_PUBCHEM_MAX_RETRIES=2
+```
+
+---
+
+#### **Step 4: Add Tests** (2 hours)
+
+**File to Create**: `oncology-coPilot/oncology-backend-minimal/tests/test_compound_alias_resolver.py`
+
+```python
+import pytest
+from api.services.compound_alias_resolver import CompoundAliasResolver
+
+@pytest.fixture
+def resolver():
+    return CompoundAliasResolver()
+
+def test_resolve_common_compound(resolver):
+    """Test resolution of well-known compound"""
+    result = resolver.resolve_compound_alias("Vitamin D")
+    assert result in ["Cholecalciferol", "Ergocalciferol", "Vitamin D"]
+
+def test_resolve_with_cache(resolver):
+    """Test cache hit"""
+    # First call - cache miss
+    result1 = resolver.resolve_compound_alias("Curcumin")
+    # Second call - cache hit (should be faster)
+    result2 = resolver.resolve_compound_alias("Curcumin")
+    assert result1 == result2
+
+def test_resolve_unknown_compound(resolver):
+    """Test fallback for unknown compound"""
+    result = resolver.resolve_compound_alias("ThisDoesNotExist12345")
+    assert result == "ThisDoesNotExist12345"
+
+def test_batch_resolution(resolver):
+    """Test batch resolution"""
+    compounds = ["Vitamin D", "Curcumin", "Resveratrol"]
+    results = resolver.resolve_batch(compounds)
+    assert len(results) == 3
+    assert all(v is not None for v in results.values())
+```
+
+**Run Tests**:
+```bash
+cd oncology-coPilot/oncology-backend-minimal
+PYTHONPATH=. venv/bin/pytest tests/test_compound_alias_resolver.py -v
+```
+
+---
+
+### **Task 1.2 Acceptance Criteria**
+
+✅ **Must Pass**:
+1. All unit tests pass (4/4)
+2. 100-compound test battery: <5% failure rate
+3. Cache hit rate >80% on repeated queries
+4. No breaking changes to existing Food Validator functionality
+5. Average response time <500ms (including retries)
+
+✅ **Integration Verified**:
+1. Food Validator works with novel compounds (not in old hardcoded list)
+2. Provenance tracking includes resolution source (PubChem/Cache)
+3. Fallback behavior works (original name if resolution fails)
+
+---
+
+## ⏳ **TASK 1.3: EVO2 COMPOUND SCORING** - **EXPERIMENTAL (P2)**
+
+**Status**: **SKIP FOR P1** - Keep neutral S=0.5 fallback
+
+**Manager's Feedback**: "alt='X' synthetic variants" approach is speculative
+
+**Revised Approach**:
+- **P1**: Keep neutral S=0.5 fallback (safe, tested)
+- **P2**: Explore masked-likelihood or k-mer perturbation
+- **P2**: Gate behind `EVO2_COMPOUND_SCORING=False` flag
+- **Validation**: 10+ test cases before enabling
+
+**Why Skip Now**:
+- Not critical for 50+ disease expansion
+- Requires research into Evo2 compound scoring methods
+- High risk of false signals
+- Can add later without breaking existing functionality
+
+**Placeholder Code** (for future):
+```python
+# api/services/food_spe_integration.py
+
+def compute_spe_score(..., evo2_enabled=False):
+    if evo2_enabled and os.getenv("EVO2_COMPOUND_SCORING") == "true":
+        # Future: Evo2 delta scoring for compound effects
+        S = compute_evo2_compound_score(compound, targets)
+    else:
+        S = 0.5  # Neutral fallback (current behavior)
+    
+    # Rest unchanged
+    ...
+```
+
+---
+
+## ⏳ **TASK 1.4: CALIBRATION INFRASTRUCTURE** - **BUILD FOUNDATION**
+
+**Goal**: Infrastructure ready, but no data yet (requires run history)
+
+### **Step 1: Create Calibration Service** (3 hours)
+
+**File to Create**: `oncology-coPilot/oncology-backend-minimal/api/services/compound_calibration.py`
+
+```python
+import json
+import logging
+from typing import Optional, Dict
+from datetime import datetime
+
+logger = logging.getLogger(__name__)
+
+class CompoundCalibrationService:
+    """
+    Calibrate compound scores across diseases using empirical distributions.
+    
+    Approach:
+    - Build calibration from historical run data
+    - Use percentile ranking with linear interpolation
+    - Track provenance (source cohort, date, sample size)
+    """
+    
+    def __init__(self, calibration_file: str = None):
+        self.calibration_file = calibration_file or "api/resources/compound_calibration.json"
+        self.calibration_data = self._load_calibration()
+    
+    def _load_calibration(self) -> Dict:
+        """Load pre-computed calibration data"""
+        try:
+            with open(self.calibration_file, 'r') as f:
+                return json.load(f)
+        except FileNotFoundError:
+            logger.warning("No calibration file found, using empty calibration")
+            return {"compounds": {}, "metadata": {}}
+    
+    def get_percentile(
+        self, 
+        compound: str, 
+        disease: str, 
+        raw_score: float
+    ) -> Optional[float]:
+        """
+        Convert raw S/P/E score to calibrated percentile.
+        
+        Args:
+            compound: Compound name
+            disease: Disease identifier
+            raw_score: Raw score to calibrate
+            
+        Returns:
+            Calibrated percentile (0-1) or None if insufficient data
+        """
+        # Check if calibration exists
+        compound_key = compound.lower()
+        if compound_key not in self.calibration_data.get("compounds", {}):
+            logger.debug(f"No calibration for compound: {compound}")
+            return None
+        
+        compound_cal = self.calibration_data["compounds"][compound_key]
+        if disease not in compound_cal.get("diseases", {}):
+            logger.debug(f"No calibration for {compound} in {disease}")
+            return None
+        
+        disease_cal = compound_cal["diseases"][disease]
+        
+        # Check minimum sample size
+        if disease_cal.get("sample_size", 0) < 10:
+            logger.warning(f"Insufficient calibration data (<10 samples)")
+            return None
+        
+        # Interpolate percentile from empirical distribution
+        percentiles = disease_cal.get("percentiles", {})
+        return self._interpolate_percentile(raw_score, percentiles)
+    
+    def _interpolate_percentile(
+        self, 
+        raw_score: float, 
+        percentiles: Dict[str, float]
+    ) -> float:
+        """
+        Linear interpolation between percentile points.
+        
+        Args:
+            raw_score: Score to calibrate
+            percentiles: Dict of {percentile: score} (e.g., {"p25": 0.3, "p50": 0.5})
+            
+        Returns:
+            Interpolated percentile (0-1)
+        """
+        if not percentiles:
+            return raw_score
+        
+        # Convert percentile strings to floats
+        points = [(float(k.replace('p', '')) / 100, v) for k, v in percentiles.items()]
+        points.sort(key=lambda x: x[1])  # Sort by score value
+        
+        # Handle edge cases
+        if raw_score <= points[0][1]:
+            return points[0][0]
+        if raw_score >= points[-1][1]:
+            return points[-1][0]
+        
+        # Linear interpolation between two closest points
+        for i in range(len(points) - 1):
+            p1, s1 = points[i]
+            p2, s2 = points[i + 1]
+            
+            if s1 <= raw_score <= s2:
+                # Linear interpolation
+                ratio = (raw_score - s1) / (s2 - s1)
+                return p1 + ratio * (p2 - p1)
+        
+        return raw_score  # Fallback
+    
+    def build_calibration_from_runs(
+        self, 
+        compound: str, 
+        disease: str, 
+        runs: list[dict]
+    ) -> Optional[Dict]:
+        """
+        Build calibration from historical run data.
+        
+        Args:
+            compound: Compound name
+            disease: Disease identifier
+            runs: List of run data dicts with 'spe_score' field
+            
+        Returns:
+            Calibration dict or None if insufficient data
+        """
+        if len(runs) < 10:
+            logger.warning(f"Insufficient runs for calibration (<10)")
+            return None
+        
+        # Extract scores and compute empirical percentiles
+        scores = sorted([r['spe_score'] for r in runs])
+        
+        percentiles = {
+            "p10": scores[len(scores) // 10],
+            "p25": scores[len(scores) // 4],
+            "p50": scores[len(scores) // 2],
+            "p75": scores[3 * len(scores) // 4],
+            "p90": scores[int(0.9 * len(scores))]
+        }
+        
+        return {
+            "percentiles": percentiles,
+            "source": "empirical_run_history",
+            "sample_size": len(runs),
+            "date": datetime.now().isoformat(),
+            "mean_score": sum(scores) / len(scores),
+            "std_dev": (sum((s - (sum(scores) / len(scores))) ** 2 for s in scores) / len(scores)) ** 0.5
+        }
+```
+
+**Calibration Data Format**:
+```json
+{
+  "version": "1.0.0",
+  "metadata": {
+    "last_updated": "2025-11-05T12:00:00Z",
+    "total_compounds": 0,
+    "total_runs": 0
+  },
+  "compounds": {
+    "vitamin_d": {
+      "canonical_name": "Cholecalciferol",
+      "diseases": {
+        "ovarian_cancer_hgs": {
+          "percentiles": {
+            "p10": 0.45,
+            "p25": 0.55,
+            "p50": 0.65,
+            "p75": 0.75,
+            "p90": 0.85
+          },
+          "sample_size": 50,
+          "source": "empirical_run_history",
+          "date": "2025-11-05T12:00:00Z",
+          "mean_score": 0.65,
+          "std_dev": 0.12
+        }
+      }
+    }
+  }
+}
+```
+
+---
+
+### **Task 1.4 Acceptance Criteria**
+
+✅ **Infrastructure Ready**:
+1. Calibration service implemented and tested
+2. Empty calibration file created (`compound_calibration.json`)
+3. Integration points defined in `food_spe_integration.py`
+4. Fallback behavior works (use raw score if no calibration)
+
+✅ **Future-Proof**:
+1. Service can ingest run history when available
+2. Percentile interpolation tested with synthetic data
+3. Minimum sample size enforced (n≥10)
+
+---
+
+## 📊 **PHASE 1 COMPLETION CRITERIA**
+
+**Gate 1: Ready for Phase 2**
+- ✅ 50+ diseases in universal_disease_pathway_database.json
+- ✅ PubChem alias resolver tested (100 compounds, <5% failure)
+- ✅ Neutral S=0.5 fallback working end-to-end
+- ✅ Top 10 cancers with real TCGA weights (9/10 done, MM pending)
+- ✅ Calibration infrastructure ready (no data required yet)
+
+---
+
+## 🎯 **ZO'S IMMEDIATE NEXT ACTIONS**
+
+**NOW** (Today):
+1. Implement Task 1.2 (PubChem alias resolver) - **4 hours**
+2. Test with 100 compounds - **1 hour**
+3. Integrate into Food Validator - **2 hours**
+
+**TOMORROW**:
+1. Implement Task 1.4 (Calibration service) - **3 hours**
+2. Test with synthetic data - **1 hour**
+3. Update tracking docs - **30 min**
+
+**Total Effort**: 2 days to complete Phase 1
+
+**FIRE IN THE HOLE!** ⚔️

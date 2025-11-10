@@ -1,0 +1,220 @@
+---
+description: AlphaFold/Boltz 1D→3D doctrine – how structure fits our product, what failed, what to build next, smoke tests, and acceptance (RUO)
+alwaysApply: false
+---
+
+# Boltz / Gauntlet – 1D → 3D Structural Doctrine (RUO)
+
+## What this is (plain English)
+- **Problem**: A sequence that “looks good” in 1D can still fold poorly in 3D – the “wet noodle” problem.
+- **Solution**: Add a structural gate (“Gauntlet”) after 1D scoring: run AlphaFold/ColabFold to get 3D confidence (pLDDT/pTM). Pass designs that are likely to fold; reject noodles.
+- **Why it matters**: This lifts confidence and credibility of any designed therapeutic (proteins, repair templates → peptides), reduces wasted wet‑lab cycles, and aligns with our RUO transparency.
+
+## Where it fits in our product
+- **S (Sequence)**: Evo2 zero‑shot scoring and calibration – disruption/impact signals.
+- **P (Pathway)**: Map variants/targets to disease pathways.
+- **E (Evidence)**: ClinVar/literature/cohort priors.
+- **Design (Forge)**: Generate candidates under constraints.
+- **Gauntlet (Boltz/AlphaFold)**: 3D structural validation to certify designs are physically plausible before hand‑off.
+
+## Current state (what exists now)
+- Notes and manual plans live in:
+  - Gauntlet doctrine: [gauntlet_doctrine.mdc](mdc:.cursor/rules/gauntlet_doctrine.mdc)
+  - Manual test plan: [boltz_gauntlet_manual_test_plan.mdc](mdc:.cursor/rules/boltz_gauntlet_manual_test_plan.mdc)
+- Clients and service attempts:
+  - Command Center structural call (legacy): [services/command_center/main.py](mdc:src/services/command_center/main.py)
+  - Gauntlet service (Modal/ColabFold attempt): [src/services/gauntlet/main.py](mdc:src/services/gauntlet/main.py)
+  - Boltz service scaffolding: [src/services/boltz_service/main.py](mdc:src/services/boltz_service/main.py)
+  - Local tester: [tools/gauntlet_client.py](mdc:tools/gauntlet_client.py)
+
+## What failed before (and why)
+- **Webhook vs function invocation mismatch**: Tried to use remote invocation patterns on webhook apps, causing runtime errors. Fix: treat webhook endpoints as HTTP only.
+- **Resource under‑provisioning**: Structure predictors need large GPU/RAM; cold starts and OOM led to silent failures. Fix: provision H100/A100 with ≥32–64GB RAM and long timeouts.
+- **Model/download confusion**: Attempted non‑existent/private model IDs; incorrect container stacks. Fix: use ColabFold runner in a stable CUDA image; cache params in container.
+- **Brittle coupling**: Command Center directly called an external structural service without robust failure handling. Fix: isolate Gauntlet with clear timeouts, retries, and graceful degradation.
+
+## Minimal viable Gauntlet (what to implement next)
+1) Stand up a ColabFold‑backed function (Modal or container) that accepts `{ protein_sequence, job_id? }` and returns `{ plddt, ptm, fraction_disordered, timings }`.
+2) Add a thin backend proxy `POST /api/gauntlet/predict` (FastAPI) with:
+   - Input validation (AAs only, length caps), non‑interactive timeouts, RUO banner.
+   - Headers: `x-run-id` and `cache-control: no-store`.
+3) Wire optional Gauntlet step in design flows:
+   - After Forge outputs candidates with translated proteins, allow “Validate structure” toggle.
+   - Save `plddt` into `provenance.structural` for downstream UI badges.
+
+## Acceptance (research-mode)
+- Gauntlet returns JSON with `plddt` in [0,100].
+- For a known, well‑behaved protein fragment, `plddt ≥ 70` in at least one model run.
+- Backend proxy returns `200` with `x-run-id` and RUO headers; logs time and failure reasons.
+- UI surfaces a “Structural Confidence” chip/badge when present; otherwise shows “Not assessed.”
+
+## Smoke tests
+### Isolated service (if deployed)
+```bash
+curl -sS -X POST "$GAUNTLET_URL/predict_structure" \
+  -H 'Content-Type: application/json' \
+  -d '{"protein_sequence":"GIVEQCCTSICSLYQLENYCN"}' | jq .
+```
+
+### Local client
+```bash
+python tools/gauntlet_client.py
+```
+
+### Backend proxy (after wiring)
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/gauntlet/predict \
+  -H 'Content-Type: application/json' \
+  -d '{"protein_sequence":"GIVEQCCTSICSLYQLENYCN"}' | jq .
+```
+
+## Data contract (proposed)
+- Request: `{ protein_sequence: string, model?: "af2_ptm", num_recycle?: 3 }`
+- Response: `{ plddt: number, ptm?: number, fraction_disordered?: number, timings?: object, provenance: { engine: "colabfold_af2_ptm", version, params } }`
+
+## Safety and guardrails
+- RUO only. Do not overstate performance. Present “Structural Assessment” as supporting evidence, not proof.
+- Validate inputs (AA alphabet, max length); redact sequences in logs by default.
+- Timeouts and retries; mark responses with `provenance.structural` fields. On failure, return `{ plddt: null }` and proceed.
+
+## How this lifts confidence (1D → 3D)
+- **1D (Evo2)**: High delta suggests functional change; calibrations turn it into interpretable percentiles.
+- **3D (Gauntlet)**: High `plddt` suggests the designed protein is physically plausible.
+- **Together**: Designs must be both biologically sensible and structurally sound → higher confidence scores and fewer dead ends.
+
+## Links and references
+- Doctrine: [gauntlet_doctrine.mdc](mdc:.cursor/rules/gauntlet_doctrine.mdc)
+- Manual test plan: [boltz_gauntlet_manual_test_plan.mdc](mdc:.cursor/rules/boltz_gauntlet_manual_test_plan.mdc)
+- Command Center structural call (legacy): [src/services/command_center/main.py](mdc:src/services/command_center/main.py)
+- Gauntlet service attempt: [src/services/gauntlet/main.py](mdc:src/services/gauntlet/main.py)
+- Boltz scaffolding: [src/services/boltz_service/main.py](mdc:src/services/boltz_service/main.py)
+- Local tester: [tools/gauntlet_client.py](mdc:tools/gauntlet_client.py)
+
+## Roadmap
+- Add batch mode and caching for repeated targets.
+- Compare AF2 pTM vs pLDDT distributions on a small benchmark set.
+- Optional: ligand/complex modeling via Boltz when stable (roadmap only).
+
+## Website copy (drop‑in)
+- **Core Capability**: 3D Structural Assessment (RUO)
+- **Evidence**: Confidence score (pLDDT) per design, with provenance.
+- **Target Audience**: Researchers and biotech R&D – reduce wet‑lab churn by filtering out unstable designs before synthesis.
+
+## Website content blueprint (what to show)
+- Hero value: “From 1D sequence to 3D certainty.” Short subtext: “We filter out ‘wet noodles’ before they hit the bench.”
+- KPI strip (live or demo):
+  - pLDDT: 0–100 (higher = more confident folding)
+  - pTM: 0–1 (higher = better global topology; optional)
+  - Structural Pass Rate: % of candidates with pLDDT ≥ 70
+  - Time to Verdict: median seconds per structure (RUO benchmark)
+- Confidence bar: Combines 1D (Evo2 calibrated percentile) + 3D (pLDDT) into a transparent, research‑mode confidence hint. Show both ingredients separately; do not collapse without labels.
+- Evidence badges (supporting, not clinical): “1D sequence fit,” “3D fold confidence,” “Provenance logged.”
+- Provenance panel: run ID, engine (ColabFold AF2‑ptm), model params, timestamp.
+- RUO banner: “Research Use Only. Structural assessment supports, does not replace, experimental validation.”
+
+### Suggested landing sections
+1) What it does (60–90 words):
+   - “Designs that look good in sequence often fail in 3D. Our Gauntlet runs a structural assessment (AlphaFold/Boltz) on candidate proteins to filter out unstable designs. You see a clear pLDDT confidence score, timing, and full provenance.”
+2) Why it matters (bullets):
+   - Reduce failed syntheses and assays
+   - Increase trust in in‑silico designs
+   - Faster iteration: promote only promising candidates
+3) How it works (pillars):
+   - 1D Evo2 scoring → 3D structural pass
+   - Transparent metrics (pLDDT/pTM) + provenance
+   - Optional toggle in design workflows
+4) What you get:
+   - Structural Confidence chip per candidate
+   - Downloadable report with pLDDT/pTM and inputs
+   - Run ID for audit/repeat
+5) Call to action: “Validate my design” (routes to design page or upload sequence)
+
+### Component copy (ready‑to‑use)
+- Structural Confidence (chip)
+  - Label: “Structural Confidence”
+  - Value: “pLDDT 82.4”
+  - Tooltip: “0–100. Higher means the model is more confident this protein folds as predicted.”
+- Sequence Fitness (chip)
+  - Label: “Sequence Fitness”
+  - Value: “Calibrated 78th percentile”
+  - Tooltip: “Percentile vs gene‑specific baseline from Evo2. Higher suggests stronger sequence evidence.”
+- Combined Confidence (bar)
+  - Sub‑labels: “1D Sequence” and “3D Structure”
+  - Note: “Research‑mode hint. See provenance for details.”
+- Provenance (panel)
+  - Fields: run_id, engine, params, timestamp
+
+## Metrics glossary (plain English)
+- pLDDT (0–100): Confidence in local 3D structure at each residue. We show the mean; ≥70 is commonly used as a “likely stable fold” hint in RUO contexts.
+- pTM (0–1): Confidence in global topology (how domains are arranged). Helpful for multi‑domain proteins.
+- Fraction disordered (0–1): Share of residues predicted to be disordered; high values can signal unstable designs.
+- Sequence disruption (delta): Evo2 magnitude suggesting functional change; not a structure metric.
+- Calibrated percentile (0–100): Gene/disease‑aware normalization of sequence disruption for interpretability.
+- Structural Pass Rate (%): Share of designs with pLDDT ≥ 70 within a run/cohort.
+- Time to Verdict (s): How long a structure prediction takes (batch median). Sets user expectations.
+
+## Multiple Myeloma exemplar (website JSON + KPI mapping)
+```json
+{
+  "oracle_analysis": {
+    "variant": "BRAF V600E",
+    "classification": "PATHOGENIC",
+    "confidence": 0.95,
+    "pathway_impact": "MAPK Hyperactivation",
+    "auroc": 0.957,
+    "vus_resolution": 0.73
+  },
+  "forge_wiwfm": {
+    "therapy_ranking": [
+      { "class": "MAPK Inhibitors", "confidence": 0.89, "rationale": "Direct pathway targeting", "tier": "Likely" },
+      { "class": "Proteasome Inhibitors", "confidence": 0.76, "rationale": "Synergy with MAPK targeting", "tier": "Likely" },
+      { "class": "Anti-CD38 mAbs", "confidence": 0.68, "rationale": "Immunotherapy backbone", "tier": "Consider" }
+    ],
+    "context_window": "1M_tokens",
+    "wiwfm_confidence": 0.51
+  },
+  "clinical_trials": {
+    "shortlist_compression": "50+ → 7",
+    "categories": { "likely": 3, "potential": 4, "unlikely": 0 }
+  },
+  "provenance": {
+    "model": "Evo2-40B",
+    "validation": "ClinVar_53210_variants",
+    "run_id": "mm_<timestamp_base36>",
+    "profile": "Fusion_AM_eligible",
+    "research_mode": true
+  }
+}
+```
+
+KPI cards (map to JSON):
+- Oracle AUROC: 0.957 (ClinVar) → “Coding SNVs AUROC 0.957 (RUO)”
+- VUS Resolution: 73% → “VUS → Actionable: 73% (RUO)”
+- WIWFM Confidence: 0.51 → “Therapy fit confidence: 0.51 (research-mode)”
+- Trials Compression: 50+ → 7 → “Trials shortlist: 7 from 50+”
+- Context Window: 1M tokens → “Genome-scale context (1M tokens)”
+
+Notes:
+- Keep RUO labels on all metrics; these guide research decisions, not clinical care.
+- If structural assessment (pLDDT) is added, show as a separate Structural Confidence chip alongside the above.
+
+## What to show when compute is unavailable (graceful degradation)
+- Greyed Structural Confidence chip labeled “Not assessed.”
+- Keep Sequence Fitness visible.
+- Display a note: “3D assessment temporarily unavailable. You can proceed or retry later.”
+
+## Editorial guidelines
+- Keep “assessment” language; avoid “proves/final.”
+- Always show RUO banner when structural metrics appear.
+- Never present a single score without its label (e.g., “pLDDT 82.4”).
+- Pair 1D and 3D signals side‑by‑side to teach the concept.
+
+## Optional placeholders (demo‑safe)
+- If live compute is off, preload static examples with a clear “Demo” label and real‑looking outputs (pLDDT, pTM, timings) sourced from prior valid runs.
+
+## Content we may need from you
+- Primary disease focus for examples (e.g., Multiple Myeloma or Melanoma)
+- Preferred proteins/targets for hero screenshots
+- Acceptable runtime budget (seconds) to set user expectations on page
+- Whether to display pTM and fraction_disordered by default or keep behind an “Advanced” disclosure
+

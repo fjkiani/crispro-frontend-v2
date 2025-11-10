@@ -1,0 +1,933 @@
+---
+alwaysApply: false
+description: SAE (Sparse Autoencoder) Real Data Integration Doctrine - Complete execution plan for transforming live data sources into interpretable features for confidence explanation
+---
+
+# ⚔️ SAE REAL DATA INTEGRATION DOCTRINE
+
+## **🎯 MISSION OVERVIEW**
+
+**Objective**: Transform existing real data sources (Evo2, Insights, Toxicity, Off-Target, ClinVar, AlphaMissense) into interpretable SAE features that explain confidence scores with full transparency.
+
+**Commander's Requirement**: **NO MOCKS** - Only real data transformations with provenance tracking.
+
+**Timeline**: 5-6 hours for core implementation
+
+---
+
+## **📊 REAL DATA SOURCES AVAILABLE (ALL LIVE)**
+
+### **1. Evo2 Sequence Scoring** ✅ OPERATIONAL
+- **Endpoints**: 
+  - `/api/evo/score_variant_multi` (delta scoring)
+  - `/api/evo/score_variant_exon` (exon-context)
+- **Data**: Delta scores, multi-window analysis, adaptive flanks
+- **Use Cases**: 
+  - `exon_disruption` feature (from delta magnitude)
+  - `sequence_impact` feature (from calibrated percentile)
+
+### **2. Insights Bundle** ✅ OPERATIONAL
+- **Endpoints**:
+  - `/api/insights/predict_protein_functionality_change`
+  - `/api/insights/predict_chromatin_accessibility`
+  - `/api/insights/predict_gene_essentiality`
+  - `/api/insights/predict_splicing_regulatory`
+- **Data**: Functionality, Chromatin, Essentiality, Regulatory scores
+- **Use Cases**:
+  - `functionality_impact` (direct mapping)
+  - `chromatin_accessibility` (direct mapping)
+  - `essentiality_signal` (direct mapping)
+  - `splice_site_proximity` (from regulatory)
+
+### **3. Pathway Disruption** ✅ OPERATIONAL
+- **Service**: `api/services/pathway/aggregation.py`
+- **Data**: Gene→pathway mapping, weighted impact scores
+- **Use Cases**:
+  - `pathway_disruption` feature (from pathway weights)
+  - `DNA_repair_capacity` (from DNA repair pathway overlap)
+
+### **4. AlphaMissense Fusion** ✅ OPERATIONAL
+- **Endpoint**: `/api/fusion/score_variant`
+- **Data**: Missense pathogenicity scores (GRCh38)
+- **Use Cases**:
+  - `hotspot_mutation` feature (from AM score)
+  - `missense_severity` (from AM + hotspot floor)
+
+### **5. ClinVar Priors** ✅ OPERATIONAL
+- **Endpoint**: `/api/evidence/clinvar`
+- **Data**: Classification, review status, clinical significance
+- **Use Cases**:
+  - `known_pathogenic_pattern` (from ClinVar classification)
+  - `clinical_validation` (from review status)
+
+### **6. Toxicity Pathway Overlap** ✅ OPERATIONAL (P1)
+- **Endpoint**: `/api/safety/toxicity_risk`
+- **Data**: Germline PGx detection, pathway overlap scoring
+- **Use Cases**:
+  - `metabolic_enzyme_deficiency` (from PGx detection)
+  - `DNA_repair_burden` (from toxicity pathway overlap)
+  - `myelosuppression_risk` (from pathway factors)
+
+### **7. Off-Target Heuristics** ✅ OPERATIONAL (P1)
+- **Endpoint**: `/api/safety/off_target_preview`
+- **Data**: GC content, homopolymer detection, heuristic scoring
+- **Use Cases**:
+  - `seed_region_quality` (from GC + homopolymer)
+  - `guide_specificity` (from heuristic score)
+
+### **8. Evidence & Literature** ✅ OPERATIONAL
+- **Endpoint**: `/api/evidence/deep_analysis`
+- **Data**: Evidence tier, citation count, badge system
+- **Use Cases**:
+  - `literature_evidence_strength` (from tier + citations)
+  - `clinical_support` (from badge system)
+
+### **9. Cohort Signals** ⚠️ STUB (FUTURE)
+- **Endpoint**: `/api/datasets/extract_and_benchmark` (planned)
+- **Data**: Cohort coverage, response rates
+- **Use Cases**:
+  - `cohort_overlap` (from coverage fraction)
+  - `real_world_validation` (from outcome data)
+
+---
+
+## **🔧 SAE FEATURE MAPPING RULES (REAL DATA → INTERPRETABLE FEATURES)**
+
+### **Core 6 Features (P2 Priority - 5 hours)**
+
+#### **1. EXON_DISRUPTION**
+```python
+Source: Evo2 delta score (absolute magnitude) + hotspot floor
+Mapping:
+  - Get delta from score_variant_multi or score_variant_exon
+  - Apply hotspot floor if gene + position matches known hotspots
+  - Normalize: exon_disruption = min(abs(delta) * scaling_factor, 1.0)
+  - OR use calibrated_seq_percentile if available
+  
+Provenance: "evo2_delta_magnitude" or "hotspot_calibration"
+Impact: POSITIVE (higher = more disruption = higher confidence for pathogenic)
+Interpretation: "Variant significantly disrupts exon structure"
+```
+
+#### **2. HOTSPOT_MUTATION**
+```python
+Source: AlphaMissense score OR hotspot floor OR ClinVar
+Mapping:
+  - If AlphaMissense available: hotspot_mutation = AM_score
+  - Else if hotspot_floor applied: hotspot_mutation = floor_value
+  - Else if ClinVar Pathogenic: hotspot_mutation = 0.95
+  - Else: hotspot_mutation = None (skip feature)
+  
+Provenance: "alphamissense", "hotspot_calibration", or "clinvar"
+Impact: POSITIVE (known pathogenic patterns boost confidence)
+Interpretation: "Variant matches known pathogenic hotspot pattern"
+```
+
+#### **3. ESSENTIALITY_SIGNAL**
+```python
+Source: Insights essentiality score
+Mapping:
+  - Call /api/insights/predict_gene_essentiality
+  - essentiality_signal = essentiality_score (direct mapping)
+  - Threshold: > 0.7 = strong, 0.4-0.7 = moderate, < 0.4 = weak
+  
+Provenance: "evo2_essentiality_endpoint"
+Impact: POSITIVE (essential genes = higher therapeutic impact)
+Interpretation: "Variant affects an essential gene (dependency score)"
+```
+
+#### **4. DNA_REPAIR_CAPACITY**
+```python
+Source: Toxicity pathway overlap (DNA_REPAIR_PATHWAY)
+Mapping:
+  - Extract toxicity factors from /api/safety/toxicity_risk
+  - Find factors with type="pathway" and pathway="DNA_REPAIR_PATHWAY"
+  - DNA_repair_capacity = pathway_overlap_score
+  - If germline PGx affects DNA repair genes: boost by 0.2
+  
+Provenance: "toxicity_pathway_mapping"
+Impact: POSITIVE for platinum agents, NEGATIVE for general toxicity
+Interpretation: "DNA repair pathway burden detected"
+```
+
+#### **5. SEED_REGION_QUALITY**
+```python
+Source: Off-target GC content + homopolymer detection
+Mapping:
+  - Get guide heuristic_score from /api/safety/off_target_preview
+  - seed_region_quality = heuristic_score (0-1)
+  - Breakdown: GC penalty + homopolymer penalty + seed uniqueness
+  
+Provenance: "offtarget_heuristic_analysis"
+Impact: POSITIVE (high quality = safe guides)
+Interpretation: "CRISPR guide seed region quality assessment"
+```
+
+#### **6. COHORT_OVERLAP**
+```python
+Source: Cohort signals (if available)
+Mapping:
+  - Extract cohort_coverage from cohort_signals in efficacy response
+  - cohort_overlap = cohort_coverage_fraction
+  - If no cohort data: cohort_overlap = None (show as "N/A")
+  
+Provenance: "cohort_extraction_metadata"
+Impact: POSITIVE (real-world validation boosts confidence)
+Interpretation: "Variant validated in clinical cohort data"
+```
+
+---
+
+### **Extended 6 Features (P3 Future - +2 hours)**
+
+#### **7. SPLICE_SITE_PROXIMITY**
+```python
+Source: Insights regulatory score
+Mapping: regulatory_impact_score from predict_splicing_regulatory
+Provenance: "evo2_regulatory_endpoint"
+Impact: POSITIVE (splice disruption = functional impact)
+```
+
+#### **8. METABOLIC_ENZYME_DEFICIENCY**
+```python
+Source: Germline PGx detection (DPYD, TPMT, etc.)
+Mapping: 1.0 if pharmacogene variant detected, 0.0 otherwise
+Provenance: "pharmacogene_detection"
+Impact: NEGATIVE for toxicity (risk factor)
+```
+
+#### **9. PATHWAY_DISRUPTION**
+```python
+Source: Pathway aggregation weights
+Mapping: pathway_impact_score from pathway service
+Provenance: "pathway_weight_aggregation"
+Impact: POSITIVE (pathway disruption = therapeutic target)
+```
+
+#### **10. LITERATURE_EVIDENCE_STRENGTH**
+```python
+Source: Evidence tier + citation count
+Mapping: tier_to_score[tier] + log(citations + 1) / 10
+Provenance: "evidence_orchestrator"
+Impact: POSITIVE (strong evidence boosts confidence)
+```
+
+#### **11. CHROMATIN_ACCESSIBILITY**
+```python
+Source: Insights chromatin score
+Mapping: accessibility_score from predict_chromatin_accessibility
+Provenance: "evo2_chromatin_endpoint"
+Impact: POSITIVE (accessible = druggable)
+```
+
+#### **12. KNOWN_PATHOGENIC_PATTERN**
+```python
+Source: ClinVar classification
+Mapping: 1.0 if Pathogenic/Likely Pathogenic, 0.0 otherwise
+Provenance: "clinvar_classification"
+Impact: POSITIVE (clinical validation)
+```
+
+---
+
+## **⚙️ IMPLEMENTATION PLAN (5-6 HOURS)**
+
+### **Hour 1-2: SAE Service Backend (Real Data Transformation)**
+
+**File**: `oncology-backend-minimal/api/services/sae_service.py`
+
+**Key Functions**:
+
+```python
+from dataclasses import dataclass
+from typing import List, Optional, Dict, Any
+import logging
+
+logger = logging.getLogger(__name__)
+
+@dataclass
+class SAEFeature:
+    """
+    Interpretable feature derived from real data sources.
+    """
+    id: str                    # Feature identifier (e.g., "exon_disruption")
+    name: str                  # Human-readable name
+    activation: float          # Feature strength [0, 1]
+    impact: str                # "positive" or "negative"
+    explanation: str           # What this feature means
+    provenance: str            # Data source (e.g., "evo2_delta_magnitude")
+    threshold: Optional[float] = None  # Activation threshold for display
+    
+@dataclass
+class SAEBundle:
+    """
+    Complete SAE feature set for a variant analysis.
+    """
+    features: List[SAEFeature]
+    boosting_features: List[str]  # Feature IDs boosting confidence
+    limiting_features: List[str]  # Feature IDs limiting confidence
+    overall_impact: float          # Net SAE contribution to confidence
+    provenance: Dict[str, Any]     # Full provenance tracking
+
+
+def extract_sae_features_from_real_data(
+    variant: Dict[str, Any],
+    evo_scores: Optional[Dict[str, Any]] = None,
+    insights: Optional[Dict[str, Any]] = None,
+    pathway_disruption: Optional[Dict[str, Any]] = None,
+    fusion_score: Optional[float] = None,
+    clinvar_data: Optional[Dict[str, Any]] = None,
+    toxicity_factors: Optional[List[Dict[str, Any]]] = None,
+    offtarget_result: Optional[Dict[str, Any]] = None,
+    evidence_data: Optional[Dict[str, Any]] = None,
+    cohort_signals: Optional[Dict[str, Any]] = None,
+) -> SAEBundle:
+    """
+    Transform real data sources into interpretable SAE features.
+    
+    Args:
+        variant: Variant information (gene, position, ref, alt)
+        evo_scores: Evo2 delta scores and calibration
+        insights: Functionality, Chromatin, Essentiality, Regulatory
+        pathway_disruption: Pathway impact scores
+        fusion_score: AlphaMissense score (if available)
+        clinvar_data: ClinVar classification and review status
+        toxicity_factors: Toxicity risk factors
+        offtarget_result: Off-target heuristic analysis
+        evidence_data: Literature evidence and citations
+        cohort_signals: Cohort coverage and validation
+    
+    Returns:
+        SAEBundle with all derived features
+    """
+    features = []
+    
+    # Feature 1: EXON_DISRUPTION
+    if evo_scores:
+        delta = abs(evo_scores.get("delta", 0.0))
+        calibrated_pct = evo_scores.get("calibrated_seq_percentile", 0.0)
+        
+        # Use calibrated percentile if available, else normalize delta
+        exon_disruption = calibrated_pct if calibrated_pct > 0 else min(delta * 1000, 1.0)
+        
+        if exon_disruption > 0.1:  # Threshold for display
+            features.append(SAEFeature(
+                id="exon_disruption",
+                name="Exon Disruption",
+                activation=exon_disruption,
+                impact="positive" if exon_disruption > 0.5 else "negative",
+                explanation=f"Variant disrupts exon structure (score: {exon_disruption:.2f})",
+                provenance="evo2_delta_magnitude" if calibrated_pct == 0 else "hotspot_calibration",
+                threshold=0.5
+            ))
+    
+    # Feature 2: HOTSPOT_MUTATION
+    hotspot_score = None
+    hotspot_provenance = None
+    
+    if fusion_score and fusion_score > 0.5:
+        hotspot_score = fusion_score
+        hotspot_provenance = "alphamissense"
+    elif evo_scores and evo_scores.get("hotspot_floor_applied"):
+        hotspot_score = evo_scores.get("calibrated_seq_percentile", 0.85)
+        hotspot_provenance = "hotspot_calibration"
+    elif clinvar_data and clinvar_data.get("classification") in ["Pathogenic", "Likely pathogenic"]:
+        hotspot_score = 0.95
+        hotspot_provenance = "clinvar"
+    
+    if hotspot_score and hotspot_score > 0.5:
+        features.append(SAEFeature(
+            id="hotspot_mutation",
+            name="Known Hotspot",
+            activation=hotspot_score,
+            impact="positive",
+            explanation=f"Variant matches known pathogenic hotspot pattern (score: {hotspot_score:.2f})",
+            provenance=hotspot_provenance,
+            threshold=0.5
+        ))
+    
+    # Feature 3: ESSENTIALITY_SIGNAL
+    if insights and "essentiality" in insights:
+        essentiality = insights["essentiality"]
+        
+        if essentiality > 0.1:  # Always show if present
+            features.append(SAEFeature(
+                id="essentiality_signal",
+                name="Gene Essentiality",
+                activation=essentiality,
+                impact="positive" if essentiality > 0.4 else "negative",
+                explanation=f"Variant affects {'essential' if essentiality > 0.7 else 'moderately essential' if essentiality > 0.4 else 'non-essential'} gene (dependency: {essentiality:.2f})",
+                provenance="evo2_essentiality_endpoint",
+                threshold=0.7
+            ))
+    
+    # Feature 4: DNA_REPAIR_CAPACITY
+    if toxicity_factors:
+        dna_repair_burden = 0.0
+        for factor in toxicity_factors:
+            if factor.get("type") == "pathway" and "DNA_REPAIR" in factor.get("detail", ""):
+                dna_repair_burden = max(dna_repair_burden, factor.get("weight", 0.0))
+        
+        if dna_repair_burden > 0.3:
+            features.append(SAEFeature(
+                id="DNA_repair_capacity",
+                name="DNA Repair Burden",
+                activation=dna_repair_burden,
+                impact="positive",  # For platinum agents
+                explanation=f"DNA repair pathway burden detected (score: {dna_repair_burden:.2f})",
+                provenance="toxicity_pathway_mapping",
+                threshold=0.5
+            ))
+    
+    # Feature 5: SEED_REGION_QUALITY
+    if offtarget_result and "guides" in offtarget_result:
+        avg_heuristic = sum(g.get("heuristic_score", 0.0) for g in offtarget_result["guides"]) / len(offtarget_result["guides"])
+        
+        if avg_heuristic > 0.1:
+            features.append(SAEFeature(
+                id="seed_region_quality",
+                name="CRISPR Guide Quality",
+                activation=avg_heuristic,
+                impact="positive" if avg_heuristic > 0.7 else "negative",
+                explanation=f"CRISPR guide seed region quality: {'High' if avg_heuristic > 0.8 else 'Moderate' if avg_heuristic > 0.6 else 'Low'} (score: {avg_heuristic:.2f})",
+                provenance="offtarget_heuristic_analysis",
+                threshold=0.7
+            ))
+    
+    # Feature 6: COHORT_OVERLAP
+    if cohort_signals and cohort_signals.get("coverage_fraction"):
+        cohort_overlap = cohort_signals["coverage_fraction"]
+        
+        if cohort_overlap > 0.05:
+            features.append(SAEFeature(
+                id="cohort_overlap",
+                name="Cohort Validation",
+                activation=cohort_overlap,
+                impact="positive" if cohort_overlap > 0.2 else "negative",
+                explanation=f"Variant validated in {int(cohort_overlap * 100)}% of clinical cohort",
+                provenance="cohort_extraction_metadata",
+                threshold=0.2
+            ))
+    
+    # Classify features
+    boosting = [f.id for f in features if f.impact == "positive" and f.activation > (f.threshold or 0.5)]
+    limiting = [f.id for f in features if f.impact == "negative" or f.activation < (f.threshold or 0.5)]
+    
+    # Calculate overall SAE impact
+    boost_score = sum(f.activation for f in features if f.id in boosting) / len(boosting) if boosting else 0.0
+    limit_score = sum((f.threshold or 0.5) - f.activation for f in features if f.id in limiting) / len(limiting) if limiting else 0.0
+    overall_impact = boost_score - limit_score
+    
+    return SAEBundle(
+        features=features,
+        boosting_features=boosting,
+        limiting_features=limiting,
+        overall_impact=overall_impact,
+        provenance={
+            "method": "real_data_transformation",
+            "data_sources": [f.provenance for f in features],
+            "feature_count": len(features),
+            "boosting_count": len(boosting),
+            "limiting_count": len(limiting)
+        }
+    )
+```
+
+---
+
+### **Hour 3: Efficacy Orchestrator Integration**
+
+**File**: `oncology-backend-minimal/api/services/efficacy_orchestrator/orchestrator.py`
+
+**Modification**: Add SAE feature extraction after data collection
+
+```python
+# Near end of predict() method, after all data collection
+
+# Extract SAE features if requested
+if options.get("include_sae_features"):
+    from api.services.sae_service import extract_sae_features_from_real_data
+    
+    # Collect all real data sources
+    sae_bundle = extract_sae_features_from_real_data(
+        variant=mutations[0] if mutations else {},
+        evo_scores={
+            "delta": sequence_result.get("delta"),
+            "calibrated_seq_percentile": sequence_result.get("calibrated_seq_percentile"),
+            "hotspot_floor_applied": sequence_result.get("hotspot_floor_applied")
+        } if sequence_result else None,
+        insights={
+            "functionality": insights_result.get("functionality", 0.0),
+            "chromatin": insights_result.get("chromatin", 0.0),
+            "essentiality": insights_result.get("essentiality", 0.0),
+            "regulatory": insights_result.get("regulatory", 0.0)
+        } if insights_result else None,
+        pathway_disruption=pathway_result,
+        fusion_score=fusion_score if fusion_score else None,
+        clinvar_data=evidence_data.get("clinvar") if evidence_data else None,
+        toxicity_factors=None,  # Not in efficacy orchestrator, comes from safety endpoint
+        offtarget_result=None,  # Not in efficacy orchestrator
+        evidence_data=evidence_data,
+        cohort_signals=cohort_result if cohort_result else None
+    )
+    
+    # Add SAE features to response
+    response.sae_features = [
+        {
+            "id": f.id,
+            "name": f.name,
+            "activation": f.activation,
+            "impact": f.impact,
+            "explanation": f.explanation,
+            "provenance": f.provenance
+        }
+        for f in sae_bundle.features
+    ]
+    
+    # Add SAE attribution to confidence breakdown
+    if "confidence_breakdown" in response.provenance:
+        response.provenance["confidence_breakdown"]["sae_attribution"] = {
+            "boosting_features": sae_bundle.boosting_features,
+            "limiting_features": sae_bundle.limiting_features,
+            "overall_impact": sae_bundle.overall_impact
+        }
+```
+
+---
+
+### **Hour 4: Frontend SAEFeaturesCard Component**
+
+**File**: `oncology-frontend/src/components/ClinicalGenomicsCommandCenter/cards/SAEFeaturesCard.jsx`
+
+```jsx
+import React from 'react';
+import {
+  Card,
+  CardContent,
+  Typography,
+  Box,
+  Chip,
+  Tooltip,
+  CircularProgress,
+  Alert,
+  Divider
+} from '@mui/material';
+import {
+  CheckCircle as CheckCircleIcon,
+  Warning as WarningIcon,
+  Info as InfoIcon
+} from '@mui/icons-material';
+
+export const SAEFeaturesCard = ({ result, loading, error }) => {
+  if (loading) {
+    return (
+      <Card>
+        <CardContent sx={{ textAlign: 'center', py: 4 }}>
+          <CircularProgress />
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+            Extracting interpretable features...
+          </Typography>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardContent>
+          <Alert severity="error">
+            Failed to extract SAE features: {error}
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!result || !result.sae_features || result.sae_features.length === 0) {
+    return (
+      <Card>
+        <CardContent>
+          <Alert severity="info">
+            No SAE features available. Run analysis with <code>include_sae_features=true</code>.
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const { sae_features, provenance } = result;
+  const sae_attribution = provenance?.confidence_breakdown?.sae_attribution || {};
+  
+  const boostingFeatures = sae_features.filter(f => 
+    sae_attribution.boosting_features?.includes(f.id)
+  );
+  
+  const limitingFeatures = sae_features.filter(f => 
+    sae_attribution.limiting_features?.includes(f.id)
+  );
+
+  return (
+    <Card>
+      <CardContent>
+        {/* Header */}
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <InfoIcon color="primary" sx={{ mr: 1 }} />
+          <Typography variant="h6">
+            Why This Confidence Score?
+          </Typography>
+        </Box>
+
+        {/* RUO Disclaimer Banner */}
+        <Alert severity="info" sx={{ mb: 2 }}>
+          <strong>Research Use Only:</strong> Features derived from real data sources 
+          (Evo2, Insights, Toxicity, Off-Target, ClinVar). For exploratory analysis only.
+        </Alert>
+
+        {/* Boosting Features */}
+        {boostingFeatures.length > 0 && (
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle2" color="success.main" sx={{ mb: 1, display: 'flex', alignItems: 'center' }}>
+              <CheckCircleIcon sx={{ mr: 0.5, fontSize: 18 }} />
+              Strengths (Boosting Confidence):
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              {boostingFeatures.map(feature => (
+                <Tooltip 
+                  key={feature.id}
+                  title={
+                    <Box>
+                      <Typography variant="caption" display="block">
+                        <strong>Provenance:</strong> {feature.provenance}
+                      </Typography>
+                      <Typography variant="caption" display="block">
+                        <strong>Activation:</strong> {(feature.activation * 100).toFixed(0)}%
+                      </Typography>
+                    </Box>
+                  }
+                  arrow
+                >
+                  <Chip
+                    label={`${feature.explanation}`}
+                    color="success"
+                    variant="outlined"
+                    size="medium"
+                    icon={<CheckCircleIcon />}
+                  />
+                </Tooltip>
+              ))}
+            </Box>
+          </Box>
+        )}
+
+        <Divider sx={{ my: 2 }} />
+
+        {/* Limiting Features */}
+        {limitingFeatures.length > 0 && (
+          <Box>
+            <Typography variant="subtitle2" color="warning.main" sx={{ mb: 1, display: 'flex', alignItems: 'center' }}>
+              <WarningIcon sx={{ mr: 0.5, fontSize: 18 }} />
+              Weaknesses (Lowering Confidence):
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              {limitingFeatures.map(feature => (
+                <Tooltip 
+                  key={feature.id}
+                  title={
+                    <Box>
+                      <Typography variant="caption" display="block">
+                        <strong>Provenance:</strong> {feature.provenance}
+                      </Typography>
+                      <Typography variant="caption" display="block">
+                        <strong>Activation:</strong> {(feature.activation * 100).toFixed(0)}%
+                      </Typography>
+                    </Box>
+                  }
+                  arrow
+                >
+                  <Chip
+                    label={`${feature.explanation}`}
+                    color="warning"
+                    variant="outlined"
+                    size="medium"
+                    icon={<WarningIcon />}
+                  />
+                </Tooltip>
+              ))}
+            </Box>
+          </Box>
+        )}
+
+        {/* Overall Impact */}
+        {sae_attribution.overall_impact !== undefined && (
+          <Box sx={{ mt: 3, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              <strong>Net SAE Impact:</strong> {sae_attribution.overall_impact > 0 ? '+' : ''}{(sae_attribution.overall_impact * 100).toFixed(1)}%
+            </Typography>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+              {boostingFeatures.length} boosting, {limitingFeatures.length} limiting features detected
+            </Typography>
+          </Box>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+```
+
+---
+
+### **Hour 5: CoPilot Integration**
+
+**File**: `oncology-frontend/src/components/ClinicalGenomicsCommandCenter/integrations/ClinicalGenomicsCoPilotIntegration.jsx`
+
+**Add New Quick Action**:
+
+```javascript
+// Quick action: Explain SAE features (NEW - P2)
+const askAboutSAEFeatures = () => {
+  if (!results.sae_features || results.sae_features.length === 0) return;
+  
+  const boosting = results.sae_features.filter(f => 
+    results.provenance?.confidence_breakdown?.sae_attribution?.boosting_features?.includes(f.id)
+  );
+  
+  const limiting = results.sae_features.filter(f => 
+    results.provenance?.confidence_breakdown?.sae_attribution?.limiting_features?.includes(f.id)
+  );
+  
+  const top_boost = boosting.sort((a, b) => b.activation - a.activation)[0];
+  const top_limit = limiting.sort((a, b) => a.activation - b.activation)[0];
+  
+  let question = `My confidence score is ${(results.efficacy?.drugs?.[0]?.confidence || 0).toFixed(2)}. `;
+  
+  if (top_boost) {
+    question += `It's boosted by: ${top_boost.explanation} (${(top_boost.activation * 100).toFixed(0)}%). `;
+  }
+  
+  if (top_limit) {
+    question += `But limited by: ${top_limit.explanation} (${(top_limit.activation * 100).toFixed(0)}%). `;
+  }
+  
+  question += `How can I improve this confidence score?`;
+  
+  setIsOpen(true);
+  setChatHistory(prev => [...prev, {
+    role: 'user',
+    content: question,
+    timestamp: new Date().toISOString(),
+    context: {
+      sae_features: results.sae_features,
+      sae_attribution: results.provenance?.confidence_breakdown?.sae_attribution
+    }
+  }]);
+};
+
+// Add to return statement
+return {
+  // ... existing methods
+  askAboutSAEFeatures,
+  // ...
+};
+```
+
+**Add Quick Action Chip**:
+
+```javascript
+{/* NEW: SAE features action (P2) */}
+{results.sae_features && results.sae_features.length > 0 && (
+  <Chip
+    label="Explain features?"
+    size="small"
+    variant="outlined"
+    color="secondary"
+    onClick={copilot.askAboutSAEFeatures}
+    sx={{ cursor: 'pointer' }}
+  />
+)}
+```
+
+---
+
+### **Hour 6: Testing & Validation**
+
+**File**: `oncology-backend-minimal/tests/test_sae_service.py`
+
+```python
+import pytest
+from api.services.sae_service import extract_sae_features_from_real_data, SAEFeature
+
+def test_exon_disruption_feature():
+    """Test exon disruption feature extraction from Evo2 scores."""
+    result = extract_sae_features_from_real_data(
+        variant={"gene": "BRAF", "pos": 140753336},
+        evo_scores={"delta": -0.00006628, "calibrated_seq_percentile": 0.88}
+    )
+    
+    exon_feature = next((f for f in result.features if f.id == "exon_disruption"), None)
+    assert exon_feature is not None
+    assert exon_feature.activation == 0.88
+    assert exon_feature.impact == "positive"
+
+def test_hotspot_mutation_feature():
+    """Test hotspot mutation feature from AlphaMissense."""
+    result = extract_sae_features_from_real_data(
+        variant={"gene": "BRAF", "pos": 140753336},
+        fusion_score=0.92
+    )
+    
+    hotspot_feature = next((f for f in result.features if f.id == "hotspot_mutation"), None)
+    assert hotspot_feature is not None
+    assert hotspot_feature.activation == 0.92
+    assert hotspot_feature.provenance == "alphamissense"
+
+def test_dna_repair_capacity_feature():
+    """Test DNA repair capacity from toxicity factors."""
+    result = extract_sae_features_from_real_data(
+        variant={"gene": "BRCA1"},
+        toxicity_factors=[
+            {"type": "pathway", "detail": "DNA_REPAIR_PATHWAY disrupted", "weight": 0.78}
+        ]
+    )
+    
+    repair_feature = next((f for f in result.features if f.id == "DNA_repair_capacity"), None)
+    assert repair_feature is not None
+    assert repair_feature.activation == 0.78
+
+def test_missing_data_handling():
+    """Test that missing data sources are handled gracefully."""
+    result = extract_sae_features_from_real_data(
+        variant={"gene": "TEST"},
+        evo_scores=None,
+        insights=None
+    )
+    
+    # Should return empty features list, not crash
+    assert result.features == []
+    assert result.boosting_features == []
+    assert result.limiting_features == []
+```
+
+---
+
+## **🎯 CRITICAL QUESTIONS FOR COMMANDER (DECISION POINTS)**
+
+### **Q1: Feature Priority**
+- **A) Core 6 features (5-6h)** ← exon_disruption, hotspot, essentiality, DNA_repair, seed_quality, cohort
+- **B) Extended 12 features (7-8h)** ← adds splice, PGx, pathway, literature, chromatin, ClinVar
+
+**RECOMMENDATION**: **A (Core 6)** - Proven data sources, fastest to demo
+
+---
+
+### **Q2: Missing Data Handling**
+- **A) Skip feature if unavailable** (sparse SAE)
+- **B) Show "N/A" with explanation** (transparent)
+- **C) Infer from related sources** (complex)
+
+**RECOMMENDATION**: **B (Show N/A)** - Transparency builds trust
+
+---
+
+### **Q3: Confidence Attribution Formula**
+- **A) Simple sum**: `confidence = Σ(boosting) - Σ(limiting)`
+- **B) Weighted**: `confidence = w1*S + w2*P + w3*E + SAE_adjustment`
+- **C) Multiplicative**: `confidence *= (1 + SAE_boost) * (1 - SAE_penalty)`
+
+**RECOMMENDATION**: **B (Weighted)** - Matches current S/P/E system
+
+---
+
+### **Q4: Real-Time vs Batch**
+- **A) On-demand** (calculate SAE features during analysis, +1-2s latency)
+- **B) Pre-compute** (fast but limited coverage)
+
+**RECOMMENDATION**: **A (On-demand)** - Flexibility for all variants
+
+---
+
+### **Q5: Provenance Display**
+- **A) Inline per feature** (e.g., "exon_disruption: 0.88 [Evo2]")
+- **B) Single provenance section at bottom**
+- **C) Expandable details per feature**
+
+**RECOMMENDATION**: **A (Inline)** - Clarity and immediate trust
+
+---
+
+## **📊 EXECUTION CHECKLIST**
+
+### **Backend (Hours 1-3)**
+- [ ] Create `api/services/sae_service.py`
+- [ ] Implement `SAEFeature` and `SAEBundle` dataclasses
+- [ ] Implement `extract_sae_features_from_real_data()` with 6 core features
+- [ ] Add SAE integration to `efficacy_orchestrator/orchestrator.py`
+- [ ] Gate SAE with `options.include_sae_features` flag
+- [ ] Add SAE features to `EfficacyResponse` schema
+
+### **Frontend (Hours 4-5)**
+- [ ] Create `cards/SAEFeaturesCard.jsx`
+- [ ] Display boosting features (green chips)
+- [ ] Display limiting features (yellow chips)
+- [ ] Add provenance tooltips
+- [ ] Add RUO disclaimer banner
+- [ ] Integrate into `MechanisticEvidenceTab.jsx`
+- [ ] Add CoPilot "Explain features?" quick action
+- [ ] Update `ClinicalGenomicsQuickActions` component
+
+### **Testing (Hour 6)**
+- [ ] Write unit tests (`test_sae_service.py`)
+- [ ] Test each feature extraction
+- [ ] Test missing data handling
+- [ ] Integration test with full efficacy endpoint
+- [ ] Smoke test: BRAF V600E with expected features
+- [ ] Smoke test: DPYD germline with toxicity features
+
+---
+
+## **🚀 ACCEPTANCE CRITERIA**
+
+**Backend**:
+- ✅ SAE service extracts 6 core features from real data
+- ✅ Features include provenance tracking
+- ✅ Missing data handled gracefully (N/A)
+- ✅ Integration tests pass (100%)
+
+**Frontend**:
+- ✅ SAEFeaturesCard renders with real data
+- ✅ Green/yellow chips display correctly
+- ✅ Provenance tooltips show data sources
+- ✅ CoPilot "Explain features?" opens with context
+
+**End-to-End**:
+- ✅ BRAF V600E shows: exon_disruption (0.88), hotspot_mutation (0.92)
+- ✅ DPYD variant shows: metabolic_enzyme_deficiency (1.0)
+- ✅ Low-confidence variant shows limiting features
+
+---
+
+## **⚔️ COMMANDER'S FINAL DECISIONS REQUIRED**
+
+**Reply with your choices**:
+
+```
+Q1: A (core 6, 5-6h) or B (extended 12, 7-8h)?
+Q2: A (skip), B (show N/A), or C (infer)?
+Q3: A (sum), B (weighted), or C (multiplicative)?
+Q4: A (on-demand) or B (pre-compute)?
+Q5: A (inline), B (bottom), or C (expandable)?
+```
+
+**OR**: Reply with **"Proceed with recommendations"** for fast path
+
+---
+
+**TIME ESTIMATE**: 5-6 hours (Core 6 features, real data only)
+
+**DELIVERABLES**:
+- Real SAE features from live data sources
+- Full transparency with provenance tracking
+- CoPilot integration for explainability
+- Complete test coverage
+
+⚔️🔥💀 **AWAITING COMMANDER'S FINAL ORDERS TO EXECUTE!** 💀🔥⚔️

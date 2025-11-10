@@ -1,0 +1,85 @@
+---
+alwaysApply: false
+description: Multiple Myeloma – End‑to‑End Doctrine (live outputs, JSON anchors, endpoints, semantics, RUO)
+---
+
+# Multiple Myeloma – End‑to‑End Doctrine (RUO)
+
+## Purpose (why this exists vs slides)
+- This doctrine is the single source of truth for MM: what we deliver live, how to read it, which endpoints produce it, and how to talk about it without overclaiming.
+- The slide deck is copy‑ready and concise. This doctrine contains the details: JSON anchors, curl examples, semantics, and RUO posture.
+
+## What we solved (plain language)
+We convert noisy MM variants into a transparent therapy game plan you can read and defend: ranked drug classes (score + confidence + tier + badges), a pathway story (why), a toxicity hint (plan safely), trials context (shortlist counts), and provenance (run_id) so everything is auditable.
+
+## Live outputs (snapshot)
+- Efficacy (subset, BRAF V600E, baseline profile with lifts ON; Fusion eligible):
+  - Proteasome inhibitor: efficacy_score 0.53, confidence 0.89, tier supported, badges [FDA‑OnLabel, PathwayAligned]
+  - BRAF/MEK inhibitors: efficacy_score 0.75, confidence 0.79, tier consider, badges [PathwayAligned]
+- Toxicity hint (germline): helper “plan cautiously under DNA‑damaging exposure”, confidence 0.55, source ClinVar link (RUO)
+- Trials summary: “50+ → 7” with categories {likely:3, potential:4, unlikely:0}
+- Fusion coverage: true (GRCh38 missense gate)
+- ClinVar prior: classification pathogenic; URL returned
+- Provenance: run_id present (cite on slides); sequence_scoring.mode = fusion_am_local
+
+## Endpoints (what produces those outputs)
+- Efficacy: `POST /api/efficacy/predict` → { drugs[*].{ name, efficacy_score, confidence, evidence_tier, badges, insights, rationale }, cohort_signals, provenance, run_signature }
+- Insights (chips):
+  - Functionality: `POST /api/insights/predict_protein_functionality_change`
+  - Essentiality: `POST /api/insights/predict_gene_essentiality`
+  - Regulatory/splicing: `POST /api/insights/predict_splicing_regulatory`
+  - Chromatin: `POST /api/insights/predict_chromatin_accessibility`
+- Fusion coverage: `GET /api/fusion/coverage?chrom&pos&ref&alt`
+- ClinVar prior (minimal): `GET /api/evidence/clinvar?chrom&pos&ref&alt[&gene&hgvs_p]`
+- Toxicity hint: `POST /api/toxicity/hint`
+
+## How to read the JSON (anchors you can safely cite)
+- Per‑drug: `drugs[*].{ efficacy_score, confidence, evidence_tier, badges, rationale }`
+- Chips: `drugs[*].insights.{ functionality, chromatin, essentiality, regulatory }`
+- Cohorts: `cohort_signals.{ coverage_by_gene, response_rates, provenance }`
+- Trials: `provenance.trials.{ shortlist_compression, categories }`
+- Fusion: `fusion_coverage.coverage` (true when GRCh38 missense)
+- ClinVar: `clinvar.{ classification, url }`
+- Provenance: `provenance.{ run_id, profile, sequence_scoring.mode }`
+
+## Capabilities inventory (live today)
+- Efficacy (S/P/E): Composite signal with evidence gates and modest, bounded lifts; PathwayAligned badge and rationale explain “why.”
+- Insights bundle: four chips (Functionality/Chromatin/Essentiality/Regulatory) to translate biology quickly.
+- Toxicity hint (germline): small, conservative caution with helper, confidence, and sources (RUO).
+- Cohort overlays: stubbed container returned now; ready to wire to datasets for lifts with provenance.
+- Trials: shortlist compression and counts included in provenance.
+- Provenance: run_id + profile for auditability; cite on slides and docs.
+
+## Semantic alignment (only live‑backed items)
+- “Target engagement” → S/P fit: Functionality + PathwayAligned + sequence disruption (partial proxy)
+- “Pathway modulation” → Pathway percentile + PathwayAligned (live)
+- “Cytotoxicity” → Toxicity Risk chip (live, RUO)
+- “Patient stratification” → Ranked therapies + confidence + cohort_signals (partial)
+- “IND package” → Dossier export with provenance (partial; RUO)
+
+Avoid road‑map claims (PK/PD, multi‑organ toxicity, ORR/PFS/OS, affinity/selectivity) in public assets.
+
+## RUO posture and limits
+- This is research‑use only. Confidence varies with inputs and eligibility (e.g., Fusion coverage). Literature may be sparse; lifts remain modest. Cohorts are stubbed unless connected. Always cite `provenance.run_id`.
+
+## Copy‑ready anchors (website/slides)
+- “Ranked therapies with score, confidence, evidence tier, and badges — each with provenance (run_id).”
+- “Four simple chips turn variants into readable biology: Function, Regulatory, Essentiality, Chromatin.”
+- “A small germline‑aware toxicity hint helps teams plan conservatively (RUO).”
+- “Trials context summarized (50+ → N) with Likely/Potential/Unlikely counts; one‑pager export ready.”
+
+## Curl (local dev example)
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/efficacy/predict \
+  -H 'Content-Type: application/json' \
+  --data '{
+    "mutations":[{"gene":"BRAF","hgvs_p":"V600E","chrom":"7","pos":140453136,"ref":"T","alt":"A"}],
+    "disease":"multiple myeloma",
+    "model_id":"evo2_1b",
+    "options":{"adaptive":true,"ensemble":true,"include_fda_badges":true,"include_cohort_overlays":true,"include_calibration_snapshot":true}
+  }'
+```
+
+## Relationship to the slide deck
+- The slide deck uses the live outputs and copy anchors from this doctrine. Keep the deck concise (no engineering details), always cite a run_id, and avoid roadmap claims.
+

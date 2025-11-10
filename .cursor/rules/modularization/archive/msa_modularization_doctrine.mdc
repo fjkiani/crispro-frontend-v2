@@ -1,0 +1,128 @@
+---
+alwaysApply: false
+description: MSA Client Modularization – non‑breaking refactor plan for tools/msa_client.py into reusable services
+---
+
+# MSA Client Modularization Doctrine (MMSeqs2)
+
+Purpose: Provide a precise, non‑breaking plan to decompose the monolithic `[tools/msa_client.py](mdc:tools/msa_client.py)` (>1k lines, duplicated blocks) into a small, testable package that we can reuse across Forge→Gauntlet flows (Boltz) and future services. Another agent should be able to follow this plan end‑to‑end.
+
+RUO posture: Research‑mode only. Respect upstream rate limits. Log provenance.
+
+## Where code lives today
+- [tools/msa_client.py](mdc:tools/msa_client.py)
+  - Exposes `run_mmseqs2(x, prefix, use_env, use_filter, use_pairing, pairing_strategy, host_url, msa_server_username, msa_server_password, auth_headers)`
+  - Concerns mixed: auth, submission, retry/backoff, status polling, download, tar extraction, A3M parsing, I/O, logging, idempotency.
+  - Repeated blocks (function re‑defs) inflate file size and risk divergence.
+
+## Target architecture (new package)
+```
+tools/msa/
+  __init__.py                 # Re-exports stable API surface (run_mmseqs2, MSAClient)
+  types.py                    # Typed configs and results (dataclasses/pydantic)
+  config.py                   # Defaults, env var reading, validation (HOST, timeouts)
+  errors.py                   # Custom exceptions (MSAAuthError, MSARateLimit, MSAProtocolError)
+  auth.py                     # Build auth headers or HTTPBasicAuth from config
+  client.py                   # Thin HTTP client: submit(), status(), download(); timeouts, retries
+  polling.py                  # Polling/backoff policies (UNKNOWN/RUNNING/PENDING/RATELIMIT)
+  downloader.py               # Download to tar.gz, safe write
+  parser.py                   # Extract A3M files, sanitize, join, map indices (Ms)
+  cache.py                    # Optional cache (filesystem/Redis) keyed by (seqs, mode, env)
+  provenance.py               # Capture run metadata (flags, host, timings, IDs) to JSON
+  runner.py                   # Orchestrate end-to-end flow; public run_mmseqs2() wrapper
+  cli.py                      # Optional CLI entrypoint for smoke tests
+```
+
+## Public API (non‑breaking)
+- Keep `run_mmseqs2(...) -> list[str]` callable with identical signature and behavior.
+- Add optional `provenance_path: Optional[str] = None` and `cache_dir: Optional[str] = None` behind kwargs; default no behavior change.
+- New typed class `MSAClient` with `run(seqs: list[str] | str, options: MSAOptions) -> MSAResult` for internal reuse.
+
+## Module responsibilities (brief)
+- types.py
+  - `MSAOptions` (host_url, use_env, use_filter, use_pairing, pairing_strategy, timeouts)
+  - `MSAResult` (a3m_lines: list[str], job_id: str, files: list[str], timings: dict)
+- config.py
+  - Pull defaults from env: `MSA_HOST_URL`, `MSA_TIMEOUTS`, `MSA_RETRY_MAX`, validate.
+- auth.py
+  - Build either HTTPBasicAuth or header‑based tokens; never both (mutually exclusive).
+- client.py
+  - `submit(seqs, mode) -> dict`, `status(job_id) -> dict`, `download(job_id, path) -> None` with timeouts and logging.
+- polling.py
+  - Loop with jitter backoff; handle states: UNKNOWN/RUNNING/PENDING/RATELIMIT/MAINTENANCE/ERROR.
+- downloader.py
+  - Stream download, atomic write, checksum optional.
+- parser.py
+  - Extract tar; locate `uniref.a3m`, `bfd.mgnify30.metaeuk30.smag30.a3m` (when env enabled) or `pair.a3m`.
+  - Sanitize null bytes, rejoin by M indices, return ordered lines matching inputs.
+- cache.py
+  - File cache: `${cache_dir}/{hash}.tar.gz` + `${hash}.json` (provenance). Optional Redis mirror.
+- provenance.py
+  - Serialize options, chosen mode, host, auth mode, job_id, timings to JSON.
+- runner.py
+  - Glue: dedupe inputs, compute M mapping, call client+polling+downloader+parser; emit provenance; optional cache.
+- cli.py
+  - `python -m tools.msa.cli --seq "..." --no-env --no-filter --host https://api.colabfold.com`.
+
+## Stepwise migration (safe, minimal blast radius)
+1) Introduce package skeleton (no code moves yet). Add `tools/msa/` with empty modules and `runner.run_mmseqs2` that simply imports old function.
+2) Move parsing into `parser.py` and call it from old function. Keep signature. Add tiny adapter in `msa_client.py`.
+3) Move submission/status/download into `client.py` and `polling.py`; wire old function to use new helpers.
+4) Move auth/config into `auth.py`/`config.py`; keep defaults identical. Add validation for mutually exclusive auth methods.
+5) Add `provenance.py` emission (guarded by kwarg) and `cache.py` (guarded by kwarg/path). Defaults remain off.
+6) Extract errors into `errors.py`, replace ad‑hoc Exceptions with typed ones; map back to existing behavior where callers expect generic errors.
+7) Add `cli.py` for smoke; document in doctrine. Ensure CI skips if network blocked.
+8) Finally, slim `tools/msa_client.py` into a re‑export shim calling `tools.msa.runner.run_mmseqs2`.
+
+## Backward‑compatibility guarantees
+- Function name, arguments, and return type unchanged unless optional kwargs are provided.
+- Network behavior, endpoints, and default timeouts preserved.
+- Error messages remain equivalent; new exceptions subclass `Exception`.
+
+## Provenance and caching
+- Optional `provenance_path` will write `${prefix}_provenance.json` with: options, host, auth_mode, job_id, timings, file list, hash of inputs.
+- Optional `cache_dir` enables cache lookup by hash of `(seqs_unique, mode, use_env, use_filter, use_pairing, pairing_strategy, host_url)`.
+
+## Retry/backoff policy (codify current behavior)
+- Submit/status/download timeouts ≈ 6.02s; 5 retries per stage with jitter.
+- RATELIMIT/UNKNOWN → sleep 5–10s with jitter, then re‑submit/status.
+- MAINTENANCE → fail fast with typed error.
+
+## Tests & smoke commands
+- Unit tests (no network):
+  - parser: null byte handling, M index ordering, multi‑file join.
+  - config/auth: mutual exclusion logic; env overrides.
+  - errors: exception mapping.
+- Integration (network, optional):
+  - submit small sequence (<=100 aa) with `use_env=false` and `use_filter=true` to public host; assert non‑empty A3M.
+  - status polling transitions produce logs; provenance JSON written when enabled.
+- Smoke (local):
+```bash
+python -m tools.msa.cli --seq "MKTAYIAKQRQISFVKSHFS" --host https://api.colabfold.com --no-pairing --no-env --filter --prefix tmp_msa
+```
+
+## Acceptance criteria
+- `from tools.msa_client import run_mmseqs2` still works and returns identical output on the same inputs.
+- New `tools/msa/` package compiles; unit tests pass; optional integration smoke succeeds.
+- No behavior change for callers in Forge/Gauntlet flows; logs and provenance optionally improved.
+
+## Risks & mitigations
+- Network flakiness → keep retry/backoff identical; allow host override.
+- API drift at provider → typed errors and explicit message when JSON invalid.
+- Performance regressions → staging: compare wall‑clock with existing implementation on the same inputs.
+
+## Work breakdown (for the implementing agent)
+1) Create `tools/msa/` skeleton with stubs; add `runner.run_mmseqs2` that imports and calls legacy.
+2) Move parser code; write tests; switch legacy to call parser module.
+3) Move client/polling; write tests; switch legacy to call client+polling.
+4) Move auth/config; add validation; adjust legacy to use them.
+5) Add provenance + optional cache; guard behind kwargs; no default behavior change.
+6) Replace bare Exceptions with typed ones; keep messages.
+7) Add CLI; include smoke command in README or this doctrine.
+8) Slim legacy into shim re‑export; run full smoke.
+
+## References
+- Current implementation: [tools/msa_client.py](mdc:tools/msa_client.py)
+- Boltz/GAUNTLET consumers (context): [tools/gauntlet_client.py](mdc:tools/gauntlet_client.py)
+- Forge/Boltz tests: [tests/integration/test_forge_and_boltz_protocol.py](mdc:tests/integration/test_forge_and_boltz_protocol.py)
+

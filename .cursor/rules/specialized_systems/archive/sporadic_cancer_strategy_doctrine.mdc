@@ -1,0 +1,524 @@
+---
+description: Strategic doctrine for managing sporadic (non-hereditary) cancer cases where germline testing is negative - focus on tumor genomics, treatment line intelligence, and clinical trial matching
+alwaysApply: false
+---
+
+## Sporadic Cancer Strategy Doctrine
+
+**Purpose:** Define the end-to-end workflow for patients with **sporadic (non-hereditary) cancers** where germline genetic testing returns negative, requiring a shift from germline-centric to tumor-centric precision medicine.
+
+---
+
+## 1) DEFINITION & PREVALENCE
+
+**Sporadic Cancer:**
+- No pathogenic germline mutations detected in cancer susceptibility genes
+- Cancer arises from somatic (acquired) mutations in tumor tissue only
+- **NOT inherited** - family members at population-level risk only
+
+**Prevalence:**
+- **~85-90% of ovarian cancers** are sporadic (non-BRCA)
+- **~90-95% of breast cancers** are sporadic
+- **~95% of colorectal cancers** are sporadic (non-Lynch)
+- **~70% of prostate cancers** are sporadic
+
+**Clinical Implications:**
+- ✅ **Better prognosis** typically (no germline "second hit" vulnerability)
+- ✅ **Lower family risk** - relatives not at elevated hereditary cancer risk
+- ⚠️ **Standard hereditary-targeted therapies less effective** (e.g., PARP inhibitors in non-BRCA)
+- 🎯 **Tumor genomics CRITICAL** - need somatic drivers to guide therapy
+
+---
+
+## 2) STRATEGIC SHIFT: GERMLINE → TUMOR
+
+### **Germline Testing Negative = Paradigm Shift**
+
+| **Germline-Centric** | **Tumor-Centric (Sporadic)** |
+|----------------------|------------------------------|
+| Family history screening | Tumor NGS panel |
+| Inherited mutation counseling | Somatic mutation profiling |
+| Predictable pathway disruption | Complex multi-hit evolution |
+| PARP inhibitors (BRCA) | Pathway-agnostic therapies |
+| Preventive surgery for family | Tumor-based trial matching |
+
+### **What We Need:**
+1. **Tumor-only NGS** (Foundation Medicine, Tempus, Guardant360)
+   - Somatic mutations (TP53, KRAS, PIK3CA, etc.)
+   - Copy number alterations (amplifications/deletions)
+   - TMB (tumor mutational burden)
+   - MSI (microsatellite instability)
+   - HRD score (homologous recombination deficiency - can be somatic)
+
+2. **Treatment History** - Track all prior therapies for cross-resistance
+   - Line 1, 2, 3+ with regimens
+   - Response duration (progression-free survival)
+   - Toxicity/tolerability
+
+3. **Imaging Context** - CT/PET for disease burden, metastatic sites
+   - Stage (I-IV)
+   - Peritoneal involvement
+   - Organ metastases
+
+---
+
+## 3) PLATFORM INTEGRATION (S/P/E + SAE + TREATMENT LINES)
+
+### **A) Sequence (S) - Tumor Somatic Variants**
+- Input: Tumor NGS panel results (VCF or report)
+- Process: Evo2 scoring for **somatic** mutations (not germline)
+- Calibration: Cancer-type specific (ovarian vs. breast vs. colorectal)
+- Endpoints: `/api/insights/predict_*` with `context=tumor`
+
+### **B) Pathway (P) - Multi-Hit Aggregation**
+- Sporadic cancers often have **multiple** somatic hits across pathways
+- Aggregate disruption across:
+  - DNA repair (HRD, MMR, BER)
+  - Cell cycle (TP53, CDKN2A, RB1)
+  - Growth signaling (KRAS, PIK3CA, EGFR)
+  - Immune evasion (PD-L1, TMB-high)
+- Orchestrator: [api/services/efficacy_orchestrator/orchestrator.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/efficacy_orchestrator/orchestrator.py)
+
+### **C) Evidence (E) - Tumor-Based Literature**
+- Focus on:
+  - Somatic mutation clinical trials (ClinicalTrials.gov)
+  - Drug approvals for specific somatic alterations
+  - NCCN guidelines for tumor genomics
+  - Published response rates in similar molecular profiles
+
+### **D) SAE Features - Tumor Landscape**
+- Somatic-specific features:
+  - `tumor_mutational_burden` (TMB) - high = immunotherapy candidate
+  - `microsatellite_instability` (MSI) - checkpoint inhibitor response
+  - `homologous_recombination_deficiency` (HRD) - somatic PARP sensitivity
+  - `oncogene_amplifications` (HER2, MYC, FGFR2)
+  - `tumor_suppressor_loss` (TP53, PTEN, RB1)
+- Service: [api/services/sae_service.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/sae_service.py)
+
+### **E) Treatment Line Integration**
+- Track prior therapies for cross-resistance mapping
+- Compute:
+  - `line_appropriateness` - is this regimen standard for current line?
+  - `cross_resistance_risk` - overlap with prior failed therapies
+  - `sequencing_fitness` - optimal ordering based on mechanism
+- Service: [.cursor/ayesha/treatment_lines/backend/services/treatment_line_integration.py](mdc:.cursor/ayesha/treatment_lines/backend/services/treatment_line_integration.py)
+
+---
+
+## 4) AYESHA'S CASE (REFERENCE EXAMPLE)
+
+**Patient:** Ayesha Kiani, 38F, ovarian cancer
+**Germline Testing:** CustomNext-Cancer® +RNAinsight® - **NEGATIVE**
+- 38 genes analyzed (BRCA1/2, Lynch, APC, TP53, ATM, PALB2, etc.)
+- No pathogenic mutations, no VUS, no deletions/duplications
+
+**Strategic Implications:**
+1. ✅ **Sporadic ovarian cancer** - not hereditary
+2. ✅ **Family members** - population-level risk only
+3. ⚠️ **PARP inhibitors** - less effective without germline BRCA
+4. 🎯 **Need tumor NGS** - find somatic drivers (likely TP53, possible HRD)
+
+**Treatment Context:**
+- Line 3 (post-platinum progression)
+- Prior: L1 carboplatin/paclitaxel, L2 unknown
+- CT: Peritoneal carcinomatosis, ascites
+
+**Platform Actions:**
+1. ✅ Clinical trial search (ovarian, post-platinum, no germline BRCA)
+2. ✅ Treatment line analysis (L3 options, cross-resistance to platinum)
+3. ⏳ Tumor NGS results integration (when available)
+
+**Report Location:** [.cursor/ayesha/AyeshasGenetics.mdc](mdc:.cursor/ayesha/AyeshasGenetics.mdc)
+
+---
+
+## 5) CLINICAL TRIAL MATCHING (SPORADIC-SPECIFIC)
+
+### **Inclusion Criteria Focus:**
+- ❌ **Exclude:** "germline BRCA required" trials
+- ✅ **Include:** 
+  - Tumor-agnostic (TMB-high, MSI-high)
+  - Somatic biomarker trials (somatic HRD, TP53 mutations)
+  - Mechanism-based (VEGF, PARP combo, immune checkpoint)
+  - Post-progression trials (L2+, L3+)
+
+### **Key Filters:**
+- Cancer type (ovarian, breast, colorectal)
+- Stage (advanced/metastatic)
+- Treatment line (L2, L3, L4+)
+- Prior therapies (platinum, taxane, anti-VEGF)
+- **Germline status: NEGATIVE** (exclude hereditary-only trials)
+
+### **Agent 1 Integration:**
+- Seed database: [.cursor/rules/clinical_trials_agents/agent_1_seeding/](mdc:.cursor/rules/clinical_trials_agents/agent_1_seeding/)
+- Search filters must include `germline_status: "not_required"` or `"negative_allowed"`
+
+---
+
+## 6) FRONTEND UI CONSIDERATIONS
+
+### **Germline Status Banner (New Component):**
+```jsx
+// GermlineStatusBanner.jsx
+{germlineStatus === 'negative' && (
+  <div className="bg-blue-50 border-l-4 border-blue-500 p-4">
+    <div className="flex">
+      <div className="flex-shrink-0">
+        <InformationCircleIcon className="h-5 w-5 text-blue-400" />
+      </div>
+      <div className="ml-3">
+        <p className="text-sm text-blue-700">
+          <strong>Sporadic Cancer:</strong> Germline testing negative. 
+          Analysis focused on <strong>tumor genomics</strong> and 
+          <strong>treatment history</strong>.
+        </p>
+      </div>
+    </div>
+  </div>
+)}
+```
+
+### **Treatment History Form (Enhanced):**
+- Add "Germline Status" field: Negative / Positive / Unknown
+- If Negative → show "Tumor NGS Required" banner
+- If Positive → show "Hereditary-Targeted Therapy Options"
+
+### **Clinical Trial Results (Filtered):**
+- Display only trials accepting germline-negative patients
+- Hide "BRCA-only" or "Lynch-only" trials
+- Highlight somatic biomarker trials (TMB-high, MSI-high, HRD-somatic)
+
+---
+
+## 7) BACKEND CONTRACTS
+
+### **Efficacy Orchestrator Enhancements:**
+```python
+# api/services/efficacy_orchestrator/orchestrator.py
+
+def predict_drug_efficacy(
+    mutations: List[Mutation],
+    germline_status: str = "unknown",  # NEW
+    tumor_context: Optional[TumorContext] = None,  # NEW
+    treatment_history: Optional[TreatmentHistory] = None,
+    options: Dict = {}
+) -> EfficacyResponse:
+    """
+    Predict drug efficacy with germline/tumor context.
+    
+    If germline_status == "negative":
+      - Require tumor_context (somatic mutations, TMB, MSI, HRD)
+      - Penalize PARP inhibitors (unless somatic HRD high)
+      - Boost tumor-agnostic therapies (immunotherapy if TMB-high)
+    """
+    ...
+```
+
+### **New Schema: TumorContext**
+```python
+# api/schemas/tumor_context.py
+
+class TumorContext(BaseModel):
+    somatic_mutations: List[Mutation]
+    tmb: Optional[float] = None  # mutations/megabase
+    msi_status: Optional[str] = None  # MSI-high/MSS
+    hrd_score: Optional[float] = None  # somatic HRD
+    copy_number_alterations: Optional[List[CNA]] = None
+    purity: Optional[float] = None
+    ploidy: Optional[float] = None
+```
+
+---
+
+## 8) SMOKE TESTS (SPORADIC PATHWAY)
+
+Run locally with backend at `http://127.0.0.1:8000`.
+
+### **Test 1: Germline Negative Detection**
+```bash
+# Input: Ayesha's negative germline report
+curl -X POST http://127.0.0.1:8000/api/genomic_intelligence/parse_report \
+  -F "report=@AyeshasGenetics.pdf"
+
+# Expected: { germline_status: "negative", genes_tested: 38, pathogenic_mutations: 0 }
+```
+
+### **Test 2: PARP Inhibitor Penalty (Germline Negative)**
+```bash
+# Input: No germline BRCA, no tumor HRD score
+curl -X POST http://127.0.0.1:8000/api/efficacy/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mutations": [],
+    "germline_status": "negative",
+    "treatment_history": {...},
+    "drug": "olaparib"
+  }'
+
+# Expected: efficacy_score < 0.5, confidence < 0.6, rationale: "PARP inhibitors less effective without germline BRCA or somatic HRD"
+```
+
+### **Test 3: Clinical Trial Filtering (Germline Negative)**
+```bash
+# Input: Ovarian cancer, germline negative, L3
+curl -X POST http://127.0.0.1:8000/api/clinical_trials/search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cancer_type": "ovarian",
+    "stage": "IV",
+    "line": 3,
+    "germline_status": "negative"
+  }'
+
+# Expected: Exclude "BRCA-required" trials, include tumor-agnostic trials
+```
+
+### **Test 4: Tumor NGS Integration**
+```bash
+# Input: Foundation Medicine report with TP53 mutation, TMB-high
+curl -X POST http://127.0.0.1:8000/api/efficacy/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mutations": [{"gene": "TP53", "hgvs_p": "R248W"}],
+    "germline_status": "negative",
+    "tumor_context": {"tmb": 18.5, "msi_status": "MSS", "hrd_score": 52}
+  }'
+
+# Expected: Boost immunotherapy (TMB-high), boost PARP combo (somatic HRD)
+```
+
+---
+
+## 9) DOCUMENTATION & REPORTS
+
+### **Patient-Facing Summary:**
+```markdown
+# Your Genetic Testing Results
+
+## Germline Testing: NEGATIVE ✅
+
+Good news: You do **not** have an inherited genetic mutation that causes cancer.
+
+### What This Means:
+- Your cancer is **sporadic** (not hereditary)
+- Your family members are **not** at increased hereditary cancer risk
+- Standard BRCA-targeted therapies (PARP inhibitors) may be **less effective**
+
+### Next Steps:
+1. **Tumor Testing** - Analyze your cancer's genetic profile (tumor biopsy/blood)
+2. **Treatment Options** - Find therapies targeting your tumor's specific mutations
+3. **Clinical Trials** - Match you to trials based on tumor genomics + treatment history
+
+Our platform analyzes your **tumor genomics** and **treatment history** to find the best options.
+```
+
+### **Provider Report:**
+```markdown
+# Sporadic Cancer Analysis Report
+
+**Patient:** Ayesha Kiani
+**Germline Status:** Negative (38 genes, CustomNext-Cancer®)
+**Cancer Type:** High-grade serous ovarian carcinoma (presumed)
+**Stage:** IIIC-IV (peritoneal carcinomatosis, ascites)
+**Treatment Line:** 3 (post-platinum progression)
+
+## Analysis Summary:
+- ✅ Germline testing negative → sporadic cancer
+- ⏳ Tumor NGS recommended (Foundation/Tempus/Guardant)
+- 🎯 Treatment line analysis: L3 ovarian options, platinum cross-resistance
+- 🔍 Clinical trials: 47 matches (somatic biomarker trials prioritized)
+
+## Recommendations:
+1. Order tumor NGS panel (Foundation Medicine preferred)
+2. Consider L3 standard options: bevacizumab combos, PARP combos, immunotherapy
+3. Review clinical trial matches (attached)
+```
+
+---
+
+## 10) PROVENANCE & AUDIT
+
+**All sporadic cancer analyses must track:**
+- `germline_status`: "negative" / "positive" / "unknown"
+- `germline_test`: panel name (e.g., "CustomNext-Cancer® +RNAinsight®")
+- `germline_genes_tested`: list of genes
+- `germline_report_date`: test date
+- `tumor_context_source`: "Foundation Medicine" / "Tempus" / "Guardant" / "local NGS"
+- `run_id`: UUID for reproducibility
+
+**Schema:** [api/schemas/provenance.py](mdc:oncology-coPilot/oncology-backend-minimal/api/schemas/provenance.py)
+
+---
+
+## 11) STRATEGIC VALUE PROPOSITION
+
+**Why This Doctrine Matters:**
+- **85-90% of cancers are sporadic** → vast majority of patients need tumor-centric analysis
+- **Germline testing alone is insufficient** → most patients have negative results
+- **Treatment line intelligence CRITICAL** → cross-resistance in sporadic cancers is complex
+- **Clinical trial matching** → somatic biomarker trials are expanding rapidly
+
+**Competitive Advantage:**
+- Most platforms focus on **hereditary** cancers (10-15% of cases)
+- We address **sporadic** cancers (85-90% of cases) with S/P/E + SAE + treatment lines
+- Integration of **tumor NGS + treatment history + clinical trials** is unique
+
+---
+
+## 12) RELATED DOCTRINES
+
+- [VUS Identification Doctrine](mdc:.cursor/rules/vus_identification_doctrine.mdc)
+- [Treatment Line Integration Doctrine](mdc:.cursor/ayesha/treatment_lines/TREATMENT_LINE_INTEGRATION_DOCTRINE.mdc)
+- [SAE Completion Roadmap](mdc:.cursor/ayesha/SAE_COMPLETION_ROADMAP.mdc)
+- [Ayesha's Plan](mdc:.cursor/ayesha/ayesha_plan.mdc)
+
+---
+
+**DOCTRINE STATUS:** ⚔️ **ACTIVE**
+**LAST UPDATED:** 2024-10-31
+**APPLIES TO:** All sporadic (germline-negative) cancer cases
+**ENFORCEMENT:** Mandatory for patient analysis pipelines
+
+---
+
+## 13) BUILD PLAN – CAPABILITIES, EXECUTION, ACCEPTANCE
+
+### A. What we will build (capabilities)
+- Germline-status gating in efficacy: down‑weight hereditary‑targeted drugs (e.g., PARP) when `germline_status="negative"`, unless somatic HRD is high.
+- TumorContext support: accept somatic mutations + TMB/MSI/HRD/CNAs, feed into S/P/E + SAE.
+- Tumor NGS ingestion: parsers for Foundation Medicine and Tempus reports to structured JSON.
+- Sporadic‑aware clinical trials: exclude “BRCA‑required” trials; prioritize tumor‑agnostic and somatic biomarker trials.
+- Frontend UX: Germline Status Banner, tumor NGS upload/parse, sporadic‑aware trial cards.
+- Provenance & caching: persist `germline_status`, `tumor_context_source`, cache parsed NGS and trial queries with TTL.
+
+### B. Step‑by‑step implementation
+1) Backend foundation (Day 1–2)
+   - Add schema `api/schemas/tumor_context.py` (see Section 7).
+   - Extend `predict_drug_efficacy` signature with `germline_status` and `tumor_context`.
+   - Implement PARP penalty and tumor‑agnostic boosts:
+     - If `germline_status == "negative"` and no `hrd_score` or score < threshold → penalize PARP class.
+     - If `tmb >= 10–15` or `msi_status == "MSI-high"` → boost checkpoint inhibitor class.
+   - Surface decisions in `rationale` and `provenance`.
+
+2) Tumor NGS parsers (Day 3)
+   - New router: `/api/tumor/ingest_ngs` accepting PDF/JSON → returns `TumorContext`.
+   - Implement extractors:
+     - Foundation: parse TMB, MSI, HRD, variant table, CNAs.
+     - Tempus: parse comparable fields (normalize to shared schema).
+   - Store minimal cache keyed by report hash; include `tumor_context_source` in provenance.
+
+3) Clinical trials filtering (Day 4)
+   - Extend `/api/clinical_trials/search` to accept `germline_status` and `tumor_context` hints.
+   - Filters:
+     - Exclude trials requiring germline BRCA/Lynch.
+     - Include tumor‑agnostic (TMB/MSI) and somatic HRD trials.
+     - Rank by match strength: biomarker match > mechanism > line‑eligibility.
+
+4) Frontend wiring (Day 5)
+   - Add `GermlineStatusBanner.jsx` per Section 6.
+   - Add NGS Upload → calls `/api/tumor/ingest_ngs` → stores `tumorContext` in `SessionContext`.
+   - Trial results: show “Sporadic‑aware” label; hide hereditary‑only trials; highlight biomarker‑matched ones.
+
+5) Ayesha E2E smoke (Day 6)
+   - Input: Ayesha’s germline report (negative) + sample tumor NGS (TP53, TMB‑high optional, HRD score sample).
+   - Run efficacy with `germline_status="negative"` and parsed `tumor_context`.
+   - Run trials search with line=3 and sporadic filters.
+   - Generate provider report (Section 9 template) with links and run_id.
+
+6) Documentation & handoff (Day 7)
+   - `SPORADIC_PIVOT_PLAN.md` with commands, endpoints, acceptance results.
+   - Update UI help text and RUO labels.
+
+### C. Endpoints and contracts to add/update
+- Update: `POST /api/efficacy/predict`
+  - Inputs: `germline_status`, `tumor_context?` (see schema); existing fields unchanged.
+  - Output: unchanged shape; add gating decisions in `rationale[]` and `provenance.flags`.
+
+- New: `POST /api/tumor/ingest_ngs`
+  - Inputs: Foundation/Tempus PDF/JSON.
+  - Output: `TumorContext` JSON + `provenance` { source, hash }.
+
+- Update: `POST /api/clinical_trials/search`
+  - Inputs: add `germline_status`, optional `tumor_context` summary.
+  - Behavior: exclude hereditary‑only trials; rank somatic/agnostic matches higher.
+
+### D. Acceptance criteria (must pass)
+- Efficacy: PARP class is penalized when `germline_status="negative"` without somatic HRD; checkpoint class boosted when TMB‑high/MSI‑high.
+- Parsers: both Foundation and Tempus reports produce valid `TumorContext` with TMB/MSI/HRD + variant list.
+- Trials: BRCA‑required trials excluded for germline‑negative; somatic biomarker trials included and ranked.
+- FE: Banner renders when germline negative; NGS upload returns parsed context; trial cards reflect sporadic logic.
+- Ayesha E2E: full flow produces provider report with run_id and audit fields.
+
+### E. Risks and mitigations
+- Report variability → Build robust regex + table extractors; allow manual JSON upload fallback.
+- Sparse HRD/TMB/MSI → keep gates conservative; display “insufficient tumor context” banner.
+- Latency from parsing PDFs → cache by file hash; allow pre‑parsed JSON upload to bypass PDF.
+
+### F. Ownership and timeline
+- Backend (Days 1–4): TumorContext, efficacy gating, parsers, trials.
+- Frontend (Day 5): Banner, NGS upload, trials UI.
+- E2E + Docs (Days 6–7): Smoke tests, provider report, plan docs.
+
+---
+
+## 14) WIWFM FOR SPORADIC – EFFICACY PREDICTION DETAILS
+
+### A. Inputs
+- `germline_status`: "negative" | "positive" | "unknown"
+- `tumor_context` (optional but recommended when germline negative):
+  - `somatic_mutations[]` (gene, hgvs_p, coords if available)
+  - `tmb` (mut/Mb), `msi_status` (MSI-high/MSS), `hrd_score`
+  - `copy_number_alterations[]` (amplifications/deletions)
+- `treatment_history` (line number, prior regimens, response window)
+- `options` (profile flags; evo routing forced to 1B; literature on/off)
+
+### B. Scoring (S/P/E + SAE + Lines)
+- Sequence (S):
+  - Score somatic mutations with Evo2 (multi/exon, calibrated percentiles).
+  - Hotspot floors for canonical oncogenic sites (e.g., KRAS G12, PIK3CA H1047).
+  - Merge with CNAs (e.g., ERBB2 amp) into pathway disruption.
+- Pathway (P):
+  - Aggregate multi-hit disruptions across DDR, MAPK/PI3K, cell cycle, immune.
+  - Weight by disease context (ovarian vs breast) and line constraints.
+- Evidence (E):
+  - Prefer tumor-based literature, NCCN disease guidelines, drug labels by somatic biomarker.
+  - Apply badges (Guideline/Label/PathwayAligned); derive `evidence_tier`.
+- SAE Features (sporadic-specific):
+  - `tmb`, `msi_status`, `hrd_score`, `oncogene_amplifications`, `tumor_suppressor_loss`.
+  - Lift drug classes consistent with features (e.g., checkpoint for TMB-high, PARP combo for HRD-somatic).
+- Treatment Lines:
+  - Compute `line_appropriateness`, `cross_resistance_risk`, `sequencing_fitness`.
+  - Penalize regimens overlapping failed mechanisms; prioritize fit for current line.
+- Germline Gating:
+  - If `germline_status == "negative"` and `hrd_score` below threshold → penalize PARP class.
+  - If `tmb >= 10–15` or `msi_status == "MSI-high"` → boost checkpoint class.
+
+### C. Confidence and Tiers
+- Confidence drivers:
+  - Strength of P aggregation, presence of supportive E badges, SAE alignment, and clean line fit.
+  - Penalize for missing tumor context; annotate missing evidence checklist.
+- Tiers (research-mode): Supported / Consider / Insufficient based on E + pathway alignment.
+
+### D. Output (unchanged shape, sporadic-aware fields populated)
+- `drugs[*]`:
+  - `efficacy_score` (0–1), `confidence` (0–1), `evidence_tier`
+  - `insights`: functionality/chromatin/essentiality/regulatory
+  - `sae_features`: { tmb, msi_status, hrd_score, amplifications[], losses[] }
+  - `treatment_line`: { line_appropriateness, cross_resistance_risk, sequencing_fitness }
+  - `rationale[]`: includes germline gating decisions and tumor-context lifts/penalties
+  - `badges[]`, `citations[]`, `provenance` (flags: germline_negative, tumor_context_source)
+
+### E. Frontend Wiring
+- WIWFM modal reads `germline_status` and `tumorContext` from session.
+- Display chips for SAE/tumor context (TMB/MSI/HRD) and line features next to each drug.
+- Show rationale rows for germline gating (PARP penalty) and tumor-agnostic lifts.
+
+### F. WIWFM Sporadic Smoke Tests
+1) PARP penalty without HRD (germline negative):
+   - Input: no HRD, `germline_status="negative"` → PARP class score lower, rationale includes penalty.
+2) Checkpoint boost with TMB-high:
+   - Input: `tmb=18`, MSS → checkpoint class confidence/score increased; rationale cites TMB.
+3) HRD-somatic combo lift:
+   - Input: `hrd_score=55` → PARP combo lifted despite germline negative.
+4) Line appropriateness and cross-resistance:
+   - L3 ovarian, prior platinum failure → penalize platinum-like regimens; rank VEGF/IO/targeted higher.

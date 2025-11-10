@@ -1,0 +1,128 @@
+---
+alwaysApply: false
+description: Guidance Router Modularization – non‑breaking refactor of chemo/radonc/synthetic into services with clear contracts
+---
+
+# Guidance Modularization Doctrine (Non‑Breaking)
+
+Scope: Refactor `oncology-coPilot/oncology-backend-minimal/api/routers/guidance.py` (~1.1K LOC) into a modular package while preserving all public API contracts and behaviors. Outputs must remain deterministic; only provenance fields may gain additional keys.
+
+RUO posture: Guidance is research‑mode. Keep copy conservative. Provenance and run IDs must be present for audit.
+
+## Current endpoints (must remain unchanged)
+- `POST /api/guidance/chemo`
+- `POST /api/guidance/radonc`
+- `POST /api/guidance/synthetic_lethality`
+
+## Non‑breaking constraints
+- Do not change endpoint paths, method names, or top‑level response keys (`tier`, `strength`, `confidence`, `insights`, `rationale`, `badges`, `citations`, `evidence_tier`, `provenance`).
+- Additions allowed only under `provenance/*` and optional `debug/*` fields.
+- Feature flags: continue to honor `GUIDANCE_FAST`, `DISABLE_LITERATURE`, Fusion/evo flags passed through to efficacy.
+
+## Target architecture
+```
+api/routers/guidance/
+  __init__.py              # re-export router for stable import path
+  router.py                # thin FastAPI endpoints delegating to service
+api/services/guidance_service.py      # orchestrates chemo, radonc, synthetic_lethality
+api/services/guidance_tiering.py      # strength classification, on-label stub, tier mapping
+api/services/guidance_markers.py      # resistance/sensitivity markers (PSMB5/CRBN/MAPK hotspots)
+api/services/efficacy_client.py       # call /api/efficacy/predict (timeouts/retries, shape guards)
+api/services/fusion_client.py         # call Fusion Engine (AM/fused S) with fallbacks
+api/services/cache_service.py         # shared Redis/LRU cache + single-flight (existing/planned)
+api/schemas/guidance.py               # Pydantic request/response (optional, for documentation)
+api/utils/http_client.py              # shared httpx client helpers
+```
+
+## Responsibilities (components)
+- router.py: Validate inputs, map to service calls, handle HTTP exceptions → JSON.
+- guidance_service.py:
+  - `async def chemo(req) -> dict`
+  - `async def radonc(req) -> dict`
+  - `async def synthetic_lethality(req) -> dict`
+  - Pure orchestration: efficacy_client, fusion_client, guidance_tiering, guidance_markers.
+- guidance_tiering.py:
+  - `def classify_strength(evidence_strength: float, citations_count: int) -> str`
+  - `def on_label_stub(disease: str, drug_or_class: str) -> dict`
+  - `def tier_from_gates(on_label: bool, badges: list[str], strength: str) -> str`
+- guidance_markers.py:
+  - `def detect_resistance_sensitivity(gene, hgvs_p, drug_class, fused_s=0.0) -> dict`
+  - Keep marker dictionaries centralized and easily extensible.
+- efficacy_client.py:
+  - `async def predict(api_base: str, payload: dict) -> dict` (timeouts, retries, schema guard)
+- fusion_client.py:
+  - `async def fused_s(mut: dict) -> float` (try multiple key formats; return −1.0 when unavailable)
+
+## Data contracts (inputs/outputs) – unchanged
+Input (chemo): `{ disease, drug_or_class, mutations:[{ gene, hgvs_p?, chrom?, pos?, ref?, alt?, build? }], api_base?, options? }`
+Output (chemo): `{ therapy, disease, on_label, tier, strength, efficacy_score, confidence, insights, rationale[], citations[], evidence_tier, badges[], provenance }`
+Input (radonc): `{ disease?, mutations:[], api_base?, options? }`
+Output (radonc): `{ modality:"radiation", disease?, on_label:false, tier, strength, radiosensitivity_score, confidence, insights, rationale[], citations[], evidence_tier, badges[], provenance }`
+Input (synthetic): `{ disease, mutations:[], api_base? }`
+Output (synthetic): `{ suggested_therapy, damage_report[], essentiality_report[], guidance? }`
+
+## Step‑by‑step migration (small PRs)
+1) Extract tiering helpers
+  - Move `_classify_strength`, `_on_label_stub`, `_tier_from_gates` → `guidance_tiering.py` (rename to public functions).
+  - Add unit tests for thresholds and tier mapping.
+2) Extract markers
+  - Move `_detect_resistance_sensitivity` → `guidance_markers.py` (rename to `detect_resistance_sensitivity`).
+  - Parameterize markers; add unit tests for PSMB5/CRBN/MAPK hotspot cases.
+3) Extract clients
+  - `efficacy_client.predict()` with 120s timeout, retries=1; guard against missing keys; raise `HTTPException` with upstream status.
+  - `fusion_client.fused_s()` with 6s timeout; try multiple AM key formats; return −1.0 on miss.
+4) Create service orchestrator
+  - Implement `guidance_service.py` with methods `chemo`, `radonc`, `synthetic_lethality`.
+  - Inject clients and helpers for testability; integrate cache_service for fused_s and efficacy results.
+5) Introduce router package
+  - `routers/guidance/router.py` maps request JSON to service and returns same shape as today.
+  - `routers/guidance/__init__.py` re-exports `router`.
+  - Keep legacy `guidance.py` as re-export shim for one deploy; then remove.
+
+## Caching and single‑flight
+- Use `cache_service` for:
+  - Fused S lookups keyed by variant (AM string) with TTL (5–15 min).
+  - Efficacy payloads keyed by `{mutations_hash}:{profile}` with TTL (5–15 min).
+- Use `single_flight` to prevent call storms per key.
+- Set `provenance.cache = 'hit'|'miss'` on responses where applicable.
+
+## Interconnections
+- Efficacy orchestrator: Guidance consumes `/api/efficacy/predict` and reads `drugs[*]` fields (score/confidence/tier/badges/insights/citations).
+- Fusion Engine: Optional enhancement via AM/fused S for resistance/sensitivity gates.
+- Knowledge Base (optional): On‑label and MoA mapping can be replaced by KB items later; design API surface to accept a resolver.
+- Sessions & logging: Include `provenance.efficacy_run`, `provenance.profile`, `x-run-id` header; FE may save guidance decisions to Session.
+- Feature flags: Respect `GUIDANCE_FAST` (DDR shortcut), `DISABLE_LITERATURE`, Fusion/Evo limits passed via efficacy options.
+
+## Tests & verification
+- Golden JSON snapshots for each route (1–2 canonical payloads; e.g., MM KRAS G12D and BRAF V600E).
+- Unit tests
+  - Tiering thresholds (strong/moderate/weak), on‑label stub, tier mapping.
+  - Markers detection for resistance/sensitivity adjustments.
+  - Fusion client key formats; efficacy client error handling.
+- Smoke (copy/paste)
+```bash
+curl -sS -X POST :8000/api/guidance/chemo -H 'Content-Type: application/json' \
+  -d '{"disease":"multiple myeloma","drug_or_class":"proteasome inhibitor","mutations":[{"gene":"PSMB5","hgvs_p":"A49T"}]}' | jq '{therapy,tier,confidence,badges}'
+curl -sS -X POST :8000/api/guidance/radonc -H 'Content-Type: application/json' \
+  -d '{"disease":"multiple myeloma","mutations":[{"gene":"BRAF","hgvs_p":"V600E","chrom":"7","pos":140453136,"ref":"T","alt":"A"}]}' | jq '{tier,radiosensitivity_score,confidence}'
+curl -sS -X POST :8000/api/guidance/synthetic_lethality -H 'Content-Type: application/json' \
+  -d '{"disease":"ovarian","mutations":[{"gene":"BRCA1","hgvs_p":"R1699W"}]}' | jq '{suggested_therapy,guidance}'
+```
+
+## Enhancement roadmap (post‑modularization)
+- On‑label provider integration: Replace stub with DailyMed/FDA label resolver; cache results; add `provenance.provider`.
+- Cohort‑aware gating: Accept `cohort_signals` and modulate `tier/strength` with aggregate study evidence.
+- MoA knowledge library: KB‑backed MoA tags per drug class; improve evidence targeting.
+- Rule engine: Externalize tiering thresholds and markers to JSON rules for runtime adjustability.
+- Disease modules: Allow disease‑specific marker sets and on‑label rules via plugin strategy.
+
+## Rollback & safety
+- Keep routes and top‑level keys the same through all steps.
+- Re-export shim ensures imports remain stable during deployment.
+- If a step fails under load, disable fused S path and fall back to efficacy‑only guidance; return graceful `provenance.fail_reason`.
+
+## Definition of Done
+- All three endpoints return identical JSON before/after (except `provenance.*` additions).
+- Unit/golden tests pass; curl smoke returns 200s; cache shows hits on repeat calls.
+- Code owners can add new markers or on‑label mappings without touching router.
+

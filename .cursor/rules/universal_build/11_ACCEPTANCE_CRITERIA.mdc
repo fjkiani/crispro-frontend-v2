@@ -1,0 +1,54 @@
+# ✅ ACCEPTANCE CRITERIA - DECISION GATES
+
+---
+
+## **GATE 1: Phase 1 → Phase 2**
+
+**Must Pass**:
+- ✅ 50+ diseases in universal_disease_pathway_database.json
+- ✅ PubChem alias resolver: 100 compounds tested, <5% failure
+- ✅ Baseline demo flows stable (no breaking changes)
+- ✅ TCGA weights for top 10 cancers (9/10 done, MM pending)
+- ✅ Calibration infrastructure ready (no data required yet)
+
+**Verification**: Run Test Wave 1, document results
+
+---
+
+## **GATE 2: Phase 2 → Phase 3**
+
+**Must Pass**:
+- ✅ Generation behind `EVO2_GENERATION_ENABLED=False` flag
+- ✅ Safety gates: 10 test cases pass viral/GC/homopolymer checks
+- ✅ No production exposure (gated feature)
+- ✅ Iterative optimization: 5/5 cases achieve score ≥0.85
+
+**Verification**: Run generation safety tests
+
+---
+
+## **GATE 3: Phase 3 → Phase 4**
+
+**Must Pass**:
+- ✅ Boltz automated structure prediction: 10 proteins tested
+- ✅ pLDDT scores reasonable: >70% pass ≥70 threshold
+- ✅ API integration stable: no timeouts/crashes
+- ✅ Performance acceptable: 2-5 min per candidate
+
+**Verification**: Test with 10 known protein structures
+
+---
+
+## **GATE 4: Phase 4 Completion**
+
+**Must Pass**:
+- ✅ Boltz automated interaction prediction: 10 pairs tested
+- ✅ iPTM >0.7 for known strong binders, <0.5 for weak
+- ✅ SMILES handling: PubChem compounds work
+- ✅ Integration complete: Food Validator → Boltz works end-to-end
+
+**Verification**: Test compound-target binding predictions
+
+---
+
+**FINAL SUCCESS**: All 4 gates passed, Universal Engine operational!

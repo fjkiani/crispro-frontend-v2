@@ -1,0 +1,219 @@
+---
+alwaysApply: false
+description: Efficacy Intelligence – In‑Silico Therapy Fit (Sept 2025). Plain‑language website copy + execution plan for S/P/E drug ranking with insights, evidence, fusion, cohort overlays, and JSON schemas (RUO).
+globs: 
+---
+
+
+export const coPilotDetailsData: Record<string, CoPilotDetailContent> = {
+  "efficacy": {
+    slug: "efficacy",
+    pageTitle: "Efficacy Intelligence: In‑Silico Therapy Fit",
+    heroSubtitle: "See which drug classes may fit — with an explainable ranking, confidence, and sources (research‑mode).",
+    vision: "Turn variants into a plain, ranked therapy view: top classes, a short ‘why’, confidence, and citations — with run IDs so you can share and repeat.",
+
+    valueProps: [
+      {
+        audience: 'For Medical Oncologists',
+        icon: 'ListChecks',
+        points: [
+          'Explainable ranking with confidence and citations (RUO).',
+          'Short ‘why’ lines connect biology to classes.',
+          'Export a one‑pager for tumor boards.'
+        ]
+      },
+      {
+        audience: 'For Pharmacists',
+        icon: 'Beaker',
+        points: [
+          'Simple biology signals alongside standard criteria.',
+          'Consistent outputs with run IDs and sources.',
+          'Roadmap: regimen safety/interaction checks.'
+        ]
+      }
+    ],
+
+    buildsOn: "What this runs on (today vs roadmap)",
+    buildsOnStackPoints: [
+      "**Today:** S/P/E fusion (Sequence, Pathway, Evidence) with insight chips.",
+      "**Optional today:** Fusion (AlphaMissense) when coverage exists; Cohort overlays for context.",
+      "**Roadmap:** Regimen safety/interaction and guideline/on‑label cues."
+    ],
+
+    kpis: [
+      { label: 'ClinVar AUROC (n=53,210)', value: '0.957' },
+      { label: 'SpliceVarDB AUROC (n=4,950)', value: '~0.826' },
+      { label: 'VUS target', value: '→ 15% (~$2.1M saved/program)' },
+      { label: 'Typical confidence (MM)', value: '~0.45–0.51' },
+      { label: 'Tier promotions', value: '~10–20% Consider→Supported' }
+    ],
+
+    observedOutcomes: [
+      'Faster decisions: explainable ranking reduces meeting time.',
+      'Tier promotions when ClinVar‑Strong + Pathway‑Aligned (literature on).',
+      'Confidence +0.05–0.12 with aligned cohort overlays and literature.',
+      'Trials shortlist: 50+ → ~5–12 when combined with eligibility labels.'
+    ],
+
+    genomicInsightsOverview: "The Efficacy table fuses Sequence (CrisPRO magnitudes), Pathway (gene→pathway burden), and Evidence (ClinVar + optional literature) into a ranked therapy view. Each row shows score, confidence, tier, badges, a short ‘why,’ citations, and provenance.",
+    coreProblemIntro: "Picking a therapy is slow when biology is unclear. We turn genetics into a simple, auditable starting point.",
+    coreProblemPoints: [
+      "Too many options, unclear fit.",
+      "Hard to explain ‘why’ without sources.",
+      "Difficult to create a one‑pager everyone can trust."
+    ],
+
+    genomicUseCasesGrid: [
+      { label: "Rank MoA‑aligned classes", iconName: "ListChecks", color: "text-blue-400" },
+      { label: "Explain ‘why’ concisely", iconName: "MessageSquare", color: "text-green-400" },
+      { label: "Confidence & citations (RUO)", iconName: "ShieldCheck", color: "text-purple-400" },
+      { label: "Cohort overlay (optional)", iconName: "Users", color: "text-orange-400" },
+      { label: "Export & provenance", iconName: "FileText", color: "text-cyan-400" }
+    ],
+
+    keyCapabilities: [
+      {
+        title: "Biology‑Aware Ranking (live)",
+        technical: "Fuse Sequence (Evo‑based disruption), Pathway (gene→pathway burden), and Evidence (ClinVar + literature when enabled). Output includes score, confidence, evidence tier, badges, and ‘why’.",
+        scientific: "Transparent S/P/E framework with insight chips and provenance (RUO).",
+        business: `
+- **Faster decisions:** An explainable starting point backed by sources.
+- **Repeatable:** Same inputs → same outputs with run IDs.
+`,
+        genomicUseCasesParagraph: "Today: \n1. **Rank MoA‑aligned classes**. \n2. **Short ‘why’** and citations show rationale. \n3. **Confidence** reflects S/P/E and supportive chips."
+      },
+      {
+        title: "Evidence Integration (live)",
+        technical: "Evidence panel with confidence/tier/badges/citations; tier rules are display‑oriented; badges include Guideline/RCT/ClinVar‑Strong/Pathway‑Aligned.",
+        scientific: "Makes strength explicit and auditable.",
+        business: `
+- **Trust:** Teams align when strength is visible.
+`,
+        genomicUseCasesParagraph: "Today: \n1. **Evidence panel** per result with export and provenance."
+      },
+      {
+        title: "Insights Bundle + Fusion (optional)",
+        technical: "Function/Regulatory/Essentiality/Chromatin chips; Fusion (AlphaMissense) when GRCh38 missense coverage exists; clearly labeled.",
+        scientific: "Adds supportive sequence/regulatory context and optional fused signals.",
+        business: `
+- **Clarity:** Clear when fusion applies; deterministic otherwise.
+`,
+        genomicUseCasesParagraph: "Today: \n1. **Chips** + Fusion when eligible; labels visible."
+      },
+      {
+        title: "Cohort Overlays (optional)",
+        technical: "Cohort snippet (n, prevalence, metrics) appears when available; drives modest confidence lifts when aligned.",
+        scientific: "Adds real‑world context (RUO).",
+        business: `
+- **Confidence:** Gentle lifts and better board discussions.
+`,
+        genomicUseCasesParagraph: "Today: \n1. **Overlay** next to Efficacy/Pathway views."
+      }
+    ],
+
+    valuePropositionSections: [
+      {
+        audience: "For the Institution",
+        points: [
+          "Faster, more consistent planning with provenance.",
+          "Reusable, auditable outputs for QA and research.",
+          "A safe path to regimen safety/interaction checks when ready."
+        ]
+      }
+    ],
+
+    conclusion: "In‑silico therapy fit that’s simple to read and easy to share. Plain ranking. Clear confidence. Sources included. Research‑mode by design."
+  },
+};
+
+
+# Efficacy Intelligence – Execution Doctrine (Sept 2025)
+
+This rule describes how to deliver Efficacy (S/P/E drug ranking) with insights, evidence, fusion, cohort overlays, and transparent provenance.
+
+## What we can deliver today (research‑grade)
+- Efficacy result with:
+  - **drugs[]:** { class, efficacy_score, confidence, evidence_tier, badges[], insights {functionality, regulatory, essentiality, chromatin}, rationale[], citations[], provenance }
+  - **provenance:** run_id, profile (Baseline/Richer/Fusion), flags, inputs snapshot
+
+## Numbers That Matter (Research‑Mode)
+- Variant foundations: ClinVar AUROC 0.957 (n=53,210); SpliceVarDB ~0.825–0.826 (n=4,950).
+- Confidence (MM baseline): ~0.45–0.51; tier promotions ~10–20% when priors/literature align.
+- Trials shortlist: 50+ → ~5–12 with Likely/Potential/Unlikely + ‘why’ lines.
+
+## Observed Outcomes (pilot; research‑mode)
+- Clearer starting point for planning; faster board alignment.
+- Confidence lifts +0.05–0.12 with aligned cohort/literature overlays.
+- Fusion improves certainty when coverage exists; deterministic otherwise.
+
+## Plain English: Why this matters
+- Everyone sees not just the rank, but the reason and strength — in a format you can share and repeat.
+
+## Where the code lives (reused components)
+- Efficacy orchestrator: `[efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py)`
+- Insights router (chips): `[insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py)`
+- Evidence services: `[evidence.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evidence.py)`
+- Fusion (optional): `[fusion.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/fusion.py)`
+- Datasets (cohort overlays): `[datasets.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/datasets.py)`
+
+## How to run Efficacy now
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/efficacy/predict \
+  -H 'Content-Type: application/json' --data '{
+    "mutations":[{"gene":"BRAF","hgvs_p":"V600E","chrom":"7","pos":140453136,"ref":"T","alt":"A"}],
+    "disease":"multiple myeloma",
+    "options":{"adaptive":true,"ensemble":true},
+    "api_base":"http://127.0.0.1:8000"
+  }'
+```
+
+## Methodology (S/P/E + lifts)
+- **Sequence (S):** Evo2 multi/exon magnitudes; hotspot‑aware functionality lift; truncation gates.
+- **Pathway (P):** Map variants to MoA‑aligned pathways per class; weighted aggregation.
+- **Evidence (E):** ClinVar prior + literature (optional); badges and tier for transparency.
+- **Lifts:** modest when Function/Chromatin/Essentiality/Regulatory exceed thresholds.
+
+## Frontend integration (table + panel)
+- Render per‑drug table with: class, efficacy_score, confidence, evidence_tier, badges, insights chips, rationale bullets, citations, provenance.
+- Evidence panel appears alongside; overlay snippet (when present) on the right.
+
+## JSON Schemas (drop‑in)
+```json
+{
+  "EfficacyResult": {
+    "drugs": [
+      {
+        "class": "PI",
+        "efficacy_score": 0.23,
+        "confidence": 0.48,
+        "evidence_tier": "Consider",
+        "badges": ["Pathway-Aligned"],
+        "insights": {
+          "functionality": 0.60,
+          "regulatory": 0.12,
+          "essentiality": 0.35,
+          "chromatin": 0.58
+        },
+        "rationale": ["MAPK burden aligns with class X", "ClinVar prior present"],
+        "citations": [
+          {"provider": "PubMed", "title": "...", "year": 2022, "url": "https://..."}
+        ],
+        "provenance": {"run_id": "uuid", "profile": "Baseline", "timestamp": "ISO"}
+      }
+    ],
+    "provenance": {"run_id": "uuid", "profile": "Baseline|Richer|Fusion", "flags": {"disableLiterature": true}}
+  },
+  "InsightChips": {"functionality": 0.6, "regulatory": 0.12, "essentiality": 0.35, "chromatin": 0.58},
+  "Evidence": {"confidence": 0.48, "tier": "Consider", "badges": ["Pathway-Aligned"], "citations": [{"provider": "PubMed", "title": "..."}]}
+}
+```
+
+## Current limitations (transparent)
+- Literature may be sparse in dev; tier remains conservative. Chromatin may be heuristic unless providers enabled.
+- Fusion requires GRCh38 missense coverage; otherwise omitted and labeled.
+
+## Success criteria
+- Table renders with rank, confidence, tier, badges, chip values, rationale, and citations; export + provenance present.
+- Evidence panel loads without blocking; cohort overlays lift confidence when aligned.
+- RUO visible across views; tooltips explain tier/badges and chip thresholds.
+

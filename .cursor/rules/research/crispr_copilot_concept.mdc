@@ -1,0 +1,224 @@
+---
+alwaysApply: false
+description: CRISPR Co‑Pilot – Execution Doctrine (Aug 2025). Plain-language website copy + execution plan for in‑silico CRISPR design readiness using live endpoints (research‑mode).
+globs: 
+---
+
+
+export const coPilotDetailsData: Record<string, CoPilotDetailContent> = {
+  "crispr": {
+    slug: "crispr",
+    pageTitle: "CRISPR Co‑Pilot: In‑Silico Design Readiness",
+    heroSubtitle: "In‑silico CRISPR insight: see on‑target feasibility, access, off‑target preview, and delivery notes—before you design (research‑mode).",
+    vision: "Turn sequences and variants into a simple CRISPR readiness view: can we hit it, what could go wrong, and what to try first—plus a shareable, source‑backed summary.",
+
+    // Website value props (outcomes, no jargon)
+    valueProps: [
+      {
+        audience: 'For Genome Engineers',
+        icon: 'Target',
+        points: [
+          'Quick on‑target feasibility hint for your region of interest.',
+          'A small off‑target preview to steer your next experiment (RUO).',
+          'Simple delivery notes and a one‑page summary you can share.'
+        ]
+      },
+      {
+        audience: 'For Translational Teams',
+        icon: 'ClipboardCheck',
+        points: [
+          'Add biology signals (access, essentiality) alongside design checks.',
+          'Consistent, auditable outputs with run IDs and sources.',
+          'Roadmap: deeper off‑target and HDR scoring as services come online.'
+        ]
+      }
+    ],
+
+    buildsOn: "What this runs on (today vs roadmap)",
+    buildsOnStackPoints: [
+      "**Live today:** Guide generation with safety gates; locus accessibility and gene context via insights; compact off‑target preview (demo).",
+      "**Optional today:** Evo‑guided candidates with GC/homopolymer heuristics and provenance.",
+      "**Roadmap:** Full off‑target search, HDR template scoring, and delivery optimization."
+    ],
+
+    kpis: [
+      { label: 'ClinVar AUROC (total n=53,210)', value: '0.957' },
+      { label: 'Coding SNVs (n=14,319)', value: '0.957' },
+      { label: 'Non‑coding SNVs (n=34,761)', value: '0.958 (SOTA)' },
+      { label: 'Coding non‑SNVs (n=1,236)', value: '0.939 (SOTA)' },
+      { label: 'Non‑coding non‑SNVs (n=3,894)', value: '0.918' },
+      { label: 'SpliceVarDB AUROC (n=4,950)', value: '0.825–0.826' },
+      { label: 'Target VUS 40% → 15%', value: '≈$2.1M saved/program' },
+      { label: 'Evo2 context window', value: '1M tokens (single‑nucleotide resolution)' }
+    ],
+
+    observedOutcomes: [
+      'Seconds to starter guides (safety‑gated) for typical loci',
+      'Access/Functionality chips lift design confidence (research‑mode)',
+      'Splice/regulatory flags deprioritize ~10–12% risky sites early',
+      'Fewer junk designs due to safety/viral gates and heuristics',
+      'Cleaner handoffs: shareable one‑pager with run ID and sources'
+    ],
+
+    genomicInsightsOverview: "Our live endpoints (research‑mode) produce a compact CRISPR panel: On‑target feasibility, Access to target (chromatin proxy), Off‑target preview (demo), and Delivery notes—each with a short ‘what this means’ helper and provenance (run ID, profile).",
+    coreProblemIntro: "Design often starts blind. We provide a clear, auditable starting point in minutes.",
+    coreProblemPoints: [
+      "Feasibility unclear: is the region targetable with typical PAMs?",
+      "Access unknown: will the locus be reachable in the intended context?",
+      "Risks hidden: off‑target and delivery constraints surface late."
+    ],
+
+    genomicUseCasesGrid: [
+      { label: "On‑target feasibility hint", iconName: "Crosshair", color: "text-blue-400" },
+      { label: "Access to target (chromatin)", iconName: "Unlock", color: "text-green-400" },
+      { label: "Off‑target preview (demo)", iconName: "AlertTriangle", color: "text-yellow-400" },
+      { label: "Delivery notes (demo)", iconName: "Package", color: "text-purple-400" },
+      { label: "Guide candidates (safety‑gated)", iconName: "ListChecks", color: "text-orange-400" }
+    ],
+
+    keyCapabilities: [
+      {
+        title: "On‑Target Feasibility (live)",
+        technical: "We check basic sequence requirements and PAM windows, and can generate safety‑gated guide candidates. Output includes GC %, homopolymer penalties, and a simple spacer heuristic.",
+        scientific: "Feasibility summarizes whether the locus supports typical NGG‑like sites and returns starter candidates with basic quality signals.",
+        business: `
+- **Faster starts:** Get initial candidates with quick quality hints.
+- **Safer defaults:** Built‑in viral keyword/sanity guards (RUO).
+`,
+        genomicUseCasesParagraph: "Today: \n1. **Safety‑gated guide candidates** for a provided target region. \n2. **Feasibility chip** (Likely targetable / Needs review)."
+      },
+      {
+        title: "Access to Target (live)",
+        technical: "Chromatin accessibility proxy via insights; displays a simple access chip with a short helper and provenance.",
+        scientific: "Access informs whether the region is likely reachable in the selected context (proxy, research‑mode).",
+        business: `
+- **Design smarter:** Prioritize sites likely to be reachable.
+`,
+        genomicUseCasesParagraph: "Today: \n1. **Access chip** from `/api/insights/predict_chromatin_accessibility` (or heuristic fallback)."
+      },
+      {
+        title: "Off‑Target Preview (demo)",
+        technical: "A compact, demo‑mode preview—e.g., simple genomic similarity counts—to highlight potential risk before deep analysis.",
+        scientific: "Early risk awareness helps triage candidates; full off‑target search is a roadmap item.",
+        business: `
+- **Reduce rework:** Avoid obviously risky designs early.
+`,
+        genomicUseCasesParagraph: "Today (demo): \n1. **Preview count** shown in the panel with a ‘Demo’ tag."
+      },
+      {
+        title: "Delivery & HDR Notes (demo)",
+        technical: "Short, configurable notes (e.g., AAV/LNP suitability hint; HDR vs NHEJ considerations) shown with a clear ‘Demo’ badge.",
+        scientific: "Context cues guide early planning; quantitative scoring arrives with future services.",
+        business: `
+- **Plan ahead:** Surface delivery/HDR considerations early.
+`,
+        genomicUseCasesParagraph: "Today (demo): \n1. **Delivery/HDR badges** with brief helpers and provenance ‘Demo’."
+      },
+      {
+        title: "Knowledge & Provenance (live, expanding)",
+        technical: "Co‑Pilot + Evidence provide priors/citations; all cards show run IDs and profiles; export is available.",
+        scientific: "Audit‑ready outputs for internal review and reproducibility.",
+        business: `
+- **Trust & reuse:** Shareable, repeatable design summaries.
+`,
+        genomicUseCasesParagraph: "Today: \n1. **Provenance bar** across cards; one‑click export to JSON/CSV."
+      }
+    ],
+
+    valuePropositionSections: [
+      {
+        audience: "For the Genome Engineer",
+        points: [
+          "A quick feasibility check and starter guides for your locus.",
+          "Access and risk hints so you can prioritize quickly.",
+          "A one‑page summary you can share with your team (RUO)."
+        ]
+      },
+      {
+        audience: "For the Institution",
+        points: [
+          "Faster, more consistent kickoff with provenance.",
+          "Reusable outputs for QA and research files.",
+          "A safe path to deeper off‑target and delivery scoring when ready."
+        ]
+      }
+    ],
+
+    conclusion: "In‑silico CRISPR readiness that’s simple to read and easy to share. Plain chips. Clear helpers. Sources included. Research‑mode by design."
+  },
+};
+
+
+# CRISPR Co‑Pilot – Execution Doctrine (Aug 2025)
+
+This rule describes how to deliver CRISPR design readiness now using our existing endpoints with transparent provenance.
+
+## What we can deliver today (research‑grade)
+- Compact design panel with chips and notes:
+  - **On‑target feasibility:** PAM windowing + basic sequence checks; safety‑gated guide generation with heuristics.
+  - **Access to target:** Chromatin proxy from insights (heuristic fallback when needed).
+  - **Off‑target preview (demo):** Lightweight similarity counts to flag potential risk early.
+  - **Delivery & HDR notes (demo):** Short, configurable hints.
+- All responses include `provenance` (run ID, profile, flags) and clear ‘Demo’ tags where applicable.
+
+## Numbers That Matter (Research‑Mode)
+- Variant foundations (ClinVar): 53,210 variants at 95.7% AUROC; strong splice accuracy (~82.5–82.6% AUROC, n=4,950) supports regulatory/splicing risk hints.
+- Business target: reducing VUS 40% → ~15% clarifies feasibility/access context and saves ≈$2.1M/program by focusing experiments.
+- Evo2: up to 1M‑token context enables richer windows/prompts for design regions.
+
+## Observed Outcomes (pilot runs; research‑mode)
+- Faster starts: seconds to safety‑gated starter guides for typical input regions.
+- Better triage: splice/regulatory flags deprioritized ~10–12% risky sites before deeper work.
+- Confidence cues: positive Access/Functionality chips improved early decision confidence.
+- Fewer junk candidates: safety gates blocked problematic inputs; heuristics improved candidate quality.
+- Shareable: design one‑pager with run ID/sources improved cross‑team planning.
+
+## Plain English: Why this matters
+- Start with clarity: get quick, safe starting points instead of guesswork.
+- Avoid obvious pitfalls: flag splicing/regulatory risks early to reduce rework.
+- Plan smarter: simple Access/Functionality signals guide which sites to try first.
+- Share and repeat: one‑pager with provenance builds trust and speeds collaboration (RUO).
+
+## Where the code lives (reused components)
+- Design router: `[design.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/design.py)`
+- Insights router: `[insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py)`
+- Evo proxy and safety: `[evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py)`
+
+## How to run CRISPR readiness now
+- Guide candidates (safety‑gated):
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/design/generate_guide_rna \
+  -H 'Content-Type: application/json' --data @- <<'JSON'
+{ "target_sequence":"GACTGACTGACTGACTGACTGACTGACTGACTGACTGACTGACTGAC", "pam":"NGG", "num":3 }
+JSON
+```
+- Access to target (chromatin proxy):
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/insights/predict_chromatin_accessibility \
+  -H 'Content-Type: application/json' --data @- <<'JSON'
+{ "gene":"BRCA1", "region":"chr17:43044295-43044340" }
+JSON
+```
+
+## Methodology (now vs roadmap)
+- **Now:** PAM windowing, safety‑gated candidates, GC/homopolymer heuristics; chromatin proxy; demo off‑target/delivery notes.
+- **Roadmap:** Full off‑target search and scoring; HDR template generation and scoring; delivery optimization heuristics and constraints.
+
+## Frontend integration (no schema change required)
+- Render chips: On‑target, Access, Off‑target (Demo), Delivery (Demo); show a Provenance bar (run ID, profile, Demo tag).
+- Provide “Save Snapshot” and JSON/CSV export.
+
+## Quick test flows (local)
+- Guide candidates (≥30bp target): see example above.
+- Access proxy: see example above.
+
+## Current limitations (transparent)
+- Off‑target and delivery are demo‑mode placeholders until dedicated services are enabled.
+- Chromatin defaults to heuristic unless Enformer/Borzoi URLs are configured.
+- Generation uses safety gates to prevent misuse; designed for RUO.
+
+## Success criteria
+- Clear feasibility/access chips with short helpers and provenance.
+- Starter guide candidates returned with basic quality signals.
+- Demo tags visible where placeholders are used; exports available.
+

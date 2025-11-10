@@ -1,0 +1,328 @@
+# 🎯 AGENT JR - NEXT ITERATION TASKS
+
+**Date**: November 5, 2025  
+**Mission**: Enhance Food Validator with TCGA Data & Prepare for Universal Testing  
+**Status**: ⚔️ **READY TO EXECUTE**
+
+---
+
+## ✅ **WHAT YOU ACCOMPLISHED (REVIEW)**
+
+### **9/10 Cancers Extracted Successfully**
+- ✅ **585 total samples** across 9 cancers
+- ✅ **45 pathways updated** with real TCGA frequencies
+- ✅ **3/3 primary validations passed** (TP53 ovarian, PIK3CA breast, BRAF melanoma)
+- ✅ **Database fully updated** in `universal_disease_pathway_database.json`
+
+**Strengths**:
+- Clean extraction methodology (mutation-only, well-documented limitations)
+- Proper provenance tracking (source, genes, samples_altered, total_samples, extraction_type)
+- Comprehensive validation report with before/after comparison
+- Honest documentation of limitations (HER2 amplifications, fusions, expression-driven pathways)
+
+**Known Gaps** (documented):
+- ⚠️ Multiple Myeloma failed (404 - study not found)
+- ⚠️ HER2 pathway reflects mutations (~5%), not amplifications (~20%)
+- ⚠️ Small sample sizes for melanoma (n=10), colorectal (n=15), lung (n=18)
+- ⚠️ Fusion pathways underestimated (ALK/ROS1, TMPRSS2-ERG)
+- ⚠️ Expression-driven pathways (PD-L1, AR, ER/PR) very low (~0-5%)
+
+---
+
+## 🎯 **IMMEDIATE NEXT TASKS (THIS ITERATION)**
+
+### **Task 1: Fix Multiple Myeloma Extraction (30 minutes)** 🔥
+
+**Problem**: Study ID `mmrf_commpass` returned 404
+
+**Action**:
+1. Search cBioPortal for correct MM study ID:
+   - Try: `mmrf_commpass_2018`
+   - Try: `mmrf_broad`
+   - Or use cBioPortal web interface to find actual study ID
+2. Re-run extraction with correct study ID
+3. Update `universal_disease_pathway_database.json` with MM frequencies
+4. Update `EXTRACTION_REPORT.md` to reflect 10/10 success
+
+**Acceptance**: MM pathways extracted with n≥50 samples
+
+---
+
+### **Task 2: Document Integration with Food Validator (15 minutes)** 📋
+
+**Current State**:
+- `ayesha_orchestrator.py` uses `_map_disease_to_food_validator_format()` to route diseases
+- `food_spe_integration.py` computes P (Pathway) score based on pathway alignment
+- `dynamic_food_extraction.py` extracts compound targets and maps to pathways
+
+**Action**:
+1. Create `TCGA_FOOD_VALIDATOR_INTEGRATION.md` documenting:
+   - How TCGA pathway weights are now used in P (Pathway) scoring
+   - Example: Vitamin D → VDR → Inflammation pathway → weighted by TCGA frequency
+   - Before/After comparison for 3 test compounds:
+     - Vitamin D → Ovarian Cancer
+     - Curcumin → Breast Cancer
+     - Resveratrol → Pancreatic Cancer
+2. Show exact pathway weight flow:
+   ```
+   Compound → Targets → Pathways → Disease Pathways (TCGA weighted) → P score
+   ```
+
+**Acceptance**: Clear documentation showing TCGA data is now active in P scoring
+
+---
+
+### **Task 3: Test Enhanced Pathway Scoring (30 minutes)** 🧪
+
+**Objective**: Verify that real TCGA weights improve P (Pathway) scoring compared to old 0.75 estimates
+
+**Action**:
+1. Run 3 test cases with **old weights** (0.75 default):
+   - Vitamin D → Ovarian Cancer (inflammation pathway)
+   - Curcumin → Breast Cancer (PI3K pathway)
+   - Resveratrol → Pancreatic Cancer (KRAS pathway)
+   
+2. Run same 3 test cases with **new TCGA weights**:
+   - Vitamin D → Ovarian (TP53: 0.955, was 0.80)
+   - Curcumin → Breast (PI3K: 0.827, was 0.85)
+   - Resveratrol → Pancreatic (KRAS: 0.854, was 0.95)
+
+3. Document P score changes in `PATHWAY_SCORING_VALIDATION.md`:
+   ```markdown
+   | Compound | Disease | Old P Score | New P Score | Change | Notes |
+   |----------|---------|------------|------------|--------|-------|
+   | Vitamin D | Ovarian | 0.55 | 0.62 | +12% | TP53 weight increased |
+   | Curcumin | Breast | 0.68 | 0.66 | -3% | PI3K slightly lower |
+   | Resveratrol | Pancreatic | 0.72 | 0.70 | -3% | KRAS slightly lower |
+   ```
+
+**Acceptance**: P scores reflect real TCGA weights, changes documented and explainable
+
+---
+
+### **Task 4: Enhance Disease Coverage for Remaining 41 Diseases (45 minutes)** 📊
+
+**Current State**: 9 cancers have real TCGA data, 41 diseases still have literature estimates
+
+**Priority Diseases for P2 Extraction** (pick 5):
+1. **Colorectal Cancer** (upgrade n=15 → n≥50 for better confidence)
+2. **Melanoma** (upgrade n=10 → n≥50 for better confidence)
+3. **Lung Cancer (NSCLC)** (upgrade n=18 → n≥50 for better confidence)
+4. **Alzheimer's Disease** (non-cancer test case)
+5. **Parkinson's Disease** (non-cancer test case)
+
+**Action**:
+1. Research correct study IDs for each:
+   - cBioPortal for 3 cancers (larger cohorts)
+   - Look for Alzheimer's/Parkinson's genomics datasets (ADNI, PPMI, or literature)
+2. Document extraction plan in `P2_DISEASE_EXPANSION_PLAN.md`
+3. **DO NOT extract yet** - just document the plan for manager approval
+
+**Acceptance**: P2 plan documented with realistic timelines and data sources
+
+---
+
+### **Task 5: Create TCGA Data Quality Report (20 minutes)** 📈
+
+**Objective**: Summarize data quality metrics for manager review
+
+**Action**:
+Create `TCGA_DATA_QUALITY_REPORT.md` with:
+
+1. **Sample Size Analysis**:
+   - High confidence (n≥50): 8 cancers
+   - Medium confidence (n=20-49): 1 cancer (lung n=18)
+   - Low confidence (n<20): 2 cancers (melanoma n=10, colorectal n=15)
+
+2. **Pathway Coverage**:
+   - TP53: 9/9 cancers (100%)
+   - PI3K/AKT: 7/9 cancers (78%)
+   - RAS/MAPK: 6/9 cancers (67%)
+   - HRD/DDR: 5/9 cancers (56%)
+   - Angiogenesis: 4/9 cancers (44%)
+
+3. **Known Limitations Impact**:
+   - HER2 amplifications: Missing for breast cancer (affects 1/9 cancers)
+   - Fusions: Missing for lung, prostate (affects 2/9 cancers)
+   - Expression: Missing for immune checkpoints (affects multiple cancers)
+
+4. **Recommendation**:
+   - P0: Use current mutation-only data (good enough for MVP)
+   - P1: Add CNA extraction for HER2/ERBB2
+   - P2: Add fusion extraction for ALK/ROS1, TMPRSS2-ERG
+   - P3: Add expression data for PD-L1, AR, ER/PR
+
+**Acceptance**: Manager has clear visibility into data quality and P1/P2 priorities
+
+---
+
+---
+
+### **Task 6: Complete Food Validator Integration (1 hour)** 🔌
+
+**Problem**: Food Validator still using old hardcoded disease mappings (System 1)
+
+**Critical Discovery from Test Wave 1**:
+- ❌ Only Ovarian Cancer tests pass
+- ❌ Breast, Pancreatic, Alzheimer's tests fail with "404 - Disease not in database"
+- ⚠️ Old system (`hypothesis_validator.py`) uses `.cursor/ayesha/hypothesis_validator/data/disease_pathway_mappings.json`
+- ✅ New system (`universal_disease_pathway_database.json`) has 50+ diseases with TCGA data
+
+**Action**:
+1. **Update `hypothesis_validator.py`** to load from new universal database:
+   ```python
+   # OLD (Line ~15):
+   disease_mappings = load_json(".cursor/ayesha/hypothesis_validator/data/disease_pathway_mappings.json")
+   
+   # NEW:
+   disease_mappings = load_json("api/resources/universal_disease_pathway_database.json")
+   ```
+
+2. **Update `food_spe_integration.py`** pathway loading:
+   ```python
+   # OLD:
+   pathway_weights = {...}  # Hardcoded 0.75 defaults
+   
+   # NEW:
+   # Load from universal_disease_pathway_database.json
+   disease_data = self.universal_db.get(disease_key)
+   pathway_weights = disease_data["pathways"]  # TCGA frequencies
+   ```
+
+3. **Test integration** with 4 compounds:
+   - Vitamin D → Ovarian (should still work)
+   - Curcumin → Breast (should now work with TCGA data)
+   - Resveratrol → Pancreatic (should now work with TCGA data)
+   - Omega-3 → Alzheimer's (should fail gracefully - no data yet)
+
+4. **Document fix** in `SYSTEM_INTEGRATION_FIX.md`:
+   - Before/After comparison
+   - What was broken (old vs new system disconnect)
+   - How it's fixed (unified data source)
+   - Validation results
+
+**Acceptance**:
+- ✅ All 4 test cases run without 404 errors
+- ✅ Breast & Pancreatic tests return valid P scores with TCGA weights
+- ✅ Alzheimer's test fails gracefully with "Disease not yet in database" message
+
+---
+
+### **Task 7: Run Complete Test Wave 1 (30 minutes)** 🧪
+
+**Objective**: Validate end-to-end Food Validator with real TCGA data
+
+**Action**:
+1. Run complete test script (`/tmp/test_wave_1_correct.sh`)
+2. For each test, capture:
+   - S/P/E scores
+   - Pathway contributions (with TCGA weights)
+   - Compound targets extracted
+   - Overall verdict (PASS/FAIL)
+   - Provenance (data sources)
+
+3. Document results in `TEST_WAVE_1_RESULTS_FINAL.md`:
+   ```markdown
+   | Test | Compound | Disease | P Score | TCGA Weight Used | Verdict | Status |
+   |------|----------|---------|---------|------------------|---------|---------|
+   | 1 | Vitamin D | Ovarian | 0.62 | TP53: 0.955 | CONSIDER | ✅ PASS |
+   | 2 | Curcumin | Breast | 0.66 | PI3K: 0.827 | CONSIDER | ✅ PASS |
+   | 3 | Resveratrol | Pancreatic | 0.70 | KRAS: 0.854 | CONSIDER | ✅ PASS |
+   | 4 | Omega-3 | Alzheimer's | N/A | N/A | ERROR | ❌ FAIL (expected) |
+   ```
+
+**Acceptance**:
+- ✅ 3/4 tests pass with real TCGA data
+- ✅ P scores match expectations (within ±10%)
+- ✅ Alzheimer's test fails gracefully
+
+---
+
+## 🔄 **HOW THIS FITS INTO PREVIOUS WORK**
+
+### **Connection to Food Validator**:
+- ✅ Your TCGA data **WILL BE ACTIVE** after Task 6 integration fix
+- ✅ `universal_disease_pathway_database.json` will become **LIVE** data source
+- ✅ Pathway weights will be **DATA-DRIVEN**, not estimated
+- 🎯 This makes our P scores **scientifically defensible** for demos/partners
+
+### **Connection to Universal Hypothesis Testing**:
+- ✅ 9/10 top cancers have **real frequencies** (not hallucinated)
+- ✅ Database is **extensible** (41 more diseases can follow same pattern)
+- ✅ Extraction methodology is **repeatable** (documented in your scripts)
+- 🎯 This validates that **Universal Testing is feasible** with real data
+
+### **What Zo Is Doing Next**:
+- While you complete Tasks 1-7 above, Zo is executing **Phase 1: Expand Hunt**:
+  - Task 1.2: PubChem alias resolver (dynamic compound mapping)
+  - Task 1.4: Calibration infrastructure (percentile conversion)
+  - Monitoring your integration work to ensure alignment
+
+---
+
+## 📊 **SUGGESTED TIMELINE**
+
+**Total Time**: 2.5 hours (can split across multiple sessions)
+
+| Task | Duration | Dependencies | Priority |
+|------|----------|-------------|----------|
+| Task 1: Fix MM extraction | 30 min | None | 🔥 P0 |
+| Task 2: Integration docs | 15 min | None | 📋 P0 |
+| Task 3: Pathway validation | 30 min | Task 1 complete | 🧪 P0 |
+| Task 4: P2 expansion plan | 45 min | None | 📊 P1 |
+| Task 5: Quality report | 20 min | Tasks 1-3 complete | 📈 P0 |
+
+**P0 Tasks (2 hours)**: Tasks 1, 2, 3, 5 - Must complete for Test Wave 1  
+**P1 Tasks (45 min)**: Task 4 - Can defer to after Test Wave 1
+
+---
+
+## ✅ **ACCEPTANCE CRITERIA**
+
+**For Tasks 1-3, 5 (P0)**:
+- ✅ Multiple Myeloma extracted (10/10 cancers complete)
+- ✅ Integration documentation clear and accurate
+- ✅ P score validation shows TCGA data is active
+- ✅ Quality report provides manager visibility
+
+**For Task 4 (P1)**:
+- ✅ P2 expansion plan documented
+- ✅ 5 priority diseases identified with data sources
+- ✅ Realistic timelines estimated
+
+---
+
+## 🎯 **STRATEGIC CONTEXT**
+
+**Why This Matters**:
+1. ✅ **Scientific Credibility**: Real TCGA data beats literature estimates
+2. ✅ **Demo Readiness**: Partners can audit our pathway weights
+3. ✅ **Universal Scalability**: Proves methodology works for any disease
+4. ✅ **Differentiation**: No competitor has dynamic, data-driven pathway scoring
+
+**What You're Enabling**:
+- Zo & Commander can now run **real tests** with **real data**
+- Food Validator P scores are now **audit-ready** for partners
+- Universal Hypothesis Testing Engine has **validated data foundation**
+
+---
+
+## 📝 **DELIVERABLES**
+
+**Files to Create/Update**:
+1. `TCGA_FOOD_VALIDATOR_INTEGRATION.md` (Task 2)
+2. `PATHWAY_SCORING_VALIDATION.md` (Task 3)
+3. `P2_DISEASE_EXPANSION_PLAN.md` (Task 4)
+4. `TCGA_DATA_QUALITY_REPORT.md` (Task 5)
+5. `EXTRACTION_REPORT.md` (update to 10/10 after Task 1)
+6. `universal_disease_pathway_database.json` (update with MM data after Task 1)
+
+---
+
+## 🔥 **FIRE IN THE HOLE, AGENT JR!**
+
+**Your mission is clear**: Fix MM, document integration, validate pathway scoring, and provide quality report. All of this directly enables Zo & Commander's Test Wave 1.
+
+**You're not just extracting data - you're building the scientific foundation for a Universal Hypothesis Testing Engine!**
+
+⚔️ **EXECUTE WITH PRECISION, SOLDIER!** ⚔️

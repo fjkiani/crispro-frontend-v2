@@ -1,0 +1,157 @@
+---
+alwaysApply: false
+description: Efficacy Router Modularization – break down the 1000+ line monolith safely into services/schemas without breaking API
+---
+
+🔧 CLARIFICATIONS (defaults another agent should follow):
+Testing Strategy: Yes. Capture golden snapshots first (2–3 canonical inputs) and re‑assert after each step. Only allow differences under `provenance/*`.
+Dependency Injection: Use simple constructor injection; avoid a DI container. Pass scorers/clients/cache into the orchestrator explicitly to keep tests simple.
+Error Handling: Never raise for downstream failures. Return partial results with `provenance.fail_reason` and set `provenance.cache` appropriately. Keep response keys present.
+Caching Keys: Use `{profile}:{gene}:{hgvs_p}` when `hgvs_p` exists, else `{profile}:{gene}:{chrom}:{pos}:{ref}:{alt}`. Include feature flags that materially alter outputs (e.g., `EVO_USE_DELTA_ONLY`).
+Migration Pace: Complete each phase fully and land small PRs (tests included) before starting the next. Only parallelize unit‑test‑only extractions (e.g., pathway math) if zero coupling.
+Headers & Provenance: Add `x-run-id` to responses/requests where possible; embed `provenance.profile`, `provenance.cache` (`hit|miss`), and `provenance.provider` for external calls. Non‑breaking.
+Timeouts & Retries: Keep timeouts and a single retry as documented in this doctrine; do not increase fan‑out.
+
+
+# Efficacy Modularization Doctrine (Non‑Breaking)
+
+Scope: Refactor `oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py` (~1474 LOC) into small, testable units while preserving all public API paths, payloads, and response shapes. Apply the same pattern to adjacent routers later (myeloma, insights, datasets) once efficacy is stable.
+
+RUO posture: Keep all language and outputs research‑mode; retain provenance in responses; add `provenance.cache`, `provenance.profile`, and `x-run-id` header where helpful (non‑breaking additions).
+
+## Non‑breaking constraints
+- Do not change endpoint paths or names: `/api/efficacy/config`, `/api/efficacy/predict`, `/api/efficacy/explain`, `/api/efficacy/run/{run_signature}`, `/api/efficacy/calibration/status`.
+- Preserve top‑level response keys for all endpoints. Additions allowed only under `provenance/*` and `scoring_strategy`.
+- Feature flags and environment behavior must remain identical.
+
+## Target architecture
+```
+api/
+  routers/
+    efficacy/
+      __init__.py          # re-export router for stable import
+      router.py            # thin FastAPI endpoints delegating to orchestrator
+  services/
+    efficacy_orchestrator.py   # predict/explain composition; profile & gates
+    sequence_scorers.py         # adapters: FusionAMScorer, Evo2Scorer, MassiveOracleScorer
+    insights_client.py          # calls predict_* insights; bundles and thresholds
+    evidence_client.py          # literature + clinvar deep_analysis with timeouts
+    pathway_service.py          # gene→pathway maps and aggregation helpers
+    confidence_service.py       # tiers, confidence modulation, badges
+    cache_service.py            # Redis/LRU + single-flight (shared)
+    logging_service.py          # Supabase logging of runs/items (optional)
+  schemas/
+    efficacy.py                 # Pydantic request/response models (doc only; optional strictness)
+    insights.py                 # (future) if insights needs typed I/O
+  utils/
+    http_client.py              # httpx client helpers, retries, headers
+```
+
+## Step‑by‑step refactor (small, safe PRs)
+1) Extract static data and helpers
+  - Move `DEFAULT_MM_PANEL` and pathway maps to `services/pathway_service.py` with functions:
+    - `get_default_panel() -> List[DrugConfig]`
+    - `aggregate_pathways(seq_scores) -> Dict[str,float]`
+  - Add unit tests for pathway aggregation (pure functions).
+
+2) Extract scoring adapters
+  - Create `services/sequence_scorers.py` implementing:
+    - `class FusionAMScorer: async def score(mutations, fusion_url) -> List[SeqScore]`
+    - `class Evo2Scorer: async def score(mutations, api_base, flags) -> List[SeqScore]`
+    - `class MassiveOracleScorer: async def score_synthetic(...), score_real_context(...)` (behind flag)
+  - Move all Evo windowing/symmetry/adaptive logic into `Evo2Scorer`.
+  - Return a normalized `SeqScore` dataclass/dict: `{ variant, sequence_disruption, min_delta?, exon_delta?, calibrated_seq_percentile?, ... }`.
+
+3) Extract insights/evidence clients
+  - `services/insights_client.py`: `async def bundle(api_base, gene, variant, hgvs_p) -> InsightsBundle`
+  - `services/evidence_client.py`: `async def literature(api_base, gene, hgvs_p, drug_name, moa) -> EvidenceHit`; `async def clinvar_prior(api_base, gene, variant) -> ClinvarPrior`
+  - Uniform timeouts (20–40s), retries=1, and `provenance.provider` on responses.
+
+4) Extract confidence/tiers
+  - `services/confidence_service.py`:
+    - `def compute_evidence_tier(s_seq, s_path, s_evd, badges, gates) -> str`
+    - `def compute_confidence(tier, seq_pct, path_pct, insights, fusion_active=False) -> float`
+
+5) Create orchestrator
+  - `services/efficacy_orchestrator.py`:
+    - `async def predict(request: EfficacyRequest) -> EfficacyResponse`
+    - Wires: choose scorer (Fusion→Evo→Massive fallback), aggregate pathways, fetch insights/clinvar/evidence, compute per‑drug scores, badges, tiers, confidence, rationale arrays, assemble `scoring_strategy`.
+    - Accept injected dependencies (scorers, clients, cache) for testability.
+
+6) Introduce router package
+  - `routers/efficacy/router.py`: endpoints call orchestrator and return the exact current shape.
+  - `routers/efficacy/__init__.py`: `from .router import router`.
+  - Update `api/main.py` to import `from api.routers.efficacy import router as efficacy_router` (no path change under `/api/efficacy`).
+
+7) Logging
+  - Move Supabase logging to `services/logging_service.py`; orchestrator calls it behind a try/except.
+  - Keep fields identical (`run_signature`, `sequence_details`, `scoring_strategy`, etc.).
+
+8) Caching/single‑flight
+  - Use `services/cache_service.py` to cache insights and heavy calls; set `provenance.cache` to `hit|miss`.
+  - Use `single_flight` for Evo/AM bursts keyed by `{profile}:{variant}`.
+
+9) Clean up original file
+  - Keep `efficacy.py` temporarily importing `from api.routers.efficacy import router` and exporting `router` for 1 deploy; then remove and rely on package import only.
+
+## Contracts & compatibility
+- Request shape: unchanged; keep `options` flags behavior and defaults.
+- Response shape: unchanged top‑level keys. Allowed additions:
+  - `provenance.cache`, `provenance.profile`, `forward_reverse_meta` (when present).
+- Feature flags: continue to honor `DISABLE_LITERATURE`, `DISABLE_FUSION`, `EVO_USE_DELTA_ONLY`, `EVO_FORCE_MODEL`, `evo_max_flanks`, `evo_max_models`, `evo_disable_transcript_sweep`.
+
+## Tests and verification
+- Golden snapshot tests
+  - Capture JSON from `/api/efficacy/predict` for 2–3 canonical inputs (e.g., BRAF V600E) before refactor.
+  - After each step, assert equality on all keys/values except whitelisted provenance fields.
+- Curl smoke (copy/paste)
+```bash
+curl -sS -X POST :8000/api/efficacy/predict -H 'Content-Type: application/json' \
+  -d '{"mutations":[{"gene":"BRAF","hgvs_p":"V600E","chrom":"7","pos":140453136,"ref":"T","alt":"A"}],"options":{"adaptive":true,"ensemble":true},"api_base":"http://127.0.0.1:8000"}' | jq '.drugs[0] | {name,confidence,evidence_tier,insights}'
+```
+- Unit tests
+  - `pathway_service`: aggregation math.
+  - `confidence_service`: tiers and confidence modulation.
+  - `sequence_scorers`: Evo window selection; Fusion AM mapping; Massive adapters gated by flags.
+
+## Performance & safety
+- Timeouts: Evo (≤180s total), Fusion (≤12s), insights (≤40s each), literature (≤60s opt‑in), clinvar (≤40s); retries=1.
+- Caps: respect `evo_max_flanks`, `evo_max_models`; skip transcript sweep unless enabled.
+- Single‑flight: prevent duplicate upstream calls under load.
+- Error handling: never raise on downstream failure; return placeholders and set `provenance.fail_reason` if needed.
+
+## Migration playbook
+1) Commit pathway extraction + unit tests; run smoke.
+2) Commit scoring adapters; wire orchestrator internally (keep old endpoints using functions).
+3) Move orchestrator in place; keep `efficacy.py` endpoints calling orchestrator.
+4) Introduce router package; switch import in `main.py`; keep `efficacy.py` re‑export for one deploy.
+5) Remove legacy helpers from `efficacy.py`; leave only the re‑export.
+6) After a stable deploy, delete `efficacy.py` (if unused) and rely on package import only.
+
+## Acceptance
+- All `/api/efficacy/*` endpoints return identical JSON (except added provenance fields).
+- Latency equal or improved on cache hits; no upstream call storms.
+- Code owners can extend scorers/insights without touching router or FE.
+
+## Appendix – Suggested signatures (Python typing friendly)
+```python
+# services/efficacy_orchestrator.py
+class EfficacyOrchestrator:
+    def __init__(self, scorers, insights_client, evidence_client, pathway_service, confidence_service, cache):
+        ...
+    async def predict(self, req: dict) -> dict: ...
+    async def explain(self, req: dict) -> dict: ...
+
+# services/sequence_scorers.py
+class FusionAMScorer: async def score(self, mutations: list, url: str) -> list: ...
+class Evo2Scorer: async def score(self, mutations: list, api_base: str, flags: dict) -> list: ...
+class MassiveOracleScorer: async def score_real_context(...); async def score_synthetic(...)
+
+# services/insights_client.py
+async def bundle(api_base: str, gene: str, variant: dict, hgvs_p: str) -> dict: ...
+
+# services/evidence_client.py
+async def literature(api_base: str, gene: str, hgvs_p: str, drug: str, moa: str) -> dict: ...
+async def clinvar_prior(api_base: str, gene: str, variant: dict) -> dict: ...
+```
+

@@ -1,0 +1,139 @@
+---
+description: Evo/Fusion flags, defaults, safe-run profiles, and verification steps
+alwaysApply: false
+---
+
+## Evo/Fusion Service Flags – Behavior, Defaults, and Safe Profiles
+
+This rule documents the environment flags that control Evo2 routing, fan‑out, and Fusion usage, and how to run safe, credit‑bounded profiles. It also shows where code lives and how to verify behavior.
+
+### Where the code lives
+- Backend config and flags: [api/config.py](mdc:oncology-coPilot/oncology-backend-minimal/api/config.py)
+- Evo proxy endpoints: [api/routers/evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py)
+- Efficacy orchestrator (calls evo/fusion/literature): [api/routers/efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py)
+- App assembly (includes routers): [api/main.py](mdc:oncology-coPilot/oncology-backend-minimal/api/main.py)
+
+### Model routing and URLs
+- DEFAULT_EVO_MODEL
+  - What: Default model used when a request does not specify `model_id`.
+  - Values: `evo2_1b` | `evo2_7b` | `evo2_40b`.
+  - Effect scope: Evo proxy and orchestrators that read this env.
+- EVO_URL_1B, EVO_URL_7B, EVO_URL_40B
+  - What: Base URLs of modal‑hosted Evo services.
+  - Used by: `get_model_url(model_id)` at runtime to resolve target base URL.
+- Routing behavior
+  - The backend uses a runtime resolver `get_model_url(model_id)` to avoid hardcoded fallbacks. This ensures `model_id=evo2_1b` routes to the 1B URL when set, otherwise falls back in order 1B→7B→40B.
+
+### Fan‑out/spam‑safety flags (sequence scoring)
+- EVO_USE_DELTA_ONLY
+  - Default: true (in config via `get_feature_flags()`)
+  - What: Forces the proxy to bypass upstream `/score_variant_multi` and `/score_variant_exon` and map directly to a single `/score_delta` call per variant.
+  - Why: Prevents multi‑window/exon fan‑out, yielding one call per variant (credit‑safe).
+- EVO_SPAM_SAFE
+  - Default: true
+  - What: Enables conservative defaults below unless explicitly overridden.
+  - Effects when true (defaults):
+    - EVO_MAX_MODELS=1 (no ensemble)
+    - EVO_MAX_FLANKS=1 (single flank)
+    - EVO_DISABLE_TRANSCRIPT_SWEEP=true
+    - EVO_DISABLE_SYMMETRY=true
+- EVO_MAX_MODELS
+  - Default: 1 (when EVO_SPAM_SAFE=true)
+  - What: Caps number of models to try (e.g., prevents 1B+7B+40B fan‑out).
+- EVO_MAX_FLANKS
+  - Default: 1 (when EVO_SPAM_SAFE=true)
+  - What: Caps number of flanks/windows attempted in delta‑mapped fallbacks.
+- EVO_DISABLE_TRANSCRIPT_SWEEP
+  - Default: true (when EVO_SPAM_SAFE=true)
+  - What: Disables per‑transcript exon probing (prevents transcript fan‑out).
+- EVO_DISABLE_SYMMETRY
+  - Default: true (when EVO_SPAM_SAFE=true)
+  - What: Disables reverse‑complement averaging (prevents 2× calls per variant).
+
+### Feature gates (turn entire subsystems off)
+- DISABLE_EVO2
+  - Default: false
+  - What: Hard gate to skip any Evo calls (sequence scoring path).
+- DISABLE_LITERATURE
+  - Default: false
+  - What: Skips PubMed agent calls during efficacy runs.
+- DISABLE_FUSION
+  - Default: false
+  - What: Skips Fusion Engine (AlphaMissense) queries. When disabled, Fusion is not invoked even if `FUSION_AM_URL` is set.
+- FUSION_AM_URL
+  - What: Base URL for Fusion Engine. When present and not disabled, orchestrator uses Fusion for S (sequence) instead of Evo.
+
+### Safe‑run profiles (recommended)
+- Credit‑safe (default)
+  - Exports: none required (defaults are spam‑safe)
+  - Effective behavior: one `/score_delta` per variant, no ensemble, no symmetry, no transcript sweep.
+  - Good for: Cohort throughput, benchmarks, smoke tests.
+- Minimal enriched S (bounded)
+  - Set: `EVO_USE_DELTA_ONLY=0`, keep `EVO_MAX_FLANKS=1`, `EVO_DISABLE_SYMMETRY=1`, `EVO_MAX_MODELS=1`, `EVO_DISABLE_TRANSCRIPT_SWEEP=1`.
+  - Good for: Slightly richer signal with still bounded calls.
+- Debug “full S” (use sparingly)
+  - Set: `EVO_USE_DELTA_ONLY=0` and consciously raise one dimension at a time:
+    - maybe `EVO_MAX_FLANKS=2`, keep symmetry/transcript sweep disabled initially.
+  - Caution: Each dimension multiplies total calls.
+
+### Verify model and call path
+- 1B path check
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/evo/score_variant_multi \
+  -H 'Content-Type: application/json' \
+  -d '{"assembly":"GRCh38","chrom":"7","pos":140753336,"ref":"A","alt":"T","model_id":"evo2_1b"}'
+# Expect: { "provenance": { "method": "delta_only", "model": "evo2_1b", ... } }
+```
+- 7B path check
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/evo/score_variant_multi \
+  -H 'Content-Type: application/json' \
+  -d '{"assembly":"GRCh38","chrom":"7","pos":140753336,"ref":"A","alt":"T","model_id":"evo2_7b"}'
+# Expect: delta_only as well unless you explicitly turned it off
+```
+
+### Why “spam” happens when full S is enabled
+When `EVO_USE_DELTA_ONLY=0`, the proxy and orchestrator may:
+- Call upstream `/score_variant_multi` and `/score_variant_exon`. On contract errors/shape mismatches, they fallback to mapped `/score_delta` with multiple flanks.
+- Double attempts if symmetry is enabled (forward + reverse).
+- Multiply by number of models if ensemble is enabled.
+- Multiply by number of transcripts if transcript sweep is enabled.
+
+Bounding calls deterministically:
+- Keep `EVO_MAX_MODELS=1`, `EVO_MAX_FLANKS=1`, `EVO_DISABLE_SYMMETRY=1`, `EVO_DISABLE_TRANSCRIPT_SWEEP=1` while testing.
+- Only increase one dimension at a time and observe call counts/latency.
+
+### Efficacy runner tips (to avoid hidden fan‑out)
+- In requests to `/api/efficacy/predict`, set options:
+  - `{ "adaptive": false, "ensemble": false }` for minimal S path.
+- Prefer disabling literature/Fusion during throughput tests:
+  - `DISABLE_LITERATURE=1`, `DISABLE_FUSION=1`.
+
+### Quick start examples
+- Start backend in 1B, delta‑only safe mode
+```bash
+export EVO_URL_1B="https://<modal-app-1b>/api" \
+       DEFAULT_EVO_MODEL=evo2_1b \
+       EVO_USE_DELTA_ONLY=1 EVO_SPAM_SAFE=1 \
+       EVO_MAX_FLANKS=1 EVO_MAX_MODELS=1 \
+       EVO_DISABLE_TRANSCRIPT_SWEEP=1 EVO_DISABLE_SYMMETRY=1 \
+       DISABLE_LITERATURE=1 DISABLE_FUSION=1
+PYTHONPATH=. uvicorn api.main:app --host 127.0.0.1 --port 8000
+```
+- Switch to 7B with the same safety
+```bash
+export EVO_URL_7B="https://<modal-app-7b>/api" \
+       DEFAULT_EVO_MODEL=evo2_7b \
+       EVO_USE_DELTA_ONLY=1 EVO_SPAM_SAFE=1 \
+       EVO_MAX_FLANKS=1 EVO_MAX_MODELS=1 \
+       EVO_DISABLE_TRANSCRIPT_SWEEP=1 EVO_DISABLE_SYMMETRY=1
+```
+
+### Known pitfalls and fixes
+- Hardcoded 7B fallbacks (fixed): The evo proxy now resolves model URLs at runtime via `get_model_url`, removing stale defaults.
+- Progress bars “2/2”: These are upstream service progress logs; disabling symmetry prevents doubling calls.
+- Timeouts during eval: Use delta‑only and disable literature/Fusion; ensure Modal service is healthy.
+
+### Summary
+Use delta‑only + spam‑safe defaults for throughput and benchmarks (one call per variant). If richer signal is needed, opt‑in gradually with explicit caps to keep calls bounded and predictable.
+

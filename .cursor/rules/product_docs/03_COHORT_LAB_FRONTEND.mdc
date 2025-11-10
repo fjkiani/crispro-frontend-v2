@@ -1,0 +1,42 @@
+---
+alwaysApply: false
+description: Frontend Cohort Lab guide - interactive data exploration, label preview, class balance validation
+---
+
+# Cohort Lab Frontend Guide (Jan 2025)
+
+## Overview
+The `CohortLab.jsx` component provides **interactive clinical outcome exploration** - users can preview labels, check class balance, and validate data quality before running full extractions.
+
+## Key Features
+
+### 1. Clinical Attributes Explorer
+- Fetches available outcome attributes from cBioPortal
+- Shows: DFS_STATUS, OS_STATUS, TREATMENT_OUTCOME, etc.
+- Helps users understand what data exists
+
+### 2. Label Preview (100 samples)
+- Quick extraction to check class distribution
+- Shows: Total, Positive %, Negative %, Balance status
+- Color-coded: Green = balanced, Orange = imbalanced
+
+### 3. Full Extraction with Outcomes
+- Extracts cohort with real DFS/OS labels
+- Downloads CSV/JSON with clinical fields
+- Ready for ML benchmarking
+
+## Component Location
+`oncology-coPilot/oncology-frontend/src/components/ResearchPortal/CohortLab.jsx`
+
+## User Workflow
+1. Select disease & study (e.g., TCGA-OV)
+2. Click "Fetch Available Attributes" → see DFS_STATUS
+3. Click "Preview Labels" → verify 67% recurred / 33% censored
+4. Click "Extract & Benchmark" → get full 500-row cohort
+5. Download CSV with dfs_status, os_status, patient_id
+
+## Technical Details
+- Uses `/api/datasets/extract_and_benchmark` endpoint
+- Mode "extract_only" for preview (100 samples)
+- Mode "both" for full extraction + benchmark
+- Label distribution computed client-side from preview data

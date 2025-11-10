@@ -1,0 +1,202 @@
+---
+alwaysApply: false
+description: Demo Completion Execution Plan – precise tasks, files, endpoints, wiring, tests, and safe refactors
+---
+
+# Demo Completion – Agent Execution Plan
+
+Purpose: A precise, step‑by‑step plan another agent can follow to finish all demos (WIWFM, VUS Explorer, Dossier, Cohort Lab, CRISPR Design), implement sessions + caching, and refactor monolith routers safely. Includes file paths, endpoint contracts, wiring steps, tests, acceptance, and rollback/safety guidance.
+
+RUO posture: Research‑use only. No clinical claims. Every output must include provenance/run_id; demo copy must reflect RUO.
+
+## 0) High‑level order of operations
+1) Backend boot & health: fix `api/main.py` indentation; verify routers mount; add CORS.
+2) Sessions API (BE) + SessionContext (FE): enable save/resume across WIWFM → VUS → Dossier.
+3) Cache service + single‑flight: wire into `insights.py`, `efficacy.py`, `datasets.py`.
+4) Verify evidence proxies (ClinVar/Fusion coverage) + timeouts.
+5) Cohort Lab: ensure `/api/datasets/extract_and_benchmark` returns metrics+coverage; FE renders.
+6) VUS/Dossier live wiring + ProvenanceBar + profile toggles; add “Add to Session”.
+7) CRISPR Design minimal demo via `/api/design/generate_guide_rna` with RUO copy/safety notes.
+8) Safe refactors for monoliths (router packages + shim re‑exports).
+9) Acceptance & smoke tests; finalize slides copy and demo runbook.
+
+## 1) Backend boot & health
+- File: `oncology-coPilot/oncology-backend-minimal/api/main.py`
+  - Action: Fix `IndentationError`; ensure imports and `include_router(...)` calls for `insights`, `efficacy`, `datasets`, `fusion`, `evidence` (or `evidence_shim`).
+  - Add CORS: allow FE origin (`VITE_API_ROOT`), allow credentials.
+  - Add `/healthz` GET returning `{ ok:true, ts }`.
+- Test:
+```bash
+curl -sS http://127.0.0.1:8000/healthz | jq .ok
+curl -sS http://127.0.0.1:8000/openapi.json | head -n1
+```
+
+## 2) Sessions API (BE)
+- New: `oncology-coPilot/oncology-backend-minimal/api/routers/sessions.py`
+- New models:
+  - `SessionCreate { user_id?:string, anonymous_id?:string }`
+  - `SessionAppend { session_id:string, item: { kind:'wiwfm'|'vus'|'dossier', payload:any, profile?:string, run_id:string } }`
+- Endpoints:
+  - `POST /api/sessions` → `{ session_id, created_at }` (idempotent by `anonymous_id` + user cookie)
+  - `POST /api/sessions/append` → `{ ok:true, items_count }`
+  - `GET /api/sessions/{session_id}` → `{ session_id, items:[...] }`
+  - `GET /api/sessions` (list by user or anonymous_id)
+- Storage: start with Supabase if configured; fallback to in‑memory dict with TTL (24–72h) and log a warning.
+- Idempotency: accept `x-idempotency-key`; upsert on same key.
+- Test:
+```bash
+curl -sS -X POST :8000/api/sessions -d '{"anonymous_id":"dev-1"}' -H 'Content-Type: application/json'
+curl -sS -X POST :8000/api/sessions/append -d '{"session_id":"...","item":{"kind":"wiwfm","payload":{"drugs":[]},"run_id":"r1"}}' -H 'Content-Type: application/json'
+curl -sS :8000/api/sessions/{id}
+```
+
+## 3) Cache service + single‑flight
+- New: `oncology-coPilot/oncology-backend-minimal/api/services/cache_service.py`
+  - Interface: `get_json(key:str)->dict|None`, `set_json(key:str, value:any, ttl:int)`, `single_flight(key:str, ttl:int)` (context manager yielding a lock or noop), `cache_key_from_payload(prefix, payload)`.
+  - Redis if `REDIS_URL` set; else in‑proc LRU.
+- Integrations:
+  - `insights.py`: wrap compute calls; include `provenance.cache: 'hit'|'miss'` and `cache_key` in debug.
+  - `efficacy.py`: cache per `{mutations, profile}`; add single‑flight to upstream calls.
+  - `datasets.py`: cache extraction/benchmark artifacts (path hashes) with TTL.
+- Test:
+```bash
+# cold then warm repeat
+time curl -sS -X POST :8000/api/insights/predict_gene_essentiality -d '{"gene":"BRAF","variants":[{"gene":"BRAF","chrom":"7","pos":140453136,"ref":"T","alt":"A"}]}' -H 'Content-Type: application/json' | jq '.provenance.cache'
+```
+
+## 4) Evidence proxies + timeouts
+- Ensure routers mounted:
+  - `GET /api/evidence/clinvar?q=...` → small proxy + minimal prior summary.
+  - `GET /api/fusion/coverage?gene=...&hgvs_p=...` → AM eligibility boolean.
+- Add: 2–3s client timeouts, retries=1, `provenance.provider` and `provenance.cache` fields.
+- Test:
+```bash
+curl -sS :8000/api/evidence/clinvar?q=BRAF%20V600E | jq .
+curl -sS :8000/api/fusion/coverage?gene=BRAF\&hgvs_p=V600E | jq .covered
+```
+
+## 5) Cohort Lab – backend contract
+- Endpoint (exists): `POST /api/datasets/extract_and_benchmark`
+  - Ensure response contains: `{ metrics:{ auprc, auroc? }, artifacts:[{name,path}], coverage:{ by_gene:[{gene,n,prevalence}] } }`.
+  - Add `run_id` and `provenance.profile`.
+- Test:
+```bash
+curl -sS -X POST :8000/api/datasets/extract_and_benchmark -H 'Content-Type: application/json' -d '{"study":"ov_tcga_pan_can_atlas_2018","mode":"extract_only"}' | jq .metrics
+```
+
+## 6) Frontend wiring
+- Session context
+  - New: `oncology-coPilot/oncology-frontend/src/context/SessionContext.jsx`
+    - Holds `sessionId`, `profile`, helpers: `saveItem(kind,payload,runId)` → calls `/api/sessions/append`; autosave to localStorage.
+  - Wire provider at app root (`App.jsx`).
+- WIWFM (Myeloma page)
+  - Ensure using `/api/efficacy/predict`; add Baseline/Richer/Fusion profile toggles; display `provenance.run_id`, `profile`.
+  - Hook existing save icon → `saveItem('wiwfm', result, runId)`.
+- VUS Explorer
+  - `AnalysisResults.jsx`: ensure live insights via `/api/insights/predict_*`; add “Add to Session” → saves variant + insights bundle + run_id.
+  - Show `ProvenanceBar` with run id + profile.
+- Target Dossier
+  - Replace mocks with live insights; render CohortSummary via `/api/datasets/extract_and_benchmark` for active gene; add “Add note to Session”.
+- CRISPR Design
+  - Minimal demo button: call `/api/design/generate_guide_rna` with ≥30bp target; show candidates; display RUO + safety note; no clinical copy.
+
+## 7) Knowledge Base (optional but valuable)
+- Seed minimal KB per `knowledge_base_doctrine.mdc` (BRAF/TP53/pathway/policy/cohort).
+- New BE: `api/routers/kb.py` read‑only; FE helper texts read via KB where possible.
+- This de‑risks live calls and keeps copy consistent.
+
+## 8) Safe refactors for monoliths
+- Targets:
+  - `api/routers/efficacy.py` (~1474 lines)
+  - `api/routers/myeloma.py` (547 lines)
+  - Evidence legacy (if any large `evidence.py` present)
+- Strategy (do not break API paths):
+  1) Create package `api/routers/evidence/` (done for literature); create modules `clinvar.py`, `fusion.py` (exists), `rag.py`, etc.
+  2) Introduce thin `evidence_shim.py` that imports/aggregates `APIRouter`s and exposes the same routes.
+  3) In `main.py`, continue `include_router(evidence_shim.router, prefix="/api/evidence")` – no FE changes.
+  4) For `efficacy.py`: create `api/services/efficacy_orchestrator.py` (aggregation + lifts), `api/schemas/efficacy.py` (pydantic I/O), and `api/routers/efficacy/__init__.py` + `router.py` (thin endpoints that call orchestrator). Re‑export `router` to keep import path stable. Keep response shape identical.
+  5) For `myeloma.py`: split into `api/routers/myeloma/__init__.py`, `router.py` (endpoints only), `schemas.py` (I/O), `services.py` (business logic), `mappers.py` (dict shaping). Keep `router` re‑export in `__init__.py`.
+  6) For `insights.py`: extract Evo client/timeouts/retries into `api/services/insights_service.py`; add `api/schemas/insights.py`. Endpoints only validate input and enrich `provenance`.
+  7) For `datasets.py`: move extraction/benchmark execution into `api/services/datasets_service.py`; define `api/schemas/datasets.py` for `{ metrics, artifacts, coverage }` contract.
+  8) Cache: add `api/services/cache_service.py` with Redis/in‑proc LRU and `single_flight`; use in insights/efficacy/datasets; set `provenance.cache`.
+  9) `api/main.py`: keep app init, CORS, `include_router(...)`, `/healthz`; add middleware to attach `x-run-id` header.
+  10) Tests: after each extraction, run health and curl smoke; ensure JSON keys and arrays remain identical; only provenance gains `cache` and `run_id`.
+- Tests:
+```bash
+curl -sS :8000/api/efficacy/predict -X POST -d '{"mutations":[]}' -H 'Content-Type: application/json' | jq . # should remain identical before/after
+```
+
+### 8a) Frontend modularization (components)
+- Session
+  - New: `src/context/SessionContext.jsx` (sessionId/profile/saveItem + localStorage); wrap `App.jsx`.
+- Common
+  - Promote `vus/ProvenanceBar.jsx` → `components/common/ProvenanceBar.jsx`
+  - Promote `vus/CoverageChips.jsx` → `components/common/CoverageChips.jsx`
+  - New: `components/common/ProfileBadge.jsx`, `components/common/AsyncState.jsx`
+- Myeloma (WIWFM)
+  - Ensure container vs presentation split: `ProfileToggle.jsx`, `ResponseTable.jsx`, `SaveButton.jsx`, `EvidenceBadges.jsx`
+- VUS Explorer
+  - Keep `InsightChips.jsx` domain‑specific; reuse `ProvenanceBar`/`CoverageChips`; add “Add to Session” button wired to context
+- Dossier
+  - Split `TargetDossierDisplay.jsx` into `InsightsPanel.jsx`, `CohortSummaryPanel.jsx`, `ProvenancePanel.jsx`, optional `NotesPanel.jsx`
+- Cohort Lab
+  - Split into `ExtractForm.jsx`, `BenchmarkResults.jsx`, `ArtifactsList.jsx`, reuse `CoverageChips`
+- CRISPR Design
+  - Add `GuideDesignForm.jsx` (RUO banner) and `GuideCandidatesList.jsx` (sequence, GC, heuristic)
+
+### 8b) FE/BE contracts to preserve
+- Do not change endpoint paths or top‑level response keys.
+- Additions allowed: `provenance.cache`, `provenance.run_id`, `provenance.profile`.
+- FE should read `profile` from context and display in `ProvenanceBar`.
+
+## 9) Copy & slides harmonization
+- Ensure FE labels show “Research‑mode”, “Provenance”, and profile (Baseline/Richer/Fusion).
+- Remove overclaims; link endpoints in developer mode panel.
+- Sync `pitch_deck_core_product.mdc` topics with on‑screen copy.
+
+## 10) Acceptance (per demo)
+- WIWFM: Renders ranked drugs with `efficacy_score`, `confidence`, `evidence_tier`, `insights` chips; save works; profile visible.
+- VUS Explorer: Live insights for selected variant; fusion eligibility chip; “Add to Session” works; provenance visible.
+- Dossier: Insights + rationale + CohortSummary; add note to session; provenance.
+- Cohort Lab: Runs extract/benchmark; shows AUPRC/AUROC + artifact links; adds coverage chip into Dossier.
+- CRISPR Design: Generates guide candidates; RUO + safety banner; export JSON works.
+- Sessions/Caching: Repeated calls show `provenance.cache='hit'` and reload restores session.
+
+## 11) Smoke tests (copy/paste)
+```bash
+# Health & openapi
+curl -sS :8000/healthz | jq .ok
+curl -sS :8000/openapi.json | head -n1
+
+# Insights bundle
+for ep in predict_gene_essentiality predict_splicing_regulatory predict_protein_functionality_change predict_chromatin_accessibility; do
+  curl -sS -X POST :8000/api/insights/$ep -H 'Content-Type: application/json' -d '{"gene":"BRAF","chrom":"7","pos":140453136,"ref":"T","alt":"A"}' | jq '.provenance.method,.provenance.cache'
+done
+
+# Efficacy
+curl -sS -X POST :8000/api/efficacy/predict -H 'Content-Type: application/json' -d '{"mutations":[{"gene":"BRAF","hgvs_p":"V600E","chrom":"7","pos":140453136,"ref":"T","alt":"A"}],"options":{"adaptive":true}}' | jq '.drugs[0].insights,.confidence'
+
+# Datasets
+curl -sS -X POST :8000/api/datasets/extract_and_benchmark -H 'Content-Type: application/json' -d '{"study":"ov_tcga_pan_can_atlas_2018","mode":"extract_only"}' | jq '.metrics,.coverage.by_gene[0]'
+
+# Evidence
+curl -sS :8000/api/evidence/clinvar?q=BRAF%20V600E | jq '.summary'
+curl -sS :8000/api/fusion/coverage?gene=BRAF\&hgvs_p=V600E | jq '.covered'
+
+# Sessions
+sid=$(curl -sS -X POST :8000/api/sessions -H 'Content-Type: application/json' -d '{"anonymous_id":"dev-1"}' | jq -r .session_id)
+curl -sS -X POST :8000/api/sessions/append -H 'Content-Type: application/json' -d '{"session_id":"'"$sid"'","item":{"kind":"wiwfm","payload":{"ok":true},"run_id":"r1"}}' | jq .ok
+curl -sS :8000/api/sessions/$sid | jq '.items | length'
+```
+
+## 12) Rollback & safety
+- Keep all refactors behind re‑export shims; don’t change endpoint paths.
+- Commit in small steps; run smoke tests after each.
+- If upstream Evo is down: keep Baseline profile; return graceful errors with `provenance.fail_reason`.
+
+## 13) Timebox & deliverables
+- Day 1: Backend boot, Sessions API, cache service; health & smoke pass.
+- Day 2: WIWFM/VUS/Dossier wiring; ProvenanceBar; save to Session.
+- Day 3: Cohort Lab FE + coverage chip; CRISPR demo; docs and slide harmonization.
+- Deliverables: PR with BE/FE changes, demo video (2–3 min), and updated runbook.
+

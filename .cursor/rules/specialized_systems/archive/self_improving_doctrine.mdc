@@ -1,0 +1,234 @@
+---
+alwaysApply: false
+description: Self‑Improving Doctrine – Closed‑loop learning, benchmarks, and champion/challenger to continuously raise accuracy and confidence
+---
+
+# Self‑Improving Doctrine – How our system learns every week
+
+Goal: Turn every run (insights, efficacy, cohort benchmark) into data that improves the next run. Do it safely (RUO), transparently (provenance), and automatically (scheduled, profile‑aware), so investors see steady accuracy lifts while costs and risks are controlled.
+
+## Why this matters
+- Lift accuracy/confidence with proof: We already log AUROC/AUPRC to Supabase; institutionalize it so profiles compete and the best one wins with audit trails.
+- Lower risk/cost: Run controlled A/Bs (Baseline vs Richer S vs Fusion) on known cohorts before changing defaults.
+- Faster iteration: Every week the platform proposes changes backed by numbers, not anecdotes.
+
+## What “self‑improving” means here
+- Champion/Challenger profiles: Baseline (evo2_1b, delta‑only), Richer S (bounded multi/exon), Fusion (AM‑covered). The current champion is what production uses by default.
+- Evidence‑aware: Literature + cohort outcomes (from cBio Data Lab) provide lifts/penalties to confidence; improvements must hold with and without E.
+- Provenance‑first: All runs have run IDs, flags, and optional on‑chain attestations; decisions cite metrics, not opinions.
+
+## How the loop runs (weekly cadence)
+1) Select datasets
+   - Public: TCGA OV HRD, plus 1–2 additional studies per sprint via cBio Data Lab.
+   - Private/partner (when available): registered as hash‑only manifests.
+
+2) Run profiles in parallel
+   - Baseline, Richer S, Fusion across the same labeled cohorts.
+   - Scripts: use the benchmark runner and Evo profiles.
+   - Example:
+```bash
+source venv/bin/activate
+venv/bin/python [hrd_platinum_auprc.py](mdc:tools/benchmarks/hrd_platinum_auprc.py) \
+  --csv tools/benchmarks/data/hrd_tcga_ov_snv_labeled.csv \
+  --api_base http://127.0.0.1:8000 \
+  --out tools/benchmarks/artifacts/hrd_ov_baseline.json
+# repeat with profile flags toggled server‑side for Richer S / Fusion
+```
+
+3) Log metrics → Supabase
+   - AUROC, AUPRC, coverage (AM‑covered %, coord‑complete %), latency, $/1k variants, error rate.
+   - Per‑profile, per‑dataset; include run_id, git SHA, and timestamp.
+
+4) Decide champion
+   - Promotion rules (example):
+     - AUPRC lift ≥ +0.03 on ≥2 datasets OR AUROC lift ≥ +0.02 with no coverage/latency regressions >10%.
+     - No new safety/quality violations (spam‑safety flags, max calls, CORS/proxy, etc.).
+     - Confidence calibration stable (drift < 5%).
+
+5) Roll out safely
+   - Canary: enable new champion for 10–20% of WIWFM calls; watch error/latency/cost.
+   - Full: flip feature flag when guardrails hold; auto‑rollback if thresholds are exceeded.
+
+6) Record decision
+   - Write a brief “Champion Decision” record to Supabase (and optional on‑chain attestation) with links to artifacts and plots.
+
+## What we measure (beyond AUROC)
+- AUPRC (primary when class imbalance is strong)
+- Coverage (GRCh38 SNVs; AM‑covered subset)
+- Confidence distribution (shift, calibration snapshots)
+- Latency and $/1k variants (by profile)
+- Error rate and retriable failure rate
+- Fusion lift on AM‑covered subset vs overall lift
+
+## Data & tools
+- Cohorts: built via cBio Data Lab (see [cbio_data_lab.mdc](mdc:.cursor/rules/cbio_data_lab.mdc))
+- Benchmarks: [hrd_platinum_auprc.py](mdc:tools/benchmarks/hrd_platinum_auprc.py)
+- Profiles/Flags: documented in `evo_flags_and_profiles.mdc` (enable delta‑only, bounded multi/exon, Fusion)
+- Logging: Supabase metrics tables (AUROC/AUPRC/coverage/latency/cost/error per profile+dataset); attach run IDs & git SHAs
+
+## Redis accelerators (fast, cheap, reliable)
+- Profile‑segmented cache keys so A/B runs never contaminate each other:
+  - `insights:{variant_hash}:{profile}:v1`, `efficacy:{variant_hash}:{profile}:v1`, `feat:variant:{hash}:{profile}:v1`
+- Canary rollout flags (flip traffic without redeploys):
+  - `ff:profile:champion=baseline|richer|fusion`, `ff:canary:traffic_pct=0.2`
+- Single‑flight dedup + idempotency (repeatable, no duplicate spend):
+  - `lock:{cache_key}` short TTL; idempotency keys per payload to return the same result on retries
+- Rate‑limits per profile (budget safety during sweeps) and request collapsing for literature/providers
+- Background queue backed by Redis for slow providers (literature); keep HTTP paths snappy
+- Pub/Sub for real‑time progress in weekly runs:
+  - `events:bench:{job_id}`, `events:wiwfm:{run_id}` → dashboards subscribe for live updates
+- Vector memory (Redis Vector) for personalization A/B:
+  - `vec:ltm:user:{id}` and `ltm:user:{id}:profile` to tailor explanations; measure impact before promotion
+
+Env switches (demo → staged → prod)
+- `REDIS_URL` (Cloud/managed), `ENABLE_PUBSUB=1`, `ENABLE_VECTOR_LTM=0|1`
+- `FF_PROFILE_CHAMPION`, `FF_CANARY_TRAFFIC_PCT`
+- `CACHE_TTL_INSIGHTS`, `CACHE_TTL_EFFICACY`, `CACHE_TTL_LIT`
+
+## Experiment patterns we’ll reuse
+- Profile sweeps: Baseline vs Richer S vs Fusion on the same cohort; report lift and cost deltas.
+- Ablations: turn off literature or cohort gates to isolate sequence gains; re‑enable and check stability.
+- Calibration checks: track confidence drift; surface calibration snapshots in UIs (VUS/Dossier).
+
+## Guardrails (safety & cost)
+- Spam‑safety and call caps enforced; Fusion only for AM‑covered missense; strict GRCh38 normalization.
+- Timeouts, retries, and CORS handled (proxy option for ClinVar/AM).
+- RUO: results labeled “research‑mode”; no clinical claims; provenance + citations for auditability.
+
+## Frontend surfaces (so users feel the improvement)
+- VUS Explorer: profile toggles; Baseline vs Fusion mini‑compare; ProvenanceBar shows profile and run ID.
+- Dossier: provenance panel with methods, calibration snapshots, and recent benchmark notes.
+- Research Portal: Cohort Lab shows lift tables and links to artifacts; “last updated” badge.
+
+## Example Supabase payload (concept)
+```json
+{
+  "dataset": "tcga_ov_hrd",
+  "profile": "fusion",
+  "auprc": 0.532,
+  "auroc": 0.508,
+  "coverage": {"am": 0.42, "grch38_snvs": 0.88},
+  "latency_ms": 1420,
+  "cost_per_1k": 1.84,
+  "error_rate": 0.007,
+  "run_id": "eff-2025-09-01-abc123",
+  "git_sha": "abcdef1"
+}
+```
+
+## Automated weekly plan (cron or CI)
+1) Pull latest (pin git SHA); run cohort extract (if needed) → label → benchmark.
+2) Run all profiles; push metrics to Supabase; render a short report (md/pdf) with lifts and costs.
+3) If promotion rules met → set Redis canary flags (`ff:profile:champion`, `ff:canary:traffic_pct`) via PR/CI and notify Slack.
+4) After canary window passes → flip champion flag or auto‑rollback by key update; attest decision.
+
+## Acceptance
+- Weekly report shows AUROC/AUPRC lifts (or regressions) with costs and coverage; decision recorded with provenance.
+- UI reflects current champion; toggles work; Baseline vs Fusion compare matches the report.
+- Rollback works within a single deploy if guardrails trip.
+
+
+
+Goal: Turn every run (insights, efficacy, cohort benchmark) into data that improves the next run. Do it safely (RUO), transparently (provenance), and automatically (scheduled, profile‑aware), so investors see steady accuracy lifts while costs and risks are controlled.
+
+## Why this matters
+- Lift accuracy/confidence with proof: We already log AUROC/AUPRC to Supabase; institutionalize it so profiles compete and the best one wins with audit trails.
+- Lower risk/cost: Run controlled A/Bs (Baseline vs Richer S vs Fusion) on known cohorts before changing defaults.
+- Faster iteration: Every week the platform proposes changes backed by numbers, not anecdotes.
+
+## What “self‑improving” means here
+- Champion/Challenger profiles: Baseline (evo2_1b, delta‑only), Richer S (bounded multi/exon), Fusion (AM‑covered). The current champion is what production uses by default.
+- Evidence‑aware: Literature + cohort outcomes (from cBio Data Lab) provide lifts/penalties to confidence; improvements must hold with and without E.
+- Provenance‑first: All runs have run IDs, flags, and optional on‑chain attestations; decisions cite metrics, not opinions.
+
+## How the loop runs (weekly cadence)
+1) Select datasets
+   - Public: TCGA OV HRD, plus 1–2 additional studies per sprint via cBio Data Lab.
+   - Private/partner (when available): registered as hash‑only manifests.
+
+2) Run profiles in parallel
+   - Baseline, Richer S, Fusion across the same labeled cohorts.
+   - Scripts: use the benchmark runner and Evo profiles.
+   - Example:
+```bash
+source venv/bin/activate
+venv/bin/python [hrd_platinum_auprc.py](mdc:tools/benchmarks/hrd_platinum_auprc.py) \
+  --csv tools/benchmarks/data/hrd_tcga_ov_snv_labeled.csv \
+  --api_base http://127.0.0.1:8000 \
+  --out tools/benchmarks/artifacts/hrd_ov_baseline.json
+# repeat with profile flags toggled server‑side for Richer S / Fusion
+```
+
+3) Log metrics → Supabase
+   - AUROC, AUPRC, coverage (AM‑covered %, coord‑complete %), latency, $/1k variants, error rate.
+   - Per‑profile, per‑dataset; include run_id, git SHA, and timestamp.
+
+4) Decide champion
+   - Promotion rules (example):
+     - AUPRC lift ≥ +0.03 on ≥2 datasets OR AUROC lift ≥ +0.02 with no coverage/latency regressions >10%.
+     - No new safety/quality violations (spam‑safety flags, max calls, CORS/proxy, etc.).
+     - Confidence calibration stable (drift < 5%).
+
+5) Roll out safely
+   - Canary: enable new champion for 10–20% of WIWFM calls; watch error/latency/cost.
+   - Full: flip feature flag when guardrails hold; auto‑rollback if thresholds are exceeded.
+
+6) Record decision
+   - Write a brief “Champion Decision” record to Supabase (and optional on‑chain attestation) with links to artifacts and plots.
+
+## What we measure (beyond AUROC)
+- AUPRC (primary when class imbalance is strong)
+- Coverage (GRCh38 SNVs; AM‑covered subset)
+- Confidence distribution (shift, calibration snapshots)
+- Latency and $/1k variants (by profile)
+- Error rate and retriable failure rate
+- Fusion lift on AM‑covered subset vs overall lift
+
+## Data & tools
+- Cohorts: built via cBio Data Lab (see [cbio_data_lab.mdc](mdc:.cursor/rules/cbio_data_lab.mdc))
+- Benchmarks: [hrd_platinum_auprc.py](mdc:tools/benchmarks/hrd_platinum_auprc.py)
+- Profiles/Flags: documented in `evo_flags_and_profiles.mdc` (enable delta‑only, bounded multi/exon, Fusion)
+- Logging: Supabase metrics tables (AUROC/AUPRC/coverage/latency/cost/error per profile+dataset); attach run IDs & git SHAs
+
+## Experiment patterns we’ll reuse
+- Profile sweeps: Baseline vs Richer S vs Fusion on the same cohort; report lift and cost deltas.
+- Ablations: turn off literature or cohort gates to isolate sequence gains; re‑enable and check stability.
+- Calibration checks: track confidence drift; surface calibration snapshots in UIs (VUS/Dossier).
+
+## Guardrails (safety & cost)
+- Spam‑safety and call caps enforced; Fusion only for AM‑covered missense; strict GRCh38 normalization.
+- Timeouts, retries, and CORS handled (proxy option for ClinVar/AM).
+- RUO: results labeled “research‑mode”; no clinical claims; provenance + citations for auditability.
+
+## Frontend surfaces (so users feel the improvement)
+- VUS Explorer: profile toggles; Baseline vs Fusion mini‑compare; ProvenanceBar shows profile and run ID.
+- Dossier: provenance panel with methods, calibration snapshots, and recent benchmark notes.
+- Research Portal: Cohort Lab shows lift tables and links to artifacts; “last updated” badge.
+
+## Example Supabase payload (concept)
+```json
+{
+  "dataset": "tcga_ov_hrd",
+  "profile": "fusion",
+  "auprc": 0.532,
+  "auroc": 0.508,
+  "coverage": {"am": 0.42, "grch38_snvs": 0.88},
+  "latency_ms": 1420,
+  "cost_per_1k": 1.84,
+  "error_rate": 0.007,
+  "run_id": "eff-2025-09-01-abc123",
+  "git_sha": "abcdef1"
+}
+```
+
+## Automated weekly plan (cron or CI)
+1) Pull latest (pin git SHA); run cohort extract (if needed) → label → benchmark.
+2) Run all profiles; push metrics to Supabase; render a short report (md/pdf) with lifts and costs.
+3) If promotion rules met → create canary flag PR; notify Slack.
+4) After canary window passes → promote champion or auto‑rollback; attest decision.
+
+## Acceptance
+- Weekly report shows AUROC/AUPRC lifts (or regressions) with costs and coverage; decision recorded with provenance.
+- UI reflects current champion; toggles work; Baseline vs Fusion compare matches the report.
+- Rollback works within a single deploy if guardrails trip.
+

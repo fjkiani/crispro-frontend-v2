@@ -1,0 +1,292 @@
+---
+alwaysApply: false
+description: Confidence Lift Plan (Sept 2025) – Raise research‑mode confidence from ~0.5 → ~0.9 using S/P/E hardening, Evidence, Cohort overlays, Fusion gating, SAE, and calibration.
+globs: 
+---
+
+# Confidence Lift Plan (RUO)
+
+Goal: Raise displayed confidence on therapy fit (and related views) from ~0.45–0.51 to ≥0.85 median (target) with transparent levers, without inflating beyond evidence.
+
+## Why confidence was ~0.5
+- Sparse E (literature off, limited priors)
+- Conservative S defaults (delta‑only; bounded multi/exon)
+- No/limited cohort overlays and disease‑specific cues
+- Fusion not applied (coverage), or disabled
+- Generic calibration and conservative aggregation
+
+## Levers to move confidence (and why they’re defensible)
+- Evidence strength (E): ClinVar‑Strong + Literature + Pathway‑Aligned → promotions and lifts
+- Cohort overlays (C): aligned prevalence/metrics add real‑world context
+- Sequence (S) depth: bounded multi/exon + hotspot lifts; Fusion when eligible
+- Pathway (P) clarity: cleaner gene→pathway mapping, disease‑specific weights
+- Calibration & normalization: gene/disease snapshots → stable percentiles
+- SAE interpretability (roadmap): feature‑linked ‘why’ improves trust
+
+## Phased plan (8–10 weeks)
+
+### Phase 0 (Foundation, 1 week)
+- Turn on stable priors and provenance everywhere
+  - Evidence panel shows confidence, tier, badges, citations, run_id
+  - ClinVar proxy cached (72h); tier rules visible in tooltips
+- Normalize confidence scale and display
+  - Cap and bucket rules documented (e.g., clamp to [0.1,0.95])
+- KPIs & logs
+  - Capture pre‑/post lifts per route: median confidence, tier mix, error rates
+
+### Phase 1 (S/P hardening, 2 weeks)
+- Sequence
+  - Ensure bounded multi/exon profile is default‑safe; add hotspot lift (small)
+  - Maintain truncation gates; improve transcript pick heuristics
+- Pathway
+  - Extract and apply disease‑specific weights (MM/Melanoma/Ovarian v1)
+  - Make pathway contribution bars consistent and reproducible
+
+### Phase 2 (Evidence ON with guardrails, 2 weeks)
+- ClinVar‑Strong integration → tier promotions when aligned to pathway
+- Literature (providers w/ fallback, caching, timeouts) → small lifts only
+- Badges clearly surfaced; ‘why’ bullets concise; RUO posture
+
+### Phase 3 (Cohort overlays v1, 2 weeks)
+- Datasets → Extract/Benchmark → Overlay snippets on Pathway/Efficacy
+  - Show (n, prevalence, AUROC/AUPRC); provenance (run_id, study_id)
+- Apply modest confidence lifts (+0.05–0.12) only when alignment rules pass
+
+### Phase 4 (Fusion & coverage, 1 week)
+- Enable Fusion only with GRCh38 missense coverage (AM)
+- Label rows as ‘Fusion’ vs Baseline; add small confidence lift when consistent
+
+### Phase 5 (Calibration & SAE (roadmap), 2 weeks)
+- Gene/disease calibration snapshots; percentile normalization of S
+- SAE overlays for interpretability: feature‑linked ‘why’ lines (exon/TFBS/2° structure)
+- (Roadmap) Prompt safety hooks in Design; later, steering demos
+
+## Target metric shifts (research‑mode)
+- Median confidence: ~0.48 → ≥0.85 (with E + Cohort overlays + Fusion when eligible)
+- Tier promotions: Consider→Supported from ~10–20% to ~25–35% on aligned cases
+- Trials shortlist: consistent 50+ → ~5–12 with clear eligibility ‘why’ lines
+
+## Contracts to implement (BE/FE)
+- Efficacy result (unchanged): `drugs[*]` with `efficacy_score`, `confidence`, `evidence_tier`, `badges`, `insights`, `rationale`, `citations`, `provenance`
+- Evidence panel: confidence/tier/badges/citations/provenance with tier rules in tooltips
+- Cohort overlay: side panel `{ study, snippet(n,prevalence), metrics(AUROC/AUPRC), artifacts[], provenance }`
+- Fusion: `provenance.flags.fusionApplied = true` when used; label rows
+- Calibration snapshot: optional `{ percentile, z_score, method }` in `provenance`
+
+## Display rules (transparent to users)
+- Confidence composition (example weights; FE display only)
+  - Base from Efficacy orchestrator (S/P/E aggregate) → 0–1
+  - + Literature lift ≤ +0.05 when citations present & relevant
+  - + Cohort overlay lift ≤ +0.12 when aligned (rules pass)
+  - + Fusion lift ≤ +0.05 when consistent and labeled
+  - Clamp to [0.1, 0.95]; never show 1.0; floor Insufficient tiers at ≤0.4
+- Tier rules
+  - Supported: meaningful literature or ClinVar‑Strong + pathway alignment
+  - Consider: partial support; Insufficient: sparse/conflicting
+
+## Endpoints & wiring checklist
+- Insights: `/api/insights/predict_*` (4 chips) — Function/Reg/Essentiality/Chromatin
+- Efficacy: `/api/efficacy/predict` — table with S/P/E, chips, evidence
+- Evidence: `/api/evidence/clinvar`, optional literature service — badges & tier
+- Fusion: `/api/fusion/coverage` — gate Fusion eligibility
+- Datasets: `/api/datasets/extract_and_benchmark` — overlay snippet
+
+## Observability
+- Log per‑run: profile, disease, lifts applied (E/Lit/Cohort/Fusion), before/after confidence, tier changes
+- Weekly rollup: medians, tier distribution, error rates, cache hit, provider health
+
+## Risks & mitigations
+- Provider flakiness → timeouts/retries + cached priors; grey‑state panels
+- Over‑confidence → clamp, audited lifts, RUO labels, provenance
+- Compute cost (SAE/Fusion) → cache + eligibility gates; demo limits
+
+## Acceptance (definition of done)
+- Confidence medians ≥0.85 on canonical MM/Melanoma/Ovarian examples with E+Fusion (eligible)+Cohort overlays
+- Tier promotions visible and auditable; badges and citations present
+- Overlays render with provenance; exports available; RUO labels visible
+
+
+---
+
+# Detailed Work Plan (How‑To, Components, Owners)
+
+## Current stack (quick audit)
+- Backend (FastAPI): `efficacy.py`, `insights.py`, `evidence.py`, `fusion.py`, `datasets.py` (present); calibration snapshots (partial), SAE (roadmap)
+- Frontend (React/MUI): Evidence band (spec in `website_components_doctrine.mdc`), ProvenanceBar (present), chips (present), overlays (partial)
+- Services: Redis caching (doctrine), single‑flight (planned), Cohort Lab endpoints (present), KB (present)
+
+Note: This plan provides a “no‑Redis” execution path first. Caching/single‑flight are optional optimizations and can be added later without changing contracts.
+
+## Phase 0 – Foundation (Evidence Everywhere, Provenance, KPIs)
+1) Evidence panel baseline
+  - How: Ensure Efficacy response includes `citations[]` (fallback to empty), `badges[]`, `evidence_tier`, and `confidence`
+  - Files: `oncology-backend-minimal/api/routers/efficacy.py`, `.../evidence.py`
+  - FE: Implement `EvidenceBand.tsx` (confidence/tier/badges + tooltips) and mount on Efficacy/Pathway/Dossier
+  - Acceptance: Evidence band visible with RUO; tooltips for tier rules
+2) ClinVar caching & tier rules
+  - How: Cache key `evidence:clinvar:{chrom}:{pos}:{ref}:{alt}` TTL 72h; expose tier rules in response `provenance.tier_rules_version`
+  - Files: `evidence.py` (Redis client), `redis_doctrine.mdc`
+  - Acceptance: Repeated queries hit cache; tier tooltips show
+3) KPIs/logs
+  - How: Add per‑run log (profile, disease, base_confidence)
+  - Files: `efficacy.py` logging decorator
+  - Acceptance: Logs present; baseline medians captured
+
+## Phase 1 – S/P Hardening
+4) Sequence multi/exon default + hotspot lift
+  - How: Use multi/exon magnitude as default S; apply bounded hotspot bonus (e.g., +0.02–0.05) for known domains
+  - Files: `insights.py` (functionality), `efficacy.py` aggregation
+  - Acceptance: S stable across re‑runs; hotspot lift applied only when matched
+5) Pathway weights per disease (v1)
+  - How: Introduce weight tables for MM/Melanoma/Ovarian and load at startup
+  - Files: `efficacy.py` (pathway mapper), `api/resources/pathway_weights.json`
+  - Acceptance: Contribution bars reflect disease profile; mapping reproducible
+
+## Phase 2 – Evidence ON (with guardrails)
+6) Literature provider fallback (no‑Redis)
+  - How: Try PubMed → OpenAlex → S2 with strict timeouts/backoff; dedupe by title/DOI in‑memory per request; grey‑state when all providers fail
+  - Files: `evidence.py` literature client (timeouts=2–4s, retries=2, total cap ≤8s)
+  - Acceptance: Panel shows citations when providers available; grey‑state otherwise
+7) Modest lifts only
+  - How: Add lift function in FE display layer: `+≤0.05` when citations present & relevant
+  - Files: FE `EvidenceBand.tsx`; display‑only clamp
+  - Acceptance: Confidence lift visible and logged; clamps respected
+
+## Phase 3 – Cohort Overlays v1
+8) Extract & benchmark → overlay snippet
+  - How: Use `/api/datasets/extract_and_benchmark` to fetch `{ metrics, artifacts, coverage.by_gene[] }`; render `CohortContextPanel`
+  - Files: `datasets.py`; FE `CohortContextPanel.tsx`
+  - Acceptance: Side panel shows (n, prevalence, AUROC/AUPRC), artifacts links, provenance
+9) Alignment rules + lift
+  - How: Only apply +0.05–0.12 when overlay gene/pathway aligns with case; log lift with reason
+  - Files: `efficacy.py` (provenance.lifts), FE display clamp
+  - Acceptance: Lifts applied on aligned cases; logged
+
+## Phase 4 – Fusion & Coverage
+10) Fusion eligibility
+  - How: Call `/api/fusion/coverage`; if GRCh38 missense covered, run fusion path and label rows; add `+≤0.05` lift when consistent
+  - Files: `fusion.py`, `efficacy.py` fusion branch
+  - Acceptance: Fusion badge present when used; confidence logged with lift
+
+## Phase 5 – Calibration & SAE (Roadmap)
+11) Calibration snapshots
+  - How: Persist `{ percentile, z_score, method }` per gene/disease; embed in `provenance`
+  - Files: `insights.py` (calibration), `schemas/insights.py`
+  - Acceptance: Percentiles shown in rationale; S normalized
+12) SAE overlays & safety
+  - How: Surface SAE feature overlays on Insight/Pathway; implement prompt safety checks in Design
+  - Files: `sae_concept.mdc`, planned `sae.py`; FE `FeatureChips.tsx`
+  - Acceptance: Feature chips and ‘why’ lines render; safety warnings in Design
+
+## Cross‑cutting – Caching, Single‑flight, Observability
+13) (Optional later) Caching & single‑flight
+  - How: Defer. Execute without Redis first; keep contracts stable to add later.
+  - Acceptance: N/A in current sprint
+14) Observability
+  - How: Per‑run log lifts (E/Lit/Cohort/Fusion), before/after confidence; weekly rollup job
+  - Files: `logging_middleware.py` (new) or within routers
+  - Acceptance: Dashboard/summary available; anomalies flagged
+
+# Test Plan (Matrix & Procedures)
+
+## Smoke tests (per endpoint)
+- insights/*: four chips return 200 with plausible scores
+- efficacy/predict: returns `drugs[]` with required fields
+- evidence/clinvar: caches; tier rules visible
+- fusion/coverage: gating works (covered vs not)
+- datasets/extract_and_benchmark: returns metrics, artifacts, coverage
+
+## Scenario matrix (Baseline → +E → +Fusion → +Cohort)
+- MM: BRAF V600E; NRAS Q61; TP53/17p case
+- Melanoma: BRAF V600E; NRAS Q61
+- Ovarian: BRCA1/2 HRD case
+For each: record confidence, tier, lifts applied, time, errors
+
+## Acceptance checks (automated where possible)
+- Median confidence ≥0.85 with full stack; tier promotions increase; overlays render with provenance; exports work; RUO visible
+
+# Ownership & Handoffs
+- BE Lead: implement caching/single‑flight, fusion gating, calibration endpoints, cohort overlay contracts
+- FE Lead: EvidenceBand, CohortContextPanel, Fusion/Lit banners, clamps, logs
+- Data Agent: pathway weights by disease; calibration snapshots; cohort mapping
+- Evidence Agent: literature providers, dedupe, relevance
+- QA Agent: smoke tests, scenario runs, weekly rollups
+
+
+## Agent Workstreams (detailed plan)
+
+### Evidence Agent
+- Backend
+  - Implement literature fallback client in `evidence.py` (PubMed→OpenAlex→S2); strict timeouts (2–4s), retries (≤2), total cap ≤8s; per‑request dedupe by title/DOI
+  - Extend response to include `citations[]`, `badges[]`, and `provenance.tier_rules_version`
+  - Add grey‑state when providers unavailable; do not block the table
+- Frontend
+  - Build `EvidenceBand.tsx` tooltips for tier rules; surface badges (Guideline/RCT/ClinVar‑Strong/Pathway‑Aligned)
+  - Display‑only lift `+≤0.05` when citations present & relevant; clamp ≤0.95
+- Tests / Acceptance
+  - Unit: provider timeouts/backs‑off; dedupe; grey‑state
+  - Manual: citations render on Efficacy/Pathway; lifts logged; response time within cap
+
+### Cohort Agent
+- Backend
+  - Finalize `/api/datasets/extract_and_benchmark` shape: `{ metrics, artifacts, coverage.by_gene[], provenance }`
+  - Implement chunked POST for large filters (when using GDC path); add retries/backoff
+  - Return `coverage.by_gene` suitable for overlay alignment (gene, n, prevalence)
+- Frontend
+  - Build `CohortContextPanel.tsx` (study, snippet, metrics, artifacts, provenance)
+  - Overlay mapping rules; apply lift only when aligned (+0.05–0.12)
+- Tests / Acceptance
+  - Endpoint smoke; panel renders with real study; lift logs include `reason`
+
+### Pathway/Mapping Agent
+- Backend
+  - Create `api/resources/pathway_weights.json` for MM/Melanoma/Ovarian
+  - Integrate disease‑specific weights in `efficacy.py` pathway mapper; stabilize top‑3 bars
+- Tests / Acceptance
+  - Deterministic mapping across runs; “pathway_impact” buckets (Low/Moderate/High/Critical) defined and used
+
+### Fusion Coverage Agent
+- Backend
+  - Enforce GRCh38 missense gating via `/api/fusion/coverage`; run fusion path only when covered
+  - Label rows with Fusion; record `provenance.flags.fusionApplied = true`
+- Tests / Acceptance
+  - Covered vs not‑covered branches; Fusion badge visible; lift `+≤0.05` only when consistent
+
+### Drug Catalog Agent
+- Data
+  - Maintain `drug_catalog.json` mapping disease→class→recommended agents/combos
+    - Examples: Melanoma BRAF/MEK combos; Ovarian PARP agents; MM PI/IMiD/Anti‑CD38
+- Backend
+  - Add lightweight resolver in `efficacy.py` to populate `prediction.recommendations[]` by top class + disease
+- Tests / Acceptance
+  - Recommendations appear for top class; provenance notes catalog version
+
+### Calibration Agent
+- Backend
+  - Compute and persist `{ percentile, z_score, method }` snapshots per gene/disease
+  - Normalize S to 0–1; include calibration in `provenance`
+- Tests / Acceptance
+  - Rationale shows percentiles; sequence_score consistent across runs
+
+### Frontend Agent
+- Components
+  - Implement `EvidenceBand.tsx`, `CohortContextPanel.tsx`, Fusion/Lit banners, clamps
+  - Add Dossier export (JSON/CSV) including citations, badges, provenance, overlays
+- Telemetry
+  - Log per‑run: before/after confidence, lifts applied, tier changes
+- Tests / Acceptance
+  - Visual checks for chips, badges, overlays, banners; export correctness
+
+### QA Agent
+- Harness
+  - Build scenario runner for the test matrix: Baseline → +Evidence → +Fusion → +Cohort (MM/Melanoma/Ovarian)
+  - Capture medians, tier mix, error codes, runtime; generate weekly rollup
+- Acceptance
+  - Confirms medians ≥0.85 with full stack on canonical cases; artifacts exported
+
+### KB Agent (optional but recommended)
+- Content
+  - Curate helper copy (tooltips), drug class descriptions, common pathway “why” lines
+  - Store catalog provenance and links (guidelines, registry pages)
+- Acceptance
+  - Consistent helper text across Evidence/Pathway/Efficacy; fewer empty tooltips

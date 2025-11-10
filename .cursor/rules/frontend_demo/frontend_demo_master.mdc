@@ -1,0 +1,435 @@
+---
+alwaysApply: true
+description: Frontend & Demo Master Doctrine - Complete consolidation of all frontend, demo, and website files
+---
+
+# 🎨 FRONTEND & DEMO MASTER DOCTRINE
+
+**Last Updated:** 2025-01-XX  
+**Status:** ✅ **CONSOLIDATED SOURCE OF TRUTH**  
+**Consolidated From:**
+- `demo_completion_agent_plan.mdc` - Demo completion execution plan
+- `website_components_doctrine.mdc` - Website components and flows
+- `website_excerpt_wiwfm_confidence.mdc` - WIWFM confidence website copy
+- `use_case_slides_with_live_json.mdc` - Use-case slides with live JSON
+- `business_value_slide.mdc` - Business value slide template
+- `pitch_deck_core_product.mdc` - Core product pitch deck
+- Additional slide deck and presentation files
+
+---
+
+## 📚 TABLE OF CONTENTS
+
+1. [Executive Summary](#executive-summary)
+2. [Demo Completion Plan](#demo-completion-plan)
+3. [Website Components & Flows](#website-components--flows)
+4. [WIWFM Confidence Story](#wiwfm-confidence-story)
+5. [Use-Case Slides & Presentations](#use-case-slides--presentations)
+6. [Business Value & Pitch Deck](#business-value--pitch-deck)
+7. [References to Archived Files](#references-to-archived-files)
+
+---
+
+## 🎯 EXECUTIVE SUMMARY
+
+### **Mission**
+Deliver demo-ready frontend experiences with live API integration, comprehensive website components, and presentation-ready slide decks with live JSON outputs.
+
+### **Core Principles**
+- **Live API Integration**: Replace all mocks with real backend calls
+- **Provenance Tracking**: Complete audit trails with run IDs and profiles
+- **Research Use Only**: All outputs clearly labeled RUO
+- **Transparent Confidence**: All rationale and evidence sources visible
+
+---
+
+## 🎬 DEMO COMPLETION PLAN
+
+### **High-Level Order of Operations**
+1. Backend boot & health
+2. Sessions API (BE)
+3. Cache service + single-flight
+4. Evidence proxies + timeouts
+5. Cohort Lab – backend contract
+6. Frontend wiring
+7. Knowledge Base (optional but valuable)
+8. Safe refactors for monoliths
+9. Copy & slides harmonization
+10. Acceptance (per demo)
+11. Smoke tests (copy/paste)
+12. Rollback & safety
+13. Timebox & deliverables
+
+### **Backend Boot & Health**
+- Fix `api/main.py` boot: CORS for FE origin, `/healthz`, attach `x-run-id` header
+- Health endpoint: `GET /healthz` returns `{ status: "ok", version: "..." }`
+- CORS configuration for frontend origin
+
+### **Sessions API (BE)**
+- **Endpoints**:
+  - `POST /api/sessions` - Create new session
+  - `GET /api/sessions/{session_id}` - Get session data
+  - `GET /api/sessions` - List sessions
+  - `POST /api/sessions/{session_id}/items` - Append to session
+  - `GET /api/sessions/{session_id}/items` - Get session items
+- **Idempotency**: Via `x-idempotency-key` header
+- **Status**: ✅ Complete and operational
+
+### **Cache Service + Single-Flight**
+- **Location**: `api/services/cache_service.py`
+- **Features**:
+  - Redis/LRU caching
+  - Single-flight protection prevents duplicate concurrent requests
+  - TTL-based expiration
+  - Graceful degradation when Redis unavailable
+- **Integration**: Wire into `insights`, `efficacy`, `datasets`
+
+### **Evidence Proxies + Timeouts**
+- Add timeouts/retries and `provenance.provider/cache` to ClinVar/Fusion endpoints
+- Confirm CORS/proxy works in prod
+- Literature off by default for deterministic demos
+
+### **Cohort Lab – Backend Contract**
+- Ensure `/api/datasets/extract_and_benchmark` returns `{ metrics, artifacts, coverage.by_gene[], run_id, provenance.profile }`
+- Frontend renders metrics + artifacts
+- Add "Add Cohort Context" to Dossier
+
+### **Frontend Wiring**
+- **Myeloma Digital Twin**: Wire to live `/api/efficacy/predict`
+- **Target Dossier**: Replace mocks with live insights endpoints
+- **VUS Explorer**: Wire insights bundle + ClinVar + Fusion coverage
+- **Evidence Intelligence**: Show provenance, badges, citations
+- **ProvenanceBar**: Display run_id, profile, mode
+
+### **Knowledge Base (Optional but Valuable)**
+- KB hooks with TTL caching
+- KB components (KbHelperTooltip, KbCoverageChip, KbProvenancePanel)
+- Integration with existing components
+
+### **Safe Refactors for Monoliths**
+- **Frontend Modularization**: Extract reusable components
+- **FE/BE Contracts**: Preserve all API contracts during refactoring
+- **Component Reusability**: DRY principles, generic components
+
+### **Copy & Slides Harmonization**
+- Enforce RUO language
+- Replace "structural validation/proves" with "structural assessment (roadmap)"
+- Remove performance/royalty overclaims
+- Align endpoints and demo flow
+
+### **Acceptance Criteria (Per Demo)**
+- All endpoints return 200s
+- Live API calls work end-to-end
+- Provenance tracking complete
+- RUO labels visible
+- No console errors
+
+### **Smoke Tests (Copy/Paste)**
+```bash
+# Health & openapi
+curl http://127.0.0.1:8000/healthz
+curl http://127.0.0.1:8000/openapi.json
+
+# Insights bundle
+curl -X POST http://127.0.0.1:8000/api/insights/predict_gene_essentiality ...
+
+# Efficacy
+curl -X POST http://127.0.0.1:8000/api/efficacy/predict ...
+
+# Datasets
+curl -X POST http://127.0.0.1:8000/api/datasets/extract_and_benchmark ...
+
+# Evidence
+curl http://127.0.0.1:8000/api/evidence/clinvar?gene=BRAF&variant=V600E
+
+# Sessions
+curl -X POST http://127.0.0.1:8000/api/sessions ...
+```
+
+---
+
+## 🏗️ WEBSITE COMPONENTS & FLOWS
+
+### **Information Architecture (IA)**
+- **Landing Page**: Capability cards, product overview, RUO disclaimer
+- **Product Pages**: WIWFM, VUS Explorer, Cohort Lab, Evidence Intelligence
+- **Research Portal**: Dataset extraction, benchmarking, artifacts
+- **Command Center**: Population-level analysis, strategic priorities
+
+### **Core UI Components**
+
+#### **Capability Cards (Landing)**
+- **Format**: Card-based layout with icons, titles, descriptions
+- **Content**: 
+  - WIWFM (Will It Work For Me)
+  - VUS Explorer
+  - Cohort Lab
+  - Evidence Intelligence
+  - CRISPR Design (Demo)
+- **Features**: Hover states, click-through to product pages
+
+#### **Product Capability Cards**
+- **Structure**: Icon, title, description, key metrics, CTA button
+- **Metrics**: Live API metrics when available (e.g., "95% confidence", "0.85 AUROC")
+- **Badges**: RUO, Demo, Beta labels
+
+#### **Evidence Chips**
+- **Format**: Small chips with icons and labels
+- **Types**: 
+  - RCT (Randomized Controlled Trial)
+  - Guideline (Clinical Guideline)
+  - ClinVar-Strong (ClinVar Strong Evidence)
+  - PathwayAligned (Pathway Alignment)
+- **Color Coding**: Green (high confidence), Yellow (moderate), Gray (low)
+
+#### **Coverage Chips**
+- **Types**: 
+  - ClinVar (ClinVar coverage)
+  - AlphaMissense (Fusion Engine coverage)
+  - Cohort (Cohort coverage)
+- **Purpose**: Show data availability and context
+
+### **Flows (End-to-End)**
+
+#### **WIWFM Flow**
+1. User inputs variants → Validation (GRCh38)
+2. Call `/api/efficacy/predict` → Get ranked drugs
+3. Display per-drug table with confidence, tier, badges, insights
+4. Show ProvenanceBar with run_id and profile
+5. Optional: Save to Session
+
+#### **VUS Explorer Flow**
+1. User pastes/uploads variants → Parse and validate
+2. Call insights bundle endpoints → Get 4 chips
+3. Call ClinVar lookup → Get prior classification
+4. Call Fusion coverage → Check eligibility
+5. Display chips + coverage + WIWFM button
+6. Show ProvenanceBar
+
+#### **Cohort Lab Flow**
+1. User selects study → Extract dataset
+2. Run benchmark → Get metrics (AUPRC/AUROC)
+3. Display metrics + artifacts + lift table
+4. Optional: Add cohort context to Dossier
+
+---
+
+## 📖 WIWFM CONFIDENCE STORY
+
+### **Will It Work For Me? A Simple, Honest Answer – With Confidence**
+
+#### **How It Works (In Human Terms)**
+1. **Sequence Analysis**: We look at how your genetic variant changes protein function
+2. **Pathway Mapping**: We check if your variant affects pathways that the drug targets
+3. **Evidence Review**: We search medical literature and databases for similar cases
+4. **Confidence Calculation**: We combine all signals to give you a confidence score (0-100%)
+
+#### **What You Get (The Output)**
+- **Per-Drug Ranking**: Drugs ranked by predicted efficacy (0-1 score)
+- **Confidence Score**: How confident we are in the prediction (0-1)
+- **Evidence Tier**: Supported/Consider/Insufficient based on evidence strength
+- **Badges**: RCT, Guideline, ClinVar-Strong, PathwayAligned when applicable
+- **Insights**: Functionality, Chromatin, Essentiality, Regulatory scores
+- **Rationale**: Plain-language explanation of why we think this will/won't work
+
+#### **Why This Is Different**
+- **Transparent**: We show you exactly how we calculated confidence
+- **Evidence-Backed**: Every recommendation backed by literature and databases
+- **Auditable**: Complete provenance tracking (run_id, profile, methods)
+- **Research Use Only**: Clearly labeled for research, not clinical decision-making
+
+#### **Multiple Myeloma Example**
+- **Input**: BRAF V600E mutation
+- **Output**: 
+  - BRAF inhibitor: 0.85 confidence (Supported tier, PathwayAligned badge)
+  - MEK inhibitor: 0.72 confidence (Consider tier)
+  - Proteasome inhibitor: 0.45 confidence (Insufficient tier)
+- **Rationale**: "BRAF V600E is a known hotspot mutation that activates the MAPK pathway. BRAF inhibitors directly target this pathway, supported by multiple clinical trials."
+
+#### **Why It Matters for Oncology**
+- **Personalized Medicine**: Recommendations based on your specific genetic profile
+- **Transparent Decision-Making**: See exactly why we recommend certain drugs
+- **Research Acceleration**: Faster hypothesis validation and treatment selection
+- **Evidence Integration**: Literature + ClinVar + pathway alignment for comprehensive assessment
+
+---
+
+## 📊 USE-CASE SLIDES & PRESENTATIONS
+
+### **Slide Content Pattern**
+- **Title Slide**: Use case name + key metric
+- **Problem Statement**: Clinical challenge or research question
+- **Our Approach**: How S/P/E framework addresses the problem
+- **Live JSON Output**: Actual API response (screenshot or embedded)
+- **Results**: Key findings, confidence scores, evidence tiers
+- **Impact**: Clinical/research implications
+- **RUO Disclaimer**: Research Use Only clearly labeled
+
+### **Canonical JSON Schema (Backend Responses)**
+```json
+{
+  "drugs": [
+    {
+      "name": "DrugName",
+      "efficacy_score": 0.23,
+      "confidence": 0.51,
+      "evidence_tier": "consider",
+      "badges": ["PathwayAligned"],
+      "insights": {
+        "functionality": 0.6,
+        "chromatin": 0.5,
+        "essentiality": 0.35,
+        "regulatory": 0.12
+      },
+      "rationale": [
+        "S: calibrated sequence impact ...",
+        "P: pathway mapping ...",
+        "E: literature/ClinVar ..."
+      ],
+      "citations": [],
+      "provenance": {
+        "run_id": "...",
+        "profile": "baseline"
+      }
+    }
+  ]
+}
+```
+
+### **Example Live API Calls**
+```bash
+# Multiple Myeloma WIWFM
+curl -X POST http://127.0.0.1:8000/api/efficacy/predict \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model_id":"evo2_1b",
+    "mutations":[{"gene":"BRAF","hgvs_p":"V600E","chrom":"7","pos":140453136,"ref":"T","alt":"A"}],
+    "options":{"adaptive":true,"ensemble":true}
+  }'
+```
+
+### **Multiple Myeloma (MM) – What We Determined**
+- **Current Capability**: Orchestrate multi-signal efficacy for MM
+- **Output**: Per-drug `efficacy_score`, `confidence`, `evidence_tier`, `badges`, `insights`
+- **Ranking**: Drug classes (BRAF inhibitor, MEK inhibitor, IMiD, proteasome inhibitor, Anti-CD38)
+- **Current Observed Outcome**: 
+  - Insights: functionality≈0.6, chromatin≈0.6, essentiality≈0.35, regulatory≈0.1
+  - Per-drug `confidence` around ~0.45–0.51, `efficacy_score` ~0.17–0.26
+  - `evidence_tier` typically "consider" due to sparse literature returns
+
+### **How to Explain Efficacy and Confidence in Slides**
+- **Efficacy Score (0-1)**: How likely the drug is to work based on variant-pathway alignment
+- **Confidence (0-1)**: How confident we are in the prediction (based on evidence strength)
+- **Evidence Tier**: Supported (strong evidence), Consider (moderate evidence), Insufficient (weak evidence)
+- **Badges**: Visual indicators of evidence quality (RCT, Guideline, ClinVar-Strong, PathwayAligned)
+
+### **CrisPRO In-Silico for Drug Development (Slide Framing)**
+- **Positioning**: "We predict drug efficacy before you synthesize the molecule"
+- **Value Proposition**: "De-risk drug development with AI-powered efficacy prediction"
+- **Key Metrics**: Confidence scores, evidence tiers, pathway alignment
+- **Use Cases**: Drug repurposing, combination therapy design, biomarker discovery
+
+### **Co-Pilot (RAG) – What to Say**
+- **Capability**: AI assistant that helps you navigate the platform
+- **Features**: Natural language queries, context-aware suggestions, session management
+- **Integration**: Available across all product pages
+
+### **Slide Authoring Checklist**
+- [ ] Live JSON output included (screenshot or embedded)
+- [ ] RUO disclaimer visible
+- [ ] Provenance information (run_id, profile) shown
+- [ ] Evidence badges and tiers explained
+- [ ] Confidence scores contextualized
+- [ ] No performance/royalty overclaims
+
+---
+
+## 💼 BUSINESS VALUE & PITCH DECK
+
+### **Business Value Slide Template**
+
+#### **Market Gaps**
+- **Problem**: >90% failure rate of clinical trials
+- **Cost**: $2.6B average cost per approved drug
+- **Time**: 10-15 years from discovery to approval
+- **Root Cause**: Insufficient target validation and efficacy prediction
+
+#### **Our Approach**
+- **AI-Powered Prediction**: Multi-modal S/P/E framework
+- **In Silico Validation**: Predict efficacy before lab work
+- **Transparent Confidence**: Evidence-backed recommendations
+- **Research Acceleration**: Faster hypothesis validation
+
+#### **Impact**
+- **De-Risk Development**: Identify promising targets early
+- **Cost Savings**: Reduce failed experiments
+- **Time Savings**: Accelerate research cycles
+- **Competitive Advantage**: First-in-class genomic AI platform
+
+#### **Competitors**
+- **Traditional Tools**: Limited to single-metric approaches
+- **Our Advantage**: Multi-modal validation (S/P/E + insights)
+- **Differentiation**: Transparent confidence, evidence integration, provenance tracking
+
+#### **Moats**
+- **Technical Moat**: Proprietary S/P/E framework, multi-modal integration
+- **Data Moat**: Comprehensive evidence databases, pathway knowledge
+- **Platform Moat**: End-to-end workflow from variant to recommendation
+
+#### **Revenue Model**
+- **Tier 1**: Platform Royalty (2-5% perpetual royalty on licensing revenue)
+- **Tier 2**: Co-Inventor Ownership (10-30% patent ownership)
+- **Tier 3**: Service + Royalty Hybrid (upfront fee + backend royalty)
+
+### **Core Product Pitch Deck**
+
+#### **Slide Outline**
+1. **Title**: "CrisPRO: AI-Powered Precision Medicine Platform"
+2. **Problem**: Clinical trial failure rates and cost
+3. **Solution**: S/P/E framework with transparent confidence
+4. **Technology**: Multi-modal AI integration (Evo2, AlphaMissense, literature)
+5. **Use Cases**: Multiple Myeloma, VUS triage, drug repurposing
+6. **Demo**: Live API call with actual results
+7. **Business Model**: Platform royalty + co-inventor ownership
+8. **Competitive Advantage**: Multi-modal validation, transparent confidence
+9. **Roadmap**: Structural validation, expanded drug classes, clinical integration
+10. **Call to Action**: Partner with us for research acceleration
+
+#### **Key Messages**
+- **For Researchers**: "Accelerate your hypothesis validation with AI-powered efficacy prediction"
+- **For Biotechs**: "De-risk drug development with transparent, evidence-backed recommendations"
+- **For Clinicians**: "Research-grade tools for personalized medicine (RUO)"
+
+---
+
+## 📖 REFERENCES TO ARCHIVED FILES
+
+All original files have been preserved in `frontend_demo/archive/`:
+
+- **Demo Completion**: `archive/demo_completion_agent_plan.mdc`
+  - Original: Complete demo completion execution plan
+  
+- **Website Components**: `archive/website_components_doctrine.mdc`
+  - Original: Website components, flows, and information architecture
+  
+- **WIWFM Confidence**: `archive/website_excerpt_wiwfm_confidence.mdc`
+  - Original: WIWFM confidence website copy and plain-language story
+  
+- **Use-Case Slides**: `archive/use_case_slides_with_live_json.mdc`
+  - Original: Use-case slides with live JSON outputs
+  
+- **Business Value**: `archive/business_value_slide.mdc`
+  - Original: Business value slide template
+  
+- **Pitch Deck**: `archive/pitch_deck_core_product.mdc`
+  - Original: Core product pitch deck outline
+
+---
+
+## ⚔️ DOCTRINE STATUS: ACTIVE
+
+**LAST UPDATED:** 2025-01-XX  
+**APPLIES TO:** All frontend development, demo preparation, and presentation materials  
+**ENFORCEMENT:** Mandatory across all development and operational activities
+
+**This master doctrine represents the complete consolidation of all frontend and demo knowledge. Every component, flow, and presentation pattern is preserved and organized for maximum clarity and actionability.**

@@ -1,0 +1,166 @@
+---
+alwaysApply: false
+description: Metastasis Assess – end-to-end implementation plan (BE/FE/cBio extraction, storage, metrics) for another agent
+---
+
+# Metastasis Assess – Implementation Doctrine (Agent‑Executable)
+
+Purpose: Turn the high‑level plan in [use-cases/metastatic-intervention.md](mdc:.cursor/rules/use-cases/metastatic-intervention.md) into a concrete, modular build across backend, frontend, data extraction, storage, metrics, and tests. Non‑breaking, RUO posture, provenance everywhere.
+
+## Backend – API surface and modules
+
+Endpoints (new):
+- `POST /api/metastasis/assess`
+  - Input: `{ mutations:[{ gene, hgvs_p?, chrom?, pos?, ref?, alt? }], disease?, options?, api_base? }`
+  - Output: `{ overall_risk, steps:[{ name, score, rationale[] }], drivers:[{ gene, variant, step_links[] }], cohort_context?, provenance }`
+
+Router package:
+```
+oncology-coPilot/oncology-backend-minimal/api/routers/metastasis/
+  __init__.py            # re-export router
+  router.py              # thin FastAPI endpoints
+```
+
+Services (new):
+```
+oncology-coPilot/oncology-backend-minimal/api/services/
+  metastasis_ruleset.py  # load/validate rules mapping insights→steps (JSON/YAML)
+  metastasis_orchestrator.py # compose insights, rules, cohort context → report
+  cohort_context_client.py   # read coverage.by_gene from KB or datasets API
+  insights_client.py         # reuse existing; add wrapper for bundle per variant
+  cache_service.py           # reuse; add keys for metastasis assess
+```
+
+Schemas (optional pydantic, doc‑strict):
+```
+oncology-coPilot/oncology-backend-minimal/api/schemas/metastasis.py
+  class AssessRequest(BaseModel): ...
+  class AssessResponse(BaseModel): ...
+```
+
+Config and assets:
+- `oncology-coPilot/oncology-backend-minimal/api/config/metastasis_rules.json`
+  - Example entry: `{ "step": "EMT/Invasion", "signals": [{ "pathway":"MAPK", "lift":0.2, "threshold":0.6, "reason":"MAPK activation proxy" }], "caps": {"per_step":0.6} }`
+
+Orchestrator flow (metastasis_orchestrator.py):
+1) Validate request; attach `run_id`, `profile` from flags; set defaults.
+2) For each mutation, call insights endpoints (functionality, regulatory, essentiality, chromatin) via `insights_client` with cache and timeouts.
+3) Map per‑variant insights to step lifts using `metastasis_ruleset` (deterministic rules):
+   - Example: functionality ≥ 0.6 for `KRAS/BRAF/NRAS` → `EMT/Invasion += 0.15` with rationale.
+4) Aggregate lifts across variants; enforce caps per step and overall.
+5) Fetch cohort context (optional):
+   - If `disease` provided, query KB or `datasets/extract_and_benchmark` for `coverage.by_gene` and apply modest priors (e.g., +0.05 when enriched); store separately under `cohort_context`.
+6) Assemble response: `steps[]`, `overall_risk` (bounded sum or softmax), `drivers[]`, `rationale[]`, `provenance` (methods, flags, cache hits, timings).
+7) Never raise on downstream failure; include `provenance.fail_reason` and continue with neutral lifts.
+
+Cache keys:
+- `metastasis:{profile}:{gene}:{hgvs_p}` or `{profile}:{gene}:{chrom}:{pos}:{ref}:{alt}` when `hgvs_p` missing; include feature flags that affect insights.
+
+Timeouts:
+- insights each ≤ 40s; cohort context ≤ 20s; total ≤ 120s; retries=1 with budget.
+
+Smoke test (curl):
+```
+curl -sS -X POST :8000/api/metastasis/assess -H 'Content-Type: application/json' \
+  -d '{"mutations":[{"gene":"BRAF","hgvs_p":"V600E","chrom":"7","pos":140453136,"ref":"T","alt":"A"}],"disease":"MM","api_base":"http://127.0.0.1:8000"}' | jq
+```
+
+## Frontend – Components and wiring
+
+New page and components:
+```
+oncology-coPilot/oncology-frontend/src/pages/MetastasisReport.jsx
+oncology-coPilot/oncology-frontend/src/components/metastasis/
+  ReportPanel.jsx            # overall risk + per-step bars
+  StepBreakdown.jsx          # list of steps with score, rationale
+  DriverLinks.jsx            # drivers and their linked steps
+  CohortContextPanel.jsx     # shows by_gene coverage (optional)
+  ProvenanceBar.jsx          # reuse common; show run_id/profile/cache
+```
+
+Wiring:
+- Add a button in `VUS Explorer` and `TargetDossier` to “Assess Metastatic Potential” → navigates to `MetastasisReport` with current variant list.
+- Report page calls `POST /api/metastasis/assess`; displays results with RUO copy and provenance.
+- Use existing `CoverageChips` and `ProvenanceBar` components where possible; promote to `components/common` if needed.
+
+UX/Copy (RUO):
+- “Research‑mode assessment. Not for clinical use.”
+- “Lifts reflect proxy signals (insights + cohort context). See provenance for details.”
+
+## cBioPortal / datasets – extraction and reuse
+
+Backend integration paths:
+1) KB snapshot path (fastest):
+   - Extend `oncology-coPilot/oncology-backend-minimal/api/routers/kb.py` to expose `GET /api/kb/items?type=coverage.by_gene&disease=MM`.
+   - Store curated `coverage.by_gene` JSON artifacts in `knowledge_base/cohorts/` with provenance.
+2) Live extraction path (slower):
+   - Reuse `POST /api/datasets/extract_and_benchmark` with `mode=extract_only` to fetch study data; derive `coverage.by_gene` and cache artifact paths.
+
+Artifacts and storage:
+- Store derived `coverage.by_gene.json` under `results/cohorts/{study}/{timestamp}/` with a small manifest `{ study, disease, filters, generated_at }`.
+- Optional Supabase logging of extraction runs (use `logging_service.py`) for traceability.
+
+## Metrics and observability
+
+Runtime metrics:
+- per‑step: mean lift, cap usage; #signals contributing; cache hit ratio.
+- per‑request: total latency; subcall timings; error counts.
+
+Product metrics:
+- % calls with cohort context present; diseases requested; top genes contributing to steps.
+
+Surfacing:
+- Add simple `/api/metastasis/assess/metrics` returning aggregate counters (in‑memory + optional Redis incr).
+- FE developer mode: small metrics panel on `MetastasisReport` showing timings and cache hits.
+
+## Testing plan
+
+Unit tests:
+- `metastasis_ruleset.py` – validate mapping, thresholds, caps; deterministic outputs for fixtures.
+- `metastasis_orchestrator.py` – given mocked insights and cohort context, produce expected step scores and rationales.
+
+Integration tests:
+- Post a BRAF V600E payload; assert presence of steps, bounded `overall_risk`, non‑empty provenance.
+- With cohort context available vs absent; ensure response remains stable and provenance notes cache/availability.
+
+Golden snapshots:
+- Capture a canonical JSON for one disease/variant set; allow differences under `provenance/*` only.
+
+Smoke commands:
+```
+curl -sS :8000/api/kb/items?type=coverage.by_gene\&disease=MM | jq '.items[0] | {disease,summary: .stats}'
+```
+
+## Security & performance
+
+- Strict RUO copy; no clinical claims.
+- Rate limit `/api/metastasis/assess` if needed (per IP) via a lightweight middleware.
+- Cache insights bundles; avoid literature by default; cap batch sizes (≤20 variants per request).
+
+## Work breakdown (agent checklist)
+
+1) Backend scaffolding
+- Create router package and services; implement `metastasis_ruleset.py` with loader/validator.
+- Implement orchestrator with cache/timeouts and provenance; add curl smoke.
+
+2) Cohort context
+- Expose KB coverage items or wire datasets API consumption; implement `cohort_context_client.py` with cache.
+
+3) Frontend
+- Create `MetastasisReport` page and components; wire from VUS/Dossier; add RUO copy and provenance bar.
+
+4) Metrics
+- Add simple counters and `/metrics` endpoint for metastasis; FE developer panel toggle.
+
+5) Tests
+- Add unit + integration tests; capture one golden snapshot.
+
+6) Docs
+- Update README section in `use-cases/metastatic-intervention.md` to reference this implementation and smoke commands.
+
+## Acceptance criteria
+
+- `POST /api/metastasis/assess` returns deterministic step scores, overall risk, and rationale with provenance; survives missing cohort context gracefully.
+- Frontend renders report with per‑step bars, drivers, cohort context (when present), and provenance bar.
+- Metrics available (latency and cache hits); no API contract breaks elsewhere; RUO copy present.
+

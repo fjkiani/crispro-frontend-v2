@@ -1,0 +1,412 @@
+---
+alwaysApply: false
+description: Master hierarchical structure for CrisPRO operations - publications, partnerships, outreach, assets
+---
+
+# ⚔️ CRISPRO COMMAND CENTER - MASTER HIERARCHY
+
+> **Mission:** Organize all operational assets, publications, partnerships, and outreach materials in a single, navigable structure.
+
+---
+
+## 📁 **PROPOSED DIRECTORY STRUCTURE**
+
+```
+.cursor/rules/CrisPRO_Command_Center/
+│
+├── /1_Publications/                    # ✅ Core validation & manuscripts
+│   ├── /Metastasis_V1/                 # Current focus
+│   │   ├── MASTER_STATUS.md            # ✅ Overall status (Week 1/2 complete)
+│   │   ├── /Week1_Validation/
+│   │   │   ├── DAY1_VALIDATION_COMPLETE.md
+│   │   │   ├── real_target_lock_data.csv
+│   │   │   ├── real_guide_designs.csv
+│   │   │   └── validation_metrics.json
+│   │   ├── /Week2_Structural/
+│   │   │   ├── WEEK2_AF3_REALISTIC_PLAN.md
+│   │   │   ├── real_guides_batch.json
+│   │   │   ├── boltz_fast_mode_results.json
+│   │   │   └── alphafold_server_results/
+│   │   ├── /Manuscript/
+│   │   │   ├── Abstract.md
+│   │   │   ├── METHODS_DRAFT.md
+│   │   │   ├── RESULTS_DRAFT.md
+│   │   │   └── SUBMISSION_CHECKLIST.md
+│   │   ├── /Figures/
+│   │   │   ├── figure1_cascade_overview.png
+│   │   │   ├── figure2_target_lock_heatmap.png
+│   │   │   └── figure3_guide_validation.png
+│   │   └── /Supplementary/
+│   │       ├── table_s1_gene_list.csv
+│   │       ├── table_s2_validation_metrics.csv
+│   │       └── methods_extended.md
+│   │
+│   ├── /TLS_Engineering/               # Future publication
+│   │   ├── TLS_MSK_INFOGRAPHIC.mdc
+│   │   ├── intel.md
+│   │   └── DOCTRINE_STATUS.mdc
+│   │
+│   ├── /TCF1_Rescue/                   # Future publication
+│   │   ├── TCELL_MD_ANDERSON_INFOGRAPHIC.mdc
+│   │   ├── TCELL_DOCTRINE_STATUS.mdc
+│   │   └── intel.mdc
+│   │
+│   └── /ASCO_2026_Abstract/            # Deadline: Nov 2025
+│       ├── abstract_draft.md
+│       ├── submission_checklist.md
+│       └── figures_for_abstract/
+│
+├── /2_Partnerships/                    # ✅ Active & prospective deals
+│   ├── /BriaCell/                      # 🔥 ACTIVE - First real pitch
+│   │   ├── company_profile.md          # Trial info, endpoints, pain points
+│   │   ├── outreach_email_FIXED.md     # ✅ Corrected version (no hallucinations)
+│   │   ├── discovery_call_script.md    # Talking points, objection handling
+│   │   ├── technical_1pager.pdf        # ✅ General1Page_CORRECTED.tsx exported
+│   │   ├── free_pilot_proposal.md      # 20-patient retrospective offer
+│   │   ├── paid_pilot_proposal.md      # $250K 50-100 patient stratification
+│   │   └── tracking.csv                # Email sent, response, next steps
+│   │
+│   ├── /MD_Anderson/                   # TLS/TCF1 partnership
+│   │   ├── dr_bruno_profile.md
+│   │   ├── outreach_email.md
+│   │   └── collaboration_proposal.md
+│   │
+│   ├── /MSK/                            # TLS collaboration
+│   │   ├── institution_profile.md
+│   │   └── outreach_strategy.md
+│   │
+│   └── /Templates/                      # Reusable partnership docs
+│       ├── company_profile_template.md
+│       ├── discovery_call_script_template.md
+│       ├── free_pilot_proposal_template.md
+│       └── paid_pilot_proposal_template.md
+│
+├── /3_Outreach/                        # ✅ Mass lead gen (Agent X mission)
+│   ├── /Lead_Gen_System/
+│   │   ├── LEAD_GEN_SYSTEM_DOCTRINE.mdc  # ✅ Agent X execution plan
+│   │   ├── /Scripts/
+│   │   │   ├── clinicaltrials_scraper.py
+│   │   │   ├── nih_reporter_scraper.py
+│   │   │   ├── asco_abstract_scraper.py
+│   │   │   ├── consolidate_leads.py
+│   │   │   ├── email_generator.py
+│   │   │   └── email_sender.py
+│   │   ├── /Data/
+│   │   │   ├── clinicaltrials_raw.csv
+│   │   │   ├── nih_reporter_raw.csv
+│   │   │   ├── asco_2025_abstracts.csv
+│   │   │   ├── master_lead_list.csv
+│   │   │   └── master_lead_list_enriched.csv
+│   │   └── /Tracking/
+│   │       ├── tier1_sent.csv
+│   │       ├── tier2_sent.csv
+│   │       ├── response_tracking.csv
+│   │       └── dashboard.html
+│   │
+│   ├── /Email_Templates/
+│   │   ├── tier1_trial_stratification.txt
+│   │   ├── tier2_crispr_design.txt
+│   │   ├── tier3_generic.txt
+│   │   ├── follow_up_day3.txt
+│   │   ├── follow_up_day7.txt
+│   │   └── follow_up_day14_breakup.txt
+│   │
+│   └── /Conference_Outreach/
+│       ├── ASCO_2026_booth_strategy.md
+│       ├── ESMO_2026_abstract.md
+│       └── NCI_cooperative_groups_pitch.md
+│
+├── /4_Assets/                          # ✅ Reusable marketing & presentation materials
+│   ├── /1_Pagers/
+│   │   ├── General1Page.tsx            # ❌ Original (has hallucinations)
+│   │   ├── General1Page_CORRECTED.tsx  # ✅ Fixed version (bulletproof)
+│   │   ├── BriaCell_Custom_1Pager.tsx  # Custom for specific partner
+│   │   └── Academic_1Pager.tsx         # For university collaborations
+│   │
+│   ├── /Slide_Decks/
+│   │   ├── TLS_Pittsburgh_Deck.pdf
+│   │   ├── TCF1_MD_Anderson_Deck.pdf
+│   │   ├── Metastasis_V1_Deck.pdf
+│   │   └── Investor_Pitch_Deck.pdf
+│   │
+│   ├── /Infographics/
+│   │   ├── 8_step_metastatic_cascade.png
+│   │   ├── SPE_doctrine_flowchart.png
+│   │   ├── target_lock_score_heatmap.png
+│   │   └── confidence_badge_system.png
+│   │
+│   ├── /Logos_Branding/
+│   │   ├── CrisPRO_logo.png
+│   │   ├── typography_guide.png
+│   │   └── color_palette.png
+│   │
+│   └── /Videos/
+│       ├── 3min_platform_demo.mp4
+│       └── 10min_technical_walkthrough.mp4
+│
+├── /5_Intelligence/                    # ✅ Competitive analysis, market research
+│   ├── /Competitive_Landscape/
+│   │   ├── benchling_analysis.md
+│   │   ├── recursion_pharma_analysis.md
+│   │   ├── insilico_medicine_analysis.md
+│   │   └── alphafold_server_analysis.md
+│   │
+│   ├── /Market_Research/
+│   │   ├── oncology_trial_failure_rates.csv
+│   │   ├── genomic_stratification_market_size.md
+│   │   └── crispr_therapeutics_pipeline.csv
+│   │
+│   ├── /Target_Institutions/
+│   │   ├── NCI_cooperative_groups.csv
+│   │   ├── top_cancer_centers.csv
+│   │   └── biotech_vc_portfolios.csv
+│   │
+│   └── /Failed_Trials_Database/
+│       ├── phase3_failures_2020_2025.csv
+│       ├── reasons_for_termination.csv
+│       └── lessons_learned.md
+│
+├── /6_Doctrines/                       # ✅ Strategic frameworks & operating procedures
+│   ├── /Core_Doctrines/
+│   │   ├── complete_platform_evolution_doctrine.mdc  # Master doctrine
+│   │   ├── ip_monetization_doctrine.mdc              # Royalty strategy
+│   │   ├── operational_improvements_doctrine.mdc     # Aug 2025 upgrades
+│   │   └── clinical_trial_partnership_doctrine.mdc   # Sales playbook
+│   │
+│   ├── /Technical_Doctrines/
+│   │   ├── spe_framework_doctrine.mdc
+│   │   ├── target_lock_scoring_doctrine.mdc
+│   │   ├── evo2_capabilities_doctrine.mdc
+│   │   └── alphafold_boltz_integration_doctrine.mdc
+│   │
+│   ├── /Publication_Doctrines/
+│   │   ├── metastasis_interception_doctrine.mdc
+│   │   ├── tls_engineering_doctrine.mdc
+│   │   └── tcf1_rescue_doctrine.mdc
+│   │
+│   └── /Operational_Doctrines/
+│       ├── lead_gen_system_doctrine.mdc
+│       ├── partnership_qualification_doctrine.mdc
+│       └── post_publication_launch_doctrine.mdc
+│
+└── /7_Tracking/                        # ✅ CRM, KPIs, dashboards
+    ├── /CRM/
+    │   ├── master_contacts.csv         # All PIs, execs, partners
+    │   ├── interaction_log.csv         # Emails, calls, meetings
+    │   └── pipeline_value.csv          # Deal stages, expected revenue
+    │
+    ├── /KPIs/
+    │   ├── weekly_metrics.csv          # Publications, outreach, revenue
+    │   ├── monthly_review.md           # Commander's review notes
+    │   └── quarterly_goals.md          # OKRs
+    │
+    └── /Dashboards/
+        ├── publication_progress.html   # Metastasis V1 status
+        ├── outreach_dashboard.html     # Email response rates
+        └── revenue_pipeline.html       # Deal stages, forecasts
+```
+
+---
+
+## 🎯 **HOW TO USE THIS STRUCTURE**
+
+### **For Commander (You):**
+
+**Daily (5 min):**
+- Check `/7_Tracking/Dashboards/publication_progress.html` (Week 2 status)
+- Check `/2_Partnerships/BriaCell/tracking.csv` (email response?)
+- Review Agent X updates (1 sentence)
+
+**Weekly (30 min):**
+- Review `/1_Publications/Metastasis_V1/MASTER_STATUS.md` (are we on track?)
+- Review `/3_Outreach/Tracking/dashboard.html` (Agent X progress)
+- Update `/7_Tracking/KPIs/weekly_metrics.csv`
+
+**Monthly (1 hour):**
+- Write `/7_Tracking/KPIs/monthly_review.md` (what worked, what didn't)
+- Update `/7_Tracking/KPIs/quarterly_goals.md` (adjust strategy)
+
+---
+
+### **For Agent X:**
+
+**Daily (2-4 hours):**
+- Work on `/3_Outreach/Lead_Gen_System/Scripts/` (Phase 1-4 execution)
+- Update `/3_Outreach/Tracking/dashboard.html` daily
+- Post 1-sentence status update
+
+**Weekly (30 min):**
+- Demo to Commander (show progress, blockers)
+- Update `/3_Outreach/Lead_Gen_System/LEAD_GEN_SYSTEM_DOCTRINE.mdc` (mark tasks complete)
+
+---
+
+### **For New Agents:**
+
+**Onboarding (1 hour):**
+- Read `/6_Doctrines/Core_Doctrines/complete_platform_evolution_doctrine.mdc`
+- Review `/1_Publications/Metastasis_V1/MASTER_STATUS.md` (current state)
+- Check `/7_Tracking/KPIs/quarterly_goals.md` (what are we building?)
+
+---
+
+## ✅ **MIGRATION PLAN (TODAY)**
+
+### **Step 1: Create Directory Structure**
+
+```bash
+cd .cursor/rules
+mkdir -p CrisPRO_Command_Center/{1_Publications,2_Partnerships,3_Outreach,4_Assets,5_Intelligence,6_Doctrines,7_Tracking}
+
+# Publications
+mkdir -p CrisPRO_Command_Center/1_Publications/{Metastasis_V1,TLS_Engineering,TCF1_Rescue,ASCO_2026_Abstract}
+mkdir -p CrisPRO_Command_Center/1_Publications/Metastasis_V1/{Week1_Validation,Week2_Structural,Manuscript,Figures,Supplementary}
+
+# Partnerships
+mkdir -p CrisPRO_Command_Center/2_Partnerships/{BriaCell,MD_Anderson,MSK,Templates}
+
+# Outreach
+mkdir -p CrisPRO_Command_Center/3_Outreach/{Lead_Gen_System,Email_Templates,Conference_Outreach}
+mkdir -p CrisPRO_Command_Center/3_Outreach/Lead_Gen_System/{Scripts,Data,Tracking}
+
+# Assets
+mkdir -p CrisPRO_Command_Center/4_Assets/{1_Pagers,Slide_Decks,Infographics,Logos_Branding,Videos}
+
+# Intelligence
+mkdir -p CrisPRO_Command_Center/5_Intelligence/{Competitive_Landscape,Market_Research,Target_Institutions,Failed_Trials_Database}
+
+# Doctrines
+mkdir -p CrisPRO_Command_Center/6_Doctrines/{Core_Doctrines,Technical_Doctrines,Publication_Doctrines,Operational_Doctrines}
+
+# Tracking
+mkdir -p CrisPRO_Command_Center/7_Tracking/{CRM,KPIs,Dashboards}
+```
+
+---
+
+### **Step 2: Move Existing Files**
+
+```bash
+# Publications
+cp use-cases/metastasis-project/MASTER_STATUS.md CrisPRO_Command_Center/1_Publications/Metastasis_V1/
+cp use-cases/metastasis-project/DAY1_VALIDATION_COMPLETE.md CrisPRO_Command_Center/1_Publications/Metastasis_V1/Week1_Validation/
+
+# Partnerships
+cp use-cases/briacell_email_FIXED.md CrisPRO_Command_Center/2_Partnerships/BriaCell/outreach_email_FIXED.md
+cp use-cases/clinical_trial_partnership_doctrine.mdc CrisPRO_Command_Center/6_Doctrines/Core_Doctrines/
+
+# Outreach
+cp use-cases/LEAD_GEN_SYSTEM_DOCTRINE.mdc CrisPRO_Command_Center/3_Outreach/Lead_Gen_System/
+
+# Assets
+cp use-cases/1-pagers/General1Page.tsx CrisPRO_Command_Center/4_Assets/1_Pagers/
+cp use-cases/1-pagers/General1Page_CORRECTED.tsx CrisPRO_Command_Center/4_Assets/1_Pagers/
+
+# Intelligence
+cp MM/TLS/TLS_MSK_INFOGRAPHIC.mdc CrisPRO_Command_Center/1_Publications/TLS_Engineering/
+cp MM/TCell/TCELL_MD_ANDERSON_INFOGRAPHIC.mdc CrisPRO_Command_Center/1_Publications/TCF1_Rescue/
+
+# Doctrines
+cp complete_platform_evolution_doctrine.mdc CrisPRO_Command_Center/6_Doctrines/Core_Doctrines/
+cp ip_monetization_doctrine.mdc CrisPRO_Command_Center/6_Doctrines/Core_Doctrines/
+```
+
+---
+
+### **Step 3: Create Index Files**
+
+```bash
+# Root README
+cat > CrisPRO_Command_Center/README.md << 'EOF'
+# ⚔️ CRISPRO COMMAND CENTER
+
+**Master operational hierarchy for all CrisPRO activities.**
+
+## 📁 Directory Structure
+
+- `/1_Publications/` - Manuscripts, validation data, figures
+- `/2_Partnerships/` - Active & prospective deals, proposals
+- `/3_Outreach/` - Mass lead gen, email campaigns, conference strategy
+- `/4_Assets/` - Marketing materials, slides, infographics
+- `/5_Intelligence/` - Competitive analysis, market research
+- `/6_Doctrines/` - Strategic frameworks, operating procedures
+- `/7_Tracking/` - CRM, KPIs, dashboards
+
+## 🎯 Quick Links
+
+**Current Focus (Week 2 - Nov 2025):**
+- [Metastasis V1 Status](1_Publications/Metastasis_V1/MASTER_STATUS.md)
+- [BriaCell Partnership](2_Partnerships/BriaCell/tracking.csv)
+- [Agent X Lead Gen](3_Outreach/Lead_Gen_System/LEAD_GEN_SYSTEM_DOCTRINE.mdc)
+
+**Key Doctrines:**
+- [Platform Evolution](6_Doctrines/Core_Doctrines/complete_platform_evolution_doctrine.mdc)
+- [Clinical Trial Partnerships](6_Doctrines/Core_Doctrines/clinical_trial_partnership_doctrine.mdc)
+- [Lead Gen System](6_Doctrines/Operational_Doctrines/lead_gen_system_doctrine.mdc)
+
+**KPIs:**
+- [Weekly Metrics](7_Tracking/KPIs/weekly_metrics.csv)
+- [Publication Progress Dashboard](7_Tracking/Dashboards/publication_progress.html)
+- [Outreach Dashboard](7_Tracking/Dashboards/outreach_dashboard.html)
+
+EOF
+
+# Create tracking CSVs
+cat > CrisPRO_Command_Center/2_Partnerships/BriaCell/tracking.csv << 'EOF'
+date,action,status,next_step,notes
+2025-11-XX,email_drafted,complete,send_email,"Corrected version with no hallucinations"
+2025-11-XX,1pager_corrected,complete,export_pdf,"General1Page_CORRECTED.tsx ready"
+EOF
+
+cat > CrisPRO_Command_Center/7_Tracking/KPIs/weekly_metrics.csv << 'EOF'
+week,publication_progress,partnerships_active,emails_sent,discovery_calls,pilots_signed,revenue
+2025-11-W1,Week1_complete,1_briacell,0,0,0,0
+2025-11-W2,Week2_in_progress,1_briacell,0,0,0,0
+EOF
+```
+
+---
+
+## 🎯 **BENEFITS OF THIS STRUCTURE**
+
+### **1. Single Source of Truth**
+- No more "where did I put that email template?"
+- Everything has a home
+
+### **2. Hierarchical & Navigable**
+- Publications → Partnerships → Outreach (logical flow)
+- Easy for new agents to onboard
+
+### **3. Separates Concerns**
+- Commander focuses on `/1_Publications/` and `/2_Partnerships/`
+- Agent X owns `/3_Outreach/`
+- No interference
+
+### **4. Tracking & Accountability**
+- `/7_Tracking/` gives Commander visibility
+- Weekly/monthly reviews built-in
+
+### **5. Scalable**
+- Add new partnerships as subdirectories
+- Add new publications as subdirectories
+- Add new agents with clear ownership
+
+---
+
+## ✅ **NEXT STEPS (RIGHT NOW)**
+
+**Commander, do you approve this structure?**
+
+**If YES:**
+1. I'll execute the migration (create dirs, move files)
+2. Generate the tracking CSVs
+3. Create the root README
+4. Brief Agent X on their directory ownership
+
+**If NO:**
+- Tell me what to change
+- I'll revise and re-propose
+
+---
+
+**⚔️ THIS IS THE COMMAND CENTER. THIS IS HOW WE SCALE WITHOUT CHAOS.**

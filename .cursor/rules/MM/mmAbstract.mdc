@@ -1,0 +1,82 @@
+Title
+Multiple Myeloma Digital Twin (RUO): Transparent in‑silico drug efficacy with provenance and cohort context
+
+Authors
+Fahad Kiani (CrisPRO.ai)
+
+Abstract
+Biopharma decisions for Multiple Myeloma (MM) are slowed by uncertainty around variants, pathways, and therapy fit. We present a research‑use‑only (RUO) Digital Twin that converts raw variants into an auditable, ranked therapy hypothesis: per‑drug efficacy score, confidence, evidence tier, badges (e.g., FDA‑OnLabel, PathwayAligned), and a four‑chip biology summary (Functionality, Regulatory, Essentiality, Chromatin). Our approach composes Sequence (Evo2 zero‑shot likelihoods with Fusion AM gating), Pathway aggregation (disease‑specific), and Evidence signals, with provenance (run_id, profile, mode) surfaced by default. We show a live MM exemplar with Functionality 0.60, Regulatory 0.10, Essentiality 0.35, Chromatin 0.60, and ranked drug classes (e.g., Proteasome inhibitor confidence ~0.89, FDA‑OnLabel; BRAF inhibitor confidence ~0.79, PathwayAligned). We preserve external validations from Evo2 demonstrating BRCA1/2 supervised performance (~0.95 AUROC; Evo2 Fig. 3I; Methods §4.3.16), noncoding/splice accuracy (Evo2 Fig. 3C–D), DMS correlation (RUO; Evo2 Fig. 2E), and generation quality (Pfam ~70% vs ~18%; Evo2 Fig. 5G–H, S8E). We discuss limitations and a path to higher confidence through cohort overlays, calibration, SAE interpretability, evidence hardening, and structural validation.
+
+1. Introduction
+Drug development suffers from >90% failure rates, 10–15 year timelines, and VUS paralysis. MM presents additional complexity due to pathway crosstalk (e.g., RAS/MAPK, proteasome/IMiD/anti‑CD38 axes). Prior work often hides uncertainty or lacks provenance. Our contribution is a transparent, provenance‑first RUO system that unifies S/P/E signals and explicitly displays confidence, evidence tier, badges, chips, and JSON outputs that can be audited and reproduced.
+
+2. Methods (S/P/E with insight chips)
+2.1 Sequence (S)
+- Evo2 zero‑shot variant scoring with bounded multi/exon windows; Fusion AM gating for GRCh38 missense when available; conservative defaults; provenance includes run_id, profile, sequence_scoring.mode (e.g., fusion_am_local).
+
+2.2 Pathway (P)
+- Gene→pathway aggregation with MM‑specific weights; drug‑class mapping; evidence‑driven badges (FDA‑OnLabel, Guideline, PathwayAligned).
+
+2.3 Evidence (E)
+- ClinVar prior lookup (gated); literature optional (cached, rate‑limited) to avoid instability; used as modest lifts only.
+
+2.4 Insight chips
+- Functionality, Regulatory (splicing), Essentiality, Chromatin. Scores are RUO and provenance‑backed; essentiality and calibration snapshots may be stubbed but structured for future services.
+
+2.5 Cohort overlays and calibration (framework)
+- Cohort overlays (coverage, response rates) and calibration snapshots are included as optional fields when available; stubs today with clear status in provenance.
+
+3. Results (MM exemplar; RUO)
+3.1 Four‑chip summary (example)
+- Functionality 0.60 (protein_kinase domain)
+- Regulatory 0.10 (minimal splicing impact)
+- Essentiality 0.35 (gene‑specific calibration)
+- Chromatin 0.60 (heuristic v0)
+
+3.2 Ranked therapy output (example)
+- Proteasome inhibitor: confidence ~0.89; badges: FDA‑OnLabel, PathwayAligned
+- BRAF inhibitor: confidence ~0.79; badges: PathwayAligned
+- Toxicity chip: 0.55 (germline caution; RUO)
+- Trials shortlist: 50+ → 7 (contextual compression)
+
+3.3 JSON exemplar (provenance included)
+{
+  "drugs": [
+    { "name": "Proteasome inhibitor", "efficacy_score": 0.53, "confidence": 0.89, "badges": ["FDA-OnLabel","PathwayAligned"] },
+    { "name": "BRAF inhibitor", "efficacy_score": 0.75, "confidence": 0.79, "badges": ["PathwayAligned"] }
+  ],
+  "toxicity": { "chip": "Toxicity Risk", "confidence": 0.55 },
+  "trials": { "shortlist_compression": "50+ → 7" },
+  "provenance": { "run_id": "<example-run-id>", "profile": "baseline", "mode": "fusion_am_local" }
+}
+Note: Values vary with input and toggles; always cite run_id.
+
+4. External validations (why these claims appear)
+- BRCA1/2 supervised classifier ~0.95 AUROC (Evo2 Fig. 3I; Methods §4.3.16) — establishes that Evo2 embeddings support high‑accuracy clinical VEP when supervised.
+- Noncoding/splicing strength (Evo2 Fig. 3C–D) — supports our Regulatory chip and noncoding sensitivity.
+- DMS correlation (RUO) (Evo2 Fig. 2E) — motivates Validation section; we present correlation qualitatively without overclaiming causality.
+- Generation quality (Pfam ~70% vs ~18%) (Evo2 Fig. 5G–H, S8E) — motivates design‑readiness framing and our Demo/Roadmap posture for de novo sequences.
+
+5. Discussion (confidence and scale)
+- Current RUO confidence for off‑label targeted classes (e.g., MAPK) is moderate (~0.79), while on‑label SOC (e.g., proteasome inhibitor) is higher (~0.89) due to FDA‑OnLabel badges and P alignment.
+- Levers to reach higher confidence: Fusion gating (where covered), cohort overlays (coverage, response rates), calibration snapshots (percentiles, thresholds), SAE interpretability (feature‑aware lifts), literature hardening (provider fallback + caching), and structural validation (roadmap).
+- Transparency over raw scores: we surface provenance, badges, chip rationale, tiers; modest lifts only.
+
+6. Reproducibility & provenance
+- All outputs carry run_id, profile, and mode. API responses include optional cohort_signals and calibration_snapshot.
+- Toggling profiles (Baseline/Richer S/Fusion) is explicit; JSON is stable and audit‑friendly.
+
+7. Ethics & safety (RUO)
+- Viral generation excluded upstream (aligned with Evo2 safety posture); generation endpoints gated; toxicity chip labeled RUO; no clinical claims.
+
+8. Conclusion
+We provide a transparent, provenance‑backed, in‑silico MM workflow that converts variants into a ranked, auditable therapy hypothesis with clear confidence and evidence. The approach is suitable for research prioritization today, with a practical roadmap to higher confidence via Fusion, cohort overlays, calibration, interpretability, and structure.
+
+References (figure/method pointers)
+- Evo2 BRCA1/2 supervised performance: Fig. 3I; Methods §4.3.16
+- Noncoding/splice evaluations: Fig. 3C–D
+- DMS correlation: Fig. 2E
+- Pfam generation quality: Fig. 5G–H; S8E
+
+
+

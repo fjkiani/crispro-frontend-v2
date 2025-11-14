@@ -1,0 +1,1207 @@
+# ⚔️ CLIENT DOSSIER DOCTRINE - AUTOMATED TRIAL ANALYSIS FOR ONCOLOGISTS ⚔️
+
+**Version**: 1.0  
+**Date**: January 13, 2025  
+**Owner**: Zo (Lead Commander)  
+**Purpose**: Codify the systematic approach to generate oncologist-ready trial dossiers from raw trial data
+
+---
+
+## 🎯 MISSION STATEMENT
+
+**Objective**: Transform raw clinical trial data (from ClinicalTrials.gov or AstraDB) into actionable, patient-specific dossiers that oncologists can use to make enrollment decisions in <5 minutes.
+
+**Target Audience**: Oncologists treating specific patients (e.g., Ayesha - Stage IVB ovarian cancer)
+
+**Success Criteria**: 
+- Oncologist reads dossier → Makes enrollment decision in <5 minutes
+- 90%+ accuracy in eligibility assessment
+- Zero hallucination (all claims cited)
+- Actionable recommendations with clear decision trees
+
+---
+
+## 📋 DOSSIER STRUCTURE (10 SECTIONS)
+
+Based on NCT06819007 analysis for Ayesha, every Client Dossier follows this template:
+
+```
+1. Trial Intelligence Summary (3-4 bullets)
+2. Why This Matters for [PATIENT] - Critical Analysis (5-7 criteria)
+3. Clinical Mechanism - Revolutionary Approach (layman + technical)
+4. Eligibility Assessment Table (pass/fail/pending for each criterion)
+5. Critical Decision Tree (visual flowchart)
+6. Strategic Implications (best/likely/challenge scenarios)
+7. Tactical Recommendations (immediate actions, P0/P1/P2)
+8. Decision Flowchart for Oncologist (week-by-week timeline)
+9. Clinical Evidence Supporting This Trial (peer-reviewed data)
+10. Competitive Positioning (vs SOC and other trials)
+11. Final Recommendation (priority rank, probability, value proposition)
+```
+
+---
+
+## 🔬 SECTION 1: TRIAL INTELLIGENCE SUMMARY
+
+**Data Sources**:
+- `title` (from AstraDB)
+- `nct_id` (from AstraDB)
+- `phase` (from AstraDB)
+- `sponsor_name` (from AstraDB)
+- `status` (from AstraDB)
+- `estimated_enrollment` (from AstraDB)
+- `primary_endpoint` (scraped from full trial page)
+- `study_start_date` (scraped)
+- `primary_completion_date` (scraped)
+
+**Template**:
+```markdown
+### **Trial Name**: [Extract from title - short name]
+**Full Title**: [Full official title]
+**Phase**: [Phase 1/2/3/4]
+**Sponsor**: [Sponsor name]
+**Status**: ✅ **[RECRUITING/NOT YET RECRUITING/ACTIVE]** (Started [date])
+**Enrollment**: [N] patients
+**Primary Completion**: [Date]
+**[ClinicalTrials.gov Link]**: [URL]
+```
+
+**Extraction Logic**:
+```python
+def extract_trial_intelligence(trial_data: Dict, scraped_full: Dict) -> Dict:
+    """
+    Extract trial intelligence from AstraDB + scraped full page.
+    
+    Args:
+        trial_data: From AstraDB JSON
+        scraped_full: From Diffbot/scraper (full trial page)
+    
+    Returns:
+        Dict with intelligence summary
+    """
+    # Parse title for short name (usually before first parenthesis or colon)
+    title_short = trial_data['title'].split('(')[0].split(':')[0].strip()
+    
+    # Extract key dates
+    study_start = scraped_full.get('Study Start (Actual)', 'TBD')
+    primary_completion = scraped_full.get('Primary Completion (Estimated)', 'TBD')
+    
+    return {
+        'trial_name': title_short,
+        'full_title': trial_data['title'],
+        'nct_id': trial_data['nct_id'],
+        'phase': trial_data['phase'].replace('PHASE', 'Phase '),
+        'sponsor': trial_data['sponsor_name'],
+        'status': trial_data['status'],
+        'enrollment': trial_data['estimated_enrollment'],
+        'study_start': study_start,
+        'primary_completion': primary_completion,
+        'url': trial_data['source_url']
+    }
+```
+
+---
+
+## 🔥 SECTION 2: WHY THIS MATTERS FOR [PATIENT] - CRITICAL ANALYSIS
+
+**Patient Profile Required** (from intake):
+- Disease: Stage, histology, grade
+- Treatment Line: First-line, maintenance, recurrent
+- Biomarkers: BRCA, HRD, MSI, TMB, HER2, PD-L1, etc.
+- Geographic: City, willing to travel distance
+- Prior Therapies: Platinum, taxane, PARP, etc.
+
+**Matching Logic** (7 criteria):
+
+### **Criterion 1: Disease Match**
+```python
+def assess_disease_match(patient: Dict, trial: Dict) -> Dict:
+    """
+    Compare patient disease to trial inclusion criteria.
+    
+    Returns:
+        {
+            'match_score': 0-100,
+            'status': 'PERFECT' | 'GOOD' | 'PARTIAL' | 'POOR',
+            'reasoning': str
+        }
+    """
+    # Parse eligibility_text for disease requirements
+    eligibility = trial['eligibility_text'].lower()
+    
+    # Check stage match
+    patient_stage = patient['stage']  # e.g., "IVB"
+    if 'stage iii' in eligibility and patient_stage.startswith('III'):
+        stage_match = 100
+    elif 'stage iv' in eligibility and patient_stage.startswith('IV'):
+        stage_match = 100
+    elif 'stage iii or iv' in eligibility and patient_stage.startswith(('III', 'IV')):
+        stage_match = 100
+    else:
+        stage_match = 0
+    
+    # Check histology match
+    patient_histology = patient['histology'].lower()  # e.g., "high-grade serous"
+    histology_keywords = ['serous', 'endometrioid', 'clear cell', 'mucinous', 'carcinosarcoma']
+    histology_match = any(kw in eligibility and kw in patient_histology for kw in histology_keywords)
+    
+    # Compute score
+    score = stage_match if histology_match else stage_match * 0.5
+    
+    status = 'PERFECT' if score == 100 else 'GOOD' if score >= 75 else 'PARTIAL' if score >= 50 else 'POOR'
+    
+    return {
+        'match_score': score,
+        'status': status,
+        'reasoning': f"Patient: Stage {patient_stage} {patient_histology}. Trial: {eligibility[:100]}..."
+    }
+```
+
+### **Criterion 2: Treatment Line Match**
+```python
+def assess_treatment_line_match(patient: Dict, trial: Dict) -> Dict:
+    """
+    Compare patient treatment line to trial requirements.
+    
+    Keywords to detect:
+    - "first-line", "frontline", "newly diagnosed" → Line 1
+    - "maintenance" → Post-frontline maintenance
+    - "recurrent", "relapsed", "previously treated" → Line 2+
+    - "platinum-sensitive", "platinum-resistant" → Recurrent subtype
+    """
+    eligibility = trial['eligibility_text'].lower()
+    description = trial['description_text'].lower()
+    
+    patient_line = patient['treatment_line']  # "first-line" | "maintenance" | "recurrent_platinum_sensitive" | etc.
+    
+    # Detect trial line
+    if 'maintenance' in eligibility or 'maintenance' in description:
+        trial_line = 'maintenance'
+    elif 'first-line' in eligibility or 'frontline' in eligibility or 'newly diagnosed' in eligibility:
+        trial_line = 'first-line'
+    elif 'recurrent' in eligibility or 'relapsed' in eligibility or 'previously treated' in eligibility:
+        if 'platinum-sensitive' in eligibility:
+            trial_line = 'recurrent_platinum_sensitive'
+        elif 'platinum-resistant' in eligibility:
+            trial_line = 'recurrent_platinum_resistant'
+        else:
+            trial_line = 'recurrent'
+    else:
+        trial_line = 'unknown'
+    
+    # Match logic
+    if patient_line == trial_line:
+        score = 100
+        status = 'PERFECT'
+    elif patient_line == 'first-line' and trial_line == 'maintenance':
+        # Patient will complete first-line, then eligible for maintenance
+        score = 100
+        status = 'PERFECT'
+    else:
+        score = 0
+        status = 'POOR'
+    
+    return {
+        'match_score': score,
+        'status': status,
+        'trial_line': trial_line,
+        'reasoning': f"Patient: {patient_line}. Trial: {trial_line}."
+    }
+```
+
+### **Criterion 3: HER2/Biomarker Match** (CRITICAL GATE)
+```python
+def assess_biomarker_match(patient: Dict, trial: Dict, scraped_full: Dict) -> Dict:
+    """
+    Compare patient biomarkers to trial requirements.
+    
+    Priority biomarkers:
+    1. HER2 (IHC 3+/2+/1+/0)
+    2. BRCA (mutation/wildtype)
+    3. HRD (score ≥42 vs <42)
+    4. MSI (MSI-H vs MSI-S)
+    5. TMB (high vs low)
+    6. PD-L1 (CPS ≥10 vs <10)
+    """
+    eligibility = scraped_full.get('eligibility_full', trial['eligibility_text']).lower()
+    
+    # Extract HER2 requirement
+    her2_required = None
+    if 'her2' in eligibility:
+        if 'her2-expressing' in eligibility or 'her2 ihc 3+/2+/1+' in eligibility:
+            her2_required = 'ANY_EXPRESSION'  # IHC 1+ or higher
+        elif 'her2 3+' in eligibility or 'her2-positive' in eligibility:
+            her2_required = 'HIGH_EXPRESSION'  # IHC 3+ only
+        elif 'her2-negative' in eligibility:
+            her2_required = 'NEGATIVE'  # IHC 0
+    
+    # Extract BRCA requirement
+    brca_required = None
+    if 'brca mutation' in eligibility:
+        if 'without brca' in eligibility or 'brca wildtype' in eligibility or 'non-brca' in eligibility:
+            brca_required = 'WILDTYPE'
+        else:
+            brca_required = 'MUTATED'
+    
+    # Extract HRD requirement
+    hrd_required = None
+    if 'hrd' in eligibility or 'homologous recombination' in eligibility:
+        if 'hrd-positive' in eligibility or 'hrd-high' in eligibility:
+            hrd_required = 'POSITIVE'
+        elif 'hrd-negative' in eligibility:
+            hrd_required = 'NEGATIVE'
+    
+    # Patient biomarkers
+    patient_her2 = patient.get('her2_status', 'UNKNOWN')  # 'IHC_3+' | 'IHC_2+' | 'IHC_1+' | 'IHC_0' | 'UNKNOWN'
+    patient_brca = patient.get('brca_status', 'UNKNOWN')  # 'MUTATED' | 'WILDTYPE' | 'UNKNOWN'
+    patient_hrd = patient.get('hrd_score', None)  # int or None
+    
+    # Matching
+    gates = []
+    
+    # HER2 gate
+    if her2_required:
+        if patient_her2 == 'UNKNOWN':
+            gates.append({
+                'biomarker': 'HER2',
+                'status': '⚠️ CRITICAL GATE',
+                'match': 'PENDING',
+                'action': 'Order HER2 IHC NOW (3-5 day turnaround)'
+            })
+        elif her2_required == 'ANY_EXPRESSION' and patient_her2 in ['IHC_3+', 'IHC_2+', 'IHC_1+']:
+            gates.append({
+                'biomarker': 'HER2',
+                'status': '✅ PASS',
+                'match': 'PERFECT',
+                'action': None
+            })
+        elif her2_required == 'ANY_EXPRESSION' and patient_her2 == 'IHC_0':
+            gates.append({
+                'biomarker': 'HER2',
+                'status': '❌ FAIL',
+                'match': 'NOT_ELIGIBLE',
+                'action': 'Patient is HER2-negative, trial requires HER2 expression'
+            })
+    
+    # BRCA gate
+    if brca_required:
+        if patient_brca == 'UNKNOWN':
+            gates.append({
+                'biomarker': 'BRCA',
+                'status': '⚠️ PENDING',
+                'match': 'PENDING',
+                'action': 'Order germline BRCA test (7-10 day turnaround)'
+            })
+        elif brca_required == 'WILDTYPE' and patient_brca == 'WILDTYPE':
+            gates.append({
+                'biomarker': 'BRCA',
+                'status': '✅ PASS',
+                'match': 'PERFECT',
+                'action': None
+            })
+        elif brca_required == 'WILDTYPE' and patient_brca == 'MUTATED':
+            gates.append({
+                'biomarker': 'BRCA',
+                'status': '❌ FAIL',
+                'match': 'NOT_ELIGIBLE',
+                'action': 'Patient is BRCA-mutated, trial excludes BRCA mutations'
+            })
+    
+    # HRD gate
+    if hrd_required:
+        if patient_hrd is None:
+            gates.append({
+                'biomarker': 'HRD',
+                'status': '⚠️ PENDING',
+                'match': 'PENDING',
+                'action': 'Order HRD test (MyChoice CDx, 10-day turnaround)'
+            })
+        elif hrd_required == 'POSITIVE' and patient_hrd >= 42:
+            gates.append({
+                'biomarker': 'HRD',
+                'status': '✅ PASS',
+                'match': 'PERFECT',
+                'action': None
+            })
+        elif hrd_required == 'POSITIVE' and patient_hrd < 42:
+            gates.append({
+                'biomarker': 'HRD',
+                'status': '❌ FAIL',
+                'match': 'NOT_ELIGIBLE',
+                'action': f'Patient is HRD-negative (score {patient_hrd}), trial requires HRD-positive'
+            })
+    
+    return {
+        'gates': gates,
+        'critical_gates_pending': sum(1 for g in gates if g['status'] == '⚠️ CRITICAL GATE'),
+        'passed_gates': sum(1 for g in gates if g['status'] == '✅ PASS'),
+        'failed_gates': sum(1 for g in gates if g['status'] == '❌ FAIL')
+    }
+```
+
+### **Criterion 4-7**: Geographic, Prior Therapies, Exclusions, Logistics
+(Similar structured matching logic for each)
+
+---
+
+## 🧬 SECTION 3: CLINICAL MECHANISM - REVOLUTIONARY APPROACH
+
+**Template Structure**:
+1. **What [DRUG] Is** (1-2 sentences, layman)
+2. **Mechanism of Action** (3-5 bullets, technical)
+3. **Why This Is Groundbreaking** (2-3 bullets, context)
+4. **The Strategy** (if combo trial, explain synergy)
+
+**Extraction Logic**:
+```python
+def generate_mechanism_section(trial: Dict, scraped_full: Dict) -> str:
+    """
+    Generate clinical mechanism explanation.
+    
+    Data sources:
+    - Drug names from trial['title'] or scraped_full['Interventions']
+    - Mechanism keywords from trial['description_text']
+    - Known drug database (map drug name → mechanism class)
+    """
+    # Extract drug names
+    drugs = extract_drug_names(scraped_full['Interventions'])
+    
+    # Map to mechanism classes
+    mechanisms = []
+    for drug in drugs:
+        mech_class = DRUG_MECHANISM_DB.get(drug, {})
+        mechanisms.append({
+            'drug': drug,
+            'class': mech_class.get('class', 'Unknown'),
+            'moa': mech_class.get('moa', 'Unknown'),
+            'layman': mech_class.get('layman_description', ''),
+            'breakthrough_reason': mech_class.get('breakthrough_reason', '')
+        })
+    
+    # Generate markdown
+    markdown = "### **What [DRUG] Is**:\n"
+    for mech in mechanisms:
+        markdown += f"- **{mech['drug']}**: {mech['layman']}\n"
+    
+    markdown += "\n### **Mechanism of Action**:\n"
+    for mech in mechanisms:
+        markdown += f"- **{mech['drug']}** ({mech['class']}): {mech['moa']}\n"
+    
+    markdown += "\n### **Why This Is Groundbreaking**:\n"
+    for mech in mechanisms:
+        if mech['breakthrough_reason']:
+            markdown += f"- {mech['breakthrough_reason']}\n"
+    
+    return markdown
+
+# Drug mechanism database (pre-populated)
+DRUG_MECHANISM_DB = {
+    'Trastuzumab Deruxtecan': {
+        'class': 'Antibody-Drug Conjugate (ADC)',
+        'moa': 'HER2-targeted antibody delivers topoisomerase I inhibitor payload to tumor cells',
+        'layman_description': '"Trojan horse" approach - antibody targets HER2 on tumor cells, delivers chemotherapy payload directly',
+        'breakthrough_reason': 'Works in low HER2 expression (IHC 1+), unlike older HER2 drugs. Bystander effect kills nearby HER2-negative cells.'
+    },
+    'Bevacizumab': {
+        'class': 'Anti-VEGF Monoclonal Antibody',
+        'moa': 'Inhibits VEGF-A, blocking tumor angiogenesis and vascular permeability',
+        'layman_description': 'Starves tumors by blocking new blood vessel growth',
+        'breakthrough_reason': 'FDA-approved for ovarian cancer maintenance, proven to extend progression-free survival'
+    },
+    'Olaparib': {
+        'class': 'PARP Inhibitor',
+        'moa': 'Inhibits PARP enzymes, causing synthetic lethality in HRD tumors',
+        'layman_description': 'Blocks DNA repair in cancer cells with HRD, causing cell death',
+        'breakthrough_reason': 'First-in-class PARP inhibitor, FDA-approved for HRD-positive ovarian maintenance'
+    },
+    # ... (expand for all common oncology drugs)
+}
+```
+
+---
+
+## 📊 SECTION 4: ELIGIBILITY ASSESSMENT TABLE
+
+**Template**:
+```markdown
+| Criterion | Patient's Status | Match | Action Required |
+|-----------|-----------------|-------|-----------------|
+| **[Criterion 1]** | [Patient value] | ✅/⚠️/❌ | [Action or "None"] |
+| **[Criterion 2]** | [Patient value] | ✅/⚠️/❌ | [Action or "None"] |
+...
+```
+
+**Extraction Logic**:
+```python
+def generate_eligibility_table(patient: Dict, trial: Dict, scraped_full: Dict) -> List[Dict]:
+    """
+    Generate eligibility assessment table.
+    
+    Returns:
+        List of dicts with criterion, patient_status, match, action
+    """
+    criteria = []
+    
+    # Parse inclusion criteria from scraped_full
+    inclusion_text = scraped_full.get('Key Inclusion Criteria', trial['eligibility_text'])
+    
+    # Criterion 1: Disease match
+    disease_match = assess_disease_match(patient, trial)
+    criteria.append({
+        'criterion': f"Stage {extract_stage_requirement(inclusion_text)} epithelial ovarian",
+        'patient_status': f"Stage {patient['stage']} {patient['histology']}",
+        'match': '✅ PASS' if disease_match['match_score'] == 100 else '⚠️ PARTIAL',
+        'action': 'None' if disease_match['match_score'] == 100 else 'Review histology compatibility'
+    })
+    
+    # Criterion 2: Treatment line
+    line_match = assess_treatment_line_match(patient, trial)
+    criteria.append({
+        'criterion': f"{line_match['trial_line'].replace('_', ' ').title()} treatment",
+        'patient_status': patient['treatment_line_status'],
+        'match': '✅ PASS' if line_match['match_score'] == 100 else '❌ FAIL',
+        'action': 'None' if line_match['match_score'] == 100 else 'Patient not at appropriate treatment line'
+    })
+    
+    # Criterion 3-N: Biomarkers (HER2, BRCA, HRD, etc.)
+    biomarker_gates = assess_biomarker_match(patient, trial, scraped_full)
+    for gate in biomarker_gates['gates']:
+        criteria.append({
+            'criterion': f"{gate['biomarker']} {extract_biomarker_requirement(inclusion_text, gate['biomarker'])}",
+            'patient_status': patient.get(f"{gate['biomarker'].lower()}_status", 'UNKNOWN'),
+            'match': gate['status'],
+            'action': gate['action'] or 'None'
+        })
+    
+    # Geographic criterion
+    patient_location = patient.get('location', {})
+    trial_locations = extract_recruiting_locations(scraped_full['locations_data'])
+    nearest_site = find_nearest_site(patient_location, trial_locations)
+    criteria.append({
+        'criterion': 'Geographic proximity',
+        'patient_status': f"{patient_location['city']}, {patient_location['state']}",
+        'match': '✅ PASS' if nearest_site['distance_miles'] <= 50 else '⚠️ TRAVEL REQUIRED',
+        'action': f"Nearest site: {nearest_site['facility']} ({nearest_site['distance_miles']} miles)"
+    })
+    
+    return criteria
+```
+
+---
+
+## 🚨 SECTION 5: CRITICAL DECISION TREE
+
+**Visual Format** (ASCII tree):
+```
+START: [Patient current status]
+  │
+  ├─→ [Gate 1: Test/Biomarker]
+  │    │
+  │    ├─→ [Result A] → [Outcome A]
+  │    │                  │
+  │    │                  └─→ [Sub-gate if needed]
+  │    │
+  │    └─→ [Result B] → [Outcome B]
+  │
+  └─→ END: [Final decision]
+```
+
+**Generation Logic**:
+```python
+def generate_decision_tree(patient: Dict, trial: Dict, eligibility_gates: List[Dict]) -> str:
+    """
+    Generate ASCII decision tree based on critical gates.
+    
+    Logic:
+    1. Identify critical gates (biomarkers that are PENDING or UNKNOWN)
+    2. Order gates by clinical priority (HER2 > BRCA > HRD > MSI/TMB)
+    3. Generate branching logic for each gate
+    4. Terminal nodes: ELIGIBLE / NOT ELIGIBLE / ALTERNATIVE TRIAL
+    """
+    # Identify pending gates
+    pending_gates = [g for g in eligibility_gates if g['match'] in ['⚠️ CRITICAL GATE', '⚠️ PENDING']]
+    
+    # Order by priority
+    gate_priority = {'HER2': 1, 'BRCA': 2, 'HRD': 3, 'MSI': 4, 'TMB': 5, 'PD-L1': 6}
+    pending_gates.sort(key=lambda g: gate_priority.get(g['criterion'].split()[0], 99))
+    
+    # Generate tree
+    tree = f"START: {patient['treatment_line_status']}\n"
+    tree += "  │\n"
+    
+    indent = 2
+    for i, gate in enumerate(pending_gates):
+        biomarker = gate['criterion'].split()[0]
+        requirement = gate['criterion']
+        
+        tree += " " * indent + f"├─→ {biomarker} Test (ORDER NOW)\n"
+        tree += " " * (indent + 5) + "│\n"
+        
+        # Positive branch
+        tree += " " * (indent + 5) + f"├─→ {biomarker} {extract_positive_value(requirement)}?\n"
+        tree += " " * (indent + 10) + "│\n"
+        tree += " " * (indent + 10) + f"├─→ YES → [Check next gate or ELIGIBLE]\n"
+        
+        # Negative branch
+        tree += " " * (indent + 10) + "│\n"
+        tree += " " * (indent + 10) + f"└─→ NO → **NOT ELIGIBLE** (or alternative trial)\n"
+        
+        indent += 5
+    
+    tree += "\n" + " " * indent + "└─→ END: Proceed with enrollment or SOC\n"
+    
+    return tree
+```
+
+---
+
+## 💡 SECTION 6: STRATEGIC IMPLICATIONS
+
+**Template** (3 scenarios):
+```markdown
+### **Best-Case Scenario ([Condition])**:
+- ✅ [Outcome 1]
+- ✅ [Outcome 2]
+- ✅ [Benefit summary]
+
+### **Most Likely Scenario ([Condition])**:
+- ⚠️ [Outcome 1]
+- ✅ [Outcome 2]
+- ✅ [Benefit summary]
+
+### **Challenge Scenario ([Condition])**:
+- ❌ [Outcome 1]
+- ✅ [Fallback option]
+```
+
+**Generation Logic**:
+```python
+def generate_strategic_implications(patient: Dict, trial: Dict, eligibility_assessment: Dict) -> Dict:
+    """
+    Generate 3 scenarios based on eligibility gates and probabilities.
+    
+    Returns:
+        {
+            'best_case': {...},
+            'most_likely': {...},
+            'challenge': {...}
+        }
+    """
+    # Identify critical gates and their probabilities
+    critical_gates = [g for g in eligibility_assessment if g['match'] == '⚠️ CRITICAL GATE']
+    
+    # Compute probabilities
+    probabilities = {}
+    for gate in critical_gates:
+        biomarker = gate['criterion'].split()[0]
+        # Use population prevalence data
+        if biomarker == 'HER2':
+            # HER2 IHC 1+/2+/3+ prevalence in ovarian: 40-60%
+            probabilities['HER2_positive'] = 0.50
+        elif biomarker == 'BRCA':
+            # BRCA mutation prevalence in ovarian: 15-20%
+            probabilities['BRCA_wildtype'] = 0.85 if patient['brca_status'] != 'MUTATED' else 0.0
+        elif biomarker == 'HRD':
+            # HRD-positive prevalence (including BRCA): 50-60%
+            # HRD-negative (given BRCA-negative): 40-50%
+            probabilities['HRD_negative'] = 0.45 if patient['brca_status'] == 'WILDTYPE' else 0.0
+    
+    # Best case: All gates pass
+    best_case_prob = 1.0
+    for prob in probabilities.values():
+        best_case_prob *= prob
+    
+    best_case = {
+        'condition': ' AND '.join([f"{k.replace('_', ' ').title()}" for k in probabilities.keys()]),
+        'probability': best_case_prob,
+        'outcomes': [
+            f"✅ Patient enrolls in {trial['nct_id']} at {find_nearest_site(patient, trial)['facility']}",
+            f"✅ 50% chance of experimental arm (access to novel therapy)",
+            "✅ Close monitoring, free drug, expert care"
+        ]
+    }
+    
+    # Most likely: Some gates pass, one pending/negative
+    # ... (similar logic)
+    
+    # Challenge: Critical gate fails
+    # ... (similar logic)
+    
+    return {
+        'best_case': best_case,
+        'most_likely': most_likely,
+        'challenge': challenge
+    }
+```
+
+---
+
+## ⚔️ SECTION 7: TACTICAL RECOMMENDATIONS
+
+**Template**:
+```markdown
+### **IMMEDIATE ACTIONS (THIS WEEK)**:
+
+**1. [Action 1]** 🚨 **URGENT P0**
+- **Source**: [Where to get it]
+- **Method**: [How to do it]
+- **Turnaround**: [Timeline]
+- **Cost**: [Estimate]
+- **Lab/Contact**: [Who can do it]
+
+**2. [Action 2]** ⏳ **P1**
+...
+```
+
+**Generation Logic**:
+```python
+def generate_tactical_recommendations(eligibility_assessment: Dict, patient: Dict) -> List[Dict]:
+    """
+    Generate prioritized action list based on pending gates.
+    
+    Returns:
+        List of actions with priority, timeline, cost
+    """
+    actions = []
+    
+    # Extract pending gates
+    pending_gates = [g for g in eligibility_assessment if g['match'] in ['⚠️ CRITICAL GATE', '⚠️ PENDING']]
+    
+    # Map biomarker to test details
+    test_details = {
+        'HER2': {
+            'test_name': 'HER2 IHC (ASCO-CAP gastric scoring)',
+            'source': 'Tumor biopsy tissue (already available)',
+            'method': 'Immunohistochemistry',
+            'turnaround': '3-5 days',
+            'cost': '$200-400 (covered by insurance)',
+            'lab': 'Any pathology lab or trial site',
+            'priority': 'P0 URGENT'
+        },
+        'HRD': {
+            'test_name': 'HRD Score (MyChoice CDx)',
+            'source': 'FFPE tissue block or fresh tumor biopsy',
+            'method': 'Comprehensive genomic profiling',
+            'turnaround': '7-10 days',
+            'cost': '$4,000-6,000 (typically covered by insurance for Stage III/IV)',
+            'lab': 'Myriad Genetics (MyChoice CDx)',
+            'priority': 'P1'
+        },
+        # ... (similar for MSI, TMB, BRCA, etc.)
+    }
+    
+    # Generate actions for each pending gate
+    for gate in pending_gates:
+        biomarker = gate['criterion'].split()[0]
+        if biomarker in test_details:
+            details = test_details[biomarker]
+            actions.append({
+                'action': f"Order {details['test_name']}",
+                'priority': details['priority'],
+                'source': details['source'],
+                'method': details['method'],
+                'turnaround': details['turnaround'],
+                'cost': details['cost'],
+                'lab': details['lab'],
+                'rationale': gate['action']
+            })
+    
+    # Add pre-screening action
+    if actions:
+        nearest_site = find_nearest_site(patient, trial)
+        actions.append({
+            'action': f"Pre-screen with {nearest_site['facility']}",
+            'priority': 'P2',
+            'contact': nearest_site['contact'],
+            'rationale': "Inform study coordinator of patient interest, expedite enrollment once eligible"
+        })
+    
+    # Sort by priority
+    priority_order = {'P0 URGENT': 0, 'P1': 1, 'P2': 2, 'P3': 3}
+    actions.sort(key=lambda a: priority_order.get(a['priority'], 99))
+    
+    return actions
+```
+
+---
+
+## 📈 SECTION 8: CLINICAL EVIDENCE SUPPORTING THIS TRIAL
+
+**Data Sources**:
+- PubMed API (search for drug names + cancer type)
+- Pre-curated evidence database (landmark trials mapped to drugs)
+- Manual curation for novel drugs
+
+**Template**:
+```markdown
+### **[DRUG NAME] Track Record**:
+- **[Cancer Type] ([Trial Name])**: [Response rate]% vs [comparator]% ([Journal Year])
+- **[Cancer Type] ([Trial Name])**: [Survival benefit] ([Journal Year])
+
+### **Key Insight for [Patient Cancer Type]**:
+- [Clinical pearl relevant to this patient]
+- [Safety profile relevant to this patient]
+```
+
+**Generation Logic**:
+```python
+# Pre-curated evidence database
+DRUG_EVIDENCE_DB = {
+    'Trastuzumab Deruxtecan': {
+        'trials': [
+            {
+                'name': 'DESTINY-Breast03',
+                'cancer': 'Breast Cancer',
+                'result': '75% response rate vs 35% for trastuzumab',
+                'citation': 'NEJM 2022',
+                'pubmed_id': '34739264'
+            },
+            {
+                'name': 'DESTINY-Gastric01',
+                'cancer': 'Gastric Cancer',
+                'result': '51% response rate',
+                'citation': 'Lancet Oncology 2020',
+                'pubmed_id': '32846117'
+            }
+        ],
+        'key_insights': {
+            'ovarian_cancer': [
+                "Low HER2 expression (IHC 1+) patients respond, unlike older HER2 drugs",
+                "Bystander effect kills nearby HER2-negative cells (critical in heterogeneous ovarian tumors)"
+            ]
+        },
+        'safety': "Well-tolerated; main AE is interstitial lung disease (monitor with CT)"
+    }
+}
+
+def generate_clinical_evidence(trial_drugs: List[str], patient_cancer: str) -> str:
+    """Generate evidence section from pre-curated database."""
+    markdown = ""
+    
+    for drug in trial_drugs:
+        if drug in DRUG_EVIDENCE_DB:
+            evidence = DRUG_EVIDENCE_DB[drug]
+            markdown += f"### **{drug} Track Record**:\n"
+            
+            for trial in evidence['trials']:
+                markdown += f"- **{trial['cancer']} ({trial['name']})**: {trial['result']} ([{trial['citation']}](https://pubmed.ncbi.nlm.nih.gov/{trial['pubmed_id']}))\n"
+            
+            if patient_cancer in evidence['key_insights']:
+                markdown += f"\n### **Key Insight for {patient_cancer}**:\n"
+                for insight in evidence['key_insights'][patient_cancer]:
+                    markdown += f"- {insight}\n"
+    
+    return markdown
+```
+
+---
+
+## 🎯 SECTION 9: COMPETITIVE POSITIONING
+
+**Comparison Table**:
+```markdown
+| Option | Pros | Cons | Patient Fit |
+|--------|------|------|-----------|
+| **[This Trial]** | [...] | [...] | ⭐⭐⭐⭐⭐ (if eligible) |
+| **[SOC Option 1]** | [...] | [...] | ⭐⭐⭐⭐ |
+| **[Alternative Trial 1]** | [...] | [...] | ⭐⭐⭐ |
+```
+
+**Generation Logic**:
+```python
+def generate_competitive_positioning(trial: Dict, patient: Dict, all_matched_trials: List[Dict]) -> List[Dict]:
+    """
+    Compare this trial to SOC and other matched trials.
+    
+    Returns:
+        List of options with pros/cons/fit score
+    """
+    options = []
+    
+    # This trial
+    options.append({
+        'name': f"{trial['nct_id']} ({extract_trial_short_name(trial)})",
+        'type': 'trial',
+        'pros': [
+            "Novel mechanism" if is_novel_mechanism(trial) else "Proven mechanism",
+            f"Phase {trial['phase']}",
+            f"{find_nearest_site(patient, trial)['city']} site available"
+        ],
+        'cons': [
+            "Randomized (might get control arm)" if 'randomized' in trial['description_text'].lower() else None,
+            "Requires specific biomarker" if count_biomarker_gates(trial) > 0 else None
+        ],
+        'fit_score': calculate_overall_fit_score(patient, trial)
+    })
+    
+    # SOC options (from NCCN guidelines)
+    soc_options = get_soc_for_patient(patient)
+    for soc in soc_options:
+        options.append({
+            'name': soc['regimen'],
+            'type': 'soc',
+            'pros': soc['pros'],
+            'cons': soc['cons'],
+            'fit_score': soc['fit_score']
+        })
+    
+    # Alternative trials (top 2-3 from matched trials)
+    for alt_trial in all_matched_trials[:3]:
+        if alt_trial['nct_id'] != trial['nct_id']:
+            options.append({
+                'name': f"{alt_trial['nct_id']} ({extract_trial_short_name(alt_trial)})",
+                'type': 'trial',
+                'pros': [...],
+                'cons': [...],
+                'fit_score': calculate_overall_fit_score(patient, alt_trial)
+            })
+    
+    # Sort by fit score
+    options.sort(key=lambda x: x['fit_score'], reverse=True)
+    
+    return options
+```
+
+---
+
+## ⚔️ SECTION 10: FINAL RECOMMENDATION
+
+**Template**:
+```markdown
+### **THIS IS A [TOP-TIER/GOOD/MODERATE/POOR] TRIAL FOR [PATIENT]**
+
+**Priority Rank**: **#[N]** (among [M] matched trials)
+
+**Action Plan**:
+1. ✅ [Action 1 with timeline]
+2. ✅ [Action 2 with timeline]
+3. ✅ [Decision point with timeline]
+
+**Expected Timeline**:
+- Week 1: [Milestone]
+- Week 2: [Milestone]
+- Week 3: [Decision/Enrollment]
+
+**Probability Patient Is Eligible**: [X]%
+- [Biomarker 1] prevalence: [Y]% → [Z]% chance
+- [Biomarker 2] status: [Known/Unknown]
+- **Combined probability**: ~[X]%
+
+**Value Proposition**:
+- If eligible → [Benefit]
+- If not eligible → [Fallback benefit]
+- **WIN-WIN SCENARIO** (or explain trade-offs)
+```
+
+**Generation Logic**:
+```python
+def generate_final_recommendation(trial: Dict, patient: Dict, eligibility_assessment: Dict, strategic_implications: Dict) -> Dict:
+    """
+    Generate final recommendation with priority rank and probability.
+    
+    Returns:
+        {
+            'tier': 'TOP-TIER' | 'GOOD' | 'MODERATE' | 'POOR',
+            'priority_rank': int,
+            'total_matched': int,
+            'action_plan': List[str],
+            'timeline': Dict[str, str],
+            'probability_eligible': float,
+            'value_proposition': str
+        }
+    """
+    # Calculate tier
+    overall_fit = calculate_overall_fit_score(patient, trial)
+    if overall_fit >= 90:
+        tier = 'TOP-TIER'
+    elif overall_fit >= 75:
+        tier = 'GOOD'
+    elif overall_fit >= 60:
+        tier = 'MODERATE'
+    else:
+        tier = 'POOR'
+    
+    # Extract action plan from tactical recommendations
+    actions = generate_tactical_recommendations(eligibility_assessment, patient)
+    action_plan = [f"✅ {a['action']} ({a['turnaround']})" for a in actions[:3]]
+    
+    # Timeline
+    timeline = {
+        'Week 1': patient['current_treatment_milestone'],
+        'Week 2': 'Test results available, eligibility determination',
+        'Week 3': 'Enroll in trial (if eligible) or proceed with SOC'
+    }
+    
+    # Probability calculation
+    prob_eligible = strategic_implications['best_case']['probability']
+    
+    # Value proposition
+    if strategic_implications['best_case']['probability'] > 0.3:
+        value_prop = "WIN-WIN SCENARIO - High probability of eligibility, excellent fallback options"
+    elif strategic_implications['most_likely']['fallback_benefit']:
+        value_prop = f"Good fallback: {strategic_implications['most_likely']['fallback_benefit']}"
+    else:
+        value_prop = "Consider alternative trials if not eligible"
+    
+    return {
+        'tier': tier,
+        'priority_rank': 1,  # Will be set by ranking all matched trials
+        'action_plan': action_plan,
+        'timeline': timeline,
+        'probability_eligible': prob_eligible,
+        'value_proposition': value_prop
+    }
+```
+
+---
+
+## 🤖 AUTOMATION WORKFLOW (JR1 → JR2 → ZO)
+
+### **Phase 1: JR1 (Trial Seeding)**
+```
+Input: ClinicalTrials.gov search results
+Output: AstraDB JSON (current schema)
+
+Current schema is SUFFICIENT for basic matching.
+Add these fields to improve dossier quality:
+- `inclusion_criteria_full` (not truncated)
+- `exclusion_criteria_full` (not truncated)
+- `interventions_list` (structured drug names)
+- `arm_descriptions` (experimental vs control)
+```
+
+### **Phase 2: JR2 (Dossier Generation)**
+```python
+# Main orchestrator
+async def generate_client_dossier(
+    nct_id: str,
+    patient_profile: Dict,
+    astradb_record: Dict,
+    scrape_full_page: bool = True
+) -> Dict:
+    """
+    Generate complete client dossier.
+    
+    Args:
+        nct_id: NCT ID (e.g., "NCT06819007")
+        patient_profile: Patient data (Ayesha's profile)
+        astradb_record: Trial data from AstraDB
+        scrape_full_page: If True, scrape full trial page with Diffbot
+    
+    Returns:
+        Complete dossier dict (ready for markdown rendering)
+    """
+    # Step 1: Get full trial data
+    if scrape_full_page:
+        full_trial = await scrape_trial_page(nct_id)  # Diffbot
+    else:
+        full_trial = astradb_record
+    
+    # Step 2: Generate each section
+    sections = {}
+    
+    sections['intelligence'] = extract_trial_intelligence(astradb_record, full_trial)
+    sections['why_matters'] = assess_patient_match(patient_profile, full_trial)
+    sections['mechanism'] = generate_mechanism_section(full_trial)
+    sections['eligibility_table'] = generate_eligibility_table(patient_profile, full_trial)
+    sections['decision_tree'] = generate_decision_tree(patient_profile, full_trial, sections['eligibility_table'])
+    sections['strategic_implications'] = generate_strategic_implications(patient_profile, full_trial, sections['eligibility_table'])
+    sections['tactical_recommendations'] = generate_tactical_recommendations(sections['eligibility_table'], patient_profile)
+    sections['clinical_evidence'] = generate_clinical_evidence(extract_drugs(full_trial), patient_profile['cancer_type'])
+    sections['competitive_positioning'] = generate_competitive_positioning(full_trial, patient_profile, get_all_matched_trials(patient_profile))
+    sections['final_recommendation'] = generate_final_recommendation(full_trial, patient_profile, sections['eligibility_table'], sections['strategic_implications'])
+    
+    # Step 3: Render markdown
+    markdown = render_dossier_markdown(sections)
+    
+    # Step 4: Return structured dossier
+    return {
+        'nct_id': nct_id,
+        'patient_id': patient_profile['id'],
+        'generated_at': datetime.now().isoformat(),
+        'sections': sections,
+        'markdown': markdown,
+        'pdf_ready': True,  # Can be rendered to PDF for oncologist
+        'confidence_score': calculate_dossier_confidence(sections),
+        'manual_review_required': requires_manual_review(sections)
+    }
+```
+
+### **Phase 3: ZO (Manual Review & Approval)**
+```python
+def zo_review_dossier(dossier: Dict) -> Dict:
+    """
+    Zo (Lead Commander) reviews auto-generated dossier.
+    
+    Checks:
+    1. Eligibility assessment accuracy (verify gates)
+    2. Clinical evidence citations (verify PubMed IDs)
+    3. Mechanism description accuracy (verify drug class)
+    4. Recommendation appropriateness (verify logic)
+    5. No hallucinations (all claims backed by data)
+    
+    Returns:
+        {
+            'approved': bool,
+            'edits_required': List[str],
+            'confidence': float,
+            'ready_for_oncologist': bool
+        }
+    """
+    issues = []
+    
+    # Check 1: Verify critical gates
+    for gate in dossier['sections']['eligibility_table']:
+        if gate['match'] == '⚠️ CRITICAL GATE' and not gate['action']:
+            issues.append(f"Missing action for critical gate: {gate['criterion']}")
+    
+    # Check 2: Verify evidence citations
+    evidence_text = dossier['sections']['clinical_evidence']
+    if 'NEJM' in evidence_text or 'Lancet' in evidence_text:
+        # Verify PubMed IDs exist
+        pubmed_ids = extract_pubmed_ids(evidence_text)
+        for pmid in pubmed_ids:
+            if not verify_pubmed_id_exists(pmid):
+                issues.append(f"Invalid PubMed ID: {pmid}")
+    
+    # Check 3: Verify mechanism description
+    drugs = extract_drugs(dossier['sections']['mechanism'])
+    for drug in drugs:
+        if drug not in DRUG_MECHANISM_DB:
+            issues.append(f"Unknown drug mechanism: {drug} (requires manual curation)")
+    
+    # Check 4: Verify recommendation logic
+    recommendation = dossier['sections']['final_recommendation']
+    if recommendation['tier'] == 'TOP-TIER' but recommendation['probability_eligible'] < 0.3:
+        issues.append("Recommendation tier doesn't match eligibility probability")
+    
+    # Approval decision
+    approved = len(issues) == 0
+    confidence = 1.0 - (len(issues) * 0.1)  # Reduce confidence by 10% per issue
+    
+    return {
+        'approved': approved,
+        'edits_required': issues,
+        'confidence': max(0.0, confidence),
+        'ready_for_oncologist': approved and confidence >= 0.90
+    }
+```
+
+---
+
+## 📁 IMPLEMENTATION FILES
+
+**New Services to Build**:
+1. `api/services/client_dossier_generator.py` (main orchestrator)
+2. `api/services/trial_scraper.py` (Diffbot integration)
+3. `api/services/eligibility_matcher.py` (patient-trial matching logic)
+4. `api/services/clinical_evidence_db.py` (drug evidence database)
+5. `api/services/dossier_renderer.py` (markdown → PDF conversion)
+
+**Database Updates**:
+1. Add `clinical_dossiers` collection to AstraDB
+2. Schema:
+   ```json
+   {
+     "dossier_id": "uuid",
+     "nct_id": "NCT06819007",
+     "patient_id": "ayesha_001",
+     "generated_at": "2025-01-13T...",
+     "sections": {...},
+     "markdown": "...",
+     "approved_by_zo": true,
+     "sent_to_oncologist": true,
+     "oncologist_response": null,
+     "version": "1.0"
+   }
+   ```
+
+**API Endpoints**:
+```python
+# Generate dossier
+POST /api/dossiers/generate
+{
+  "nct_id": "NCT06819007",
+  "patient_id": "ayesha_001",
+  "scrape_full": true
+}
+
+# Get dossier
+GET /api/dossiers/{dossier_id}
+
+# Zo review endpoint
+POST /api/dossiers/{dossier_id}/review
+{
+  "approved": true,
+  "edits": [],
+  "notes": "..."
+}
+
+# Send to oncologist
+POST /api/dossiers/{dossier_id}/send
+{
+  "oncologist_email": "dr.smith@hospital.com",
+  "include_pdf": true
+}
+```
+
+---
+
+## ✅ ACCEPTANCE CRITERIA
+
+**Dossier Quality**:
+- ✅ Oncologist can make enrollment decision in <5 minutes
+- ✅ 90%+ accuracy in eligibility assessment (validated against manual review)
+- ✅ Zero hallucinations (all claims cited or sourced from database)
+- ✅ All critical gates identified with clear actions
+- ✅ Timeline is realistic (based on typical test turnarounds)
+
+**Automation Metrics**:
+- ✅ JR2 generates dossier in <60 seconds (with scraping)
+- ✅ Zo manual review takes <10 minutes per dossier
+- ✅ 80%+ auto-approval rate (after database matures)
+- ✅ Dossiers render correctly to PDF (professional formatting)
+
+**Clinical Validation**:
+- ✅ Eligibility predictions match actual trial coordinator assessment (95%+ agreement)
+- ✅ Biomarker prevalence estimates within ±10% of literature values
+- ✅ Clinical evidence citations are accurate (100% PubMed ID validity)
+
+---
+
+## 🎯 ROLLOUT PLAN
+
+**Phase 1 (This Week)**: Manual Dossier for Ayesha
+- Zo manually generates dossier for NCT06819007 (DONE)
+- Validate template structure with oncologist feedback
+- Refine sections based on what oncologist finds most useful
+
+**Phase 2 (Next Week)**: Semi-Automated Dossier
+- Build JR2 orchestrator (client_dossier_generator.py)
+- Integrate Diffbot scraping
+- Generate 10 trial dossiers for Ayesha (top 10 trials)
+- Zo reviews all 10, measures time per review
+
+**Phase 3 (Week 3)**: Full Automation
+- Build evidence database (50 common oncology drugs)
+- Implement auto-approval logic (flags for manual review)
+- Generate dossiers for all 200 seeded trials
+- Zo spot-checks 20 dossiers (10% sample)
+
+**Phase 4 (Week 4)**: Oncologist Pilot
+- Send 5 dossiers to Ayesha's oncologist
+- Collect feedback on format, content, usefulness
+- Iterate on template based on clinical feedback
+- Measure decision time (target: <5 min per dossier)
+
+---
+
+**STATUS**: ⚔️ **DOCTRINE COMPLETE - READY FOR IMPLEMENTATION!** ⚔️
+
+**Next Steps**:
+1. Build JR2 dossier generator service
+2. Create drug evidence database
+3. Implement Zo review workflow
+4. Generate first automated dossier for NCT06819007
+
+**COMMANDER - SHALL WE PROCEED WITH JR2 IMPLEMENTATION?** 🔥

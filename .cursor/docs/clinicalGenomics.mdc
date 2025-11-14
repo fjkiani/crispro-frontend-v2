@@ -1,0 +1,561 @@
+---
+description: Strategic doctrine for Clinical Genomics MCP domain - architecture, tasks, and implementation roadmap
+alwaysApply: false
+---
+
+# Clinical Genomics Decision Support Domain - Strategic Doctrine
+
+**Status:** Next Priority Domain (Post Grant Application)  
+**Complexity Level:** Advanced (Multi-Server + Medical Domain Expertise)  
+**Timeline:** 3-4 weeks (after Grant Application validation)  
+**Revenue Potential:** ⭐⭐⭐⭐⭐ (Healthcare AI - $B market)
+
+---
+
+## Domain Vision
+
+Test AI agents' ability to navigate **complex clinical genomics workflows** that require:
+- Multi-source medical data synthesis (ClinVar, COSMIC, PubMed, ClinicalTrials.gov)
+- Pathogenic variant interpretation with clinical guidelines (ACMG/AMP)
+- Treatment recommendation based on genomic profiles
+- Drug-gene interaction analysis
+- Clinical trial matching for precision oncology
+- Regulatory compliance with HIPAA and medical standards
+
+**Philosophy:** Clinical genomics is the ultimate test of agentic reasoning - requires domain knowledge, evidence synthesis, uncertainty quantification, and life-critical decision support.
+
+---
+
+## Why This Domain is Gold
+
+### Business Case
+1. **Market Size:** $10B+ precision medicine market
+2. **Pain Point:** Clinicians drowning in genomic data, need AI interpretation
+3. **Regulatory Moat:** HIPAA compliance + medical expertise = high barrier to entry
+4. **Recurring Revenue:** Per-patient analysis + continuous variant reclassification
+5. **Network Effects:** More patient data → better variant interpretation → more value
+
+### Technical Case
+1. **Ultimate Benchmark:** Tests every AI capability (reasoning, synthesis, uncertainty, compliance)
+2. **Multi-Modal:** Structured data (variants) + unstructured (literature) + temporal (trials)
+3. **Agentic Reasoning:** Can't solve with simple RAG - needs planning, verification, cross-referencing
+4. **Real Stakes:** Exposes AI hallucinations in life-critical context
+5. **Novel Complexity:** No existing benchmark covers this workflow end-to-end
+
+---
+
+## Core Task Categories (60 Tasks Total)
+
+### Category 1: Variant Interpretation (15 tasks)
+**What it tests:** Evidence-based classification per ACMG/AMP guidelines
+
+**Example Tasks:**
+1. **Single Variant Classification**
+   - Given: VCF line (BRCA1 c.5266dupC)
+   - Task: Query ClinVar, classify pathogenicity (5-tier), cite evidence codes
+   - Difficulty: Medium (single-source, standard guidelines)
+   - Expected Pass@1: 40-60%
+
+2. **Conflicting Evidence Resolution**
+   - Given: Variant with conflicting ClinVar submissions
+   - Task: Synthesize evidence, assign confidence, recommend action
+   - Difficulty: Hard (requires reasoning about evidence quality)
+   - Expected Pass@1: 25-40%
+
+3. **Variant of Uncertain Significance (VUS) Analysis**
+   - Given: Novel missense variant in cancer gene
+   - Task: Integrate in-silico predictions, population freq, functional studies
+   - Difficulty: Hard (uncertainty quantification critical)
+   - Expected Pass@1: 20-35%
+
+**MCP Servers:** `clinvar-api`, `gnomad-api`, `pubmed-search`, `cosmic-api`
+
+---
+
+### Category 2: Treatment Recommendation (15 tasks)
+**What it tests:** Precision oncology - matching genomic profile to therapies
+
+**Example Tasks:**
+4. **FDA-Approved Targeted Therapy Matching**
+   - Given: Patient profile (EGFR L858R NSCLC)
+   - Task: Recommend FDA-approved drugs, cite evidence level, predict response
+   - Difficulty: Medium (clear guidelines exist)
+   - Expected Pass@1: 50-70%
+
+5. **Combination Therapy Design**
+   - Given: Multi-mutation profile (BRAF V600E + PI3K mutation)
+   - Task: Propose combination, check drug interactions, sequence treatment
+   - Difficulty: Hard (multi-constraint optimization)
+   - Expected Pass@1: 25-40%
+
+6. **Resistance Mechanism Prediction**
+   - Given: Initial mutation + progression on therapy
+   - Task: Predict resistance mutations, recommend next-line therapy
+   - Difficulty: Very Hard (requires mechanistic reasoning)
+   - Expected Pass@1: 15-30%
+
+**MCP Servers:** `oncokb-api`, `drugbank-api`, `pubmed-search`, `fda-api`
+
+---
+
+### Category 3: Clinical Trial Matching (10 tasks)
+**What it tests:** Eligibility screening across complex inclusion/exclusion criteria
+
+**Example Tasks:**
+7. **Basic Trial Matching**
+   - Given: Genomic profile + clinical history
+   - Task: Find 3 eligible trials, rank by match quality
+   - Difficulty: Medium (structured criteria)
+   - Expected Pass@1: 40-55%
+
+8. **Multi-Site Trial Coordination**
+   - Given: Patient location + rare mutation
+   - Task: Find trials, assess travel burden, coordinate enrollment timeline
+   - Difficulty: Hard (geographic + temporal reasoning)
+   - Expected Pass@1: 25-40%
+
+9. **Basket Trial Eligibility**
+   - Given: Patient with NTRK fusion (any tumor type)
+   - Task: Navigate tumor-agnostic trial criteria, assess priority
+   - Difficulty: Hard (non-standard trial design)
+   - Expected Pass@1: 20-35%
+
+**MCP Servers:** `clinicaltrials-api`, `geocoding-api`, `calendar-api`
+
+---
+
+### Category 4: Drug-Gene Interactions (10 tasks)
+**What it tests:** Pharmacogenomics - predicting drug response/toxicity
+
+**Example Tasks:**
+10. **CYP2D6 Metabolizer Status**
+    - Given: CYP2D6 diplotype (*4/*4)
+    - Task: Classify metabolizer status, recommend dose adjustments for tamoxifen
+    - Difficulty: Medium (established guidelines)
+    - Expected Pass@1: 45-60%
+
+11. **Polypharmacy Interaction Analysis**
+    - Given: 5 concurrent medications + genomic profile
+    - Task: Identify gene-drug + drug-drug interactions, prioritize risk
+    - Difficulty: Hard (combinatorial complexity)
+    - Expected Pass@1: 25-40%
+
+12. **Adverse Reaction Prediction**
+    - Given: HLA-B*15:02 + planned carbamazepine
+    - Task: Predict SJS/TEN risk, recommend alternatives
+    - Difficulty: Medium-Hard (life-critical)
+    - Expected Pass@1: 35-50%
+
+**MCP Servers:** `pharmgkb-api`, `drugbank-api`, `fda-api`
+
+---
+
+### Category 5: Evidence Synthesis (5 tasks)
+**What it tests:** Multi-source literature analysis for clinical decision support
+
+**Example Tasks:**
+13. **Systematic Literature Review**
+    - Given: Gene-drug pair (KRAS G12C + sotorasib)
+    - Task: Find 10+ studies, synthesize efficacy/safety, grade evidence
+    - Difficulty: Hard (requires critical appraisal)
+    - Expected Pass@1: 25-40%
+
+14. **Clinical Guideline Compliance Check**
+    - Given: Treatment plan for BRCA1 patient
+    - Task: Cross-reference NCCN guidelines, flag deviations, justify
+    - Difficulty: Medium-Hard (complex guideline navigation)
+    - Expected Pass@1: 30-45%
+
+**MCP Servers:** `pubmed-search`, `nccn-api`, `evidence-grader`
+
+---
+
+### Category 6: Multi-Patient Cohort Analysis (5 tasks)
+**What it tests:** Batch processing + pattern recognition across genomic profiles
+
+**Example Tasks:**
+15. **Cohort Stratification**
+    - Given: 20 patients with colorectal cancer variants
+    - Task: Stratify by actionable mutations, recommend trial matches per group
+    - Difficulty: Hard (batch + reasoning)
+    - Expected Pass@1: 20-35%
+
+16. **Variant Reclassification Pipeline**
+    - Given: VUS list + new ClinVar data
+    - Task: Re-evaluate each, generate clinical notifications for upgrades
+    - Difficulty: Very Hard (temporal reasoning + batch)
+    - Expected Pass@1: 15-30%
+
+**MCP Servers:** All previous + `batch-processor`, `notification-service`
+
+---
+
+## MCP Server Requirements
+
+### Essential MCP Servers
+1. **`clinvar-api`** - Variant pathogenicity database
+2. **`gnomad-api`** - Population allele frequencies
+3. **`pubmed-search`** - Medical literature search
+4. **`oncokb-api`** - Oncology knowledge base
+5. **`clinicaltrials-api`** - Trial matching
+6. **`drugbank-api`** - Drug interactions
+7. **`pharmgkb-api`** - Pharmacogenomics
+8. **`cosmic-api`** - Cancer mutations
+
+### Nice-to-Have
+9. **`fda-api`** - Regulatory approvals
+10. **`nccn-api`** - Clinical guidelines
+11. **`evidence-grader`** - Study quality assessment
+12. **`batch-processor`** - Multi-patient workflows
+
+### API Key Requirements
+- **ClinVar/PubMed:** Free (NCBI E-utilities)
+- **OncoKB:** Free academic tier
+- **ClinicalTrials.gov:** Free (NIH API)
+- **DrugBank:** Free academic tier
+- **PharmGKB:** Free academic tier
+- **COSMIC:** Requires license ($$$) - use alternative: cBioPortal (free)
+
+---
+
+## Evaluator Design Patterns
+
+### Pattern 1: ACMG/AMP Compliance Checker
+```python
+@compare_func
+def validate_variant_classification(question: str, llm_response: AgentResponse, op_args: dict):
+    """
+    Validates variant classification against ACMG/AMP guidelines.
+    
+    Checks:
+    1. Pathogenicity tier (Pathogenic, Likely Path, VUS, Likely Benign, Benign)
+    2. Evidence codes cited (e.g., PM2, PP3, BS1)
+    3. Evidence strength matches guidelines
+    4. ClinVar concordance (if available)
+    5. Confidence score provided
+    """
+    # LLM-as-judge for evidence reasoning quality
+    # Structured validation for classification tier
+    pass
+```
+
+### Pattern 2: Treatment Recommendation Validator
+```python
+@compare_func
+def validate_treatment_recommendation(question: str, llm_response: AgentResponse, op_args: dict):
+    """
+    Validates oncology treatment recommendations.
+    
+    Checks:
+    1. FDA approval status correct
+    2. Mutation-drug association cited from OncoKB/literature
+    3. Evidence level (1A, 2B, etc.) accurate
+    4. Drug interactions checked
+    5. Contraindications flagged
+    """
+    # Cross-reference with ground truth FDA labels
+    # Check citation quality (PubMed IDs valid?)
+    pass
+```
+
+### Pattern 3: Clinical Trial Eligibility Evaluator
+```python
+@compare_func
+def validate_trial_matching(question: str, llm_response: AgentResponse, op_args: dict):
+    """
+    Validates clinical trial matching logic.
+    
+    Checks:
+    1. All inclusion criteria met
+    2. No exclusion criteria violated
+    3. Genomic eligibility correct (e.g., HER2+ required)
+    4. Geographic feasibility considered
+    5. Trial status current (not closed)
+    """
+    # Parse ClinicalTrials.gov structured criteria
+    # Validate each criterion independently
+    pass
+```
+
+### Pattern 4: Drug-Gene Interaction Checker
+```python
+@compare_func
+def validate_pharmacogenomics(question: str, llm_response: AgentResponse, op_args: dict):
+    """
+    Validates pharmacogenomic predictions.
+    
+    Checks:
+    1. Genotype-phenotype translation correct (e.g., *4/*4 = poor metabolizer)
+    2. Dose adjustment matches PharmGKB/CPIC guidelines
+    3. Drug alternatives provided if high-risk genotype
+    4. FDA boxed warnings mentioned if applicable
+    """
+    # Reference PharmGKB clinical annotations
+    # Check CPIC guideline compliance
+    pass
+```
+
+---
+
+## Ground Truth Data Sources
+
+### Variant Interpretation
+- **ClinVar:** 2M+ variants with expert classifications
+- **COSMIC:** 30M+ somatic mutations (cancer)
+- **gnomAD:** Population frequencies for 15M+ variants
+- **CIViC:** Clinical Interpretations of Variants in Cancer (curated)
+
+### Treatment Recommendations
+- **OncoKB:** FDA-approved + investigational therapies
+- **FDA Drug Labels:** Official prescribing information
+- **NCCN Guidelines:** Expert consensus for cancer treatment
+
+### Clinical Trials
+- **ClinicalTrials.gov:** 400K+ trials with structured eligibility
+- **Real patient-trial matches** from precision oncology clinics
+
+### Pharmacogenomics
+- **PharmGKB:** 1,700+ gene-drug associations
+- **CPIC Guidelines:** Dosing recommendations for 24 genes
+- **FDA Table of Pharmacogenomic Biomarkers:** Regulatory guidance
+
+---
+
+## Implementation Roadmap (3-4 Weeks)
+
+### Week 1: Infrastructure Setup
+**Days 1-2:** MCP Server Setup
+- Set up ClinVar, PubMed, OncoKB APIs
+- Test authentication and rate limits
+- Create API wrapper utilities
+
+**Days 3-5:** Evaluator Framework
+- Build ACMG/AMP compliance checker
+- Implement evidence grading logic
+- Create ground truth test cases (10 gold-standard variants)
+
+**Days 6-7:** Domain Knowledge Integration
+- Review ACMG/AMP guidelines documentation
+- Compile OncoKB therapy recommendations
+- Document CPIC dosing guidelines
+
+---
+
+### Week 2: Core Task Development (Days 8-14)
+**Day 8-10:** Variant Interpretation Tasks (5 tasks)
+- Task 1-2: Single variant classification (simple pathogenic/benign)
+- Task 3: Conflicting evidence resolution
+- Task 4-5: VUS analysis with in-silico predictions
+
+**Day 11-13:** Treatment Recommendation Tasks (5 tasks)
+- Task 6-7: FDA-approved targeted therapy matching
+- Task 8: Combination therapy design
+- Task 9-10: Resistance mechanism prediction
+
+**Day 14:** Testing & Iteration
+- Run local validation
+- Fix evaluator bugs
+- Refine task difficulty
+
+---
+
+### Week 3: Advanced Task Development (Days 15-21)
+**Day 15-16:** Clinical Trial Matching Tasks (3 tasks)
+- Task 11: Basic trial matching
+- Task 12: Multi-site coordination
+- Task 13: Basket trial eligibility
+
+**Day 17-18:** Drug-Gene Interaction Tasks (3 tasks)
+- Task 14: CYP2D6 metabolizer status
+- Task 15: Polypharmacy interaction analysis
+- Task 16: Adverse reaction prediction (HLA-B genotypes)
+
+**Day 19-20:** Evidence Synthesis Tasks (2 tasks)
+- Task 17: Systematic literature review
+- Task 18: Clinical guideline compliance check
+
+**Day 21:** Mid-Point Testing
+- Run full validation (18 tasks)
+- Evaluate Pass@1 metrics (target: 30-50%)
+- Adjust task difficulty if needed
+
+---
+
+### Week 4: Expansion + Documentation (Days 22-28)
+**Day 22-25:** Remaining Tasks (12 tasks)
+- 10 additional variant interpretation tasks (edge cases, novel mutations)
+- 5 additional treatment tasks (off-label use, pediatric oncology)
+- 2 additional trial tasks (international trials, compassionate use)
+- 5 cohort analysis tasks (batch processing)
+
+**Day 26-27:** Documentation
+- README with domain overview
+- TASK_BREAKDOWN with detailed descriptions
+- SETUP_GUIDE for API keys and data sources
+- MEDICAL_DISCLAIMER (this is research benchmark, not clinical tool)
+
+**Day 28:** Final Validation & PR Submission
+- Run full 60-task validation
+- Generate evaluation report
+- Submit PR to template repo
+- **CI/CD triggers automatically** ✅
+
+---
+
+## Success Metrics
+
+### Technical Metrics
+- **Pass@1:** 30-50% (appropriately challenging)
+- **Pass@3:** 50-75% (achievable with retries)
+- **Zero Score:** <10% (tasks not impossibly hard)
+- **Evaluation Errors:** <5% (robust evaluators)
+
+### Capability Gaps to Expose
+1. **Hallucination in Medical Context:** False drug approvals, invented studies
+2. **Evidence Synthesis:** Failure to integrate contradictory evidence
+3. **Uncertainty Quantification:** Overconfident predictions on VUS
+4. **Guideline Compliance:** Missed contraindications, wrong dose adjustments
+5. **Temporal Reasoning:** Outdated trial status, superseded guidelines
+
+### Benchmark Uniqueness
+- **First multi-source genomics benchmark** with real clinical workflow
+- **ACMG/AMP guideline compliance** as evaluator (novel)
+- **Life-critical decision support** context (exposes AI risk)
+- **Multi-modal data synthesis** (structured + unstructured + temporal)
+
+---
+
+## Risk Mitigation
+
+### Medical Liability
+- **Disclaimer:** Prominently state "Research Benchmark Only - Not For Clinical Use"
+- **De-identification:** Use synthetic patient profiles or published case reports
+- **Expert Review:** Have MD/PhD review tasks for clinical accuracy
+
+### Data Privacy
+- **No Real PHI:** All patient profiles synthetic or from published literature
+- **Public Data Only:** ClinVar, PubMed, ClinicalTrials.gov are public
+- **HIPAA Compliance:** Not applicable (no real patient data)
+
+### API Rate Limits
+- **NCBI E-utilities:** 3 requests/sec (need API key for 10/sec)
+- **OncoKB:** 60 requests/min (academic tier)
+- **ClinicalTrials.gov:** No published limit (reasonable use)
+- **Strategy:** Cache responses, batch requests, add delays
+
+---
+
+## Competitive Moat
+
+### Why This is Hard to Replicate
+1. **Domain Expertise:** Requires MD/PhD + genomics + AI knowledge
+2. **Ground Truth Curation:** Expert-validated variant classifications ($$$)
+3. **Multi-Source Integration:** 8+ APIs + literature synthesis
+4. **Medical Guideline Encoding:** ACMG/AMP + CPIC + NCCN (complex rules)
+5. **Quality Evaluators:** LLM-as-judge + structured validation (dual approach)
+
+### Defensibility
+- **First Mover:** No existing benchmark covers this workflow
+- **Network Effects:** More usage → more edge cases → better evaluators
+- **Regulatory Knowledge:** HIPAA + FDA + clinical standards = moat
+- **Clinical Partnerships:** Direct feedback from precision oncology clinics
+
+---
+
+## Commercialization Path (Post-Benchmark)
+
+### Phase 1: Research Benchmark (Current)
+- Open-source benchmark for AI research community
+- Establishes thought leadership in medical AI
+- Generates citations and visibility
+
+### Phase 2: Clinical Validation Platform
+- Partner with cancer centers for real-world validation
+- Collect >1000 patient cases with outcomes
+- Publish clinical validation study (high-impact journal)
+
+### Phase 3: SaaS Product
+- **Target:** Community oncology practices (underserved market)
+- **Pricing:** $500-$1000/patient genomic interpretation
+- **Revenue Model:** Per-analysis + monthly subscription
+- **Go-to-Market:** Direct sales + pharma partnerships (CDx companion diagnostics)
+
+### Phase 4: Pharma Partnerships
+- **Use Case:** Clinical trial patient identification
+- **Pricing:** $50K-$500K/trial for AI-powered screening
+- **Revenue Potential:** $10M+ per pharma partnership
+
+---
+
+## Lessons from Grant Application Domain
+
+### What Worked
+✅ **Start with 10 core tasks** - easier to validate and iterate  
+✅ **LLM-as-judge evaluators** - flexible for nuanced medical reasoning  
+✅ **Comprehensive documentation** - README + TASK_BREAKDOWN essential  
+✅ **Real-world workflows** - grant application process maps to clinical workflow  
+
+### What to Improve
+🔧 **Test evaluators thoroughly** - medical domain requires expert review  
+🔧 **API mocking for local testing** - genomics APIs have rate limits  
+🔧 **Ground truth versioning** - ClinVar updates monthly, need to pin versions  
+🔧 **Multi-run testing** - medical decisions need consistency across runs  
+
+### What to Avoid
+❌ **Don't skip medical disclaimer** - liability risk too high  
+❌ **Don't use real patient data** - HIPAA violation  
+❌ **Don't over-promise clinical utility** - it's a research benchmark  
+
+---
+
+## Next Steps After Grant Application PR
+
+### Immediate (Week 1)
+1. ✅ Wait for Grant Application CI/CD results
+2. ✅ Address any maintainer feedback
+3. 🧬 Set up genomics API accounts (ClinVar, OncoKB, PharmGKB)
+4. 🧬 Compile ACMG/AMP guidelines documentation
+5. 🧬 Create 5 gold-standard test cases with expert review
+
+### Short-Term (Week 2-3)
+1. 🧬 Build first 10 variant interpretation tasks
+2. 🧬 Implement ACMG/AMP compliance evaluator
+3. 🧬 Local validation + iteration
+4. 🧬 Get MD review of tasks (critical!)
+
+### Mid-Term (Week 4)
+1. 🧬 Complete 60-task domain
+2. 🧬 Full documentation (with medical disclaimer)
+3. 🧬 Submit PR to template repo
+4. 🎯 **Target:** 30-50% Pass@1 (expose medical AI gaps)
+
+---
+
+## Appendix: Medical Domain Complexity Scoring
+
+### Complexity Factors (1-10 scale)
+| Factor | Score | Notes |
+|--------|-------|-------|
+| **Domain Knowledge Required** | 9/10 | Requires medical + genomics expertise |
+| **Multi-Source Data Synthesis** | 9/10 | 8+ APIs + literature + guidelines |
+| **Reasoning Depth** | 10/10 | Life-critical decisions, uncertainty quantification |
+| **Evaluator Difficulty** | 8/10 | Need expert ground truth + guideline compliance |
+| **API Complexity** | 6/10 | Public APIs, but rate limits + authentication |
+| **Ground Truth Availability** | 7/10 | ClinVar good, but expert review needed |
+| **Regulatory Risk** | 8/10 | Medical liability, HIPAA considerations |
+
+**Overall Difficulty:** 9/10 (Hardest benchmark domain)  
+**Revenue Potential:** 10/10 (Healthcare AI - $B market)  
+**Impact:** 10/10 (Life-saving clinical decision support)
+
+---
+
+## Related Resources
+- [Grant Application Domain](mdc:grant-application-production-architecture.mdc) - Reference implementation
+- [MCP Servers Guide](mdc:mcp-servers-reference.mdc) - Available MCP servers
+- [Profitability Doctrine](mdc:profitability-doctrine.mdc) - Strategic prioritization
+
+**Status:** Ready for development post Grant Application validation  
+**Owner:** Alpha (Fahad)  
+**Timeline:** Start Week 1 after GA PR approval  
+**Expected Completion:** 3-4 weeks from start

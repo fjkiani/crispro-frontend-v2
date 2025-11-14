@@ -205,33 +205,26 @@ def run_boltz_inference(target_sequence: str, candidate_sequences: list, job_id:
 )
 def run_structure_prediction(protein_sequence: str, job_id: str) -> dict:
     """
-    (Reforged v3) Runs a structural integrity check for a single protein.
-    This version restores the critical MSA generation step.
+    (Reforged v4 - FAST MODE) Runs a structural integrity check for a single protein.
+    Uses msa='empty' for single-sequence inference (2-5 min vs 60+ min with full MSA).
+    Trade-off: Lower accuracy (pLDDT ~50-70) but FAST. Good for relative ranking.
     """
     import yaml
     import subprocess
     import json
     from pathlib import Path
-    from tools.msa_client import run_mmseqs2 # MSA RESTORATION
+    # No MSA client needed - using msa='empty' for fast mode!
 
     print(f"Starting structural integrity check for job {job_id}")
 
-    # --- OPERATION: MSA RESTORATION ---
-    print("Fetching MSA for target sequence...")
-    msa_prefix = f"/tmp/msa_{job_id}"
-    msa_results = run_mmseqs2(protein_sequence, prefix=msa_prefix)
-    
-    sanitized_msa_content = msa_results[0]
-    sanitized_msa_path = Path(f"/tmp/sanitized_msa_{job_id}.a3m")
-    with open(sanitized_msa_path, "w") as f:
-        f.write(sanitized_msa_content)
-    print(f"MSA fetched and sanitized to {sanitized_msa_path}")
-
+    # FAST MODE: Use 'empty' MSA for single-sequence inference (2-5 min vs 60+ min)
+    # SKIP MMseqs2 API call entirely - no 60+ min timeout!
+    # Per Boltz schema.py lines 1125-1132: msa='empty' triggers single-sequence mode
+    # Trade-off: Lower accuracy (pLDDT ~50-70) but FAST. Good for relative ranking.
     final_input_data = {
         'version': 1,
         'sequences': [
-            # Provide the MSA file path along with the sequence
-            {'protein': {'id': 'TARG', 'sequence': protein_sequence, 'msa': str(sanitized_msa_path)}},
+            {'protein': {'id': 'TARG', 'sequence': protein_sequence, 'msa': 'empty'}},
         ],
     }
 

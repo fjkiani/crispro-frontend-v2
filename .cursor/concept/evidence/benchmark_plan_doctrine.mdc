@@ -1,0 +1,195 @@
+---
+alwaysApply: false
+description: Benchmark & Evidence Plan – What we will prove, datasets, scaffolding, scenarios, and metrics
+---
+# Benchmark & Evidence Plan – From Signals to Trustworthy Guidance
+
+This rule defines what we are trying to prove, which datasets we will use, the experimental scaffolding, success metrics, and how these results map to clinical guidance (Tier I/II/III/Research). It is the execution playbook for turning our S/P/E + insights pipeline into measurable, trustworthy, and auditable performance.
+
+## 1) What we will prove (hypotheses)
+
+- H1 – Variant impact accuracy (coding/noncoding proxy):
+  Evo2 `min_delta`/`exon_delta` can discriminate ClinVar pathogenic vs benign SNVs with strong AUROC/AUPRC.
+- H2 – DDR/HRD → platinum/PARP sensitivity:
+  Our synthetic lethality path (damage + dependency) identifies platinum/PARP responders with meaningful AUPRC on public cohorts.
+- H3 – Tier integrity and calibration:
+  Tier I (Yes GO) correlates with on‑label/guideline truth; model‑only Tier I operating points can be chosen to achieve target precision/FP rates.
+
+## 2) Primary metrics and analyses
+
+- Variant impact (ClinVar): AUROC, AUPRC; reliability (ECE/Brier) for calibrated scores.
+- HRD/platinum cohorts: AUPRC (preferred), AUROC; threshold analysis for operating points.
+- Guidance evaluation: Precision/Recall/F1 of Tier I vs guideline truth; ablations (±Chromatin, ±Regulatory, ±Essentiality lifts).
+
+## 3) Datasets (minimum viable set)
+
+- ClinVar variant_summary (tab‑delimited): SNVs only, GRCh38 preferred; filter conflicts; label positive = pathogenic/likely_pathogenic, negative = benign/likely_benign.
+  - Source: NCBI FTP (`variant_summary.txt.gz`).
+  - Parser/bench: `[variant_auroc.py](mdc:tools/benchmarks/variant_auroc.py)`.
+- DDR/HRD platinum response (public): small ovarian/breast cohorts with HRD labels and platinum outcomes (to be enumerated; allow substitution with internal if available).
+- Guidance truth: FDA/DailyMed on‑label status + open guidelines (NCCN/ESMO summaries where license permits) for disease/therapy pairs.
+
+## 4) Experimental scaffolding (code + scripts)
+
+- Variant AUROC/AUPRC (ready):
+  - Script: `[variant_auroc.py](mdc:tools/benchmarks/variant_auroc.py)`
+  - Runs Evo proxy endpoints: `[evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py)`
+  - Output JSON: AUROC/AUPRC and configs.
+  - Extend: flags to include `likely_*`, GRCh37, and `exon_delta` aggregation.
+- HRD/platinum AUPRC (plan):
+  - Script: `tools/benchmarks/hrd_platinum_auprc.py` (to be created)
+  - Flow: compute damage (VEP proxy + functionality), dependency (essentiality), map to platinum/PARP, compare to outcomes.
+- Guidance tier eval (plan):
+  - Script: `tools/benchmarks/guidance_tier_eval.py` (to be created)
+  - Flow: compare Tier I vs on‑label/guideline truth; compute precision/recall/F1.
+- Makefile targets (ready):
+  - Backend: `make backend`
+  - Chromatin proxies: `make chromatin`
+  - Add: `make bench_variant` (run AUROC script with defaults).
+
+## 5) Endpoints under test (where signals originate)
+
+- Orchestrator: `[efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py)`
+- Insights: `[insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py)`
+  - `predict_gene_essentiality`, `predict_chromatin_accessibility` (Enformer/Borzoi), `predict_protein_functionality_change`, `predict_splicing_regulatory`
+- Guidance: `[guidance.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/guidance.py)`
+  - `chemo`, `radonc`, `synthetic_lethality`
+- Evo proxy: `[evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py)`
+
+## 6) Test scenarios (minimum set)
+
+- Variant AUROC:
+  - Balanced SNVs: 1,000 pathogenic/likely_pathogenic vs 1,000 benign/likely_benign; report AUROC/AUPRC.
+  - Sensitivity: coding vs noncoding subsets; `min_delta` vs `exon_delta` vs combined.
+- DDR/HRD AUPRC:
+  - Ovarian cohort: BRCA1/2 LOF vs platinum outcomes; report AUPRC; ablate essentiality and chromatin lifts.
+  - Breast cohort: replicate method; compare operating points.
+- Guidance tiering:
+  - Chemo: disease/therapy pairs with known label; compute Tier I precision/recall; measure effect of guideline/RCT/meta badges.
+  - RadOnc: NSCLC TP53 scenarios; verify stability and tier transitions with evidence gates.
+  - Off‑label “model‑only” gate: test threshold grid for efficacy/confidence/evidence_strength → select operating point from ROC/PR.
+
+## 7) Mapping metrics → product gates
+
+- Calibrate internal signals (Platt/Isotonic) on held‑out; select probability cutoffs to match target PR operating points.
+- Encode thresholds in guidance:
+  - Experimental Tier I requires: `efficacy_score ≥ T_efficacy`, `confidence ≥ T_conf`, `evidence_strength ≥ T_evidence`, MoA alignment true, minimal literature signal present.
+  - Tier I (label) unchanged: on‑label/guideline present.
+- UI clarity: badge “Model‑backed Yes” vs “Label‑backed Yes”; show expected precision from validation curve.
+
+## 8) Governance & auditability
+
+- Persist benchmark outputs (JSON) with run signatures and environment (model_id, API base, dates).
+- Record lifts (Functionality/Chromatin/Essentiality/Regulatory) and their provenance in results.
+- Maintain reproducible Makefile targets and pin environment in `requirements.txt` if dedicated venv is used.
+
+## 9) Timeline & milestones
+
+- Week 1: Ship variant AUROC/AUPRC (balanced SNVs), add flags, publish JSON + short write‑up.
+- Week 2: Implement guidance tier eval; fetch on‑label/guideline truth (ruleset stub then FDA/DailyMed).
+- Week 3–4: Implement HRD/platinum AUPRC on at least one open cohort; ablation study; select model‑only Tier I thresholds.
+
+## 10) Execution checklist (quick)
+
+- [ ] ClinVar AUROC run ≥1k/1k with JSON results
+- [ ] Add `make bench_variant` target with sane defaults
+- [ ] Implement `guidance_tier_eval.py` with label truth CSV
+- [ ] Implement `hrd_platinum_auprc.py` and cohort loader
+- [ ] Document thresholds → router gates; update UI badges and copy
+
+---
+
+## Outcomes to date (from first run to Fusion Engine integration)
+
+### Where we started
+- Evo2‑only S pipeline with occasional upstream timeouts and long evaluation runs.
+- Guidance endpoints returned low scores/confidence when literature/insights were disabled; evidence gate zeroed “insufficient” rows.
+- AlphaMissense (AM) integration was conceptual; variant keys and coordinates (GRCh37 vs GRCh38, REF/ALT flips) were inconsistent across test data.
+
+### Fixes and hardening delivered
+- Backend stability:
+  - Added guards in Evo proxy and insights to skip calls when variant coordinates are missing; fast fallbacks instead of timeouts.
+  - Added runtime knobs to evaluators (`--timeout`, `--retries`, `--max_rows`, `--sleep`).
+- Fusion Engine:
+  - Deployed Modal service with AM parquet volume; added `/debug/info`, `/debug/lookup`, `/debug/pos` endpoints.
+  - Standardized AM keys (`chr{chrom}:{pos}:{REF}:{ALT}`) and validated against ClinVar.
+  - Wired backend to use Fusion AM first; disabled lingering Evo/transcript calls when fusion is active; avoided zeroing on AM misses.
+- Guidance orchestration:
+  - Adjusted gating so “insufficient” under Fusion doesn’t zero scores; conservative confidence computed from S/P when evidence is off.
+  - Added resistance/sensitivity scaffolding (TP53 high‑risk; PSMB5; MAPK hotspot sensitivity).
+
+### Current results (research‑mode snapshot)
+- 6‑row micro (literature disabled; Fusion ON):
+  - NRAS Q61R + MEK inhibitor → efficacy 0.664, confidence 0.65, tier consider.
+  - BRAF V600E + BRAF inhibitor → efficacy 0.625, confidence 0.65, tier consider.
+  - TP53 R248W + chemotherapy → efficacy 0.369, confidence 0.40, tier consider.
+  - KRAS G12D + MEK inhibitor → conservative in batch (0.0/0.113) due to therapy mapping; direct KRAS call confirmed fused S working (~0.629/0.5).
+  - PSMB5 A49T (PI) → insufficient (AM not applicable).
+  - BRCA1 R1699W (platinum) → ERROR due to CSV REF/ALT; corrected key (chr17:43063931 G>A) returns valid score/confidence.
+
+### What this demonstrates
+- End‑to‑end pipeline completes quickly and deterministically with Fusion enabled; Evo timeouts eliminated.
+- AM‑covered missense variants lift sequence signal and confidence into “consider” even with evidence disabled.
+- Debuggability: We can prove variant‑level coverage via Fusion debug endpoints and reconcile REF/ALT/GRCh38 mismatches.
+
+### Gaps and next lifts
+- Publish fresh AUROC/AUPRC artifacts (variant_auroc.py, eval_fused_micro.py) from this repo run.
+- Wire `provenance.sequence = {evo2, am, fused}` into responses and reflect in UI.
+- Enable literature and HRD proxies for chemotherapy/platinum; expand eval to ~50 labeled rows.
+- Add Model‑backed Tier I operating points and document thresholds.
+
+## Current capability snapshot (concise)
+- Inputs: GRCh38 coords + hgvs_p; disease; therapy classes.
+- S: Fusion Engine (AM) with fallback; Evo2 skipped when Fusion is active.
+- P: MAPK/TP53/DDR mapping with MoA‑aware weighting.
+- E: Optional (disabled in current micro runs for speed).
+- Outputs: efficacy_score, confidence, evidence_tier (supported/consider/insufficient), badges, rationale, insights.
+- Status: Research‑mode; FDA/NCCN tiers not surfaced yet; Model‑backed Tier I planned.
+
+
+## Outcomes to date (from first run to Fusion Engine integration)
+
+### Where we started
+- Evo2‑only S pipeline with occasional upstream timeouts and long evaluation runs.
+- Guidance endpoints returned low scores/confidence when literature/insights were disabled; evidence gate zeroed “insufficient” rows.
+- AlphaMissense (AM) integration was conceptual; variant keys and coordinates (GRCh37 vs GRCh38, REF/ALT flips) were inconsistent across test data.
+
+### Fixes and hardening delivered
+- Backend stability:
+  - Added guards in Evo proxy and insights to skip calls when variant coordinates are missing; fast fallbacks instead of timeouts.
+  - Added runtime knobs to evaluators (`--timeout`, `--retries`, `--max_rows`, `--sleep`).
+- Fusion Engine:
+  - Deployed Modal service with AM parquet volume; added `/debug/info`, `/debug/lookup`, `/debug/pos` endpoints.
+  - Standardized AM keys (`chr{chrom}:{pos}:{REF}:{ALT}`) and validated against ClinVar.
+  - Wired backend to use Fusion AM first; disabled lingering Evo/transcript calls when fusion is active; avoided zeroing on AM misses.
+- Guidance orchestration:
+  - Adjusted gating so “insufficient” under Fusion doesn’t zero scores; conservative confidence computed from S/P when evidence is off.
+  - Added resistance/sensitivity scaffolding (TP53 high‑risk; PSMB5; MAPK hotspot sensitivity).
+
+### Current results (research‑mode snapshot)
+- 6‑row micro (literature disabled; Fusion ON):
+  - NRAS Q61R + MEK inhibitor → efficacy 0.664, confidence 0.65, tier consider.
+  - BRAF V600E + BRAF inhibitor → efficacy 0.625, confidence 0.65, tier consider.
+  - TP53 R248W + chemotherapy → efficacy 0.369, confidence 0.40, tier consider.
+  - KRAS G12D + MEK inhibitor → conservative in batch (0.0/0.113) due to therapy mapping; direct KRAS call confirmed fused S working (~0.629/0.5).
+  - PSMB5 A49T (PI) → insufficient (AM not applicable).
+  - BRCA1 R1699W (platinum) → ERROR due to CSV REF/ALT; corrected key (chr17:43063931 G>A) returns valid score/confidence.
+
+### What this demonstrates
+- End‑to‑end pipeline completes quickly and deterministically with Fusion enabled; Evo timeouts eliminated.
+- AM‑covered missense variants lift sequence signal and confidence into “consider” even with evidence disabled.
+- Debuggability: We can prove variant‑level coverage via Fusion debug endpoints and reconcile REF/ALT/GRCh38 mismatches.
+
+### Gaps and next lifts
+- Publish fresh AUROC/AUPRC artifacts (variant_auroc.py, eval_fused_micro.py) from this repo run.
+- Wire `provenance.sequence = {evo2, am, fused}` into responses and reflect in UI.
+- Enable literature and HRD proxies for chemotherapy/platinum; expand eval to ~50 labeled rows.
+- Add Model‑backed Tier I operating points and document thresholds.
+
+## Current capability snapshot (concise)
+- Inputs: GRCh38 coords + hgvs_p; disease; therapy classes.
+- S: Fusion Engine (AM) with fallback; Evo2 skipped when Fusion is active.
+- P: MAPK/TP53/DDR mapping with MoA‑aware weighting.
+- E: Optional (disabled in current micro runs for speed).
+- Outputs: efficacy_score, confidence, evidence_tier (supported/consider/insufficient), badges, rationale, insights.
+- Status: Research‑mode; FDA/NCCN tiers not surfaced yet; Model‑backed Tier I planned.

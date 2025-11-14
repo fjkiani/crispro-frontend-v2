@@ -492,3 +492,249 @@ if __name__ == "__main__":
     main()
 
 
+
+    if len(valid_variants) == 0:
+        print("No valid variants after filtering reference mismatches.", file=sys.stderr)
+        sys.exit(1)
+    
+    if len(set(labels)) < 2:
+        print("Not enough class diversity in valid variants after filtering.", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        auroc = roc_auc_score(labels, scores)
+        auprc = average_precision_score(labels, scores)
+    except Exception as e:
+        print(f"Failed to compute metrics: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Supervised head with isotonic calibration (skip in fast mode)
+    sup_auroc, sup_auprc = None, None
+    if not args.fast:
+        print("Building supervised dataset...", file=sys.stderr)
+        import asyncio as _asyncio
+        X_all, y_all, genes = _asyncio.run(build_supervised_dataset(args.api_base, valid_variants, require_am=args.require_am))
+        sup_auroc, sup_auprc = run_group_kfold_supervised(X_all, y_all, genes)
+
+    # Fused AM-only baseline on covered subset for quick comparison
+    fused_baseline = None
+    try:
+        import asyncio as _asyncio
+        async def _am_fused(http_client: httpx.AsyncClient):
+            y_cov: List[int] = []
+            s_cov: List[float] = []
+            for v in valid_variants:
+                am = await fetch_am_score_only(http_client, v)
+                if am is None or am in (-998.0, -999.0):
+                    continue
+                # Simple fusion: max(|Evo2|, AM)
+                idx = valid_variants.index(v)
+                evo = float(scores[idx])
+                fused = max(evo, float(am))
+                y_cov.append(v.label)
+                s_cov.append(fused)
+            if len(set(y_cov)) >= 2 and len(y_cov) >= 10:
+                return {
+                    "auroc": roc_auc_score(y_cov, s_cov),
+                    "auprc": average_precision_score(y_cov, s_cov),
+                    "n": len(y_cov),
+                }
+            return None
+        async def _runner():
+            async with httpx.AsyncClient(timeout=30.0) as _hc:
+                return await _am_fused(_hc)
+        fused_baseline = _asyncio.run(_runner())
+    except Exception:
+        fused_baseline = None
+
+    summary = {
+        "n_pos_initial": len(pos),
+        "n_neg_initial": len(neg),
+        "n_pos_valid": sum(1 for v in valid_variants if v.label == 1),
+        "n_neg_valid": sum(1 for v in valid_variants if v.label == 0),
+        "n_filtered": len(variants) - len(valid_variants),
+        "model_id": args.model_id,
+        "api_base": args.api_base,
+        "metrics": {
+            "auroc": auroc,
+            "auprc": auprc,
+        },
+        "metrics_supervised_groupcv": {
+            "auroc": sup_auroc,
+            "auprc": sup_auprc,
+        },
+        "metrics_fused_baseline": fused_baseline,
+    }
+    with open(args.out, "w") as f:
+        json.dump(summary, f, indent=2)
+    print(json.dumps(summary, indent=2))
+
+
+if __name__ == "__main__":
+    main()
+
+
+
+    if len(valid_variants) == 0:
+        print("No valid variants after filtering reference mismatches.", file=sys.stderr)
+        sys.exit(1)
+    
+    if len(set(labels)) < 2:
+        print("Not enough class diversity in valid variants after filtering.", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        auroc = roc_auc_score(labels, scores)
+        auprc = average_precision_score(labels, scores)
+    except Exception as e:
+        print(f"Failed to compute metrics: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Supervised head with isotonic calibration (skip in fast mode)
+    sup_auroc, sup_auprc = None, None
+    if not args.fast:
+        print("Building supervised dataset...", file=sys.stderr)
+        import asyncio as _asyncio
+        X_all, y_all, genes = _asyncio.run(build_supervised_dataset(args.api_base, valid_variants, require_am=args.require_am))
+        sup_auroc, sup_auprc = run_group_kfold_supervised(X_all, y_all, genes)
+
+    # Fused AM-only baseline on covered subset for quick comparison
+    fused_baseline = None
+    try:
+        import asyncio as _asyncio
+        async def _am_fused(http_client: httpx.AsyncClient):
+            y_cov: List[int] = []
+            s_cov: List[float] = []
+            for v in valid_variants:
+                am = await fetch_am_score_only(http_client, v)
+                if am is None or am in (-998.0, -999.0):
+                    continue
+                # Simple fusion: max(|Evo2|, AM)
+                idx = valid_variants.index(v)
+                evo = float(scores[idx])
+                fused = max(evo, float(am))
+                y_cov.append(v.label)
+                s_cov.append(fused)
+            if len(set(y_cov)) >= 2 and len(y_cov) >= 10:
+                return {
+                    "auroc": roc_auc_score(y_cov, s_cov),
+                    "auprc": average_precision_score(y_cov, s_cov),
+                    "n": len(y_cov),
+                }
+            return None
+        async def _runner():
+            async with httpx.AsyncClient(timeout=30.0) as _hc:
+                return await _am_fused(_hc)
+        fused_baseline = _asyncio.run(_runner())
+    except Exception:
+        fused_baseline = None
+
+    summary = {
+        "n_pos_initial": len(pos),
+        "n_neg_initial": len(neg),
+        "n_pos_valid": sum(1 for v in valid_variants if v.label == 1),
+        "n_neg_valid": sum(1 for v in valid_variants if v.label == 0),
+        "n_filtered": len(variants) - len(valid_variants),
+        "model_id": args.model_id,
+        "api_base": args.api_base,
+        "metrics": {
+            "auroc": auroc,
+            "auprc": auprc,
+        },
+        "metrics_supervised_groupcv": {
+            "auroc": sup_auroc,
+            "auprc": sup_auprc,
+        },
+        "metrics_fused_baseline": fused_baseline,
+    }
+    with open(args.out, "w") as f:
+        json.dump(summary, f, indent=2)
+    print(json.dumps(summary, indent=2))
+
+
+if __name__ == "__main__":
+    main()
+
+
+
+    if len(valid_variants) == 0:
+        print("No valid variants after filtering reference mismatches.", file=sys.stderr)
+        sys.exit(1)
+    
+    if len(set(labels)) < 2:
+        print("Not enough class diversity in valid variants after filtering.", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        auroc = roc_auc_score(labels, scores)
+        auprc = average_precision_score(labels, scores)
+    except Exception as e:
+        print(f"Failed to compute metrics: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Supervised head with isotonic calibration (skip in fast mode)
+    sup_auroc, sup_auprc = None, None
+    if not args.fast:
+        print("Building supervised dataset...", file=sys.stderr)
+        import asyncio as _asyncio
+        X_all, y_all, genes = _asyncio.run(build_supervised_dataset(args.api_base, valid_variants, require_am=args.require_am))
+        sup_auroc, sup_auprc = run_group_kfold_supervised(X_all, y_all, genes)
+
+    # Fused AM-only baseline on covered subset for quick comparison
+    fused_baseline = None
+    try:
+        import asyncio as _asyncio
+        async def _am_fused(http_client: httpx.AsyncClient):
+            y_cov: List[int] = []
+            s_cov: List[float] = []
+            for v in valid_variants:
+                am = await fetch_am_score_only(http_client, v)
+                if am is None or am in (-998.0, -999.0):
+                    continue
+                # Simple fusion: max(|Evo2|, AM)
+                idx = valid_variants.index(v)
+                evo = float(scores[idx])
+                fused = max(evo, float(am))
+                y_cov.append(v.label)
+                s_cov.append(fused)
+            if len(set(y_cov)) >= 2 and len(y_cov) >= 10:
+                return {
+                    "auroc": roc_auc_score(y_cov, s_cov),
+                    "auprc": average_precision_score(y_cov, s_cov),
+                    "n": len(y_cov),
+                }
+            return None
+        async def _runner():
+            async with httpx.AsyncClient(timeout=30.0) as _hc:
+                return await _am_fused(_hc)
+        fused_baseline = _asyncio.run(_runner())
+    except Exception:
+        fused_baseline = None
+
+    summary = {
+        "n_pos_initial": len(pos),
+        "n_neg_initial": len(neg),
+        "n_pos_valid": sum(1 for v in valid_variants if v.label == 1),
+        "n_neg_valid": sum(1 for v in valid_variants if v.label == 0),
+        "n_filtered": len(variants) - len(valid_variants),
+        "model_id": args.model_id,
+        "api_base": args.api_base,
+        "metrics": {
+            "auroc": auroc,
+            "auprc": auprc,
+        },
+        "metrics_supervised_groupcv": {
+            "auroc": sup_auroc,
+            "auprc": sup_auprc,
+        },
+        "metrics_fused_baseline": fused_baseline,
+    }
+    with open(args.out, "w") as f:
+        json.dump(summary, f, indent=2)
+    print(json.dumps(summary, indent=2))
+
+
+if __name__ == "__main__":
+    main()
+
+

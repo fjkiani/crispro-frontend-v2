@@ -1,0 +1,197 @@
+# Trustworthy Evidence Doctrine (TED)
+
+Purpose: Make final, production-grade changes that ensure trustworthy, reproducible variant assessment by aligning sequence-only signals with curated clinical evidence while preserving abstain-first safety.
+
+## Scope
+- Applies to oncology-backend-minimal (`api/index.py`) and oncology-frontend Myeloma UI.
+- Integrates ClinVar alignment, PubMed synthesis, priors, provenance, discrepancy surfacing, and UI affordances.
+
+## Core Tenets
+- Evidence-first: Never overclaim from sequence-only scores; synthesize ClinVar and PubMed context.
+- Abstain over speculate: Default to Unknown when confidence is low, unless high-quality priors justify nudging.
+- Transparent discrepancy handling: Explicitly surface discordance, reason, and confidence gap.
+- Reproducibility: Every call produces a run signature and provenance fields.
+
+## Backend Requirements
+- ClinVar resolution order:
+  1. Variation ID by `gene + hgvs_p` (preferred)
+  2. Coordinate search fallback (`chrom:pos ref>alt`)
+  - Response must include `clinvar.source` and resolved `clinvar.url`.
+- Discrepancy analysis in `/api/evidence/deep_analysis`:
+  - Return: `discordant`, `discrepancy_reason`, `confidence_gap`, `our_call`, `clinvar`.
+  - Reasons include: `low_model_confidence_and_weak_clinvar_review`, `low_model_confidence_vs_strong_clinvar`, `model_disagrees_with_strong_clinvar`, `model_disagrees_with_moderate_clinvar`, `unknown`.
+- Literature endpoint `/api/evidence/literature`:
+  - Inputs: `gene, hgvs_p, disease, time_window, max_results`.
+  - Outputs: `query, pubmed_query, total_found, top_results[]`.
+  - Phase 2 (optional): `include_abstracts` and `evidence_synthesis` (LLM summary with citations).
+- Policy v1.2 enforcement:
+  - Gating: magnitude + confidence; neutral zone; Unknown if < thresholds.
+  - Optional priors (bounded): enable `clinvar_prior` and `literature_prior` when review and quality criteria met.
+- Provenance:
+  - Include `mode`, `selected_model`, `upstream_service`, `use_case_id`, `policy_version`, `run_signature`.
+
+## Frontend Requirements
+- Deeper Analysis Drawer:
+  - Show Discordant/Consistent chip, `discrepancy_reason`, `confidence_gap`.
+  - Render ClinVar section with resolved URL; Literature results with links.
+  - If `evidence_synthesis` available, display concise summary + citations.
+- Variant Cards:
+  - Keep Unknown/Neutral when confidence < 0.6 unless priors applied.
+  - Add "Why different?" inline hint when discordant.
+
+## Safety & Data Hygiene
+- Strict REF allele validation via Ensembl.
+- Deduplicate variants preflight; treat single-variant errors as non-fatal.
+- Timeouts and chunking to avoid serverless failures.
+
+## Analytics & Logging
+- Log `discordant`, `discrepancy_reason`, `confidence_gap`, and priors used (if any) into Supabase per run.
+- Dashboard summaries for alignment rate and average confidence gap.
+
+## Success Criteria
+- Reduced discordance for canonical hotspots (BRAF V600E, KRAS G12/G13, NRAS Q61) via bounded priors.
+- Clear user-facing discrepancy rationale and evidence links.
+- Reproducible runs with provenance captured.
+
+---
+
+## LLM Evidence Synthesis & Multi‑Step Pipeline (New)
+- Purpose-built rubric and schema for variant–disease–therapy alignment:
+  - Sections: mechanism (GoF/LoF), pathogenicity evidence, disease relevance (myeloma), therapeutic implication, resistance, evidence strength, key quotes + PMIDs.
+  - Machine-usable JSON schema; claims must carry PMIDs.
+- Map → Filter → Reduce pipeline:
+  1) Collect: `/api/evidence/literature` (optionally include abstracts) + curated URLs (ClinVar/trials).
+  2) Extract: `/api/evidence/extract` (Diffbot) to fetch clean text.
+  3) Chunk+Tag: LLM chunk tagger assigns disease/mechanism/therapy/resistance/level-of-evidence and relevance-to-myeloid.
+  4) Filter: keep high-relevance myeloma chunks; downweight off-indication as mechanistic.
+  5) Reduce: LLM produces rubric-aligned JSON; require citations per claim.
+  6) Validate: schema enforcement; quote spans for top claims; drop uncited claims.
+  7) Persist: store JSON, citations, and run_signature in Supabase.
+  8) Present: Drawer shows AI Explanation + Literature Synthesis + citations.
+- Relevance gating to use-case: only myeloma-specific (or clearly cross-hematologic) evidence may influence priors; cross-indication evidence marked mechanistic.
+
+## API Additions (Implemented)
+- `/api/evidence/extract`: Diffbot article extraction (title, text, html, tags).
+- `/api/evidence/explain`: LLM explanation combining Evo2 metrics, ClinVar, and literature.
+- `/api/evidence/literature`: supports `include_abstracts` and `synthesize` for inline summaries.
+
+## API Roadmap (Optional)
+- `/api/evidence/crawl` (batch URLs) → `/api/evidence/summarize` (map-reduce over stored text) → `/api/evidence/align` (final rubric JSON with citations).
+
+## Confidence Breakdown (Implemented)
+- Return `evo2_result.confidence_breakdown` with:
+  - `magnitude_s1`, `exon_support_s2`, `window_consistency_s3`, `short_window_boost`, `consistency_boost`, `final_confidence`.
+- Return `evo2_result.confidence_explanation` one-liner and `evo2_result.gating` flags (`magnitude_ok`, `neutral_zone`, `confidence_ok`).
+
+## Hotspot & Priors Controls (Implemented)
+- `options.use_priors` (bounded ClinVar prior) and `options.hotspot_relaxation` (small confidence bump when exon corroborates) in `/api/predict`.
+- Frontend toggles: "Use Evidence Priors" and "Synthesize Literature".
+
+## Frontend UX Updates (Implemented)
+- Drawer renders: AI Explanation, Literature Synthesis, discrepancy fields, references.
+- Variant chips show confidence with tooltip; drawer displays confidence breakdown.
+
+## Testing & Local Verification
+- Backend pytest green; smoke-tested `/health`, `/api/evo/refcheck`, literature/explain/extract locally.
+- Frontend points to local backend (e.g., `VITE_API_ROOT=http://127.0.0.1:8025`) for end-to-end validation.
+
+description:
+globs:
+alwaysApply: false
+---
+
+- Integrates ClinVar alignment, PubMed synthesis, priors, provenance, discrepancy surfacing, and UI affordances.
+
+## Core Tenets
+- Evidence-first: Never overclaim from sequence-only scores; synthesize ClinVar and PubMed context.
+- Abstain over speculate: Default to Unknown when confidence is low, unless high-quality priors justify nudging.
+- Transparent discrepancy handling: Explicitly surface discordance, reason, and confidence gap.
+- Reproducibility: Every call produces a run signature and provenance fields.
+
+## Backend Requirements
+- ClinVar resolution order:
+  1. Variation ID by `gene + hgvs_p` (preferred)
+  2. Coordinate search fallback (`chrom:pos ref>alt`)
+  - Response must include `clinvar.source` and resolved `clinvar.url`.
+- Discrepancy analysis in `/api/evidence/deep_analysis`:
+  - Return: `discordant`, `discrepancy_reason`, `confidence_gap`, `our_call`, `clinvar`.
+  - Reasons include: `low_model_confidence_and_weak_clinvar_review`, `low_model_confidence_vs_strong_clinvar`, `model_disagrees_with_strong_clinvar`, `model_disagrees_with_moderate_clinvar`, `unknown`.
+- Literature endpoint `/api/evidence/literature`:
+  - Inputs: `gene, hgvs_p, disease, time_window, max_results`.
+  - Outputs: `query, pubmed_query, total_found, top_results[]`.
+  - Phase 2 (optional): `include_abstracts` and `evidence_synthesis` (LLM summary with citations).
+- Policy v1.2 enforcement:
+  - Gating: magnitude + confidence; neutral zone; Unknown if < thresholds.
+  - Optional priors (bounded): enable `clinvar_prior` and `literature_prior` when review and quality criteria met.
+- Provenance:
+  - Include `mode`, `selected_model`, `upstream_service`, `use_case_id`, `policy_version`, `run_signature`.
+
+## Frontend Requirements
+- Deeper Analysis Drawer:
+  - Show Discordant/Consistent chip, `discrepancy_reason`, `confidence_gap`.
+  - Render ClinVar section with resolved URL; Literature results with links.
+  - If `evidence_synthesis` available, display concise summary + citations.
+- Variant Cards:
+  - Keep Unknown/Neutral when confidence < 0.6 unless priors applied.
+  - Add "Why different?" inline hint when discordant.
+
+## Safety & Data Hygiene
+- Strict REF allele validation via Ensembl.
+- Deduplicate variants preflight; treat single-variant errors as non-fatal.
+- Timeouts and chunking to avoid serverless failures.
+
+## Analytics & Logging
+- Log `discordant`, `discrepancy_reason`, `confidence_gap`, and priors used (if any) into Supabase per run.
+- Dashboard summaries for alignment rate and average confidence gap.
+
+## Success Criteria
+- Reduced discordance for canonical hotspots (BRAF V600E, KRAS G12/G13, NRAS Q61) via bounded priors.
+- Clear user-facing discrepancy rationale and evidence links.
+- Reproducible runs with provenance captured.
+
+---
+
+## LLM Evidence Synthesis & Multi‑Step Pipeline (New)
+- Purpose-built rubric and schema for variant–disease–therapy alignment:
+  - Sections: mechanism (GoF/LoF), pathogenicity evidence, disease relevance (myeloma), therapeutic implication, resistance, evidence strength, key quotes + PMIDs.
+  - Machine-usable JSON schema; claims must carry PMIDs.
+- Map → Filter → Reduce pipeline:
+  1) Collect: `/api/evidence/literature` (optionally include abstracts) + curated URLs (ClinVar/trials).
+  2) Extract: `/api/evidence/extract` (Diffbot) to fetch clean text.
+  3) Chunk+Tag: LLM chunk tagger assigns disease/mechanism/therapy/resistance/level-of-evidence and relevance-to-myeloid.
+  4) Filter: keep high-relevance myeloma chunks; downweight off-indication as mechanistic.
+  5) Reduce: LLM produces rubric-aligned JSON; require citations per claim.
+  6) Validate: schema enforcement; quote spans for top claims; drop uncited claims.
+  7) Persist: store JSON, citations, and run_signature in Supabase.
+  8) Present: Drawer shows AI Explanation + Literature Synthesis + citations.
+- Relevance gating to use-case: only myeloma-specific (or clearly cross-hematologic) evidence may influence priors; cross-indication evidence marked mechanistic.
+
+## API Additions (Implemented)
+- `/api/evidence/extract`: Diffbot article extraction (title, text, html, tags).
+- `/api/evidence/explain`: LLM explanation combining Evo2 metrics, ClinVar, and literature.
+- `/api/evidence/literature`: supports `include_abstracts` and `synthesize` for inline summaries.
+
+## API Roadmap (Optional)
+- `/api/evidence/crawl` (batch URLs) → `/api/evidence/summarize` (map-reduce over stored text) → `/api/evidence/align` (final rubric JSON with citations).
+
+## Confidence Breakdown (Implemented)
+- Return `evo2_result.confidence_breakdown` with:
+  - `magnitude_s1`, `exon_support_s2`, `window_consistency_s3`, `short_window_boost`, `consistency_boost`, `final_confidence`.
+- Return `evo2_result.confidence_explanation` one-liner and `evo2_result.gating` flags (`magnitude_ok`, `neutral_zone`, `confidence_ok`).
+
+## Hotspot & Priors Controls (Implemented)
+- `options.use_priors` (bounded ClinVar prior) and `options.hotspot_relaxation` (small confidence bump when exon corroborates) in `/api/predict`.
+- Frontend toggles: "Use Evidence Priors" and "Synthesize Literature".
+
+## Frontend UX Updates (Implemented)
+- Drawer renders: AI Explanation, Literature Synthesis, discrepancy fields, references.
+- Variant chips show confidence with tooltip; drawer displays confidence breakdown.
+
+## Testing & Local Verification
+- Backend pytest green; smoke-tested `/health`, `/api/evo/refcheck`, literature/explain/extract locally.
+- Frontend points to local backend (e.g., `VITE_API_ROOT=http://127.0.0.1:8025`) for end-to-end validation.
+
+description:
+globs:
+alwaysApply: false
+---

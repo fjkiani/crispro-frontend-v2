@@ -1,0 +1,1486 @@
+---
+alwaysApply: false
+description: Complete frontend integration guide for Resistance Playbook V1 - Agent Jr's mission to wire SAE-powered resistance prediction UI
+---
+
+# ⚔️ RESISTANCE PLAYBOOK FRONTEND INTEGRATION DOCTRINE ⚔️
+
+**Mission Owner**: Agent Jr  
+**Backend Status**: ✅ 100% Complete (Zo - 19/19 tests passing)  
+**Frontend Status**: ⏸️ 0% Complete (Awaiting Jr)  
+**Timeline**: 3-4 hours  
+**Priority**: P0 (Completes Ayesha Demo)
+
+---
+
+## 🎯 MISSION OBJECTIVE
+
+**Build frontend components to display Zo's resistance playbook backend**:
+- Detected resistance risks (HR restoration, ABCB1, MAPK, PI3K, SLFN11)
+- Recommended combo strategies (7 trial-backed options)
+- Next-line therapy switches (6 evidence-tiered alternatives)
+- Trial keyword filtering (auto-generated for matching)
+
+**End Result**: Ayesha can ask "What if I become resistant to PARP?" and get a complete, transparent answer with combos, switches, and trial matches.
+
+---
+
+## 📊 BACKEND DATA STRUCTURE (WHAT JR RECEIVES)
+
+### **Ayesha Complete Care Plan Response**:
+
+```json
+{
+  "run_id": "abc123",
+  "timestamp": "2025-01-12T10:00:00Z",
+  "patient_context": {...},
+  "drug_recommendations": [...],
+  "food_recommendations": [...],
+  
+  // ⚔️ NEW: Resistance Playbook (from Zo's backend)
+  "resistance_playbook": {
+    "risks": [
+      {
+        "type": "HR_restoration",
+        "confidence": 0.7,
+        "evidence": "HRD score 35 < 42 after PARP exposure (possible reversion)",
+        "triggers": ["PARP inhibitors"],
+        "source": "tumor_context + treatment_history"
+      }
+    ],
+    "combo_strategies": [
+      {
+        "drugs": ["Niraparib", "Bevacizumab"],
+        "moa": "PARP + anti-angiogenic",
+        "indication": "Platinum-sensitive maintenance",
+        "evidence_tier": "STANDARD",
+        "trials": ["PAOLA-1", "NCT01891344"],
+        "rank_score": 0.966,
+        "triggers": ["platinum_sensitive_maintenance"],
+        "rationale": "Complementary stress: DNA repair inhibition + angiogenesis blockade creates hostile tumor microenvironment"
+      },
+      {
+        "drugs": ["Olaparib", "Ceralasertib"],
+        "moa": "PARP + ATR",
+        "indication": "HRD-high with HR restoration risk or prior PARP failure",
+        "evidence_tier": "SUPPORTED",
+        "trials": ["NCT03462342", "NCT02264678"],
+        "rank_score": 0.638,
+        "triggers": ["HR_restoration", "prior_PARP_failure"],
+        "rationale": "Synthetic lethality extended: Block both HR (PARP) and ATR-mediated S-phase checkpoint compensation"
+      }
+    ],
+    "next_line_switches": [
+      {
+        "drug": "Carboplatin",
+        "drug_class": "Platinum agent",
+        "indication": "Platinum-sensitive rechallenge",
+        "evidence_tier": "STANDARD",
+        "trials": ["DESKTOP III", "SOC"],
+        "rank_score": 0.9,
+        "rationale": "Platinum rechallenge for sensitive disease (>6 month PFI)"
+      },
+      {
+        "drug": "Ceralasertib",
+        "drug_class": "ATR inhibitor",
+        "indication": "PARP resistance via HR restoration",
+        "evidence_tier": "SUPPORTED",
+        "trials": ["NCT02264678", "NCT03462342"],
+        "rank_score": 0.82,
+        "rationale": "ATR inhibition targets S-phase checkpoint, bypassing HR restoration mechanisms"
+      }
+    ],
+    "trial_keywords": [
+      "ATR inhibitor",
+      "CHK1 inhibitor",
+      "WEE1 inhibitor",
+      "PARP combination"
+    ],
+    "provenance": {
+      "service": "resistance_playbook_service",
+      "version": "1.0",
+      "methods": {
+        "resistance_detection": "heuristic_rules_v1",
+        "combo_ranking": "trigger_match + biomarker_boost + prior_penalty",
+        "switch_ranking": "trigger_match + prior_penalty"
+      },
+      "data_sources": {
+        "tumor_context": true,
+        "treatment_history": true,
+        "pathway_disruption": false,
+        "sae_features": true,
+        "insights": false
+      },
+      "risk_count": 1,
+      "combo_count": 2,
+      "switch_count": 6
+    }
+  },
+  
+  "integrated_confidence": 0.68,
+  "provenance": {
+    "drug_analysis": {...},
+    "food_analysis": {...},
+    "resistance_analysis": {
+      "endpoint": "/api/care/resistance_playbook",
+      "enabled": true,
+      "version": "1.0"
+    }
+  }
+}
+```
+
+---
+
+## 📋 TASK BREAKDOWN (4 TASKS = 3-4 HOURS)
+
+### **🎯 CRITICAL: DYNAMIC APPROACH (NO HARDCODING!)** ⚔️
+
+**Philosophy**: Build components that **dynamically adapt** to ANY backend response shape. No assumptions, no hardcoded values, no fixed structures.
+
+**Why**:
+- Backend may evolve (new risk types, new fields)
+- Different patients have different data completeness
+- Must handle missing/partial data gracefully
+- Future-proof for additional capabilities
+
+**How**:
+- Iterate over arrays (don't assume length/order)
+- Check for field existence before displaying
+- Use fallbacks for missing data
+- Adapt UI based on what's actually present
+
+---
+
+### **TASK 1: Create ResistancePlaybookCard Component** ⚔️
+
+**Priority**: P0  
+**Time**: 1.5-2 hours  
+**Complexity**: Medium
+
+#### **File Location**:
+```
+oncology-coPilot/oncology-frontend/src/components/care/ResistancePlaybookCard.jsx
+```
+
+#### **Dynamic Component Requirements**:
+
+**⚠️ KEY PRINCIPLE: Iterate over backend arrays, don't hardcode structure**
+
+**Section 1: Header** (Always Show)
+- Icon: `<Shield />`
+- Title: "Resistance Playbook"
+- Subtitle: "Strategies for durable control"
+- **Dynamic**: Show even if no data (with empty state message)
+
+**Section 2: Detected Risks** (Conditional: `risks.length > 0`)
+- **Dynamic count**: "Detected Risks ({risks.length})"
+- **Iterate**: `risks.map((risk, idx) => ...)`
+- For each risk (no assumptions about count):
+  - Risk type: `formatRiskType(risk.type)` (handle any string)
+  - Confidence: `{Math.round(risk.confidence * 100)}%` (handle 0-1 range)
+  - Evidence: `{risk.evidence || 'No explanation available'}`
+  - Source: `{risk.source || 'Unknown'}`
+  - Triggers: `{risk.triggers?.join(', ') || 'None'}` (handle missing)
+  - Color: Amber/Orange
+- **Collapsible**: Accordion (closed by default)
+
+**Section 3: Recommended Combinations** (Conditional: `combo_strategies.length > 0`)
+- **Dynamic count**: Show ALL combos from backend, not just top 3
+- **Iterate**: `combo_strategies.map((combo, idx) => ...)`
+- For each combo (handle missing fields):
+  - Drugs: `{combo.drugs?.join(' + ') || 'Unknown combination'}`
+  - MOA: `{combo.moa || ''}` (optional)
+  - Evidence tier: `{combo.evidence_tier || 'UNKNOWN'}` (dynamic color mapping)
+  - Rank score: `{Math.round((combo.rank_score || 0) * 100)}%`
+  - Indication: `{combo.indication || ''}` (hide if missing)
+  - Rationale: `{combo.rationale || ''}` (expandable if >200 chars)
+  - Trials: `{combo.trials?.map(...) || []}` (iterate, handle empty)
+  - Color: Blue
+- **Sorting**: Display in order received from backend (already ranked)
+
+**Section 4: Next-Line Switches** (Conditional: `next_line_switches.length > 0`)
+- **Dynamic count**: Show ALL switches, not just top 3
+- **Iterate**: `next_line_switches.map((sw, idx) => ...)`
+- For each switch (handle missing fields):
+  - Drug: `{sw.drug || 'Unknown'}`
+  - Class: `{sw.drug_class || ''}` (hide if missing)
+  - Evidence tier: `{sw.evidence_tier || 'UNKNOWN'}`
+  - Rank score: `{Math.round((sw.rank_score || 0) * 100)}%`
+  - Rationale: `{sw.rationale || ''}` (truncate if >100 chars)
+  - Trials: `{sw.trials?.join(', ') || ''}` (handle missing)
+  - Color: Green
+
+**Section 5: Trial Matching CTA** (Conditional: `trial_keywords.length > 0`)
+- Button: "View Matched Trials ({trial_keywords.length})"
+- OnClick: Navigate with `state: { keywords: trial_keywords }`
+- **Hide if**: No keywords present
+- Icon: `<LocalHospital />`
+
+**Section 6: Provenance Footer** (Conditional: `provenance && Object.keys(provenance).length > 0`)
+- Collapsible accordion
+- **Dynamic fields**: Iterate over provenance object, don't assume structure
+- Show any fields present (methods, data_sources, counts)
+- Handle missing fields gracefully
+
+**Section 7: Empty State** (Show if no data at all)
+```jsx
+if (risks.length === 0 && combo_strategies.length === 0 && next_line_switches.length === 0) {
+  return (
+    <Card>
+      <CardContent>
+        <Typography color="text.secondary">
+          No resistance predictions available. Resistance analysis requires:
+          • Tumor genomic data (NGS report)
+          • Treatment history (prior therapies)
+        </Typography>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+#### **Dynamic Component Code Template**:
+
+**⚠️ KEY: This template uses NO hardcoding - all data-driven**
+
+```jsx
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Card,
+  CardContent,
+  Typography,
+  Box,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Chip,
+  Button,
+  LinearProgress,
+  Divider,
+  Stack
+} from '@mui/material';
+import {
+  Shield,
+  Warning,
+  ExpandMore,
+  LocalHospital,
+  Info
+} from '@mui/icons-material';
+
+/**
+ * ResistancePlaybookCard - Displays SAE-powered resistance prediction
+ * 
+ * Shows:
+ * - Detected resistance risks (HR restoration, ABCB1, MAPK, PI3K, SLFN11)
+ * - Recommended combination strategies (trial-backed)
+ * - Next-line therapy switches (evidence-tiered)
+ * - Trial keyword filtering
+ * 
+ * Backend: /api/care/resistance_playbook (Zo's service)
+ * Integration: Ayesha orchestrator (/api/ayesha/complete_care)
+ */
+export const ResistancePlaybookCard = ({ playbook }) => {
+  const navigate = useNavigate();
+  const [expandedRisk, setExpandedRisk] = useState(null);
+  const [expandedProvenance, setExpandedProvenance] = useState(false);
+
+  // ⚔️ GUARD 1: No playbook data at all
+  if (!playbook) {
+    return null;
+  }
+
+  // ⚔️ DYNAMIC EXTRACTION: Use optional chaining, provide defaults
+  const {
+    risks = [],
+    combo_strategies = [],
+    next_line_switches = [],
+    trial_keywords = [],
+    provenance = {}
+  } = playbook;
+
+  // ⚔️ GUARD 2: Empty state (no data to display)
+  const hasData = risks.length > 0 || combo_strategies.length > 0 || next_line_switches.length > 0;
+  
+  if (!hasData) {
+    return (
+      <Card elevation={1} sx={{ mb: 3, borderLeft: '4px solid', borderColor: 'warning.light' }}>
+        <CardContent>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+            <Shield sx={{ mr: 1, color: 'text.secondary' }} />
+            <Typography variant="h6" color="text.secondary">
+              Resistance Playbook
+            </Typography>
+          </Box>
+          <Typography variant="body2" color="text.secondary">
+            No resistance predictions available yet. Resistance analysis requires:
+          </Typography>
+          <Box component="ul" sx={{ mt: 1, pl: 2 }}>
+            <Typography component="li" variant="body2" color="text.secondary">
+              Tumor genomic data (TMB, MSI, HRD, somatic mutations)
+            </Typography>
+            <Typography component="li" variant="body2" color="text.secondary">
+              Treatment history (prior therapies, outcomes)
+            </Typography>
+          </Box>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // ⚔️ HELPER: Format risk type dynamically (handles ANY string)
+  const formatRiskType = (type) => {
+    if (!type) return 'Unknown Risk';
+    return type
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  };
+
+  // ⚔️ HELPER: Get evidence tier color dynamically (handles unknown tiers)
+  const getEvidenceTierColor = (tier) => {
+    if (!tier) return 'default';
+    const colors = {
+      'STANDARD': 'success',
+      'SUPPORTED': 'primary',
+      'INVESTIGATIONAL': 'default',
+      'CONSIDER': 'secondary',
+      'UNKNOWN': 'default'
+    };
+    return colors[tier.toUpperCase()] || 'default';
+  };
+
+  // ⚔️ HELPER: Truncate text dynamically
+  const truncateText = (text, maxLength = 200) => {
+    if (!text) return '';
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
+  };
+
+  // ⚔️ HELPER: Handle trial navigation (only if keywords exist)
+  const handleViewTrials = () => {
+    if (trial_keywords && trial_keywords.length > 0) {
+      navigate('/research', {
+        state: {
+          keywords: trial_keywords,
+          source: 'resistance_playbook'
+        }
+      });
+    }
+  };
+
+  return (
+    <Card 
+      elevation={2}
+      sx={{ 
+        mb: 3,
+        border: '2px solid',
+        borderColor: 'warning.light',
+        borderRadius: 2
+      }}
+    >
+      <CardContent>
+        {/* Header */}
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <Shield sx={{ fontSize: 32, mr: 1.5, color: 'warning.main' }} />
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              Resistance Playbook
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Strategies for durable control
+            </Typography>
+          </Box>
+        </Box>
+
+        <Divider sx={{ mb: 2 }} />
+
+        {/* Section 1: Detected Risks */}
+        {risks.length > 0 && (
+          <Accordion 
+            expanded={expandedRisk === 'risks'}
+            onChange={() => setExpandedRisk(expandedRisk === 'risks' ? null : 'risks')}
+            sx={{ mb: 2, boxShadow: 1 }}
+          >
+            <AccordionSummary expandIcon={<ExpandMore />}>
+              <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                <Warning sx={{ color: 'warning.main', mr: 1 }} />
+                <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>
+                  Detected Risks ({risks.length})
+                </Typography>
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Stack spacing={2}>
+                {risks.map((risk, idx) => (
+                  <Card key={idx} variant="outlined" sx={{ p: 2, bgcolor: 'warning.50' }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                      {formatRiskType(risk.type)}
+                    </Typography>
+                    
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                      <Chip 
+                        label={`${Math.round(risk.confidence * 100)}% Confidence`}
+                        size="small"
+                        color="warning"
+                      />
+                      <Chip 
+                        label={risk.source}
+                        size="small"
+                        variant="outlined"
+                      />
+                    </Box>
+                    
+                    <Typography variant="body2" color="text.secondary">
+                      {risk.evidence}
+                    </Typography>
+                    
+                    {risk.triggers && risk.triggers.length > 0 && (
+                      <Box sx={{ mt: 1 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          Triggers: {risk.triggers.join(', ')}
+                        </Typography>
+                      </Box>
+                    )}
+                  </Card>
+                ))}
+              </Stack>
+            </AccordionDetails>
+          </Accordion>
+        )}
+
+        {/* Section 2: Recommended Combinations */}
+        {combo_strategies.length > 0 && (
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1.5, display: 'flex', alignItems: 'center' }}>
+              <Box component="span" sx={{ width: 4, height: 20, bgcolor: 'primary.main', mr: 1, borderRadius: 1 }} />
+              Recommended Combinations ({combo_strategies.length})
+            </Typography>
+            
+            <Stack spacing={1.5}>
+              {/* ⚔️ DYNAMIC: Show ALL combos, don't hardcode slice(0,3) */}
+              {combo_strategies.map((combo, idx) => (
+                <Card key={idx} variant="outlined" sx={{ p: 2, bgcolor: 'primary.50' }}>
+                  {/* ⚔️ DYNAMIC: Combo Header - handle missing fields */}
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '1rem' }}>
+                      {combo.drugs?.length > 0 ? combo.drugs.join(' + ') : 'Unknown combination'}
+                    </Typography>
+                    {combo.rank_score !== undefined && (
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: 'primary.main' }}>
+                        {Math.round(combo.rank_score * 100)}% match
+                      </Typography>
+                    )}
+                  </Box>
+                  
+                  {/* ⚔️ DYNAMIC: Rank Score Bar - only if score exists */}
+                  {combo.rank_score !== undefined && (
+                    <LinearProgress 
+                      variant="determinate" 
+                      value={combo.rank_score * 100}
+                      sx={{ mb: 1.5, height: 6, borderRadius: 3 }}
+                    />
+                  )}
+                  
+                  {/* ⚔️ DYNAMIC: Badges - only show if fields exist */}
+                  {(combo.moa || combo.evidence_tier) && (
+                    <Box sx={{ display: 'flex', gap: 0.5, mb: 1, flexWrap: 'wrap' }}>
+                      {combo.moa && (
+                        <Chip 
+                          label={combo.moa}
+                          size="small"
+                          variant="outlined"
+                        />
+                      )}
+                      {combo.evidence_tier && (
+                        <Chip 
+                          label={combo.evidence_tier}
+                          size="small"
+                          color={getEvidenceTierColor(combo.evidence_tier)}
+                        />
+                      )}
+                    </Box>
+                  )}
+                  
+                  {/* ⚔️ DYNAMIC: Indication - only if exists */}
+                  {combo.indication && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                      <strong>Indication:</strong> {combo.indication}
+                    </Typography>
+                  )}
+                  
+                  {/* ⚔️ DYNAMIC: Rationale - truncate if long */}
+                  {combo.rationale && (
+                    <Typography variant="body2" sx={{ mb: 1 }}>
+                      {truncateText(combo.rationale, 200)}
+                    </Typography>
+                  )}
+                  
+                  {/* ⚔️ DYNAMIC: Trials - iterate, handle missing/empty */}
+                  {combo.trials && combo.trials.length > 0 && (
+                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <Typography variant="caption" color="text.secondary">
+                        Trials:
+                      </Typography>
+                      {combo.trials.map((trial, tidx) => (
+                        <Chip 
+                          key={tidx}
+                          label={trial}
+                          size="small"
+                          variant="outlined"
+                          color="primary"
+                          sx={{ cursor: 'pointer' }}
+                          onClick={() => {
+                            // Only open if it's an NCT ID
+                            if (trial && trial.startsWith('NCT')) {
+                              window.open(`https://clinicaltrials.gov/ct2/show/${trial}`, '_blank');
+                            }
+                          }}
+                        />
+                      ))}
+                    </Box>
+                  )}
+                </Card>
+              ))}
+            </Stack>
+          </Box>
+        )}
+
+        {/* Section 3: Next-Line Switches */}
+        {next_line_switches.length > 0 && (
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1.5, display: 'flex', alignItems: 'center' }}>
+              <Box component="span" sx={{ width: 4, height: 20, bgcolor: 'success.main', mr: 1, borderRadius: 1 }} />
+              Next-Line Switches ({next_line_switches.length})
+            </Typography>
+            
+            <Stack spacing={1}>
+              {/* ⚔️ DYNAMIC: Show ALL switches, don't hardcode slice */}
+              {next_line_switches.map((sw, idx) => (
+                <Card key={idx} variant="outlined" sx={{ p: 1.5, bgcolor: 'success.50' }}>
+                  {/* ⚔️ DYNAMIC: Switch header - handle missing fields */}
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                    <Box>
+                      <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                        {sw.drug || 'Unknown drug'}
+                      </Typography>
+                      {sw.drug_class && (
+                        <Typography variant="caption" color="text.secondary">
+                          {sw.drug_class}
+                        </Typography>
+                      )}
+                    </Box>
+                    <Box sx={{ textAlign: 'right' }}>
+                      {sw.evidence_tier && (
+                        <Chip 
+                          label={sw.evidence_tier}
+                          size="small"
+                          color={getEvidenceTierColor(sw.evidence_tier)}
+                        />
+                      )}
+                      {sw.rank_score !== undefined && (
+                        <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
+                          {Math.round(sw.rank_score * 100)}% match
+                        </Typography>
+                      )}
+                    </Box>
+                  </Box>
+                  
+                  {/* ⚔️ DYNAMIC: Rationale - truncate if long, hide if missing */}
+                  {sw.rationale && (
+                    <Typography variant="body2" sx={{ mb: 0.5 }}>
+                      {truncateText(sw.rationale, 100)}
+                    </Typography>
+                  )}
+                  
+                  {/* ⚔️ DYNAMIC: Trials - only if exists */}
+                  {sw.trials && sw.trials.length > 0 && (
+                    <Typography variant="caption" color="text.secondary">
+                      Trials: {sw.trials.join(', ')}
+                    </Typography>
+                  )}
+                </Card>
+              ))}
+            </Stack>
+          </Box>
+        )}
+
+        {/* Section 4: Trial Matching CTA */}
+        {trial_keywords.length > 0 && (
+          <Button
+            variant="contained"
+            size="large"
+            fullWidth
+            startIcon={<LocalHospital />}
+            onClick={handleViewTrials}
+            sx={{ mb: 2 }}
+          >
+            View Matched Clinical Trials ({trial_keywords.length} keywords)
+          </Button>
+        )}
+
+        {/* Section 5: Provenance (Collapsible) */}
+        {provenance && Object.keys(provenance).length > 0 && (
+          <Accordion 
+            expanded={expandedProvenance}
+            onChange={() => setExpandedProvenance(!expandedProvenance)}
+            sx={{ boxShadow: 0, '&:before': { display: 'none' } }}
+          >
+            <AccordionSummary expandIcon={<ExpandMore />}>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <Info sx={{ fontSize: 18, mr: 0.5, color: 'text.secondary' }} />
+                <Typography variant="caption" color="text.secondary">
+                  Provenance & Methods
+                </Typography>
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Stack spacing={1}>
+                <Typography variant="caption">
+                  <strong>Service:</strong> {provenance.service} v{provenance.version}
+                </Typography>
+                {/* ⚔️ DYNAMIC: Iterate over provenance fields, don't assume structure */}
+                {provenance.methods && typeof provenance.methods === 'object' && (
+                  <>
+                    {Object.entries(provenance.methods).map(([key, value]) => (
+                      <Typography key={key} variant="caption">
+                        <strong>{formatRiskType(key)}:</strong> {value}
+                      </Typography>
+                    ))}
+                  </>
+                )}
+                {provenance.data_sources && typeof provenance.data_sources === 'object' && (
+                  <Typography variant="caption">
+                    <strong>Data Sources:</strong>{' '}
+                    {Object.entries(provenance.data_sources)
+                      .filter(([_, enabled]) => enabled)
+                      .map(([source]) => formatRiskType(source))
+                      .join(', ') || 'None'}
+                  </Typography>
+                )}
+                {(provenance.risk_count !== undefined || provenance.combo_count !== undefined || provenance.switch_count !== undefined) && (
+                  <Typography variant="caption">
+                    <strong>Counts:</strong>{' '}
+                    {[
+                      provenance.risk_count !== undefined && `${provenance.risk_count} risk(s)`,
+                      provenance.combo_count !== undefined && `${provenance.combo_count} combo(s)`,
+                      provenance.switch_count !== undefined && `${provenance.switch_count} switch(es)`
+                    ].filter(Boolean).join(', ')}
+                  </Typography>
+                )}
+              </Stack>
+            </AccordionDetails>
+          </Accordion>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+```
+
+#### **Export from Index**:
+
+```jsx
+// oncology-coPilot/oncology-frontend/src/components/care/index.js
+export { ResistancePlaybookCard } from './ResistancePlaybookCard';
+```
+
+---
+
+### **TASK 2: Wire to Ayesha Complete Care Plan** ⚔️
+
+**Priority**: P0  
+**Time**: 30 minutes  
+**Complexity**: Low
+
+#### **Files to Modify**:
+
+**Option A**: If there's a dedicated Ayesha care plan page:
+```
+oncology-coPilot/oncology-frontend/src/pages/AyeshaCare.jsx
+```
+
+**Option B**: If displayed in Co-Pilot message:
+```
+oncology-coPilot/oncology-frontend/src/components/CoPilot/MessageDisplay.jsx
+```
+
+**Option C**: If in a modal/dialog:
+```
+oncology-coPilot/oncology-frontend/src/components/ayesha/CarePlanDialog.jsx
+```
+
+#### **Integration Code**:
+
+```jsx
+import { ResistancePlaybookCard } from '../care/ResistancePlaybookCard';
+
+// Inside the component that displays complete_care_plan:
+
+const CompleteCareDisplay = ({ carePlan }) => {
+  return (
+    <Box>
+      {/* Existing sections */}
+      <DrugRecommendations drugs={carePlan.drug_recommendations} />
+      <FoodRecommendations foods={carePlan.food_recommendations} />
+      
+      {/* NEW: Resistance Playbook */}
+      {carePlan.resistance_playbook && (
+        <ResistancePlaybookCard playbook={carePlan.resistance_playbook} />
+      )}
+      
+      {/* Provenance, etc. */}
+    </Box>
+  );
+};
+```
+
+#### **Conditional Rendering Logic**:
+
+```jsx
+// Only show if:
+// 1. resistance_playbook exists
+// 2. At least one risk, combo, or switch present
+const hasPlaybookData = 
+  carePlan?.resistance_playbook &&
+  (
+    carePlan.resistance_playbook.risks?.length > 0 ||
+    carePlan.resistance_playbook.combo_strategies?.length > 0 ||
+    carePlan.resistance_playbook.next_line_switches?.length > 0
+  );
+
+{hasPlaybookData && (
+  <ResistancePlaybookCard playbook={carePlan.resistance_playbook} />
+)}
+```
+
+---
+
+### **TASK 3: Add Trial Filtering by Keywords** ⚔️
+
+**Priority**: P1  
+**Time**: 45 minutes  
+**Complexity**: Medium
+
+#### **Files to Modify**:
+
+**Primary**:
+```
+oncology-coPilot/oncology-frontend/src/pages/Research.jsx
+OR
+oncology-coPilot/oncology-frontend/src/pages/ResearchPortal/ResearchPortal.jsx
+```
+
+**Secondary** (if trials displayed in component):
+```
+oncology-coPilot/oncology-frontend/src/components/research/ResultsDisplay.jsx
+```
+
+#### **Step 1: Accept Keywords from Navigation State**:
+
+```jsx
+import { useLocation } from 'react-router-dom';
+
+const ResearchPage = () => {
+  const location = useLocation();
+  const [keywords, setKeywords] = useState([]);
+  
+  useEffect(() => {
+    // Check if navigated from resistance playbook
+    if (location.state?.keywords) {
+      setKeywords(location.state.keywords);
+      // Optionally trigger search with keywords
+      handleSearch({ keywords: location.state.keywords });
+    }
+  }, [location.state]);
+  
+  // ... rest of component
+};
+```
+
+#### **Step 2: Filter Trials by Keywords**:
+
+```jsx
+const filterTrialsByKeywords = (trials, keywords) => {
+  if (!keywords || keywords.length === 0) return trials;
+  
+  return trials.map(trial => {
+    // Check if trial description matches any keyword
+    const matchedKeywords = keywords.filter(keyword => {
+      const lowerKeyword = keyword.toLowerCase();
+      const searchableText = `
+        ${trial.title || ''} 
+        ${trial.description || ''} 
+        ${trial.interventions?.join(' ') || ''}
+        ${trial.biomarkers?.join(' ') || ''}
+      `.toLowerCase();
+      
+      return searchableText.includes(lowerKeyword);
+    });
+    
+    return {
+      ...trial,
+      matched_by_resistance: matchedKeywords.length > 0,
+      matched_keywords: matchedKeywords
+    };
+  });
+};
+```
+
+#### **Step 3: Display "Resistance-Matched" Badge**:
+
+```jsx
+// In ResultsDisplay.jsx or trial card component:
+
+import { Shield } from '@mui/icons-material';
+
+{trial.matched_by_resistance && (
+  <Chip 
+    icon={<Shield />}
+    label={`Resistance-Matched (${trial.matched_keywords.length})`}
+    color="warning"
+    size="small"
+    sx={{ mb: 1 }}
+  />
+)}
+
+{/* Show which keywords matched */}
+{trial.matched_keywords && trial.matched_keywords.length > 0 && (
+  <Box sx={{ mt: 0.5 }}>
+    <Typography variant="caption" color="text.secondary">
+      Matches: {trial.matched_keywords.join(', ')}
+    </Typography>
+  </Box>
+)}
+```
+
+#### **Step 4: Add Keyword Filter UI**:
+
+```jsx
+// In research page filters section:
+
+{keywords.length > 0 && (
+  <Box sx={{ mb: 2, p: 2, bgcolor: 'warning.50', borderRadius: 1 }}>
+    <Typography variant="subtitle2" sx={{ mb: 1, display: 'flex', alignItems: 'center' }}>
+      <Shield sx={{ mr: 0.5, fontSize: 18 }} />
+      Resistance Keywords Active
+    </Typography>
+    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+      {keywords.map((keyword, idx) => (
+        <Chip 
+          key={idx}
+          label={keyword}
+          size="small"
+          color="warning"
+          onDelete={() => {
+            setKeywords(keywords.filter((_, i) => i !== idx));
+          }}
+        />
+      ))}
+    </Box>
+    <Button 
+      size="small" 
+      sx={{ mt: 1 }}
+      onClick={() => setKeywords([])}
+    >
+      Clear All Keywords
+    </Button>
+  </Box>
+)}
+```
+
+---
+
+### **TASK 4: Update Co-Pilot Display** ⚔️
+
+**Priority**: P1  
+**Time**: 30 minutes  
+**Complexity**: Low
+
+#### **Files to Modify**:
+
+```
+oncology-coPilot/oncology-frontend/src/components/CoPilot/MessageDisplay.jsx
+OR
+oncology-coPilot/oncology-frontend/src/components/CoPilot/CoPilotUI.jsx
+```
+
+#### **Integration Code**:
+
+```jsx
+import { ResistancePlaybookCard } from '../care/ResistancePlaybookCard';
+
+// In message rendering logic:
+
+const renderMessage = (message) => {
+  // Existing logic for different message types
+  
+  // If message contains complete_care_plan:
+  if (message.type === 'complete_care_plan' || message.data?.drug_recommendations) {
+    return (
+      <Box>
+        {/* Existing drug/food displays */}
+        {message.data.drug_recommendations && (
+          <DrugRecommendationsSection drugs={message.data.drug_recommendations} />
+        )}
+        
+        {message.data.food_recommendations && (
+          <FoodRecommendationsSection foods={message.data.food_recommendations} />
+        )}
+        
+        {/* NEW: Resistance playbook */}
+        {message.data.resistance_playbook && (
+          <ResistancePlaybookCard playbook={message.data.resistance_playbook} />
+        )}
+      </Box>
+    );
+  }
+  
+  // ... other message types
+};
+```
+
+#### **Co-Pilot Conversational Enhancement**:
+
+When user asks "What if I become resistant?", Co-Pilot should:
+1. Detect intent: "resistance_prediction"
+2. Call `/api/ayesha/complete_care` (which includes playbook)
+3. Display playbook prominently
+
+```jsx
+// In Co-Pilot response formatter:
+
+const formatResistanceResponse = (playbook) => {
+  const text = [];
+  
+  if (playbook.risks && playbook.risks.length > 0) {
+    text.push(`I've detected ${playbook.risks.length} potential resistance mechanism(s):`);
+    playbook.risks.forEach(risk => {
+      text.push(`- ${formatRiskType(risk.type)} (${Math.round(risk.confidence * 100)}% confidence)`);
+    });
+  }
+  
+  if (playbook.combo_strategies && playbook.combo_strategies.length > 0) {
+    const topCombo = playbook.combo_strategies[0];
+    text.push(`\nBest combination strategy: ${topCombo.drugs.join(' + ')} (${Math.round(topCombo.rank_score * 100)}% match)`);
+    text.push(`Evidence: ${topCombo.evidence_tier}`);
+  }
+  
+  if (playbook.next_line_switches && playbook.next_line_switches.length > 0) {
+    const topSwitch = playbook.next_line_switches[0];
+    text.push(`\nIf current therapy fails, switch to: ${topSwitch.drug} (${topSwitch.drug_class})`);
+  }
+  
+  return text.join('\n');
+};
+```
+
+---
+
+## 🚨 CRITICAL IMPLEMENTATION NOTES
+
+### **⚔️ DYNAMIC PHILOSOPHY - READ THIS FIRST**:
+
+**THE GOLDEN RULE**: "If it comes from the backend, treat it as dynamic"
+
+**What this means**:
+- ❌ Don't slice arrays: `combo_strategies.slice(0, 3)` → ✅ Show all: `combo_strategies.map(...)`
+- ❌ Don't assume counts: "3 combos" → ✅ Dynamic: `{combos.length} combos`
+- ❌ Don't hardcode fields: `combo.drugs[0]` → ✅ Iterate: `combo.drugs.join(' + ')`
+- ❌ Don't assume order: Display in backend order (already ranked)
+- ❌ Don't skip null checks: `combo.moa` → ✅ Check: `{combo.moa && ...}`
+
+**Why**:
+- Backend may return 1 combo or 10 combos (show all)
+- Backend may add new risk types (handle dynamically)
+- Patient may have incomplete data (show what's available)
+- Backend may evolve fields (component should adapt)
+
+**Example - BAD (hardcoded)**:
+```jsx
+{combo_strategies[0].drugs[0]} + {combo_strategies[0].drugs[1]}
+```
+
+**Example - GOOD (dynamic)**:
+```jsx
+{combo_strategies.map(combo => 
+  combo.drugs?.length > 0 ? combo.drugs.join(' + ') : 'Unknown'
+)}
+```
+
+---
+
+### **Styling Consistency**:
+- Use existing MUI theme colors
+- Match card styles from `SporadicProvenanceCard.jsx`
+- Responsive design (test mobile + desktop)
+- Loading states (skeleton while fetching)
+
+### **⚔️ DYNAMIC Error Handling (CRITICAL)**:
+
+**Philosophy**: Never assume data structure, always validate
+
+```jsx
+// ⚔️ GUARD 1: No playbook at all
+if (!playbook) return null;
+
+// ⚔️ GUARD 2: Extract with defaults (handle undefined/null)
+const risks = playbook?.risks || [];
+const combos = playbook?.combo_strategies || [];
+const switches = playbook?.next_line_switches || [];
+const keywords = playbook?.trial_keywords || [];
+
+// ⚔️ GUARD 3: Empty state (show helpful message)
+const hasData = risks.length > 0 || combos.length > 0 || switches.length > 0;
+if (!hasData) {
+  return <EmptyStateCard />;
+}
+
+// ⚔️ GUARD 4: Within iterations, check each field
+{combo.drugs?.length > 0 ? combo.drugs.join(' + ') : 'Unknown'}
+{combo.rank_score !== undefined ? `${Math.round(combo.rank_score * 100)}%` : 'N/A'}
+{combo.rationale || 'No explanation available'}
+
+// ⚔️ GUARD 5: Conditional rendering for optional sections
+{combo.moa && <Chip label={combo.moa} />}
+{combo.trials?.length > 0 && <TrialsList trials={combo.trials} />}
+
+// ⚔️ GUARD 6: Array operations (handle empty/undefined)
+{combo.trials?.map(...) || []}
+{keywords?.filter(k => k).join(', ') || 'None'}
+
+// ⚔️ GUARD 7: Numeric operations (handle NaN/undefined)
+Math.round((combo.rank_score || 0) * 100)
+combo.drugs?.length || 0
+```
+
+**Key Principles**:
+1. ✅ Use optional chaining (`?.`) everywhere
+2. ✅ Provide fallback values (`|| 'Unknown'`)
+3. ✅ Validate before rendering (`{field && <Component />}`)
+4. ✅ Handle arrays carefully (`.length > 0` checks)
+5. ✅ Graceful degradation (show partial data if some missing)
+6. ❌ Never assume field exists
+7. ❌ Never hardcode array indices
+8. ❌ Never skip null checks
+
+### **TypeScript (if applicable)**:
+```typescript
+interface ResistanceRisk {
+  type: string;
+  confidence: number;
+  evidence: string;
+  triggers: string[];
+  source: string;
+}
+
+interface ComboStrategy {
+  drugs: string[];
+  moa: string;
+  indication: string;
+  evidence_tier: 'STANDARD' | 'SUPPORTED' | 'INVESTIGATIONAL' | 'CONSIDER';
+  trials: string[];
+  rank_score: number;
+  triggers: string[];
+  rationale: string;
+}
+
+interface NextLineSwitch {
+  drug: string;
+  drug_class: string;
+  indication: string;
+  evidence_tier: 'STANDARD' | 'SUPPORTED' | 'INVESTIGATIONAL';
+  trials: string[];
+  rank_score: number;
+  rationale: string;
+}
+
+interface ResistancePlaybook {
+  risks: ResistanceRisk[];
+  combo_strategies: ComboStrategy[];
+  next_line_switches: NextLineSwitch[];
+  trial_keywords: string[];
+  provenance: Record<string, any>;
+}
+
+interface ResistancePlaybookCardProps {
+  playbook: ResistancePlaybook | null;
+}
+```
+
+### **Accessibility**:
+- Add `aria-label` to buttons
+- Ensure keyboard navigation works
+- Use semantic HTML (`<section>`, `<article>`)
+- Add `alt` text to icons (via `titleAccess` prop)
+
+---
+
+## 📁 FILES TO CREATE/MODIFY SUMMARY
+
+### **New Files** (1):
+1. `oncology-coPilot/oncology-frontend/src/components/care/ResistancePlaybookCard.jsx` (350+ lines)
+
+### **Modified Files** (4-6):
+1. `oncology-coPilot/oncology-frontend/src/components/care/index.js` (export)
+2. `oncology-coPilot/oncology-frontend/src/pages/[AyeshaCare or similar].jsx` (wire playbook)
+3. `oncology-coPilot/oncology-frontend/src/pages/Research.jsx` (trial filtering)
+4. `oncology-coPilot/oncology-frontend/src/components/research/ResultsDisplay.jsx` (badges)
+5. `oncology-coPilot/oncology-frontend/src/components/CoPilot/MessageDisplay.jsx` (Co-Pilot integration)
+6. `oncology-coPilot/oncology-frontend/src/components/CoPilot/CoPilotUI.jsx` (conditional render)
+
+---
+
+## ✅ ACCEPTANCE CRITERIA (DEFINITION OF DONE)
+
+**Jr's work is complete when**:
+
+### **Functional**:
+- ✅ `ResistancePlaybookCard` component renders without errors
+- ✅ Displays all 3 sections (risks, combos, switches)
+- ✅ Shows correct data from Ayesha response
+- ✅ "View Matched Trials" button navigates to trials page
+- ✅ Trial keywords pre-populate search filters
+- ✅ Resistance-matched badge appears on trials
+- ✅ Co-Pilot displays playbook in complete care response
+
+### **Visual**:
+- ✅ Matches existing MUI theme/style
+- ✅ Responsive (mobile + desktop)
+- ✅ Icons render correctly
+- ✅ Color coding consistent (amber/blue/green)
+- ✅ Evidence tier badges color-coded
+
+### **Technical**:
+- ✅ No console errors
+- ✅ TypeScript errors resolved (if applicable)
+- ✅ PropTypes defined (if using)
+- ✅ Code formatted (Prettier)
+- ✅ Components exported correctly
+
+### **User Experience**:
+- ✅ Collapsible sections work smoothly
+- ✅ Trial chips clickable (open NCT page)
+- ✅ Rank scores display as percentages
+- ✅ Rationale text readable (not truncated weirdly)
+- ✅ Loading states handled gracefully
+- ✅ Empty states handled (no playbook data)
+
+---
+
+## 🧪 TESTING INSTRUCTIONS
+
+### **Test Case 1: Ayesha's Scenario (HR Restoration)**
+
+**Setup**:
+1. Start backend: `cd oncology-coPilot/oncology-backend-minimal && venv/bin/python -m uvicorn api.main:app --reload`
+2. Start frontend: `cd oncology-coPilot/oncology-frontend && npm start`
+
+**Test Steps**:
+1. Navigate to Ayesha care plan page
+2. Trigger `/api/ayesha/complete_care` call with:
+   ```json
+   {
+     "patient_context": {
+       "disease": "ovarian_cancer_hgs",
+       "germline_status": "negative",
+       "tumor_context": {
+         "hrd_score": 35,
+         "tmb": 6.8,
+         "msi_status": "MSI-Stable"
+       },
+       "treatment_history": {
+         "current_line": 3,
+         "prior_therapies": [
+           {"line": 2, "drugs": ["Olaparib"], "outcome": "progression"}
+         ],
+         "platinum_response": "sensitive"
+       }
+     }
+   }
+   ```
+
+**Expected**:
+- ✅ ResistancePlaybookCard renders
+- ✅ Shows "HR Restoration" risk (70% confidence)
+- ✅ Shows "Niraparib + Bevacizumab" combo (96.6% match)
+- ✅ Shows "Ceralasertib" switch (82% match)
+- ✅ "View Matched Trials (4)" button present
+
+---
+
+### **Test Case 2: MSI-High Scenario (IO Focus)**
+
+**Payload**:
+```json
+{
+  "patient_context": {
+    "disease": "ovarian_cancer_hgs",
+    "germline_status": "negative",
+    "tumor_context": {
+      "hrd_score": 20,
+      "tmb": 25.0,
+      "msi_status": "MSI-High"
+    },
+    "treatment_history": {
+      "current_line": 1,
+      "prior_therapies": []
+    }
+  }
+}
+```
+
+**Expected**:
+- ✅ No risks detected (first-line, no prior therapies)
+- ✅ Shows IO combo strategies (Pembrolizumab + PARP/VEGF)
+- ✅ High rank scores (boosted by MSI-H + TMB)
+- ✅ Trial keywords include "MSI-High", "TMB-high"
+
+---
+
+### **Test Case 3: Trial Keyword Filtering**
+
+**Steps**:
+1. Render ResistancePlaybookCard with keywords: `["ATR inhibitor", "PARP combination"]`
+2. Click "View Matched Trials (2)"
+3. Navigate to `/research` page
+
+**Expected**:
+- ✅ Research page opens
+- ✅ Keywords pre-populated in filters
+- ✅ Trials containing "ATR" or "PARP combination" highlighted
+- ✅ "Resistance-Matched" badge visible on matching trials
+
+---
+
+### **Test Case 4: Co-Pilot Integration**
+
+**Steps**:
+1. Open Co-Pilot
+2. Ask: "What should I do if I become resistant to PARP inhibitors?"
+3. Co-Pilot returns complete care plan
+
+**Expected**:
+- ✅ Co-Pilot displays textual summary
+- ✅ ResistancePlaybookCard rendered below text
+- ✅ All sections (risks, combos, switches) visible
+- ✅ No layout issues (cards stack properly)
+
+---
+
+## 🚨 COMMON PITFALLS & SOLUTIONS
+
+### **⚔️ PITFALL 1: HARDCODING (THE #1 MISTAKE)**
+**Cause**: Assuming backend always returns exactly 3 combos, specific fields, etc.  
+**Symptoms**:
+- Component crashes when backend returns 1 or 5 combos
+- Fields don't appear when backend adds new properties
+- Cannot handle missing/partial data
+
+**Solution**: Use dynamic iteration
+```jsx
+// ❌ BAD (hardcoded)
+<div>{combo_strategies[0].drugs[0]}</div>
+<div>{combo_strategies[1].drugs[0]}</div>
+<div>{combo_strategies[2].drugs[0]}</div>
+
+// ✅ GOOD (dynamic)
+{combo_strategies.map((combo, idx) => (
+  <div key={idx}>{combo.drugs?.join(' + ') || 'Unknown'}</div>
+))}
+```
+
+---
+
+### **Pitfall 2: Missing Null Checks**
+**Cause**: Not validating fields before accessing  
+**Symptoms**: "Cannot read property 'X' of undefined" errors
+
+**Solution**: Use optional chaining + fallbacks
+```jsx
+// ❌ BAD
+<div>{combo.drugs.join(' + ')}</div>
+
+// ✅ GOOD
+<div>{combo.drugs?.length > 0 ? combo.drugs.join(' + ') : 'Unknown'}</div>
+```
+
+---
+
+### **Pitfall 3: Slicing Arrays (Artificial Limits)**
+**Cause**: Hardcoding `.slice(0, 3)` when backend may return variable amounts  
+**Symptoms**: Backend returns 5 combos but UI only shows 3 (data loss)
+
+**Solution**: Show ALL data, let backend control limits
+```jsx
+// ❌ BAD (throws away data)
+{combo_strategies.slice(0, 3).map(...)}
+
+// ✅ GOOD (respects backend ranking)
+{combo_strategies.map(...)}  // Show all combos from backend
+```
+
+---
+
+### **Pitfall 4: Playbook Data Not Showing**
+**Cause**: Ayesha orchestrator not returning playbook  
+**Solution**: 
+- Check backend logs for resistance_playbook call
+- Verify `tumor_context` exists in request
+- Check if `treatment_history` has prior therapies
+- Implement empty state gracefully
+
+---
+
+### **Pitfall 5: Assuming Field Types**
+**Cause**: Not validating data types before operations  
+**Symptoms**: `NaN`, wrong formats, crashes
+
+**Solution**: Validate types
+```jsx
+// ❌ BAD
+{Math.round(combo.rank_score * 100)}%
+
+// ✅ GOOD
+{combo.rank_score !== undefined && typeof combo.rank_score === 'number' 
+  ? `${Math.round(combo.rank_score * 100)}%` 
+  : 'N/A'}
+```
+
+---
+
+### **Pitfall 6: Trial Navigation Broken**
+**Cause**: `useNavigate()` not imported or keywords missing  
+**Solution**:
+```jsx
+import { useNavigate } from 'react-router-dom';
+
+const handleViewTrials = () => {
+  if (trial_keywords && trial_keywords.length > 0) {
+    navigate('/research', { state: { keywords: trial_keywords } });
+  }
+};
+```
+
+---
+
+### **Pitfall 7: Styling Inconsistent**
+**Cause**: Not using theme colors  
+**Solution**: Use MUI theme
+```jsx
+sx={{ 
+  bgcolor: 'primary.50',  // Not '#e3f2fd'
+  color: 'primary.main',  // Not '#1976d2'
+}}
+```
+
+---
+
+## 📚 REFERENCE FILES (FOR JR TO REVIEW)
+
+### **Backend Reference**:
+1. `.cursor/ayesha/RESISTANCE_PLAYBOOK_V1_COMPLETE.md` - Full backend spec
+2. `.cursor/ayesha/ayesha_plan.mdc` Section 17.13 - Technical details
+3. `oncology-coPilot/oncology-backend-minimal/api/routers/care.py` - Endpoint code
+4. `oncology-coPilot/oncology-backend-minimal/api/services/resistance_playbook_service.py` - Detection logic
+
+### **Frontend Reference** (Similar Components):
+1. `oncology-coPilot/oncology-frontend/src/components/sporadic/SporadicProvenanceCard.jsx` - Card style
+2. `oncology-coPilot/oncology-frontend/src/components/research/ResultsDisplay.jsx` - Trial display
+3. `oncology-coPilot/oncology-frontend/src/components/CoPilot/MessageDisplay.jsx` - Message rendering
+
+### **Smoke Test Commands**:
+See `.cursor/ayesha/ayesha_plan.mdc` lines 1005-1041 for backend test curls
+
+---
+
+## ⏱️ ESTIMATED TIMELINE
+
+| Task | Estimated Time | Actual Time | Status |
+|------|----------------|-------------|--------|
+| Task 1: ResistancePlaybookCard | 1.5-2 hours | ___ | ⏸️ Pending |
+| Task 2: Wire to Ayesha | 30 min | ___ | ⏸️ Pending |
+| Task 3: Trial Filtering | 45 min | ___ | ⏸️ Pending |
+| Task 4: Co-Pilot Integration | 30 min | ___ | ⏸️ Pending |
+| Testing & Fixes | 30 min | ___ | ⏸️ Pending |
+| **TOTAL** | **3.5-4 hours** | ___ | ⏸️ Pending |
+
+---
+
+## 🎯 SUCCESS METRICS
+
+**Jr's mission is successful when**:
+- ✅ Ayesha can see resistance playbook in care plan
+- ✅ All 3 sections (risks, combos, switches) render correctly
+- ✅ Trial filtering by keywords works end-to-end
+- ✅ Co-Pilot displays playbook conversationally
+- ✅ Zero console errors, clean code
+- ✅ Demo-ready (can present to Commander)
+
+---
+
+## ⚔️ FINAL CHECKLIST BEFORE MARKING COMPLETE
+
+### **Functional Requirements**:
+- [ ] `ResistancePlaybookCard.jsx` created and exported
+- [ ] Component displays all sections correctly
+- [ ] Wired to Ayesha complete care plan
+- [ ] Trial keyword filtering implemented
+- [ ] "View Matched Trials" button works
+- [ ] Resistance-matched badge on trials
+- [ ] Co-Pilot integration complete
+
+### **⚔️ DYNAMIC REQUIREMENTS (CRITICAL)**:
+- [ ] ✅ Uses `.map()` for ALL arrays (no hardcoded indices)
+- [ ] ✅ Shows ALL combos/switches (no `.slice(0, 3)`)
+- [ ] ✅ Dynamic counts: "Combos ({combo_strategies.length})"
+- [ ] ✅ Optional chaining used: `combo.drugs?.join(...)`
+- [ ] ✅ Fallbacks provided: `|| 'Unknown'`, `|| []`
+- [ ] ✅ Conditional rendering: `{field && <Component />}`
+- [ ] ✅ Null checks before operations: `!== undefined`
+- [ ] ✅ Empty state displays when no data
+- [ ] ✅ Handles missing fields gracefully (doesn't crash)
+- [ ] ✅ Provenance iterates over object keys dynamically
+- [ ] ✅ No hardcoded array lengths or assumptions
+- [ ] ✅ Works with 1 combo, 10 combos, or 0 combos
+
+### **Testing Requirements**:
+- [ ] Tested with Ayesha's scenario (1 risk, 2 combos)
+- [ ] Tested with MSI-High scenario (0 risks, 2 combos)
+- [ ] Tested with empty playbook (all arrays empty)
+- [ ] Tested with missing fields (undefined moa, rationale, etc.)
+- [ ] Tested with variable array lengths (1-10 combos)
+- [ ] No console errors
+- [ ] No TypeScript errors (if applicable)
+
+### **Quality Requirements**:
+- [ ] Responsive on mobile
+- [ ] Code formatted and clean
+- [ ] No magic numbers or hardcoded limits
+- [ ] Committed with message: `feat(frontend): Add dynamic ResistancePlaybookCard component`
+
+---
+
+## 📞 COMMUNICATION WITH ZO
+
+**If Stuck**:
+1. Create `.cursor/ayesha/AGENT_JR_QUESTIONS_FOR_ZO.md`
+2. List specific blockers
+3. Zo will respond with answers/fixes
+
+**When Complete**:
+1. Create `.cursor/ayesha/AGENT_JR_FRONTEND_COMPLETION_REPORT.md`
+2. Document what was built
+3. Include screenshots (if possible)
+4. List any deviations from plan
+
+---
+
+## ⚔️ AGENT JR - READY TO BUILD? ⚔️
+
+**Mission**: Wire Zo's resistance playbook backend to frontend UI  
+**Timeline**: 3-4 hours  
+**Impact**: **COMPLETES AYESHA DEMO** 🎬
+
+**Commander - Approve Jr to proceed?** 🎯

@@ -1,0 +1,169 @@
+⚔️ CO-PILOT BACKEND ENDPOINT TESTS ⚔️
+======================================
+
+Testing http://127.0.0.1:8000
+Output directory: .cursor/tests/copilot/output
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEST 1: DRUG EFFICACY (WIWFM)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Query: 'Will Olaparib work for me?'
+Context: BRCA1 p.Cys61Gly, Ovarian Cancer, HRD+, L3 post-platinum
+
+✅ SUCCESS
+
+📊 KEY RESULTS:
+  Top Drug: Proteasome inhibitor
+  Efficacy Score: 0.134
+  Confidence: 0.362
+  Evidence Tier: consider
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEST 2: FOOD/SUPPLEMENT VALIDATOR
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Query: 'Should I take Vitamin D?'
+Context: Ovarian Cancer, HRD+, L3 post-platinum, taking warfarin
+
+✅ SUCCESS
+
+📊 KEY RESULTS:
+  Verdict: NOT_SUPPORTED
+  Overall Score: 0.44
+  Evidence Grade: N/A
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEST 3: COMPLETE CARE PLAN (UNIFIED)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Query: 'Give me a complete care plan'
+Context: BRCA1, Ovarian Cancer, HRD+, L3
+
+✅ SUCCESS
+
+📊 KEY RESULTS:
+  Drug Recommendations: 5 drugs
+    Top: N/A (score: 0.448)
+  Food Recommendations: 0 compounds
+  Integrated Confidence: 0.319
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEST 4: CLINICAL TRIALS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Query: 'Find clinical trials for me'
+Context: 55yo female, ovarian cancer, HRD+, post-platinum
+
+✅ SUCCESS
+
+📊 KEY RESULTS:
+  No trials field in response
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEST 5: TOXICITY RISK (PGx)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Query: 'Will platinum be toxic for me?'
+Context: DPYD variant (germline)
+
+✅ SUCCESS
+
+📊 KEY RESULTS:
+  Risk Score: N/A
+  Risk Level: N/A
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEST 6: SYNTHETIC LETHALITY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Query: 'What's my cancer's weakness?'
+Context: BRCA1 mutation
+
+✅ SUCCESS
+
+📊 KEY RESULTS:
+  Suggested Therapy: platinum
+  Damage Report: 0 genes
+  Essentiality Report: 0 genes
+  Error parsing response: 'NoneType' object has no attribute 'get'
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEST 7: VARIANT IMPACT (DEEP ANALYSIS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Query: 'What is the functional impact of BRAF V600E?'
+
+✅ SUCCESS
+
+📊 KEY RESULTS:
+  ClinVar Classification: pathogenic
+  ClinVar Review Status: None
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEST 8: RADIATION GUIDANCE (PrecisionRad)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Query: 'Should I get radiation therapy?'
+Context: TP53 R175H
+
+✅ SUCCESS
+
+📊 KEY RESULTS:
+  Modality: radiation
+  Tier: research
+  Radiosensitivity Score: 0.69
+  Confidence: 0.57
+  On-Label: False
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEST 9: CHEMO GUIDANCE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Query: 'Should I use platinum chemotherapy?'
+Context: BRCA1, HRD+
+
+✅ SUCCESS
+
+📊 KEY RESULTS:
+  Tier: research
+  Strength: weak
+  On-Label: False
+  Efficacy Score: 0.0
+  Confidence: 0.217
+  Evidence Tier: insufficient
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEST 10: LITERATURE RETRIEVAL (RAG)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Query: 'Find papers on BRCA1 mutations'
+
+✅ SUCCESS
+
+📊 KEY RESULTS:
+  Answer Length: 645 chars
+  Evidence Level: Insufficient
+  Confidence Score: 0.0
+  Supporting Papers: 0
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+All output files saved to: .cursor/tests/copilot/output/
+
+Files:
+total 128
+-rw-r--r--  1 fahadkiani  staff   1.1K Nov  4 13:48 10_rag.json
+-rw-r--r--  1 fahadkiani  staff   9.9K Nov  4 13:46 1_drug_efficacy.json
+-rw-r--r--  1 fahadkiani  staff    14K Nov  4 13:46 2_food_validator.json
+-rw-r--r--  1 fahadkiani  staff   4.3K Nov  4 13:46 3_complete_care.json
+-rw-r--r--  1 fahadkiani  staff    63B Nov  4 13:46 4_trials.json
+-rw-r--r--  1 fahadkiani  staff   783B Nov  4 13:46 5_toxicity.json
+-rw-r--r--  1 fahadkiani  staff   118B Nov  4 13:46 6_synthetic_lethality.json
+-rw-r--r--  1 fahadkiani  staff   767B Nov  4 13:46 7_variant_impact.json
+-rw-r--r--  1 fahadkiani  staff   687B Nov  4 13:47 8_radiation_guidance.json
+-rw-r--r--  1 fahadkiani  staff   654B Nov  4 13:48 9_chemo_guidance.json
+
+⚔️ REAL BACKEND TESTS COMPLETE ⚔️

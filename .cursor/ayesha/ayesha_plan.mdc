@@ -1,11 +1,11 @@
 ---
 alwaysApply: false
-description: Ayesha Clinical Plan – essentials we’ve built, supported use‑cases, and how it translates into product flows (RUO)
+description: Ayesha Clinical Plan – essentials we've built, supported use‑cases, and how it translates into product flows (RUO)
 ---
 
 # Ayesha – Essentials Plan (RUO)
 
-This rule summarizes the minimal, battle‑ready capabilities we already have, how they map to Ayesha’s suspected ovarian/peritoneal case, and how they surface in the product. It links concrete backend/frontend files and provides quick test commands.
+This rule summarizes the minimal, battle‑ready capabilities we already have, how they map to Ayesha's suspected ovarian/peritoneal case, and how they surface in the product. It links concrete backend/frontend files and provides quick test commands.
 
 ## What's built and ready
 
@@ -179,7 +179,7 @@ curl -sS -X POST http://127.0.0.1:8000/api/safety/off_target_preview \
 - Surface cohort context (when available) in EvidenceBand/Trials card (read‑only if sparse)
 
 ## Acceptance (doctor‑facing, RUO)
-- Clear therapy table with confidence + “why” (S/P/E + SAE) and toxicity flags
+- Clear therapy table with confidence + "why" (S/P/E + SAE) and toxicity flags
 - Provenance includes run_id, profile, feature flags, confidence_breakdown
 - Trials page returns recruiting trials; filters by state/phase; shows contacts
 - Latency: fast profile ≤ ~10–20s; richer ≤ ~20–40s for small variant sets
@@ -223,7 +223,7 @@ curl -sS -X POST http://127.0.0.1:8000/api/safety/off_target_preview \
 Commands used (local): see "Minimal test commands" above; we added here‑doc JSON forms to avoid shell quoting errors.
 
 ### What this means for Ayesha (doctor‑facing impact)
-- Trust: Confidence is no longer a black box. EvidenceBand now explains “why” via SAE features (e.g., exon disruption, DNA repair burden, hotspot, essentiality).
+- Trust: Confidence is no longer a black box. EvidenceBand now explains "why" via SAE features (e.g., exon disruption, DNA repair burden, hotspot, essentiality).
 - Speed: Baseline profile returns fast; Richer/Fusion enable deeper signals on demand. Provenance records profile/flags for audit.
 - Actionability: For BRCA/HRD‑like cases, SAE will surface DNA‑repair‑related features (improves rationale for PARP); if absent, the UI honestly shows limiting features and invites next steps (trials, evidence, richer profile).
 - Consistency: All cards (Efficacy/Toxicity/Off‑Target) render together in the Mechanistic tab; Co‑Pilot can explain SAE in plain language.
@@ -637,4 +637,1337 @@ t
 - Ayesha's Germline Report: [.cursor/ayesha/AyeshasGenetics.mdc](mdc:.cursor/ayesha/AyeshasGenetics.mdc)
 - Treatment Line Integration: [.cursor/ayesha/treatment_lines/TREATMENT_LINE_INTEGRATION_DOCTRINE.mdc](mdc:.cursor/ayesha/treatment_lines/TREATMENT_LINE_INTEGRATION_DOCTRINE.mdc)
 - VUS Identification: [.cursor/rules/vus_identification_doctrine.mdc](mdc:.cursor/rules/vus_identification_doctrine.mdc)
+
+---
+
+## 17) OVARIAN CANCER – DURABLE CONTROL STRATEGY (RESISTANCE‑AWARE, SEQUENCED PLAN)
+
+### Why this section
+- Objective: Move beyond single‑line picks to a durable, resistance‑aware plan for sporadic ovarian cancer (RUO).
+- Risk addressed: Clonal evolution and acquired resistance (e.g., BRCA reversion, HR restoration, MAPK/PI3K escape, ABCB1 upregulation).
+- Outcome: A single guided flow in Co‑Pilot that returns therapy + combo + trial + supportive care + monitoring, with provenance.
+
+### 17.1 Care sequence (doctor‑facing, one pass in Co‑Pilot)
+1) Intake → Sporadic gates
+   - Inputs: `germline_status="negative"`, `tumor_context={tmb, msi_status, hrd_score, somatic_mutations[]}`
+   - Effect: PARP penalized unless somatic HRD≥42; IO boosted if MSI‑H/TMB‑high; confidence cap by completeness (L0/L1/L2)
+2) WIWFM (line‑aware)
+   - Output: Ranked drugs with confidence, evidence tier, badges, insight chips
+   - Profile: Baseline→Richer as needed; Fusion ON only when AM coverage
+3) Resistance Playbook (NEW)
+   - Reads driver/pathway state (e.g., HR restoration risk, RAS/MAPK activity, ABCB1 signals)
+   - Returns: Preemptive or adaptive combos and next‑line switches (e.g., PARP→ATR/CHK1/WEE1; MAPK escape→MEK; PI3K escape→AKT/WEE1)
+4) Clinical Trials (sporadic‑aware)
+   - Exclude germline‑required; prioritize HRD‑somatic, MSI‑H/TMB‑high, pathway‑matched trials
+5) Supportive Care (Food)
+   - Treatment‑line‑aware timing (post‑platinum recovery, maintenance repletion, inflammation control)
+   - Drug–nutrient interactions flagged
+6) Toxicity & PGx
+   - DPYD/TPMT/UGT1A1/CYP2D6 flags; dose/alternative notes; drug–drug interactions
+7) Monitoring & MRD (NEW)
+   - ctDNA/MRD cadence; re‑NGS triggers; imaging schedule; switch thresholds on rising resistance signals
+8) Export
+   - Single report (drug+combo+trial+food+monitoring) with run_id/profile/flags, rationale
+
+### 17.2 Combination strategy library (when/why)
+- PARP + ATR/CHK1/WEE1
+  - When: HRD‑high or BRCA/HRR mutated; or suspected HR restoration escape
+  - Why: Synthetic lethality; block S‑phase checkpoint repair compensation
+- PARP + anti‑angiogenic (bevacizumab)
+  - When: High‑risk platinum‑sensitive maintenance
+  - Why: Complementary stress on DNA repair + angiogenesis microenvironment
+- IO combos (checkpoint inhibitor + PARP/VEGF)
+  - When: MSI‑H/TMB‑high or inflamed microenvironment signal
+  - Why: Neoantigen burden + DNA damage augments immune visibility
+- MAPK/PI3K combos
+  - When: RAS/MAPK or PI3K activation present; avoid monotherapy traps
+  - Why: Pathway cross‑talk drives escape; dual inhibition improves durability
+
+### 17.3 Resistance Playbook (logic we implement) ✅ **V1 COMPLETE**
+- **Implementation**: `api/services/resistance_playbook_service.py` (702 lines)
+- **Detectable risks** (5 heuristic rules):
+  - ✅ **HR restoration** (confidence: 0.6-0.7)
+    - Triggers: HRD drop after PARP (HRD <42), RAD51C/D compensation, SAE DNA repair >0.7
+    - Code: `detect_hr_restoration_risk()`
+  - ✅ **ABCB1 upregulation** (confidence: 0.8)
+    - Triggers: ABCB1 copy number >4
+    - Code: `detect_abcb1_upregulation()`
+  - ✅ **RAS/MAPK activation** (confidence: 0.7-0.85)
+    - Triggers: KRAS/NRAS/BRAF mutations OR MAPK pathway burden >0.7
+    - Code: `detect_mapk_activation()`
+  - ✅ **PI3K/AKT activation** (confidence: 0.65-0.8)
+    - Triggers: PIK3CA/PTEN mutations OR PI3K pathway burden >0.7
+    - Code: `detect_pi3k_activation()`
+  - ✅ **SLFN11 loss** (confidence: 0.75)
+    - Triggers: SLFN11 deletion OR LOF mutation
+    - Code: `detect_slfn11_loss()`
+- **Output shape** (fully implemented):
+  - ✅ `playbook: { risks[], combo_strategies[], next_line_switches[], trial_keywords[] }`
+  - ✅ Rationale array with pathway alignment and line context
+  - ✅ Full provenance tracking (methods, data sources, counts)
+- **Combo ranking logic**:
+  - Trigger match (resistance risk → relevant combo)
+  - Biomarker boost (MSI-H+TMB ≥20 → 1.1x, HRD ≥42 + PARP → 1.05x)
+  - Prior failure penalty (same class → 0.75x)
+- **Switch ranking logic**:
+  - Trigger match (resistance risk → relevant switch)
+  - Prior drug penalty (exact drug failed → 0.5x)
+  - Platinum rechallenge (sensitive + >6mo PFI → high rank)
+
+### 17.4 Monitoring & MRD plan (don't lose the response)
+- ctDNA/MRD assay:
+  - Baseline → post‑cycle 2 → q8–12 weeks during active therapy → q12 weeks in maintenance
+- Re‑biopsy/NGS:
+  - On biochemical progression or radiographic growth → refresh `tumor_context`
+- Imaging:
+  - Per guideline cadence; tighter interval when high resistance risk flagged
+- Switch criteria:
+  - Rising MRD in 2 consecutive draws or radiographic progression; fall back to Resistance Playbook path
+
+### 17.5 Pharmacogenomics & safety
+- Screen: DPYD, TPMT/NUDT15, UGT1A1, CYP2D6; drug–drug interactions (e.g., SSRIs, azoles)
+- Behavior:
+  - Add risk chips to plan; dose adjustment notes; safe alternatives; trial suitability
+
+### 17.6 Nutraceutical synergy/antagonism (treatment‑line‑aware)
+- Post‑platinum: NAC (oxidative stress), Omega‑3 (inflammation), Vitamin D (repletion; HRD context)
+- Antagonism timing: Antioxidants distant from ROS‑dependent chemo windows
+- Output: Line‑aware timing table; interaction cautions; dosage with citations
+
+### 17.7 Capability → step mapping (how our stack is used)
+- Evo2 (Sequence oracle)
+  - Use: S signals for variant impact; calibrated percentiles; insights bundle fueling WIWFM
+  - Why: Zero‑shot sequence likelihood proxy; gene‑calibrated for cross‑gene comparison
+- Insights bundle (Functionality/Chromatin/Essentiality/Regulatory)
+  - Use: Confidence lifts, domain‑aware context; feeds Resistance Playbook
+  - Why: Mechanistic signal beyond raw S/P/E; explains confidence
+- Sporadic Gates (apply_sporadic_gates)
+  - Use: Penalize PARP when germline‑negative/HRD unknown; rescue when HRD≥42; IO boosts (MSI‑H/TMB)
+  - Why: Honest, tumor‑centric fit with completeness‑aware confidence caps
+- Fusion (AlphaMissense) – optional
+  - Use: Missense coverage only; gate lifts conservatively; show Fusion badge when active
+  - Why: Add orthogonal S evidence without overstating
+- Clinical Trials (Hybrid: AstraDB + Neo4j)
+  - Use: Exclude germline‑required; boost HRD‑somatic/MSI‑H/TMB‑high; rank pathway‑aligned combos from Playbook
+  - Why: Faster, profile‑matched trial shortlisting
+- SAE Explainability
+  - Use: EvidenceBand attribution and chips; reason "why this will work"
+  - Why: Trust and auditability for MDT
+- Boltz/AF validation (Demo‑safe)
+  - Use: Re‑use our 15 AF‑validated guides in Dossier for structural viability narrative (RUO)
+  - Why: Show 1D→3D doctrine without expensive live generation
+
+### 17.8 Implementation notes (no schema breaks) ✅ **V1 COMPLETE**
+- Backend (new lightweight endpoints) ✅
+  - ✅ **COMPLETE**: `POST /api/care/resistance_playbook` → returns risks, combos, switches, trial_keywords (reads WIWFM + insights + SAE)
+    - **File**: `api/services/resistance_playbook_service.py` (702 lines)
+    - **Router**: `api/routers/care.py` (186 lines)
+    - **Tests**: 19/19 passing (380 lines)
+    - **Detection Rules**: HR restoration, ABCB1, MAPK, PI3K, SLFN11
+    - **Combos**: 7 strategies (PARP+ATR, PARP+VEGF, IO combos, MAPK/PI3K)
+    - **Switches**: 6 next-line options (ATR, CHK1, WEE1, MEK, PI3K, Platinum)
+  - ⏸️ **FUTURE**: `POST /api/care/monitoring_plan` → returns cadence + switch thresholds
+  - ⏸️ **FUTURE**: `POST /api/care/pharmacogene_detect` → returns PGx flags + dose/alt notes (heuristics first)
+- Orchestrator (Ayesha) ✅
+  - ✅ **COMPLETE**: Integrated into `build_complete_care_plan()`
+  - ✅ Flow: WIWFM → Resistance Playbook → Food → Integrated confidence
+  - ✅ Non-blocking (graceful degradation if playbook fails)
+  - ✅ SAE features extracted from top drug and passed to playbook
+  - ✅ Response includes `resistance_playbook: { risks[], combo_strategies[], next_line_switches[], trial_keywords[], provenance }`
+- Frontend (Co‑Pilot + Command Center) ⏸️ **PENDING Jr Agent**
+  - [ ] Render compact cards: Resistance, Monitoring, PGx; add "Combo‑ready" badge to Trials
+  - [ ] Export: Single "Care Plan" PDF/Markdown with provenance
+
+### 17.9 Acceptance (doctor‑facing)
+- Plan includes: primary therapy, combo rationale, next‑line switches, eligible trials, food timing, PGx risks, monitoring cadence.
+- Provenance lists S/P/E, SAE, gates, and playbook rules used; profile and flags recorded.
+- Latency budget preserved (Baseline fast; Richer on demand; Playbook/Monitoring light).
+
+### 17.10 Data inputs and readiness – how we keep signals fresh
+- Intake (always available)
+  - L0 Quick Intake: age/sex/ECOG, suspected diagnosis, platinum response, known mutations → computes `completeness_score` and seeds `tumor_context` from disease priors
+  - Treatment history: current line, prior regimens, response windows
+  - Medications/OTC: interaction and PGx impact
+- Tumor genomics (progressive enhancement)
+  - L1: Partial metrics (any of TMB/MSI/HRD or a short mutation list)
+  - L2: Full NGS (Foundation/Tempus JSON/PDF via `/api/tumor/ingest_ngs`) → `somatic_mutations[]`, `tmb`, `msi_status`, `hrd_score`, CNAs, purity/ploidy
+  - Longitudinal: ctDNA/MRD draws appended to `tumor_context.history`
+- Germline/PGx
+  - Germline panel summary (positive/negative/unknown)
+  - Pharmacogene flags (DPYD, TPMT/NUDT15, UGT1A1, CYP2D6) from prior reports or `/api/care/pharmacogene_detect`
+- Evidence/coverage
+  - Fusion (missense only) coverage check; Insights bundle availability; literature cache (provider TTL)
+  - Trials index (AstraDB vector) + eligibility graph (Neo4j) refreshed on a schedule
+- Persistence & provenance
+  - Frontend `SessionContext` holds current session state; backend responses include `run_id`, `profile`, `flags`, `completeness_score`
+  - Caching & single‑flight in services to avoid duplicate calls; TTLs per provider
+  - Profiles: Baseline (fast), Richer (insights + evidence + SAE), Fusion (when eligible)
+
+### 17.11 Decision rules – when to use which strategy (operational gates)
+- PARP use
+  - If `hrd_score ≥ 42` (somatic): enable PARP (± maintenance) and consider ATR/CHK1/WEE1 on prior PARP or suspected HR restoration
+  - If germline negative AND `hrd_score` unknown: apply conservative PARP penalty (0.8x) and prefer HRD‑enriched trials; prompt to obtain HRD
+- IO use
+  - If `msi_status` is MSI‑H OR `tmb ≥ 20`: prioritize checkpoint inhibitor (alone or combo); if `10 ≤ tmb < 20`: consider IO combos as "conditional"
+- MAPK/PI3K escapes
+  - If RAS/MAPK activation: add MEK‑based combo candidates
+  - If PI3K/AKT/PTEN loss: consider AKT/WEE1 combinations
+- PARP resistance risks
+  - If SLFN11 low or absent: reduce PARP weighting; propose ATR/CHK1 options
+  - If ABCB1 upregulation pattern suspected: avoid substrate regimens; prefer non‑substrates
+- Line‑aware sequencing
+  - Platinum‑sensitive intervals → platinum re‑challenge and maintenance strategies; refractory → switch class/combos prioritized
+- MRD‑driven switches
+  - If MRD rises on 2 consecutive draws or exceeds predefined delta from nadir → follow Resistance Playbook path for next‑line switch
+- PGx/toxicity
+  - DPYD variants → avoid/adjust fluoropyrimidines; UGT1A1*28 → irinotecan dose caution; CYP2D6 SSRI interactions flagged for endocrine agents
+
+### 17.12 Always‑on readiness (ops)
+- Prompts & nudges
+  - If `tumor_context` missing TMB/MSI/HRD for ovarian pathway: prompt for NGS upload and mark confidence cap
+  - If medications missing: request list to enable interaction/PGx checks
+  - If no MRD plan: suggest standard cadence block for line of therapy
+- Background refresh
+  - Nightly trials indexing and eligibility graph updates; literature cache refresh within rate limits; calibration snapshots periodic refresh
+- Reliability & safety
+  - Graceful degradation with explicit "unknown" states; provenance lists fallbacks
+  - CI smoke tests for endpoints (efficacy/insights/trials/safety); profile‑gated heavy features
+  - RUO labeling throughout
+
+---
+
+### 17.13 V1 Implementation Details (Technical Reference) ✅ **COMPLETE**
+
+**Date**: January 12, 2025  
+**Status**: ✅ **OPERATIONAL** - 19/19 tests passing  
+**Documentation**: `.cursor/ayesha/RESISTANCE_PLAYBOOK_V1_COMPLETE.md`
+
+#### **Backend Service Architecture**:
+
+**File 1**: `api/services/resistance_playbook_service.py` (702 lines)
+- 5 detection functions (HR, ABCB1, MAPK, PI3K, SLFN11)
+- 7 combo strategies (PARP+ATR, PARP+VEGF, IO combos, MAPK/PI3K, WEE1)
+- 6 next-line switches (ATR, CHK1, WEE1, MEK, PI3K, Platinum)
+- Ranking logic with biomarker boosts + prior failure penalties
+- SAE integration for DNA repair capacity signals
+
+**File 2**: `api/routers/care.py` (186 lines)
+- Endpoint: `POST /api/care/resistance_playbook`
+- Pydantic schemas (Request/Response models)
+- Error handling + health check
+
+**File 3**: `api/services/ayesha_orchestrator.py` (modified ~60 lines)
+- New function: `call_resistance_playbook()`
+- Integrated into `build_complete_care_plan()`
+- SAE extraction from drug results
+- Response enhancement with playbook data
+
+**File 4**: `api/main.py` (2 lines added)
+- Router import + registration
+
+**File 5**: `tests/test_resistance_playbook.py` (380 lines)
+- 19 unit tests (100% passing)
+- Coverage: All 5 detection rules, combo ranking, switch ranking, E2E
+
+#### **How It Works (Flow)**:
+
+**Step 1**: Extract tumor context + treatment history from patient
+```python
+tumor_context = {
+  "somatic_mutations": [{"gene": "BRCA2", "hgvs_p": "S1982fs"}],
+  "hrd_score": 35,  # Dropped after PARP
+  "tmb": 6.8,
+  "msi_status": "MSI-Stable",
+  "copy_number_alterations": []
+}
+
+treatment_history = {
+  "current_line": 3,
+  "prior_therapies": [
+    {"line": 2, "drugs": ["Olaparib"], "outcome": "progression"}
+  ],
+  "platinum_response": "sensitive"
+}
+```
+
+**Step 2**: Detect resistance risks
+```python
+risks = []
+risks.append(detect_hr_restoration_risk(tumor_context, treatment_history, sae_features))
+risks.append(detect_abcb1_upregulation(tumor_context))
+risks.append(detect_mapk_activation(tumor_context, pathway_disruption))
+# ... etc
+```
+
+**Step 3**: Rank combo strategies (filter by triggers, boost/penalize)
+```python
+combos = rank_combo_strategies(risks, tumor_context, treatment_history)
+# Returns ranked list (top = best match)
+```
+
+**Step 4**: Recommend next-line switches
+```python
+switches = recommend_next_line_switches(risks, tumor_context, treatment_history)
+# Returns ranked list (top = best alternative)
+```
+
+**Step 5**: Generate trial keywords
+```python
+trial_keywords = []
+for risk in risks:
+  if risk.type == "HR_restoration":
+    trial_keywords.extend(["ATR inhibitor", "CHK1 inhibitor", "PARP combination"])
+# ... etc
+```
+
+**Step 6**: Return playbook with provenance
+```python
+return ResistancePlaybook(
+  risks=risks,
+  combo_strategies=combos[:5],
+  next_line_switches=switches[:5],
+  trial_keywords=list(set(trial_keywords)),
+  provenance={...}
+)
+```
+
+#### **SAE Integration**:
+
+**DNA Repair Capacity** (Feature 4):
+- Extracted from SAE features in drug efficacy results
+- Used in `detect_hr_restoration_risk()`
+- Threshold: >0.7 → HR restoration risk flagged
+
+**Pathway Burden** (derived from P scoring):
+- MAPK pathway burden >0.7 → MAPK activation risk
+- PI3K pathway burden >0.7 → PI3K activation risk
+
+#### **Example Output (Ayesha's Case)**:
+
+```json
+{
+  "risks": [
+    {
+      "type": "HR_restoration",
+      "confidence": 0.7,
+      "evidence": "HRD score 35 < 42 after PARP exposure (possible reversion)",
+      "triggers": ["PARP inhibitors"],
+      "source": "tumor_context + treatment_history"
+    }
+  ],
+  "combo_strategies": [
+    {
+      "drugs": ["Niraparib", "Bevacizumab"],
+      "moa": "PARP + anti-angiogenic",
+      "indication": "Platinum-sensitive maintenance",
+      "evidence_tier": "STANDARD",
+      "trials": ["PAOLA-1"],
+      "rank_score": 0.966,
+      "rationale": "Complementary stress: DNA repair + angiogenesis blockade"
+    },
+    {
+      "drugs": ["Olaparib", "Ceralasertib"],
+      "moa": "PARP + ATR",
+      "indication": "HRD-high with HR restoration risk",
+      "evidence_tier": "SUPPORTED",
+      "trials": ["NCT03462342"],
+      "rank_score": 0.638,
+      "rationale": "Block both HR and ATR compensation"
+    }
+  ],
+  "next_line_switches": [
+    {
+      "drug": "Carboplatin",
+      "drug_class": "Platinum agent",
+      "indication": "Platinum-sensitive rechallenge",
+      "evidence_tier": "STANDARD",
+      "trials": ["DESKTOP III"],
+      "rank_score": 0.9,
+      "rationale": "Platinum rechallenge for sensitive disease"
+    },
+    {
+      "drug": "Ceralasertib",
+      "drug_class": "ATR inhibitor",
+      "indication": "PARP resistance via HR restoration",
+      "evidence_tier": "SUPPORTED",
+      "trials": ["NCT02264678"],
+      "rank_score": 0.82,
+      "rationale": "ATR inhibition bypasses HR restoration"
+    }
+  ],
+  "trial_keywords": ["ATR inhibitor", "CHK1 inhibitor", "WEE1 inhibitor", "PARP combination"]
+}
+```
+
+#### **Smoke Tests** (copy/paste ready):
+
+```bash
+# Test 1: Ayesha (HR restoration after PARP)
+curl -X POST http://127.0.0.1:8000/api/care/resistance_playbook \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "tumor_context": {
+      "somatic_mutations": [{"gene": "TP53", "hgvs_p": "R273H"}, {"gene": "BRCA2", "hgvs_p": "S1982fs"}],
+      "hrd_score": 35, "tmb": 6.8, "msi_status": "MSI-Stable"
+    },
+    "treatment_history": {
+      "current_line": 3,
+      "prior_therapies": [
+        {"line": 1, "drugs": ["Carboplatin", "Paclitaxel"], "outcome": "partial_response"},
+        {"line": 2, "drugs": ["Olaparib"], "outcome": "progression", "drug_class": "PARP inhibitor"}
+      ],
+      "platinum_response": "sensitive"
+    }
+  }'
+
+# Test 2: MSI-High (IO focus)
+curl -X POST http://127.0.0.1:8000/api/care/resistance_playbook \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "tumor_context": {"hrd_score": 20, "tmb": 25.0, "msi_status": "MSI-High"},
+    "treatment_history": {"current_line": 1, "prior_therapies": []}
+  }'
+
+# Test 3: MAPK activation
+curl -X POST http://127.0.0.1:8000/api/care/resistance_playbook \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "tumor_context": {
+      "somatic_mutations": [{"gene": "KRAS", "hgvs_p": "G12D"}],
+      "hrd_score": 10, "tmb": 5.0, "msi_status": "MSI-Stable"
+    },
+    "treatment_history": {"current_line": 1, "prior_therapies": []}
+  }'
+```
+
+#### **Integration with Co-Pilot**:
+
+**Ayesha Orchestrator** (`/api/ayesha/complete_care`):
+- Calls resistance playbook automatically after WIWFM
+- Extracts SAE features from top drug
+- Attaches playbook to response
+- Non-blocking (continues if playbook fails)
+
+**Co-Pilot Response Enhancement**:
+```
+Ayesha: "What should I do if I become resistant to PARP inhibitors?"
+
+Co-Pilot: "Based on your tumor profile (HRD 35, prior Olaparib progression), 
+I've detected HR restoration risk (70% confidence). Here's what works:
+
+🎯 Best Combo: Niraparib + Bevacizumab (96.6% match)
+   Why: Platinum-sensitive maintenance with proven PAOLA-1 trial evidence
+
+⚔️ Next-Line Switch: Ceralasertib (ATR inhibitor, 82% match)
+   Why: Bypasses HR restoration mechanism detected in your tumor
+
+📋 Clinical Trials: NCT03462342 (PARP + ATR combination)
+   Keywords: ATR inhibitor, PARP combination"
+```
+
+---
+
+**V1 IMPLEMENTATION: COMPLETE** ⚔️  
+**AWAITING FRONTEND INTEGRATION (Jr Agent)**
+
+
+## 18) ADVANCED CARE PLAN FEATURES - RESISTANCE-AWARE, DURABLE CONTROL
+
+**Objective:** Expand Ayesha's care beyond basic Food + WIWFM + Clinical Trials to include resistance management, combination strategies, monitoring, and toxicity prevention. All features integrated into Co-Pilot as a single guided workflow.
+
+---
+
+### 18.0 COMPLETE 101 GUIDE - ALL ACRONYMS & TERMS EXPLAINED
+
+**Purpose:** This section explains every acronym, technical term, and concept used in the advanced care plan features. Read this first if you're new to oncology terminology.
+
+---
+
+#### **A. DRUG CLASSES & TARGETS**
+
+**PARP (Poly(ADP-ribose) polymerase)**
+- **What it is:** An enzyme that repairs DNA single-strand breaks
+- **What it does:** PARP inhibitors block this repair → Cancer cells with broken DNA repair (like BRCA mutations) die
+- **Why it matters:** Highly effective for ovarian cancer with BRCA mutations or HRD-high tumors
+- **Example drugs:** Olaparib, niraparib, rucaparib
+
+**ATR (Ataxia telangiectasia and Rad3-related)**
+- **What it is:** A protein kinase that controls DNA damage response
+- **What it does:** ATR inhibitors block DNA damage checkpoint → Cancer cells can't pause to repair DNA
+- **Why it matters:** Works when PARP stops working (resistance mechanism)
+- **Example drugs:** Berzosertib, ceralasertib
+
+**CHK1 (Checkpoint kinase 1)**
+- **What it is:** A protein that pauses cell division when DNA is damaged
+- **What it does:** CHK1 inhibitors prevent this pause → Cancer cells divide with broken DNA and die
+- **Why it matters:** Combo with PARP prevents cancer from escaping treatment
+- **Example drugs:** Prexasertib, rabusertib
+
+**WEE1 (WEE1 G2 checkpoint kinase)**
+- **What it is:** A protein that controls cell cycle progression
+- **What it does:** WEE1 inhibitors force cells to divide with damaged DNA → Cell death
+- **Why it matters:** Another escape route blocked when combined with PARP
+- **Example drugs:** Adavosertib, AZD1775
+
+**MEK (Mitogen-activated protein kinase kinase)**
+- **What it is:** Part of the MAPK signaling pathway (cell growth/survival)
+- **What it does:** MEK inhibitors block this pathway → Stops cancer growth
+- **Why it matters:** Works for cancers with RAS/MAPK mutations (common in ovarian)
+- **Example drugs:** Trametinib, cobimetinib
+
+**PI3K (Phosphoinositide 3-kinase)**
+- **What it is:** Part of the PI3K/AKT pathway (cell survival/growth)
+- **What it does:** PI3K inhibitors block this pathway → Stops cancer survival signals
+- **Why it matters:** Works for cancers with PI3K mutations (common in ovarian)
+- **Example drugs:** Alpelisib, copanlisib
+
+**VEGF (Vascular endothelial growth factor)**
+- **What it is:** A protein that promotes blood vessel growth
+- **What it does:** VEGF inhibitors (like bevacizumab) block blood vessel formation → Starves tumor
+- **Why it matters:** Tumors need blood vessels to grow; blocking them shrinks tumors
+- **Example drugs:** Bevacizumab (Avastin), ramucirumab
+
+**Checkpoint Inhibitor (IO - Immunotherapy)**
+- **What it is:** Drugs that "release the brakes" on the immune system
+- **What it does:** Allows T-cells to attack cancer cells
+- **Why it matters:** Works best for MSI-H or TMB-high tumors (lots of mutations = visible to immune system)
+- **Example drugs:** Pembrolizumab, nivolumab, atezolizumab
+
+---
+
+#### **B. GENETIC TERMS & BIOMARKERS**
+
+**BRCA (BReast CAncer gene)**
+- **What it is:** Genes (BRCA1, BRCA2) that repair DNA double-strand breaks
+- **What it does:** When mutated, DNA repair is broken → Cancer cells vulnerable to PARP inhibitors
+- **Why it matters:** Germline BRCA mutations = hereditary cancer; Somatic BRCA mutations = sporadic cancer
+- **For Ayesha:** Germline negative (no hereditary mutation), but may have somatic BRCA mutation in tumor
+
+**HRD (Homologous Recombination Deficiency)**
+- **What it is:** A condition where cells can't repair DNA double-strand breaks properly
+- **What it does:** Makes cancer cells vulnerable to PARP inhibitors and platinum chemotherapy
+- **Why it matters:** HRD-high tumors (score ≥42) respond well to PARP, even without BRCA mutations
+- **For Ayesha:** Somatic HRD score 52 (high) → PARP approved despite germline negative
+
+**HRR (Homologous Recombination Repair)**
+- **What it is:** The DNA repair pathway that BRCA genes control
+- **What it does:** When broken (HRD), cancer cells can't fix DNA damage
+- **Why it matters:** HRR genes (BRCA1/2, RAD51C/D, PALB2) all affect PARP sensitivity
+
+**MSI-H (Microsatellite Instability-High)**
+- **What it is:** A condition where DNA repair machinery is broken (mismatch repair deficiency)
+- **What it does:** Causes thousands of mutations → Makes cancer visible to immune system
+- **Why it matters:** MSI-H tumors respond well to checkpoint inhibitors (immunotherapy)
+- **For Ayesha:** MSI-H status → Eligible for IO combos
+
+**TMB (Tumor Mutational Burden)**
+- **What it is:** Number of mutations per megabase of DNA
+- **What it does:** High TMB (≥10-20 mutations/Mb) = lots of mutations = visible to immune system
+- **Why it matters:** TMB-high tumors respond well to checkpoint inhibitors
+- **For Ayesha:** TMB 8.2 (moderate) → May benefit from IO combos, not IO alone
+
+**RAS (Rat sarcoma)**
+- **What it is:** A family of genes (KRAS, NRAS, HRAS) that control cell growth
+- **What it does:** When mutated, constantly signals "grow" → Cancer
+- **Why it matters:** RAS mutations drive many cancers; hard to target directly, but MEK inhibitors work
+
+**MAPK (Mitogen-activated protein kinase)**
+- **What it is:** A signaling pathway (RAS → RAF → MEK → ERK) that controls cell growth
+- **What it does:** When overactive, drives cancer growth
+- **Why it matters:** MAPK inhibitors (MEK, BRAF) can block this pathway
+
+**RAD51C/D (DNA repair genes)**
+- **What it is:** Genes that help repair DNA double-strand breaks (part of HRR pathway)
+- **What it does:** When reactivated, restores DNA repair → PARP stops working (resistance)
+- **Why it matters:** RAD51C/D reactivation is a common PARP resistance mechanism
+
+**SLFN11 (Schlafen family member 11)**
+- **What it is:** A protein that makes PARP inhibitors work better
+- **What it does:** When present, PARP is more effective; when lost, PARP stops working
+- **Why it matters:** SLFN11 loss is a PARP resistance mechanism
+
+**ABCB1 (ATP-binding cassette subfamily B member 1)**
+- **What it is:** A "drug pump" protein that removes chemotherapy from cells
+- **What it does:** When overactive (upregulated), pumps drugs out → Chemotherapy doesn't work
+- **Why it matters:** ABCB1 upregulation causes resistance to many chemotherapy drugs
+
+---
+
+#### **C. TREATMENT TERMS**
+
+**L1/L2/L3 (Treatment Lines)**
+- **L1 (First-line):** Initial treatment after diagnosis (e.g., platinum + taxane)
+- **L2 (Second-line):** Treatment after L1 fails or recurs (e.g., PARP maintenance)
+- **L3 (Third-line):** Treatment after L2 fails (e.g., platinum re-challenge or new drug)
+- **Why it matters:** Same drug, different line = different recommendation (context matters)
+
+**WIWFM (Will It Work For Me)**
+- **What it is:** Our drug efficacy prediction system
+- **What it does:** Ranks drugs by predicted effectiveness (0-1 score) with confidence and evidence
+- **Why it matters:** Helps doctors choose the best drug for each patient
+
+**Platinum Sensitivity**
+- **What it is:** How well a tumor responds to platinum chemotherapy (carboplatin, cisplatin)
+- **What it does:** If platinum worked well (sensitive), PARP more likely to work
+- **Why it matters:** Platinum and PARP both target DNA repair → Similar mechanisms
+
+**Maintenance Therapy**
+- **What it is:** Treatment given after initial therapy to prevent recurrence
+- **What it does:** Keeps cancer from coming back (e.g., PARP maintenance after platinum)
+- **Why it matters:** Maintenance extends survival in ovarian cancer
+
+**Re-challenge**
+- **What it is:** Using the same drug again after it previously worked
+- **What it does:** If platinum worked before, may work again (if sensitive)
+- **Why it matters:** Re-using effective drugs is a valid strategy
+
+---
+
+#### **D. PHARMACOGENOMICS (DRUG-GENE INTERACTIONS)**
+
+**DPYD (Dihydropyrimidine dehydrogenase)**
+- **What it is:** An enzyme that breaks down 5-FU (fluoropyrimidine chemotherapy)
+- **What it does:** When mutated, can't break down 5-FU → Toxic levels build up → Severe toxicity
+- **Why it matters:** DPYD variants cause life-threatening 5-FU toxicity (diarrhea, neutropenia, death)
+- **Action:** Test before 5-FU; reduce dose or avoid if variant present
+
+**TPMT (Thiopurine S-methyltransferase)**
+- **What it is:** An enzyme that breaks down thiopurine drugs (6-MP, azathioprine)
+- **What it does:** When mutated, can't break down thiopurines → Toxic levels → Severe bone marrow toxicity
+- **Why it matters:** TPMT variants cause life-threatening neutropenia (low white blood cells)
+- **Action:** Test before thiopurines; reduce dose or avoid if variant present
+
+**NUDT15 (Nudix hydrolase 15)**
+- **What it is:** Another enzyme that breaks down thiopurines (works with TPMT)
+- **What it does:** When mutated, increases thiopurine toxicity (especially in Asian populations)
+- **Why it matters:** NUDT15 variants cause severe bone marrow toxicity
+- **Action:** Test before thiopurines; reduce dose or avoid if variant present
+
+**UGT1A1 (UDP glucuronosyltransferase family 1 member A1)**
+- **What it is:** An enzyme that breaks down irinotecan (chemotherapy drug)
+- **What it does:** When mutated (UGT1A1*28), can't break down irinotecan → Toxic levels → Severe diarrhea
+- **Why it matters:** UGT1A1*28 causes life-threatening irinotecan toxicity
+- **Action:** Test before irinotecan; reduce dose if variant present
+
+**CYP2D6 (Cytochrome P450 family 2 subfamily D member 6)**
+- **What it is:** An enzyme that activates tamoxifen (breast cancer drug)
+- **What it does:** When mutated, can't activate tamoxifen → Drug doesn't work
+- **Why it matters:** CYP2D6 poor metabolizers get no benefit from tamoxifen
+- **Action:** Test before tamoxifen; use alternative (aromatase inhibitor) if poor metabolizer
+
+**5-FU (5-fluorouracil)**
+- **What it is:** A chemotherapy drug (fluoropyrimidine) used in many cancer regimens
+- **What it does:** Blocks DNA synthesis → Kills dividing cells (cancer and normal)
+- **Why it matters:** Very effective, but DPYD variants cause severe toxicity
+
+**SSRIs (Selective Serotonin Reuptake Inhibitors)**
+- **What it is:** Antidepressant drugs (e.g., Prozac, Zoloft)
+- **What it does:** Interacts with tamoxifen → Reduces tamoxifen effectiveness
+- **Why it matters:** SSRIs block CYP2D6 → Tamoxifen doesn't work
+
+**INR (International Normalized Ratio)**
+- **What it is:** A blood test that measures how fast blood clots
+- **What it does:** Used to monitor warfarin (blood thinner) effectiveness
+- **Why it matters:** Vitamin D can affect warfarin → Need to monitor INR closely
+
+---
+
+#### **E. MONITORING & DIAGNOSTICS**
+
+**MRD (Minimal Residual Disease)**
+- **What it is:** Very small amounts of cancer cells left after treatment
+- **What it does:** Detected by ctDNA tests → Predicts if cancer will come back
+- **Why it matters:** Rising MRD = cancer coming back → Switch therapy early
+
+**ctDNA (Circulating tumor DNA)**
+- **What it is:** DNA fragments from cancer cells floating in blood
+- **What it does:** Blood test detects cancer DNA → Non-invasive monitoring
+- **Why it matters:** Can detect recurrence before scans show it (earlier = better outcomes)
+
+**NGS (Next-generation sequencing)**
+- **What it is:** Technology that sequences all genes in a tumor (or blood)
+- **What it does:** Finds all mutations, biomarkers (TMB, MSI, HRD) in one test
+- **Why it matters:** Comprehensive genomic profiling guides treatment decisions
+
+**Re-biopsy**
+- **What it is:** Taking a new tumor sample (surgery or needle biopsy)
+- **What it does:** Gets fresh tumor DNA → See how cancer evolved (new mutations, resistance)
+- **Why it matters:** Cancer changes over time → Need fresh genomics to adapt treatment
+
+**Imaging**
+- **What it is:** CT scans, PET scans, MRIs that show tumor size/location
+- **What it does:** Tracks if tumors are growing or shrinking
+- **Why it matters:** Progression on imaging = treatment not working → Switch therapy
+
+---
+
+#### **F. FOOD & SUPPLEMENTS**
+
+**NAC (N-acetylcysteine)**
+- **What it is:** A supplement that boosts glutathione (antioxidant)
+- **What it does:** Reduces oxidative stress after platinum chemotherapy
+- **Why it matters:** Platinum causes oxidative damage → NAC helps recovery
+
+**ROS (Reactive oxygen species)**
+- **What it is:** Toxic molecules produced during chemotherapy
+- **What it does:** Causes cell damage (cancer and normal cells)
+- **Why it matters:** Some chemo (like platinum) relies on ROS to kill cancer → Antioxidants can interfere
+
+**Antioxidants**
+- **What it is:** Supplements that neutralize ROS (Vitamin C, E, NAC)
+- **What it does:** Protects cells from oxidative damage
+- **Why it matters:** Timing matters - avoid during ROS-dependent chemo, use after
+
+---
+
+#### **G. TECHNICAL TERMS**
+
+**VCF (Variant Call Format)**
+- **What it is:** A file format that stores genetic variants (mutations)
+- **What it does:** Standard format for sharing genomic data
+- **Why it matters:** Our system reads VCF files to analyze patient genetics
+
+**JSON (JavaScript Object Notation)**
+- **What it is:** A data format for storing structured information
+- **What it does:** Easy to read/write for computers and humans
+- **Why it matters:** Our APIs use JSON to send/receive data
+
+**PDF (Portable Document Format)**
+- **What it is:** A file format for documents (read-only, preserves formatting)
+- **What it does:** Used for exporting care plans, reports
+- **Why it matters:** Doctors can print/share care plans easily
+
+**Markdown**
+- **What it is:** A simple text format for writing documents
+- **What it does:** Easy to read/write, converts to HTML/PDF
+- **Why it matters:** Used for care plan exports, documentation
+
+**PharmGKB (Pharmacogenomics Knowledge Base)**
+- **What it is:** A database of drug-gene interactions
+- **What it does:** Tells us which genetic variants affect which drugs
+- **Why it matters:** We use PharmGKB to predict toxicity risks
+
+**RUO (Research Use Only)**
+- **What it is:** A legal disclaimer that our platform is for research, not clinical decision-making
+- **What it does:** Protects us from liability; clarifies that doctors make final decisions
+- **Why it matters:** Required for FDA compliance; honest about platform limitations
+
+---
+
+#### **H. PLATFORM TERMS**
+
+**Co-Pilot**
+- **What it is:** Our AI assistant that guides doctors through care planning
+- **What it does:** Answers questions, generates care plans, explains recommendations
+- **Why it matters:** Makes complex genomics accessible to busy doctors
+
+**Sporadic Gates**
+- **What it is:** Logic that adjusts recommendations for sporadic (non-hereditary) cancers
+- **What it does:** Penalizes PARP if germline negative + HRD unknown; rescues if HRD-high
+- **Why it matters:** 85-90% of ovarian cancers are sporadic → Need different logic
+
+**Germline vs Somatic**
+- **Germline:** Mutations inherited from parents (in every cell, can pass to children)
+- **Somatic:** Mutations acquired during life (only in tumor, not inherited)
+- **Why it matters:** Germline = hereditary cancer; Somatic = sporadic cancer
+
+**Synthetic Lethality**
+- **What it is:** When two things together kill a cell, but neither alone does
+- **What it does:** PARP + broken DNA repair = cancer cell death
+- **Why it matters:** Explains why PARP works for BRCA/HRD tumors
+
+---
+
+### 18.1 WHAT THIS SECTION MEANS (Plain Language)
+
+**The Problem We're Solving:**
+- Current platform: Recommends single drugs per line (e.g., "PARP inhibitor for L2")
+- Missing: What happens when cancer becomes resistant? What combos work? When to switch?
+- Missing: How to monitor response? When to re-biopsy? What about drug toxicity?
+
+**The Solution:**
+A complete, adaptive care plan that:
+1. **Anticipates resistance** - Predicts what might go wrong and prepares backup plans
+2. **Recommends combinations** - Not just single drugs, but smart drug pairs
+3. **Monitors continuously** - Tells doctors when to check biomarkers, re-biopsy, switch therapies
+4. **Prevents toxicity** - Flags genetic variants that cause severe drug reactions
+5. **Adapts to progression** - Generates new plans when cancer evolves
+
+**Why It Matters for Ayesha:**
+- Ayesha has sporadic ovarian cancer (germline negative, somatic HRD-high)
+- She needs PARP inhibitors, but they may stop working (resistance)
+- She needs monitoring to catch resistance early
+- She needs toxicity screening to avoid dangerous drug reactions
+- She needs a complete plan, not just isolated recommendations
+
+---
+
+### 18.2 NEW FEATURES BEYOND CURRENT CAPABILITIES
+
+#### **A. Targeted Combination Strategies** 🎯
+**What It Is:** Recommends drug pairs (not just single drugs) based on tumor biology.
+
+**How It Works:**
+Instead of recommending one drug at a time, we recommend smart combinations that attack cancer from multiple angles. This prevents resistance because cancer can't escape multiple attacks simultaneously.
+
+**Examples:**
+- **PARP + ATR/CHK1/WEE1** → When HRD-high or BRCA mutated
+  - **Why:** PARP blocks DNA repair; ATR/CHK1/WEE1 block backup repair pathways → Cancer can't escape
+  - **When:** HRD-high tumors or BRCA mutations (synthetic lethality combo)
+  
+- **PARP + Bevacizumab** → High-risk, platinum-sensitive maintenance
+  - **Why:** PARP targets DNA repair; Bevacizumab starves tumor of blood vessels → Dual attack
+  - **When:** Platinum worked well, high risk of recurrence (maintenance setting)
+  
+- **Checkpoint Inhibitor + PARP/VEGF** → When MSI-H or TMB-high
+  - **Why:** IO activates immune system; PARP creates DNA damage → Immune system sees damaged cells better
+  - **When:** MSI-H (lots of mutations) or TMB-high (≥10-20 mutations/Mb)
+  
+- **MEK + PI3K inhibitors** → When RAS/MAPK or PI3K active
+  - **Why:** Cancer often escapes single pathway inhibition; blocking both prevents escape
+  - **When:** RAS/MAPK mutations or PI3K pathway active (avoid monotherapy resistance)
+
+**Why It Matters:** Single drugs often fail due to resistance. Combinations attack multiple pathways simultaneously, making it harder for cancer to escape.
+
+---
+
+#### **B. Resistance Playbook** ⚔️
+**What It Is:** Predicts how cancer might become resistant and prepares counter-strategies BEFORE resistance happens.
+
+**How It Works:**
+Cancer is smart - it evolves to escape treatment. We analyze the tumor's genetics and predict which resistance mechanisms are most likely, then prepare backup plans in advance. This is like having a playbook for every possible move the cancer might make.
+
+**Resistance Mechanisms Detected:**
+
+1. **BRCA Reversion**
+   - **What happens:** Cancer "fixes" its BRCA mutation (reverses it back to normal)
+   - **Result:** DNA repair works again → PARP inhibitors stop working
+   - **Counter-strategy:** Switch to ATR/CHK1 inhibitors (target different repair pathway)
+   - **Detection:** Look for BRCA mutations that disappear in follow-up NGS
+
+2. **HR Restoration (Homologous Recombination Restoration)**
+   - **What happens:** RAD51C/D genes get reactivated → DNA repair pathway restored
+   - **Result:** Cancer can repair DNA again → PARP stops working
+   - **Counter-strategy:** Add ATR inhibitors (block backup repair pathway)
+   - **Detection:** RAD51C/D expression increases in follow-up tests
+
+3. **SLFN11 Loss**
+   - **What happens:** SLFN11 protein disappears (gene deleted or silenced)
+   - **Result:** PARP inhibitors become less effective (SLFN11 makes PARP work better)
+   - **Counter-strategy:** Reduce PARP dose, consider ATR/CHK1 alternatives
+   - **Detection:** SLFN11 expression drops in follow-up NGS
+
+4. **ABCB1 Upregulation**
+   - **What happens:** ABCB1 "drug pump" protein increases → Pumps chemotherapy out of cells
+   - **Result:** Chemotherapy doesn't reach cancer cells → Treatment fails
+   - **Counter-strategy:** Avoid drugs that ABCB1 pumps out; use non-substrate alternatives
+   - **Detection:** ABCB1 expression increases in follow-up tests
+
+**Output:**
+- **Risk Assessment:** Likely resistance mechanisms ranked by probability (e.g., "60% chance of BRCA reversion")
+- **Switch Recommendations:** Next-line drugs if current therapy fails (e.g., "If PARP fails → try ATR/CHK1")
+- **Prevention Strategies:** Combinations to prevent resistance (e.g., "PARP + ATR combo prevents HR restoration")
+- **Trial Keywords:** Specific trials for resistance mechanisms (e.g., "ATR inhibitor trials for PARP-resistant")
+
+**Why It Matters:** Cancer evolves. We need to stay ahead of it by predicting resistance and having backup plans ready.
+
+---
+
+#### **C. Treatment Line Intelligence** 📊
+**What It Is:** Adjusts recommendations based on treatment history (L1 vs L2 vs L3) and what worked before.
+
+**How It Works:**
+The same drug can work differently depending on WHEN it's used. A drug that's perfect for first-line might be less effective in third-line. We track the patient's treatment history and adjust recommendations accordingly.
+
+**Features:**
+
+1. **Line-Aware WIWFM (Will It Work For Me)**
+   - **L1 (First-line):** Higher confidence thresholds (patient is treatment-naive, better response expected)
+   - **L2 (Second-line):** Moderate thresholds (some resistance may have developed)
+   - **L3+ (Third-line+):** Lower thresholds (more resistance, but still options)
+   - **Why:** Patients who've had multiple treatments may have developed resistance → Lower confidence
+
+2. **Platinum Sensitivity Logic**
+   - **What it tracks:** How well platinum chemotherapy worked (sensitive vs resistant)
+   - **How it works:** If platinum worked well (sensitive) → PARP more likely to work (both target DNA repair)
+   - **Why it matters:** Platinum and PARP share mechanisms → Platinum response predicts PARP response
+
+3. **Sequencing Fitness**
+   - **What it tracks:** Which drugs work best in which order
+   - **How it works:** Tracks drug combinations and sequences that have worked historically
+   - **Why it matters:** Some drugs work better when given in specific sequences
+
+**Real-World Example (Ayesha's Case):**
+- **L1 (First-line):** Platinum + taxane → Standard, high confidence (0.85)
+- **L2 (Maintenance):** PARP inhibitor if HRD-high → Prevents recurrence, moderate confidence (0.72)
+- **L3 (Re-challenge):** Platinum again if sensitive → Re-use what worked, lower confidence (0.65)
+
+**Why It Matters:** Same drug, different context = different recommendation. Context is everything in oncology.
+
+---
+
+#### **D. Toxicity & Pharmacogenomics** ⚠️
+**What It Is:** Flags genetic variants that cause severe drug reactions BEFORE prescribing, preventing life-threatening toxicity.
+
+**How It Works:**
+Some people have genetic variants that make them unable to break down certain drugs. When these drugs build up in the body, they cause severe toxicity (diarrhea, low white blood cells, even death). We screen for these variants BEFORE prescribing and adjust doses or recommend alternatives.
+
+**Pharmacogenes Screened (Drug-Metabolizing Enzymes):**
+
+1. **DPYD (Dihydropyrimidine dehydrogenase)**
+   - **What it does:** Breaks down 5-FU (fluoropyrimidine chemotherapy)
+   - **What happens when mutated:** Can't break down 5-FU → Toxic levels build up
+   - **Toxicity:** Severe diarrhea, neutropenia (low white blood cells), death (5-10% mortality)
+   - **Action:** Test before 5-FU; reduce dose by 50% or avoid entirely
+   - **Prevalence:** ~3-5% of population have DPYD variants
+
+2. **TPMT (Thiopurine S-methyltransferase)**
+   - **What it does:** Breaks down thiopurine drugs (6-MP, azathioprine)
+   - **What happens when mutated:** Can't break down thiopurines → Toxic levels build up
+   - **Toxicity:** Severe neutropenia (life-threatening low white blood cells)
+   - **Action:** Test before thiopurines; reduce dose by 50-90% or avoid
+   - **Prevalence:** ~10% of population have TPMT variants
+
+3. **NUDT15 (Nudix hydrolase 15)**
+   - **What it does:** Also breaks down thiopurines (works with TPMT)
+   - **What happens when mutated:** Increases thiopurine toxicity (especially in Asian populations)
+   - **Toxicity:** Severe bone marrow toxicity
+   - **Action:** Test before thiopurines; reduce dose or avoid
+   - **Prevalence:** ~20% of Asian population have NUDT15 variants
+
+4. **UGT1A1 (UDP glucuronosyltransferase family 1 member A1)**
+   - **What it does:** Breaks down irinotecan (chemotherapy drug)
+   - **What happens when mutated (UGT1A1*28):** Can't break down irinotecan → Toxic levels build up
+   - **Toxicity:** Severe diarrhea (life-threatening dehydration)
+   - **Action:** Test before irinotecan; reduce dose by 25-50%
+   - **Prevalence:** ~10-15% of population have UGT1A1*28 variant
+
+5. **CYP2D6 (Cytochrome P450 family 2 subfamily D member 6)**
+   - **What it does:** Activates tamoxifen (breast cancer drug) into active form
+   - **What happens when mutated:** Can't activate tamoxifen → Drug doesn't work
+   - **Toxicity:** Not toxicity, but drug ineffectiveness (no benefit from tamoxifen)
+   - **Action:** Test before tamoxifen; use alternative (aromatase inhibitor) if poor metabolizer
+   - **Prevalence:** ~5-10% of population are poor metabolizers
+
+**Drug-Drug Interactions:**
+
+1. **SSRIs (Selective Serotonin Reuptake Inhibitors) + Tamoxifen**
+   - **What happens:** SSRIs (Prozac, Zoloft) block CYP2D6 → Tamoxifen doesn't activate
+   - **Result:** Tamoxifen ineffective (no benefit)
+   - **Action:** Switch to aromatase inhibitor or different antidepressant
+
+2. **Antifungals + Chemotherapy**
+   - **What happens:** Antifungals (ketoconazole, fluconazole) block drug breakdown enzymes
+   - **Result:** Chemotherapy levels increase → Increased toxicity
+   - **Action:** Monitor closely, reduce chemotherapy dose if needed
+
+**Output:**
+- **Risk Chips:** Visual indicators (red = high risk, yellow = moderate, green = low)
+- **Dose Adjustments:** Specific recommendations (e.g., "Reduce 5-FU dose by 50%")
+- **Alternative Regimens:** Safer drug options if variant present
+- **Trial Suitability:** Flags trials that exclude patients with certain variants
+
+**Why It Matters:** Prevent life-threatening toxicity before it happens. This is proactive safety, not reactive damage control.
+
+---
+
+#### **E. MRD & Monitoring Plan** 📈
+**What It Is:** Tells doctors when to check biomarkers, re-biopsy, switch therapies - a complete monitoring schedule to catch resistance early.
+
+**How It Works:**
+Cancer doesn't announce when it's becoming resistant. We need to monitor continuously to catch resistance BEFORE it's too late. This plan tells doctors exactly when to test, what to look for, and when to switch therapies.
+
+**Monitoring Schedule:**
+
+1. **ctDNA/MRD Assays (Circulating Tumor DNA / Minimal Residual Disease)**
+   - **What it is:** Blood test that detects cancer DNA floating in blood
+   - **When to test:**
+     - **Baseline:** Before starting treatment (establish starting point)
+     - **Post-cycle 2:** After 2 cycles of chemotherapy (see if treatment is working)
+     - **Every 8-12 weeks:** During active therapy (catch resistance early)
+     - **Every 12 weeks:** During maintenance therapy (monitor for recurrence)
+   - **What to look for:** Rising ctDNA levels = cancer coming back
+   - **Why it matters:** Can detect recurrence months before scans show it
+
+2. **Re-biopsy/NGS (Next-Generation Sequencing)**
+   - **What it is:** Taking a new tumor sample and sequencing all genes
+   - **When to test:**
+     - **On progression:** When scans show tumor growing
+     - **When MRD rises:** If ctDNA increases significantly
+     - **Before switching therapy:** To see how cancer evolved
+   - **What to look for:** New mutations, resistance mechanisms (BRCA reversion, HR restoration)
+   - **Why it matters:** Cancer changes over time → Need fresh genomics to adapt treatment
+
+3. **Imaging (CT scans, PET scans, MRIs)**
+   - **What it is:** Scans that show tumor size and location
+   - **When to test:**
+     - **Per guideline cadence:** Standard schedule (e.g., every 3 months)
+     - **Tighter if high resistance risk:** More frequent if resistance likely (e.g., every 6 weeks)
+   - **What to look for:** Tumor growth = progression = treatment not working
+   - **Why it matters:** Visual confirmation of treatment response
+
+**Switch Criteria (When to Change Therapy):**
+
+1. **MRD Rises in 2 Consecutive Draws**
+   - **What it means:** ctDNA levels increase in two back-to-back tests
+   - **Action:** Switch therapy immediately (don't wait for scans)
+   - **Why:** Rising MRD = cancer coming back → Act fast
+
+2. **Radiographic Progression**
+   - **What it means:** Scans show tumor growing (≥20% increase in size)
+   - **Action:** Re-biopsy + Resistance Playbook (see what changed)
+   - **Why:** Cancer evolved → Need new genomics + new treatment plan
+
+**Real-World Example (Ayesha's Monitoring Plan):**
+```
+Baseline: ctDNA test before starting PARP
+Post-cycle 2: ctDNA test after 2 cycles → If decreasing, continue
+Every 8 weeks: ctDNA test during active therapy
+Every 12 weeks: Imaging (CT scan) to check tumor size
+On progression: Re-biopsy + NGS → See if BRCA reverted or HR restored
+If MRD rises: Switch to ATR/CHK1 immediately (don't wait for scans)
+```
+
+**Why It Matters:** Catch resistance early, before it's too late. Early detection = better outcomes.
+
+---
+
+#### **F. Evidence & Real-World Reinforcement** 📚
+**What It Is:** Strengthens recommendations with trial-level outcomes matching patient profile.
+
+**Features:**
+- HRD-stratified trial outcomes → "Patients like Ayesha had 73% response rate"
+- MSI-H cohort overlays → "MSI-H patients had 85% response to IO"
+- Badge-level evidence → RCT, Guideline, Cohort-validated
+
+**Why It Matters:** Real-world data builds confidence in recommendations.
+
+---
+
+#### **G. Nutraceutical Synergy/Antagonism** 🥗
+**What It Is:** Food Validator timing guide - when to take supplements relative to chemotherapy.
+
+**Examples:**
+- **Antioxidants** → Avoid during ROS-dependent chemo (timing matters)
+- **Omega-3** → Post-chemo inflammation control
+- **Vitamin D** → HRD context repletion (DNA repair support)
+
+**Why It Matters:** Supplements can help or hurt depending on timing.
+
+---
+
+#### **H. Demo-Safe CRISPR Story** 🧬
+**What It Is:** Reuses 15 AlphaFold-validated guides to show structural viability (RUO/demo only).
+
+**Why It Matters:** Demonstrates 1D→3D validation without expensive live generation.
+
+---
+
+### 18.3 HOW CO-PILOT OPERATIONALIZES IT (User-Facing Workflows)
+
+#### **Workflow 1: "Build My Care Plan"** 📋
+**Single guided flow:**
+```
+Intake → Sporadic Gates → WIWFM (line-aware) → Resistance Playbook → 
+Trials → Food → Monitoring/MRD → Risks/Toxicity → Final Plan PDF
+```
+
+**Output:** Complete care plan with all components integrated.
+
+---
+
+#### **Workflow 2: "Am I Eligible for IO/PARP/ATR?"** ✅
+**Input:** MSI/TMB/HRD status  
+**Output:** Go/no-go decision with alternatives/combos
+
+**Example:**
+- MSI-H → "Eligible for checkpoint inhibitor + PARP combo"
+- HRD-high → "Eligible for PARP + ATR combo"
+- TMB-low → "Not eligible for IO alone; consider IO + PARP combo"
+
+---
+
+#### **Workflow 3: "What Happens When I Progress?"** 🔄
+**Input:** Current therapy, progression biomarkers  
+**Output:** Adaptive switch pathways with trial options
+
+**Example:**
+- PARP progression → "Switch to ATR/CHK1; consider ATR trials"
+- Platinum progression → "Switch to non-platinum; consider IO if MSI-H"
+
+---
+
+#### **Workflow 4: "Any Drug-Gene or Drug-Drug Issues?"** ⚠️
+**Input:** Germline variants, medication list  
+**Output:** Pharmacogene flags, interaction alerts, dose adjustments
+
+**Example:**
+- DPYD variant → "Avoid 5-FU; reduce dose or use alternative"
+- Warfarin + Vitamin D → "Monitor INR closely"
+
+---
+
+### 18.4 TECHNICAL IMPLEMENTATION (Minimal Additions)
+
+#### **A. ResistancePlaybook Service** 🔧
+**Endpoint:** `POST /api/care/resistance_playbook`  
+**Inputs:** Mutations, HRD/TMB/MSI, prior treatment lines  
+**Outputs:** 
+- Likely resistance mechanisms (ranked)
+- Combo/sequence recommendations
+- Trial keywords for resistance-specific trials
+
+**Implementation:** Read-only logic layered on WIWFM (no schema breaks)
+
+---
+
+#### **B. PharmacogeneDetection Endpoint** 🔧
+**Endpoint:** `POST /api/care/pharmacogene_detect`  
+**Inputs:** Germline/tumor VCF/JSON, medication list  
+**Outputs:**
+- DPYD/TPMT/UGT1A1/CYP2D6 flags
+- Dose adjustment notes
+- Drug-drug interaction alerts
+
+**Implementation:** Fast heuristics first (PharmGKB lookup, interaction database)
+
+---
+
+#### **C. MonitoringPlan Generator** 🔧
+**Endpoint:** `POST /api/care/monitoring_plan`  
+**Inputs:** Treatment line, tumor context, resistance risks  
+**Outputs:**
+- MRD cadence (when to test)
+- Re-NGS triggers (when to re-biopsy)
+- Imaging schedule (when to scan)
+- Switch criteria (when to change therapy)
+
+**Implementation:** Rule-based generator aligned to treatment line
+
+---
+
+### 18.5 ASSIGNMENTS (Who Does What)
+
+#### **Zo's Tasks (Backend)** 🔧
+- [ ] Wire ResistancePlaybook into WIWFM response (add confidence notes + combo suggestions)
+- [ ] Add MonitoringPlan and PharmacogeneDetection to Co-Pilot orchestrator output
+- [ ] Update Trials ranking to reflect combo-resistance rationale (e.g., ATR trials higher after PARP)
+
+---
+
+#### **Jr's Tasks (Frontend)** 🎨
+- [ ] Co-Pilot UI: Show germline_status, tumor_context summary, resistance risk chips, toxicity flags
+- [ ] Add "Care Plan" export (PDF/Markdown) with line-aware sequencing and monitoring
+- [ ] Clinical Trials page: Add "Combo-ready" badge (e.g., PARP+ATR, IO combos) from playbook
+- [ ] Food page: Add "Treatment-line-aware" timing table (e.g., post-chemo, maintenance)
+
+---
+
+### 18.6 WHY THIS CLOSES THE LOOP FOR AYESHA
+
+**Ayesha's Profile:**
+- HRD-high (somatic) → PARP approved
+- MSI-H → IO combos elevated
+- Germline-negative → Sporadic pathway activated
+
+**Complete Care Plan:**
+1. ✅ **Primary Therapy:** PARP + bevacizumab (HRD-high, high-risk maintenance)
+2. ✅ **Resistance Plan:** If HR restored → Switch to ATR/CHK1
+3. ✅ **IO Combo:** Checkpoint inhibitor + PARP (MSI-H eligible)
+4. ✅ **Monitoring:** MRD every 8 weeks, re-biopsy on progression
+5. ✅ **Toxicity:** DPYD screened, dose adjustments flagged
+6. ✅ **Food:** NAC post-platinum, Vitamin D for HRD context
+7. ✅ **Trials:** Biomarker-aligned, combo-ready trials prioritized
+
+**Result:** System adapts when biology adapts. Response isn't lost. Toxicity prevented.
+
+---
+
+### 18.7 NEXT STEPS (Implementation Plan)
+
+**Phase 1: Backend Services (Zo)**
+- [ ] Implement ResistancePlaybook endpoint (lightweight, no schema breaks)
+- [ ] Implement MonitoringPlan generator
+- [ ] Implement PharmacogeneDetection endpoint
+- [ ] Wire into Co-Pilot orchestrator
+
+**Phase 2: Frontend Integration (Jr)**
+- [ ] Add resistance risk chips to UI
+- [ ] Add toxicity flags to care plan
+- [ ] Add "Care Plan" export functionality
+- [ ] Add combo-ready badges to Trials page
+
+**Phase 3: Testing & Validation**
+- [ ] Test with Ayesha's profile (HRD-high, MSI-H, germline-negative)
+- [ ] Validate resistance predictions against known mechanisms
+- [ ] Test toxicity screening with known pharmacogene variants
+- [ ] Validate monitoring plan against clinical guidelines
+
+---
+
+**Status:** 📋 **PLANNED** - Ready for implementation  
+**Priority:** P1 (High ROI, fast implementation, no schema breaks)  
+**Timeline:** 2-3 weeks (backend + frontend + testing)
+
+---
+
+## 19) SAE→Evo2→S/P/E Operational Playbook (for Agents)
+
+### 19.1 Overview (what SAE adds to S/P/E)
+- **S (Sequence, Evo2):** zero‑shot disruption proxy. We use calibrated percentiles + exon‑context magnitudes to avoid raw delta drift.
+- **P (Pathway):** maps disrupted genes to ovarian pathways (RAS/MAPK, DDR/HRR, PI3K/AKT, angiogenesis) and aggregates weighted impact.
+- **E (Evidence):** literature/ClinVar tiers and badges; optional Fusion (AM) when GRCh38 missense coverage exists.
+- **SAE (Explainability):** interpretable features derived from S + Insights + P (e.g., exon_disruption, hotspot_mutation, essentiality_signal, dna_repair_capacity, pathway_burden). SAE converts raw signal into "why this will work" and drives confidence lifts/penalties transparently.
+
+Result: S/P/E stays the score backbone; SAE explains and modulates confidence with explicit, auditable rationale.
+
+### 19.2 Data flow (end‑to‑end)
+1) Evo2 scoring → `sequence_disruption`, `calibrated_seq_percentile`  
+2) Insights bundle → Functionality/Chromatin/Essentiality/Regulatory  
+3) Pathway aggregation → per‑pathway burden (MAPK/PI3K/DDR/VEGF…)  
+4) SAE extractor → features:  
+   - `exon_disruption`, `hotspot_mutation`, `essentiality_signal`  
+   - `dna_repair_capacity` (DDR/HRR composite), `pathway_burden.*`  
+   - optional cohort/coverage flags (Fusion, ClinVar prior)  
+5) Confidence computation → S/P/E base ± SAE lifts/penalties ± gates (sporadic/coverage/completeness)  
+6) Output → drug ranking + EvidenceBand (with SAE attribution) + provenance
+
+### 19.3 Action rules (turn SAE into clinician hints)
+- **DNA repair capacity high (≥0.7)** + ascites/Stage IVB → favor platinum ± bevacizumab; PARP maintenance if HRD≥42. If PARP resistance emerges → ATR/CHK1 combo trials.
+- **RAS/MAPK hotspot (KRAS/BRAF/NRAS)** or `pathway_burden.mapk ≥ 0.7` → surface MEK/RAF trial candidates; if absent, deprioritize MEK monotherapy.
+- **Essentiality_signal high in DDR genes (BRCA1/2, RAD51C/D)** → stronger PARP case; if subsequent SAE shows "HR restoration pattern" (dna_repair_capacity rising + HRD drop) → preemptive ATR/CHK1 options.
+- **Cross‑resistance_risk high** with prior taxane and ABCB1 inference → avoid substrate regimens; propose non‑substrates and combo strategies.
+- **PI3K pathway burden ≥ 0.7** (PIK3CA/PTEN context) → PI3K/AKT/WEE1 combos over monotherapy.
+
+These rules do not override S/P/E; they adjust confidence and generate "why/what next" text and trial keywords.
+
+### 19.4 Ovarian‑specific quick hints (doctor‑facing)
+- HRD ≥42 (somatic, germline‑neg) → PARP enabled; offer PARP+ATR if HR restoration risk.  
+- MSI‑H or TMB ≥20 → checkpoint inhibitor (IO) ± PARP/VEGF combos.  
+- Platinum‑sensitive intervals → platinum rechallenge + bevacizumab maintenance.  
+- Ascites/microenvironment risk → VEGF (bevacizumab) synergy noted.  
+- Post‑platinum recovery → NAC timing; Vitamin D repletion in HRD context; separate antioxidants from ROS‑dependent chemo windows.
+
+### 19.5 Next‑test recommender (close evidence gaps)
+Emit "next best action" when confidence capped or signals conflict:
+- Missing HRD/MSI/TMB → suggest ctDNA/NGS fast‑track; explain impact on PARP/IO gates.
+- No `hgvs_p` → ask for transcript context or Foundation/Tempus JSON → improves SAE fidelity.
+- Ambiguous MAPK/PI3K signals → propose targeted panel or immuno IHC where appropriate.
+
+### 19.6 Trial ranking tie‑ins
+- Add `trial_keywords` from SAE and Resistance Playbook (e.g., "ATR inhibitor", "PARP combination", "MEK inhibitor", "WEE1 inhibitor").  
+- In Research page, boost trials whose MoA matches current SAE risks/combos; demote germline‑required BRCA trials for sporadic unless somatic HRD/BRCA qualifies.
+
+### 19.7 Backend contracts (minimal, no schema break)
+- Request (fast profile with SAE on):
+```json
+{
+  "mutations": [{"gene":"BRCA2","hgvs_p":"S1982fs","build":"GRCh38"}],
+  "disease": "ovarian_carcinoma",
+  "profile": "richer",
+  "options": { "include_sae_features": true, "enable_fusion": false }
+}
+```
+- Response (abridged additions):
+```json
+{
+  "drugs": [
+    {
+      "name": "PARP inhibitor",
+      "efficacy_score": 0.73,
+      "confidence": 0.85,
+      "insights": { "functionality": 0.62, "essentiality": 0.35, "regulatory": 0.12, "chromatin": 0.48 },
+      "sae_features": {
+        "exon_disruption": 0.75,
+        "dna_repair_capacity": 0.82,
+        "pathway_burden": { "ddr": 0.78, "vegf": 0.41 }
+      },
+      "provenance": { "confidence_breakdown": { "s": 0.42, "p": 0.28, "e": 0.10, "sae": 0.05, "gates": 0.00 } }
+    }
+  ]
+}
+```
+
+### 19.8 UI wiring (files to touch)
+- `ClinicalGenomicsCommandCenter/tabs/MechanisticEvidenceTab.jsx` → show EvidenceBand first; ensure SAE chips render (boosting/limiting + overall impact).
+- `cards/SAEFeaturesCard.jsx` → list features, thresholds, and plain‑language "what this means".
+- `cards/EvidenceBand.jsx` → add small inline SAE attribution chip and confidence breakdown bar.
+- Trials page → consume `trial_keywords`, add "combo‑ready" badge when Playbook + SAE align.
+
+### 19.9 Confidence governance (transparent, audit‑ready)
+- Lifts: modest (+0.02 to +0.08) when SAE strongly supportive; Penalties when conflicting (e.g., high cross‑resistance).  
+- Caps: completeness caps (L0: 0.4, L1: 0.6, L2: none); sporadic gates (PARP penalty unless HRD≥42; IO boost on MSI‑H/TMB).  
+- Provenance: always include `run_id`, `profile`, `flags`, `confidence_breakdown` and which SAE features affected confidence.
+
+### 19.10 Acceptance (copy/paste checks)
+- A BRCA2 frameshift with HRD≥42 returns PARP ranked with SAE explaining DNA repair burden + exon disruption.  
+- A KRAS G12D case surfaces MEK/RAF trial keywords and MEK‑aligned combos.  
+- MSI‑H case elevates IO ± PARP/VEGF; EvidenceBand shows why; SAE shows pathway context.  
+- Trials list shows ATR/CHK1 keywords when HR‑restoration risk is detected.  
+- Next‑test recommender appears when HRD/MSI/TMB missing; disappears after upload.  
+- All additions keep latency within profile budgets; no schema breaks; RUO labels intact.
+
+### 19.11 SAE→action rules (expanded)
+- **DNA_repair_capacity high (≥0.7) + Stage IVB/ascites** → favor platinum ± bevacizumab; if PARP benefit waning (efficacy downtrend, HRD drop) → elevate ATR inhibitor ± PARP combo trials.
+- **Hotspot_mutation in RAS/MAPK (KRAS/BRAF/NRAS)** → prioritize MEK/RAF trial candidates; if no hotspot or low `pathway_burden.mapk`, deprioritize MEK monotherapy.
+- **Essentiality_signal high (DDR: BRCA1/2, RAD51C/D)** → PARP maintenance stronger; if "HR restoration pattern" (dna_repair_capacity↑ + HRD↓) → switch early to ATR/CHK1 trials.
+- **Cross_resistance_risk high with prior taxane** → avoid same class; propose non‑substrate regimens; check ABCB1 efflux markers in Toxicity/SAE.
+- **Cohort_overlap low + model confidence low** → push trials first; if overlap high for a mechanism, lean standard and lift confidence modestly.
+
+### 19.12 SAE‑driven "Clinician hint" tiles (Mechanistic Evidence tab)
+Render concise, actionable hints with reason codes:
+- **What to try next**: "ATR + PARP combo likely to overcome HR restoration" (reasons: dna_repair_capacity+, waning PARP benefit, HR‑restoration pattern).
+- **What to avoid**: "High cross‑resistance risk for re‑taxane" (reasons: cross_resistance_risk+, prior taxane exposure).
+- **What to test now**: "Order SLFN11 IHC; if low, PARP sensitivity reduced; consider ATR/PLK1 trial."
+- **Trial levers**: "Patient matches DDR‑combo trials (ATR/CHK1) > PI3K > IO (only if TMB/MSI gate).".
+- **Monitoring**: "If CA‑125 drop <50% by cycle 3 + HR restoration SAE → switch away from PARP early.".
+
+UI: add a compact tile row under EvidenceBand to surface 2–4 hints; each tile links to an action (order test, open trials filter, adjust plan).
+
+### 19.13 Ovarian‑specific SAE playbook (therapy/trial mapping)
+- **HRD‑high (SAE/NGS)** → platinum + PARP maintenance (NCCN Cat 1).
+- **HR restoration (SAE pattern)** → ATR/CHK1 ± PARP trials; consider WEE1 if replication stress signals present.
+- **ABCB1/efflux pattern** → avoid known substrates; consider non‑substrate regimens and enrollment in non‑substrate trials.
+- **PI3K/mTOR SAE signal** → PI3K/mTOR short‑list when pathway alignment present.
+- **SLFN11‑low (requires IHC)** → reduced PARP sensitivity; prioritize ATR/PLK1 or DNA‑damage checkpoint trials.
+
+### 19.14 Fast "next‑test" recommender
+- If SAE suggests resistance path but evidence is thin → auto‑propose one confirmatory test (IHC/FISH/lab) and show how result branches the plan.
+- Examples: "SLFN11 IHC" (PARP sensitivity), "ABCB1 expression proxy", "Updated HRD (ctDNA/tissue)", "MAPK/PI3K mini‑panel".
+- Each test emits a binary branch: e.g., "If SLFN11+, continue PARP; if −, pivot to ATR trial.".
+
+Backend (lightweight): `POST /api/hints/next_test` → `{ test, rationale, branch_if_positive, branch_if_negative }`.
+
+### 19.15 SAE‑aligned trial ranking
+- Enrich trial scoring with a **mechanism fit** term = cosine(`sae_mechanism_vector`, `trial_moa_vector`).
+- Offline tagging: use Gemini on trial arms to tag DDR/ATR/CHK1/PI3K/IO; store `trial_moa_vector` alongside eligibility.
+- Rank = `eligibility_score * α + mechanism_fit * β` (α,β tuned conservatively; default β≈0.2–0.3).
+
+Backend:
+- `POST /api/trials/score_by_mechanism` → input SAE vector + N trial candidates → returns re‑ranked list with `mechanism_fit` and rationale.
+
+### 19.16 Confidence governance (EvidenceBand updates)
+- Add "SAE agreement" meter: agreement with S/P/E lifts confidence modestly; conflict shows caution banner and proposes a "What to test now" tile.
+- Cap confidence when Cohort_overlap is low and SAE conflicts with S/P/E; provenance records cap cause.
+
+### 19.17 UI upgrades (small, high‑yield)
+- **Mechanism Map** strip: DDR | Efflux | MAPK | PI3K | IO with green/amber/red chips from SAE burden.
+- **One‑click orders** next to hints: SLFN11 IHC, ctDNA HRD update, ABCB1 proxy (routes to `/api/hints/next_test`).
+- **Pivot early** banner when CA‑125 rule + SAE resistance both hit.
+
+### 19.18 Backend extensions (minimal)
+- Extend `/api/clinical_genomics/analyze_variant` response with:
+  - `sae_mechanism_vector: number[]`
+  - `mechanism_hints: string[]` (short strings used by hint tiles)
+- New utilities:
+  - `/api/hints/next_test` (see 19.14)
+  - `/api/trials/score_by_mechanism` (see 19.15)
+
+### 19.19 Data priorities (to lift confidence)
+- SLFN11 IHC; ABCB1 proxy; updated HRD score (ctDNA/tissue); minimal panel for MAPK/PI3K alterations.
+- Keep "awaiting NGS" guardrails until available; surface interim SAE‑based hypotheses clearly as research‑mode.
+
+### 19.20 Pre‑computed care pathways (ready‑to‑serve)
+- **If platinum partial response + SAE HR restoration** → line‑ready ATR combo trials ranked with logistics (e.g., NYC proximity).
+- **If no MAPK/PI3K SAE signal** → hide those trials by default; move to "Explore more" bucket.
 

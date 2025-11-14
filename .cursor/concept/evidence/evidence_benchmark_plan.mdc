@@ -1,0 +1,84 @@
+---
+alwaysApply: false
+description: End-to-end benchmark plan and preflight for Guidance Tier Eval, HRD/Platinum AUPRC, and Variant AUROC
+---
+
+## Benchmark Plan – Preflight, Runs, Success Criteria, and Lessons
+
+### What we will prove
+- Guidance Tier Eval: Our guidance tiers (Supported/Consider/Insufficient) align with on‑label truth (proxy Tier I) on curated rows.
+- HRD/Platinum AUPRC: Our DDR/HRD → platinum/PARP proxy is predictive at cohort level (AUPRC/AUROC).
+- Variant AUROC: Sequence signal (Evo2; fused with AM where applicable) separates ClinVar pathogenic vs benign SNVs.
+
+### Preflight checks (must pass before any run)
+- Backend
+  - Start backend with fusion enabled and Evo skipped when fusion is on:
+    - export `FUSION_AM_URL=https://crispro--fusion-engine-fusionengine-api.modal.run`
+    - Run: `PYTHONPATH=. uvicorn api.main:app --host 127.0.0.1 --port 8000`
+  - Health: `curl -s http://127.0.0.1:8000/health` → `healthy`.
+- Fusion Engine (AlphaMissense)
+  - Schema: `curl -s $FUSION_AM_URL/debug/info` shows parquet path and index head.
+  - Key check for each variant: `curl -s "$FUSION_AM_URL/debug/pos?key=chr{chrom}:{pos}"` → verify available `{REF,ALT}`.
+  - If miss, try flipped REF/ALT. Ensure GRCh38 coordinates.
+- Environment flags
+  - Research runs: set `DISABLE_LITERATURE=true` for speed (optional).
+  - Model-backed Tier I: keep disabled until thresholds are set.
+
+### Datasets and inputs
+- Guidance tier eval CSV schema: `disease,therapy,drug_or_class,gene,hgvs_p,chrom,pos,ref,alt,build,on_label_truth`.
+  - File example: `[mm_will_it_work_for_me.csv](mdc:tools/benchmarks/data/mm_will_it_work_for_me.csv)` (fix REF/ALT to GRCh38; e.g., BRCA1 R1699W is chr17:43063931 G>A).
+- HRD AUPRC CSV schema: `disease,gene,hgvs_p,chrom,pos,ref,alt,build,outcome_platinum` (1/0). Provide a small labeled cohort.
+- Variant AUROC uses ClinVar sampler (built‑in to Modal job).
+
+### Commands to run (copy/paste)
+- Guidance Tier Eval (chemo mode, research‑speed)
+```bash
+python tools/benchmarks/guidance_tier_eval.py \
+  --csv tools/benchmarks/data/mm_will_it_work_for_me.csv \
+  --api_base http://127.0.0.1:8000 \
+  --mode chemo \
+  --out tools/benchmarks/guidance_tier_eval_results.json
+```
+
+- HRD/Platinum AUPRC (requires cohort CSV)
+```bash
+python tools/benchmarks/hrd_platinum_auprc.py \
+  --csv /absolute/path/to/hrd_cohort.csv \
+  --api_base http://127.0.0.1:8000 \
+  --out tools/benchmarks/hrd_platinum_auprc_results.json
+```
+
+- Variant AUROC (Modal; Evo2 min_delta baseline)
+```bash
+modal run tools/benchmarks/modal_auroc_app.py::run_auroc \
+  --param n_pos=1000 --param n_neg=1000 --param include_likely=true --param allow_grch37=true \
+  --param model_id=evo2_7b
+```
+
+### Success criteria (today)
+- Guidance tier eval: JSON result present. Non‑zero precision/recall/F1; per‑row decisions align with on‑label truth on micro set. Fusion‑covered MAPK hotspots show higher confidence (Consider or Supported when evidence enabled).
+- HRD AUPRC: JSON with AUPRC>random baseline; qualitative alignment on BRCA1/2 LOF rows; identify gains from adding HRD proxies and literature.
+- Variant AUROC: AUROC/AUPRC computed; document Evo2 baseline; plan fused covered‑set run.
+
+### Artifacts to save
+- `tools/benchmarks/guidance_tier_eval_results.json`
+- `tools/benchmarks/hrd_platinum_auprc_results.json`
+- Modal AUROC JSON (stdout capture or path printed by job)
+
+### Lessons applied (to avoid prior failures)
+- Key normalization: AM requires `chr{chrom}:{pos}:{REF}:{ALT}` with GRCh38; verify via Fusion `/debug/pos`.
+- Fusion‑first: when `FUSION_AM_URL` is set, skip Evo and transcript probes to avoid timeouts.
+- Conservative gating: do not zero “insufficient” when fusion‑only; derive minimal confidence from S/P to keep runs informative.
+- Caching & retries: use built‑in backoff; enable on‑disk cache in guidance eval to avoid repeat calls.
+- Disable literature for smoke/micro speed; re‑enable for Tier I validation once stable.
+
+### What these benchmarks will help us share/identify
+- Quantified alignment of our tiers with label truth (Guidance tier eval).
+- Cohort‑level predictive value for platinum/PARP (HRD AUPRC) and where HRD proxies/literature raise confidence.
+- Transparent sequence‑level discrimination (Variant AUROC) and roadmap for fused covered‑set accuracy.
+
+### Follow‑ups
+- Wire `provenance.sequence = {evo2, am, fused}` in outputs and display in FE.
+- Run fused covered‑set AUROC (AM‑present only) and publish JSON.
+- Enable Model‑backed Tier I thresholds after selecting operating point from validation curves.
+

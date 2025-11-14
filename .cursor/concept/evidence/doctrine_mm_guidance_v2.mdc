@@ -1,0 +1,147 @@
+---
+alwaysApply: false
+description: MM Guidance v2 – What we predict, AA (AlphaMissense) usage, resistance logic, validation, and demo flows
+---
+
+## Doctrine: MM Drug Response Prediction (Guidance v2)
+
+### What our prediction is
+- We produce, per therapy class, a transparent clinical guidance bundle:
+  - **efficacy_score ∈ [0,1]**: strength of therapeutic match
+  - **confidence ∈ [0,1]**: how much we trust the recommendation
+  - **tier ∈ {I, II, III, research}**: clinical readiness gate
+  - **provenance**: S/P/E breakdown, citations, rationale, and decision flags
+
+Where S/P/E = Sequence, Pathway (MoA alignment), Evidence (literature/clinical).
+
+### How we compute it (flow)
+1) Inputs: list of variants with GRCh38 coords and `hgvs_p`, plus disease and therapy class.
+2) Sequence (S):
+   - Base: Evo2 `min_delta`/exon deltas via backend proxy
+   - Fused S (optional): When AlphaMissense (AA) coverage exists, fuse AM with Evo2
+3) Pathway (P): Map disrupted genes to MM-relevant pathways and therapy MoA (e.g., RAS/MAPK → MEK/BRAF)
+4) Evidence (E): PubMed agent with MoA-aware ranking and conservative gates
+5) Resistance/sensitivity logic (MM‑specific):
+   - Sensitivity: MAPK hotspots (KRAS/NRAS/BRAF) + MoA alignment (+ modest confidence lift)
+   - Resistance: TP53 high‑risk context (chemo tolerance), PSMB5 (proteasome), CRBN (IMiD)
+6) Compose outputs: aggregate S/P/E, apply modest, transparent adjustments, set tier by gates
+
+### Is AA (AlphaMissense) applied right now?
+- Fusion Engine is live and returning AM scores: [main.py](mdc:src/services/fusion_engine/main.py)
+- Current guidance integration status:
+  - The backend can call Evo2 and compute P/E; resistance logic is integrated in `guidance.py`
+  - Fused S wiring into guidance is the next step (enable via either):
+    - `ALPHAMISSENSE_DATA` (local Parquet) using [alphamissense_client.py](mdc:src/tools/alphamissense_client.py)
+    - or `FUSION_AM_URL` (HTTP to Fusion Engine)
+  - Expected provenance once wired: `provenance.sequence = { evo2, am, fused }`
+
+### What changed since ~0.60 confidence runs
+- Removed accidental “fake” lifts where E was empty; now confidence=0 when no evidence/S support
+- Added MM resistance/sensitivity detection in [guidance.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/guidance.py):
+  - TP53 high‑risk flag (chemo tolerance)
+  - Proteasome (PSMB5) and IMiD (CRBN) scaffolding
+- Fixed therapy label propagation in chemo guidance
+- Caching, coordinate preflight, and safer Evo2 proxy calls to prevent call explosions
+- With these, KRAS/NRAS hotspot → MEK predictions now show Tier I with high confidence; BRAF/MM remains conservative without evidence
+- Next lift: wire fused S from AA to increase confidence ~+0.05 on AM‑covered hotspots (policy‑bounded)
+
+### Validation – how we prove it
+- Micro checks (covered missense): [eval_fused_micro.py](mdc:tools/benchmarks/eval_fused_micro.py)
+- Mass guidance eval (chunked, cached): [guidance_tier_eval.py](mdc:tools/benchmarks/guidance_tier_eval.py)
+  - CSV schema: `disease,therapy,drug_or_class,gene,hgvs_p,chrom,pos,ref,alt,build,on_label_truth`
+  - Run:
+```bash
+source venv/bin/activate
+python tools/benchmarks/guidance_tier_eval.py \
+  --csv tools/benchmarks/data/mm_mass_tests.csv \
+  --api_base http://127.0.0.1:8000 \
+  --mode chemo \
+  --out tools/benchmarks/out/mm_guidance.json
+```
+  - Verify: confidence/efficacy reflect resistance/sensitivity; rationale contains `resistance:*` flags; provenance is populated
+
+## Current test focus (runtime sanity + fused S readiness)
+- **What we are testing (now):**
+  - Backend stability and quick completion for MM guidance with missense SNVs (KRAS/NRAS/BRAF/TP53) using Evo2 S, pathway MoA, resistance logic, and conservative evidence (literature disabled).
+  - Runtime knobs verified: evaluator `--timeout`, `--retries`, `--max_rows`, `--sleep` to prevent long stalls when upstream models are degraded.
+- **Why:**
+  - Ensure end-to-end guidance completes quickly and deterministically before enabling AlphaMissense fusion; avoid long retries/timeouts from upstream Evo when unavailable.
+- **Proof (commands):**
+```bash
+source venv/bin/activate
+python tools/benchmarks/wiwfm_eval.py \
+  --csv tools/benchmarks/data/mm_will_it_work_for_me.csv \
+  --api_base http://127.0.0.1:8000 \
+  --mode chemo \
+  --timeout 30 --retries 2 --max_rows 10 --sleep 0.1
+```
+- **Success criteria (today):**
+  - All rows return without timeout; decisions reflect resistance logic; provenance populated. Confidence remains conservative with literature disabled.
+
+## Next test (prove fused S lift with AlphaMissense)
+- **Goal:** Demonstrate modest, policy-bounded confidence lift (~+0.05) on AM-covered MAPK hotspots (KRAS/NRAS/BRAF/FGFR3) when MoA aligns.
+- **Setup (choose one):**
+  - Local Parquet: `export ALPHAMISSENSE_DATA=/absolute/path/AlphaMissense_hg38.parquet`
+  - Remote Fusion Engine: `export FUSION_AM_URL=https://crispro--fusion-engine-fusionengine-api.modal.run/score_variants`
+- **Run micro fused check (covered missense only):**
+```bash
+source venv/bin/activate
+python tools/benchmarks/eval_fused_micro.py \
+  --api_base http://127.0.0.1:8000 \
+  --fusion_url "$FUSION_AM_URL"  # or rely on ALPHAMISSENSE_DATA
+```
+- **Re-run guidance with fused S enabled:**
+```bash
+source venv/bin/activate
+python tools/benchmarks/guidance_tier_eval.py \
+  --csv tools/benchmarks/data/mm_mass_tests.csv \
+  --api_base http://127.0.0.1:8000 \
+  --mode chemo \
+  --out tools/benchmarks/out/mm_guidance_fused.json
+```
+- **Prove:**
+  - `provenance.sequence` shows `{ evo2, am, fused }`.
+  - Confidence increases modestly on AM-covered MAPK hotspots; no lift when AM missing or MoA misaligned.
+  - Resistance flags (e.g., TP53, PSMB5/CRBN scaffolding) still down-weight scores.
+
+### Demo scenarios (end‑to‑end)
+1) KRAS G12D → MEK inhibitor (MM, MAPK sensitivity)
+   - Input: KRAS p.G12D with GRCh38 coords
+   - Expect: Tier I, confidence ~0.83–0.86; rationale shows MAPK alignment; fused S (if AA wired) lifts modestly
+2) NRAS Q61R → MEK inhibitor (MM, MAPK sensitivity)
+   - Similar to KRAS; Tier I with supported evidence
+3) BRAF V600E → BRAF inhibitor (MM, off‑label)
+   - Conservative unless evidence found; confidence modest; Tier typically research/III without E
+4) TP53 R248W → chemotherapy (tolerance/resistance)
+   - Resistance flag applied; confidence/efficacy down‑weighted; rationale includes `resistance:TP53_high_risk`
+5) PSMB5 A49T → proteasome inhibitor (resistance)
+   - Down‑weight efficacy/confidence; rationale includes `resistance:PSMB5_resistance`
+6) BRCA1/2 LOF → platinum (HRD sensitivity)
+   - When HRD proxies available, expect lift; otherwise conservative
+
+### Files and endpoints
+- Guidance: [guidance.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/guidance.py)
+- Efficacy orchestrator: [efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py)
+- Evo proxy: [evo.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py)
+- Fusion Engine (AA): [main.py](mdc:src/services/fusion_engine/main.py)
+- Bench: [guidance_tier_eval.py](mdc:tools/benchmarks/guidance_tier_eval.py), [variant_auroc.py](mdc:tools/benchmarks/variant_auroc.py)
+- Results snapshot: [MM_MISSENSE_GUIDANCE_RESULTS.md](mdc:MM_MISSENSE_GUIDANCE_RESULTS.md)
+
+### Enable fused S (AA) – wiring steps
+1) Set AA source:
+   - Local: `export ALPHAMISSENSE_DATA=/path/to/AlphaMissense_hg38.parquet`
+   - Or remote: `export FUSION_AM_URL=https://<fusion>/score_variants`
+2) In guidance/efficacy, attach `provenance.sequence = { evo2, am, fused }` and use fused S for MAPK hotspot lift policy
+3) Re‑run mass tests; confirm confidence lift only when AM coverage exists and MoA aligns
+
+### Policy: transparency and modesty
+- Lifts are modest and explicitly recorded in `provenance` and `rationale`
+- No silent extrapolation outside AA coverage; fallback to Evo2‑only
+- Evidence gates remain independent; strong evidence can upgrade tiers even if S is moderate
+
+### Known gaps and next actions
+- Wire fused S into guidance outputs (AA → provenance.sequence)
+- Add HRD proxies (LOH/TAI/LST) to synthetic‑lethality/platinum flow
+- Expand resistance dictionaries (PSMB5, CRBN) and validate with coords
+- Harden literature agent and caching; add curated guideline hooks
+

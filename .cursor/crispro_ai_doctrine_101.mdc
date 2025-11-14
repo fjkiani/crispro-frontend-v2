@@ -1,0 +1,262 @@
+---
+alwaysApply: false
+description: CrisPRO.ai Doctrine 101 – platform overview, orchestration engine, RUO posture, capabilities (discriminative + generative), users, value, and quick start
+---
+
+# CrisPRO.ai Doctrine 101 – What it is, what it does, why it matters
+
+Purpose: A single, plain‑language reference that explains the platform, how it is orchestrated, what we can do today (research‑mode/RUO), where the code lives, and how partners derive value. Use this as the onboarding doc and the investor‑friendly overview that stays grounded in our code.
+
+RUO disclaimer (always): Results are for research and prioritization only. No clinical claims. Privacy first; provenance always.
+
+## What’s special about our performance (plain language)
+- We compose state‑of‑the‑art building blocks and make them work together with provenance.
+- Zero‑shot variant science from Evo2 (paper): state‑of‑the‑art on noncoding/regulatory variants; competitive on coding variants. Our stack uses these strengths for VUS, pathway context, and therapy fit.
+- Missense coverage from AlphaMissense (Fusion mode) where applicable. We label Fusion runs clearly and keep Baseline deterministic.
+- Benchmarks (internal, research‑mode): HRD control runs show stable baselines; we add lifts with richer sequence signals and Fusion where covered. Every run is exportable with run IDs.
+
+## State‑of‑the‑art building blocks we leverage
+- Evo2 (paper): zero‑shot SOTA for noncoding; strong coding performance; 1M‑token context; biologically grounded features.
+- AlphaMissense: leading missense pathogenicity prior used in Fusion profile when eligible.
+- Our orchestration: S/P/E fusion with insight chips; conservative confidence and transparent evidence tiers; caching and provenance throughout.
+
+## Executive overview (plain language)
+- What it is: An in‑silico copilot that turns raw genetics into clear, ranked guidance you can act on. It helps you decide what likely matters and what to try next, then packages it so teams can move fast with confidence.
+- Who it’s for: Biotech R&D, translational teams, diagnostics labs, and partners who want auditable, research‑mode answers quickly.
+- What you get in minutes: Simple insight chips that explain variant impact, a ranked therapy hypothesis with confidence and citations, and a one‑click dossier you can share.
+
+## Three lenses to understand CrisPRO
+
+### 1) In‑silico (computer‑simulated) decision support
+- What it does: Simulates how a variant may affect biology and how that lines up with potential therapies.
+- Why it helps: You get a fast, transparent starting point before spending time and money in the lab.
+- Output: Ranked therapy list with clear confidence, evidence notes, and a shareable record of exactly what was run.
+
+### 2) Precision oncology (research‑mode)
+- What it does: Translates a patient’s variants into plain signals (e.g., likely function change, regulatory impact, accessibility).
+- Why it helps: Teams can quickly see which variants are worth attention and which therapies might fit the mechanism.
+- Output: An explainable “Will it work for me?” view with confidence and citations, plus a Target Dossier for review.
+
+### 3) Genetic testing (VUS enrichment)
+- What it does: Enriches Variants of Uncertain Significance with clear, human‑readable context and next actions.
+- Why it helps: Reports move from “unknown” to “understood and actionable” (research‑mode), improving follow‑up and discussion.
+- Output: Insight chips, coverage/prior badges, and a concise narrative you can include in research reports.
+
+## How it works (no jargon)
+1) Paste or upload variants (or select a small cohort).
+2) The copilot converts raw genetics into four simple signals: Function, Regulatory, Essentiality, Chromatin.
+3) It asks, “Will this therapy work?” and returns a ranked list with confidence and citations.
+4) Export a Dossier or continue exploring (e.g., design readiness in demo mode).
+
+## What’s inside (modules you can turn on today)
+- VUS Explorer: instant insight chips and a one‑page summary you can share.
+- Therapy Fit (Chemo): ranked drug classes with confidence, short “why,” and citations.
+- Radiation Readiness: radiosensitivity and toxicity risk hints for planning discussions.
+- CRISPR Readiness: feasibility, access, off‑target preview (demo), delivery notes (demo).
+- Evidence Intelligence: citations and badges with provenance for trust.
+- Knowledge Base: reusable facts, helper text, and coverage chips across the app.
+- Clinical Trials Co‑Pilot: fast shortlist with clear eligibility labels (Likely/Potential/Unlikely) and a shareable one‑pager.
+- Cohort Lab: small extracts and baseline benchmarks to ground results.
+
+## What you get (deliverables)
+- Insight Chips: four plain signals with short “what this means” helpers.
+- Therapy Hypothesis: ranked options with confidence, evidence tier, badges, and citations.
+- Target Dossier: a clean, shareable summary with provenance (run ID, profile, inputs snapshot).
+- Cohort Lab (optional): quick extraction + a baseline benchmark to prove repeatability.
+
+## Dossier → a blueprint for the next step
+- What it contains: the variants analyzed, the insight chips, ranked therapy view, citations, confidence, and run IDs.
+- Why it matters: it lets wet‑lab partners or trial teams start from a clear, auditable blueprint instead of a blank page.
+- How it’s used: plan experiments, brief tumor boards, enroll in trials faster (RUO).
+
+## Why trust it (research‑mode guardrails)
+- Provenance by default: every run includes a run ID, chosen profile, and inputs/outputs snapshot.
+- Conservative by design: clear research‑mode labels, safe default profile, and transparent confidence.
+- No black boxes: you can see sources and rationale; when something isn’t available, the UI says so.
+
+## Business value (what partners get)
+- Faster decisions: minutes to a ranked, explainable hypothesis, not weeks.
+- Lower cost and risk: start in‑silico, then invest selectively in wet‑lab work.
+- Audit‑ready: clean dossiers with provenance and citations for internal review and partner discussions.
+- Scalable: profile toggles (Baseline → Richer → Fusion) let you balance speed and depth.
+
+## Engagement options (indicative)
+- SaaS pilot (research‑mode): access to VUS Explorer, WIWFM, Dossier, and Cohort Lab.
+- Cohort projects: extract/label/benchmark studies; compare profiles; capture artifacts.
+- Co‑development: when our copilot materially contributes to a novel design, we help document contribution for future IP discussions.
+
+## The platform in one line
+A computational platform that analyzes genetic variants and predicts which cancer drugs will work for specific patients, then designs CRISPR guides to fix genetic problems – all with clear explanations of why and how confident we are.
+
+## Core principles
+- **Every result is traceable**: Every analysis gets a unique ID, shows exactly what data was used, and can be reproduced
+- **Three analysis modes**: Fast & safe (Baseline), More detailed (Richer), Enhanced with external data (Fusion)
+- **Safety first**: We check for dangerous mutations before running expensive analyses
+- **Honest about limitations**: We tell you how confident we are and what evidence supports our predictions
+- **Built for researchers**: Clean APIs that can be integrated into existing lab workflows
+
+## Orchestration engine and where code lives
+- Backend (FastAPI gateway)
+  - Efficacy orchestrator: [/api/efficacy/predict](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py)
+  - Insights (discriminative): [/api/insights/*](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py)
+  - Design (generative): [/api/design/*](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/design.py)
+  - Evo proxy (sequence scoring/generation guardrails): [/api/evo/*](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evo.py)
+  - Evidence + ClinVar proxy: [/api/evidence/*](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evidence.py)
+  - Datasets (extraction + benchmarking): [/api/datasets/extract_and_benchmark](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/datasets.py)
+  - App entry: [api/main.py](mdc:oncology-coPilot/oncology-backend-minimal/api/main.py); configuration/flags: [api/config.py](mdc:oncology-coPilot/oncology-backend-minimal/api/config.py)
+
+- Frontend (React/MUI)
+  - VUS Explorer (research‑mode): [MutationExplorer.jsx](mdc:oncology-coPilot/oncology-frontend/src/pages/MutationExplorer.jsx)
+  - VUS components (analysis/results, WIWFM modal, mini‑compare): [AnalysisResults.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/vus/AnalysisResults.jsx)
+  - Cohort Lab (Research Portal): [CohortLab.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/research/CohortLab.jsx), mounted in [Research.jsx](mdc:oncology-coPilot/oncology-frontend/src/pages/Research.jsx)
+  - Dossier (target summary + provenance): [TargetDossierDisplay.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/dossier/TargetDossierDisplay.jsx)
+
+- Doctrines and runbooks
+  - VUS Explorer plan: [.cursor/rules/vus_explorer_plan.mdc](mdc:.cursor/rules/vus_explorer_plan.mdc)
+  - cBio Data Lab (extract/label/benchmark): [.cursor/rules/cbio_data_lab.mdc](mdc:.cursor/rules/cbio_data_lab.mdc)
+  - Redis + self‑improving loop: [.cursor/rules/redis_doctrine.mdc](mdc:.cursor/rules/redis_doctrine.mdc), [.cursor/rules/self_improving_doctrine.mdc](mdc:.cursor/rules/self_improving_doctrine.mdc)
+  - Web3 provenance/IP rails: [.cursor/rules/web3_doctrine.mdc](mdc:.cursor/rules/web3_doctrine.mdc)
+
+## What we can do today (capabilities)
+
+### **Drug Response Prediction**
+- **Input**: Patient's genetic variants (like BRAF V600E mutation)
+- **Output**: Ranked list of cancer drugs with confidence scores and explanations
+- **Example**: "BRAF inhibitor: 85% confidence, supported by pathway evidence and literature"
+- **Why it matters**: Helps researchers prioritize which drugs to test in the lab
+
+### **Variant Impact Analysis**
+- **Protein function**: How much does this mutation break the protein?
+- **Gene essentiality**: How important is this gene for cell survival?
+- **Regulatory effects**: Does this mutation affect gene expression?
+- **Chromatin accessibility**: Can this region be targeted by drugs?
+- **Why it matters**: Explains why a variant might cause disease or respond to treatment
+
+### **CRISPR Guide Design**
+- **Input**: Target DNA sequence
+- **Output**: Optimized guide RNAs for gene editing
+- **Safety checks**: Prevents targeting viral sequences, checks for off-targets
+- **Why it matters**: Enables precise gene editing experiments
+
+### **Cohort Analysis**
+- **Input**: Patient cohort data (like TCGA cancer studies)
+- **Output**: Drug response predictions across the entire cohort
+- **Benchmarking**: Compares our predictions against known outcomes
+- **Why it matters**: Validates our approach on real patient data
+
+## Recent improvements (what's new)
+
+### **Variant Analysis Interface**
+- **Live analysis**: Upload a genetic variant and get instant insights about its impact
+- **Drug recommendations**: One-click "Will it work for me?" shows ranked cancer drugs
+- **Clear explanations**: Each result shows confidence level and supporting evidence
+- **Export ready**: Save results with full documentation for lab reports
+
+### **Cohort Analysis Tools**
+- **Real patient data**: Analyze cancer patient cohorts from TCGA studies
+- **Benchmark validation**: Compare our predictions against known patient outcomes
+- **Reproducible results**: Every analysis can be re-run with the same inputs
+- **Artifact downloads**: Get raw data and analysis files for further research
+
+### **Stability and Safety**
+- **Reliable predictions**: Default to fast, safe analysis mode
+- **Enhanced accuracy**: Optional high-detail mode for critical decisions
+- **Safety checks**: Prevents analysis of dangerous or viral sequences
+- **Error handling**: Clear messages when something goes wrong
+
+## Who it's for
+
+### **Cancer Researchers**
+- **Target validation**: Test if a genetic variant is worth studying further
+- **Drug prioritization**: Rank which cancer drugs are most likely to work
+- **Mechanism understanding**: Understand why a mutation causes disease
+
+### **Biotech Companies**
+- **Preclinical research**: Validate drug targets before expensive lab experiments
+- **Portfolio decisions**: Prioritize which drug candidates to develop
+- **Investor presentations**: Show data-driven target selection
+
+### **Clinical Labs**
+- **Variant interpretation**: Understand the significance of patient mutations
+- **Treatment guidance**: Suggest which drugs might work for specific patients
+- **Research reports**: Generate evidence-based analysis for clinicians
+
+## Value to partners
+
+### **Speed**
+- **Minutes, not months**: Get drug response predictions in seconds
+- **Instant insights**: Understand variant impact without waiting for lab results
+- **Rapid iteration**: Test multiple hypotheses quickly
+
+### **Cost Savings**
+- **Avoid dead ends**: Identify unlikely drug targets before expensive experiments
+- **Prioritize resources**: Focus on the most promising candidates
+- **Reduce lab costs**: Validate hypotheses computationally first
+
+### **Quality**
+- **Evidence-based**: Every prediction comes with supporting data
+- **Reproducible**: Same inputs always give same results
+- **Auditable**: Full documentation of how conclusions were reached
+
+## How to use it
+
+### **Three Analysis Modes**
+- **Fast Mode** (default): Quick, reliable predictions for initial screening
+- **Detailed Mode**: More comprehensive analysis for important decisions
+- **Enhanced Mode**: Includes external data sources for maximum accuracy
+
+### **Safety and Privacy**
+- **Research use only**: All results are clearly labeled for research purposes
+- **No patient data**: We don't store or process personal health information
+- **Safe by design**: Prevents analysis of dangerous or viral sequences
+- **Transparent**: Every result shows exactly how it was calculated
+
+### **Getting Started**
+- **Web interface**: Upload variants and get instant results
+- **API access**: Integrate into existing lab workflows
+- **Batch processing**: Analyze multiple variants at once
+- **Export results**: Download analysis reports and raw data
+
+## Try it yourself
+
+### **Example: Analyze a BRAF mutation**
+```bash
+# Check if BRAF V600E mutation affects protein function
+curl -X POST http://localhost:8000/api/insights/predict_protein_functionality_change \
+  -H 'Content-Type: application/json' \
+  -d '{"gene":"BRAF","variants":[{"gene":"BRAF","chrom":"7","pos":140453136,"ref":"T","alt":"A"}]}'
+
+# Get drug recommendations for this mutation
+curl -X POST http://localhost:8000/api/efficacy/predict \
+  -H 'Content-Type: application/json' \
+  -d '{"mutations":[{"gene":"BRAF","hgvs_p":"V600E","chrom":"7","pos":140453136,"ref":"T","alt":"A"}]}'
+```
+
+### **Example: Analyze a patient cohort**
+```bash
+# Extract and analyze ovarian cancer patients
+curl -X POST http://localhost:8000/api/datasets/extract_and_benchmark \
+  -H 'Content-Type: application/json' \
+  -d '{"source":"cbio","study":"ov_tcga_pan_can_atlas_2018","filters":{"genes":["BRCA1","BRCA2"]}}'
+```
+
+## What's next
+
+### **Near-term improvements**
+- **Enhanced accuracy**: Better integration with external databases
+- **More drug classes**: Expand beyond current cancer drugs
+- **Batch analysis**: Process multiple variants simultaneously
+- **Integration tools**: Easier connection to existing lab systems
+
+### **Long-term vision**
+- **Real-time updates**: Live integration with new research data
+- **Global deployment**: Support for international research standards
+- **Clinical validation**: Partner with hospitals for real-world testing
+- **AI co-invention**: Platform becomes a research partner, not just a tool
+
+## Success metrics
+- **Accuracy**: How well do our predictions match real patient outcomes?
+- **Speed**: How quickly can researchers get actionable insights?
+- **Adoption**: How many research teams are using our platform?
+- **Impact**: How many drug targets have we helped validate?
+

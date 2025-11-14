@@ -1,0 +1,255 @@
+---
+alwaysApply: false
+description: Co‑Pilot (RAG) iteration doctrine aligned to Evidence S/P/E, Oracle/Forge, and deep‑analysis workflows
+---
+# Co‑Pilot Doctrine — Evidence‑Aligned RAG Agent (v1.1)
+
+Mission: Evolve the Co‑Pilot from a helpful sidebar into an Evidence Amplifier that drives our S/P/E scoring, fills evidence gaps, and orchestrates deeper analysis — without breaking the architecture. Treat the Co‑Pilot as a “trojan horse” for better evidence: every interaction should improve data provenance, confidence, and auditability.
+
+Reference: UI/architecture in [CoPilot_README.md](mdc:oncology-coPilot/oncology-frontend/src/components/CoPilot_README.md)
+
+## Alignment Targets
+
+- Evidence System (S/P/E):
+  - S (Sequence): Fusion‑first via AlphaMissense (Fusion Engine) when available; else Evo2 delta signals (min_delta/exon) with calibration percentiles
+  - P (Pathway): gene→pathway burden, per‑drug weighting
+  - E (Evidence): ClinVar priors, PubMed→Diffbot→LLM synthesis, RCT/guidelines
+- Oracle vs Forge:
+  - Oracle = discriminative predictions via `/api/efficacy/*` and `/api/insights/*`
+  - Forge = generative design via `/api/design/*`
+- Command Center: `/api/command/*` bundles (evidence → design) with provenance snapshots
+
+Research‑mode: FDA/NCCN tiers are not surfaced; we output Supported/Consider/Insufficient with transparent provenance.
+
+## What the Co‑Pilot Must Do (Outcomes)
+
+1) Question‑to‑Capability Routing (Q2C)
+   - Classify user questions into intents:
+     - variant_impact, drug_efficacy, literature_retrieval, clinvar_context, design_request, explain_result
+   - Map intents to backend endpoints (see API Matrix) and return structured answers with links.
+
+2) Evidence Amplification
+   - For variant/drug queries, call backend evidence routes, not raw externals:
+     - Literature: `/api/evidence/literature` (cached + backoff)
+     - ClinVar context: `/api/evidence/deep_analysis` (includes synthesis hooks)
+     - Extract: `/api/evidence/extract` (Diffbot)
+   - Summarize with citations and badges (RCT/Guideline/ClinVar‑Strong). Deliver a short “Why this matters for LoB.”
+
+3) Confidence & Governance Awareness
+   - Reflect operational mode (research/clinical) and feature flags in answers.
+   - Surface evidence tier (supported/consider/insufficient) when available; never up‑tier based on synthetic/massive modes.
+
+4) Deep Analysis Orchestration
+   - Offer “Run deeper analysis” quick actions that trigger:
+     - Evo profiles/probes: `/api/evo/score_variant_profile`, `/api/evo/score_variant_probe`
+     - Evidence bundle: `/api/command/run_evidence_bundle` (when enabled)
+     - Design bundle: `/api/command/run_design_bundle` gated on tier/threshold
+
+5) Audit & Learning Loop
+   - Include `run_signature` and configuration snapshots in messages when available.
+   - Log all Co‑Pilot actions/questions to Supabase (via backend) for provenance.
+
+6) Fusion Awareness & Orchestration
+   - Detect Fusion Engine availability and prefer fusion‑first sequence signal.
+   - Offer debug actions: “Check AM coverage” → call Fusion `/debug/pos` with `chr:pos`; show available REF/ALT keys.
+   - Validate keys for user‑provided variants; suggest corrected REF/ALT if needed.
+
+7) One‑Click WIWFM Execution
+   - Provide a single action to run the WIWFM micro evaluation (6‑row) against the backend and return a compact per‑row summary with export link.
+
+## API Matrix (use these first)
+
+Discriminative & Evidence
+- `/api/efficacy/predict` — S/P/E LoB per drug
+- `/api/evidence/literature` — PubMed search + cached synthesis
+- `/api/evidence/extract` — Diffbot full‑text extraction
+- `/api/evidence/deep_analysis` — ClinVar comparison + LLM explanation
+- `/api/evo/*` — profile/probe/exon helpers
+- `/api/insights/*` — gene essentiality, protein functionality, chromatin (research proxies; spacer efficacy planned)
+
+Generative (design)
+- `/api/design/*` — guide RNA (research), others planned
+
+Orchestrator
+- (Soon) `/api/copilot/wiwfm` — unified WIWFM orchestrator returning efficacy/confidence/tier + provenance
+- (Soon) `/api/command/*` — evidence & design bundles with snapshots
+
+Fusion Engine (external service)
+- `$FUSION_AM_URL/score_variants` — AlphaMissense prior lookup
+- `$FUSION_AM_URL/debug/info|/debug/pos|/debug/lookup` — schema and key debugging
+
+## Co‑Pilot Answer Shapes
+
+- Minimal Answer (summary + actions)
+```json
+{
+  "summary": "BRAF V600E has moderate LoB; limited sequence disruption but strong prior.",
+  "evidence": {"tier": "consider", "citations": ["PMID:37059834"], "clinvar": {"classification": "pathogenic"}},
+  "links": {"clinvar": "https://...", "ensembl": "https://..."},
+  "actions": [
+    {"label": "Deeper analysis", "endpoint": "/api/evidence/deep_analysis", "payload": {...}},
+    {"label": "Run profiles", "endpoint": "/api/evo/score_variant_profile", "payload": {...}}
+  ],
+  "provenance": {"operational_mode": "research", "feature_flags": {"enable_massive_modes": false}}
+}
+```
+
+- Literature Answer (with Diffbot)
+```json
+{
+  "query": "BRAF V600E multiple myeloma response to BRAF inhibitors",
+  "results": [{"pmid": "37059834", "title": "Dabrafenib + trametinib...", "url": "https://pubmed..."}],
+  "extractions": [{"url": "https://journal...", "title": "...", "snippet": "..."}],
+  "synthesis": "Trials suggest benefit in V600E‑mutated MM; evidence still limited.",
+  "badges": ["RCT"],
+  "provenance": {"cached": true}
+}
+```
+
+## Query Templates (seed suggestions)
+
+- Variant impact: "What is the functional impact of {gene} {hgvs_p} in {disease}?"
+- Drug efficacy: "Is {drug} likely to benefit patients with {gene} {hgvs_p} in {disease}?"
+- Evidence gap fill: "Find RCTs/guidelines for {drug} in {disease} with {gene} variants."
+- Design prompt: "Design 3 gRNAs near {chrom}:{pos} with PAM=NGG."
+
+## Diffbot & Deep Navigation
+
+- Prefer backend `/api/evidence/extract` to call Diffbot with retries and secrets handled server‑side.
+- After extraction, the Co‑Pilot should:
+  - Store a short note + link in its answer, not the full text.
+  - Offer “Summarize this paper” which calls `/api/evidence/explain` with relevant context (gene, hgvs_p, evo2_result, clinvar, top_results).
+  - For deeper pages (supplement, figures), trigger another `/api/evidence/extract` with the found links.
+
+## Caching, Backoff, and Limits
+
+- Obey backend caching windows; never hammer PubMed/Diffbot directly from the browser.
+- Use exponential backoff on retries (the backend already implements it; prefer calling backend).
+- Respect `max_results`, `time_window` to keep responses snappy.
+
+## Feature Flags & Env (Co‑Pilot awareness)
+
+- `FUSION_AM_URL`: when set, the backend uses fusion‑first; Evo calls are skipped to avoid timeouts.
+- `ENABLE_MODEL_TIER1`: enable Model‑backed Tier I thresholds once calibrated.
+- `DISABLE_LITERATURE`: used for fast micro runs; Co‑Pilot should state when literature is disabled.
+- Health checks: backend `/health`; Fusion `/debug/info`.
+
+## Guardrails
+
+- Never present massive/synthetic scores as clinical.
+- When calibration is `fallback`, label confidence accordingly (e.g., "percentile based on fallback").
+- If endpoints are disabled by flags, offer alternative suggestions (e.g., literature first).
+
+## Fusion Integration Notes (how the Co‑Pilot helps)
+
+- Key normalization: prefer `chr{chrom}:{pos}:{REF}:{ALT}` for AM lookups; try flipped REF/ALT if initial miss.
+- When a miss occurs, suggest checking Fusion `/debug/pos?key=chr:pos` and present available keys.
+- For BRCA1/DDR contexts, remind users to validate GRCh38 coords and REF/ALT against ClinVar before running.
+
+## Iteration Roadmap for the Co‑Pilot
+
+1) Intent Router: implement a lightweight classifier that maps questions to the API Matrix and builds payloads from page context (page, variant, disease).
+2) Evidence Badges: render RCT/Guideline/ClinVar‑Strong on answers; show citation counts and titles.
+3) Actions as First‑Class: always include 1‑click actions to run profiles/probes/deep analysis or bundles.
+4) Logging: attach `run_signature` when the backend returns it; send a `copilot_interaction` event to Supabase.
+5) Confidence Language: display tier and rationale sentences aligned to S/P/E (“Seq weak, Path aligned via RAS, strong ClinVar prior”).
+6) Personalization (later): remember user’s last variant/page to seed next suggestions; surface deltas since last run.
+
+7) Unified WIWFM endpoint: implement backend `/api/copilot/wiwfm` and update Co‑Pilot to call it.
+8) Provenance.sequence: ensure `{evo2, am, fused}` appears in guidance responses; render in UI.
+9) Model‑backed Tier I: add thresholds to backend; Co‑Pilot to explain gate decisions.
+10) Bench hooks: embed buttons to run 6‑row micro and fused micro evals; render summaries with links to JSON artifacts.
+
+## Success Criteria
+
+- Answers consistently cite backend evidence; tiers/confidence match backend outputs and reflect feature flags (fusion on/off, literature on/off).
+- Users can launch deeper analysis and design from the Co‑Pilot in one click.
+- Evidence coverage improves over time (more citations saved, fewer fallback calibrations) without extra user effort.
+
+---
+
+## Quick Start: Co‑Pilot actions that reproduce our recent wins
+
+- “Use Fusion Engine for this variant” → validate AM key via `/debug/pos`, then run efficacy with fusion.
+- “Run WIWFM micro (6 rows)” → trigger evaluator against backend; return per‑row decisions/confidence.
+- “Check ClinVar + MoA evidence” → call `/api/evidence/deep_analysis` and `/api/evidence/literature` with MoA terms.
+- “Show sequence provenance” → display `{evo2, am, fused}` values when available.
+
+---
+
+## Knowledge Base (KB) — Canonical Spec (align to S/P/E)
+
+Target: Replace ad‑hoc JSON KB with a structured, variant‑aware store that directly feeds evidence badges and LoB explanations. Keep disk JSON during prototyping, but design for Supabase later.
+
+Required fields per paper (extend `KnowledgeBase.add_paper`):
+- identity: `pmid`, `doi?`, `url`, `year`, `journal`
+- variant indexing: `gene`, `hgvs_p?`, `disease`, `variant_info` (already present)
+- study metadata: `study_type` (rct|meta|guideline|cohort|case|preclinical), `trial_phase?`, `n?`
+- evidence mapping: `drug_mentions[]`, `effect_direction` (benefit|resistance|neutral|unknown), `evidence_tags[]` (e.g., RCT, Guideline, ClinVar‑Strong), `lob_implication` (+/0/−)
+- embeddings: `embedding` or provider‑specific keys (already present), `combined_score` (computed at retrieval)
+- ingestion provenance: `added_to_kb`, `source` (pubmed|diffbot), `extracted_sections[]`
+
+KB lifecycle:
+- On add: run `ClinicalInsightsProcessor` → fill study_type, drug_mentions, effect_direction; compute embeddings.
+- On search: return top‑K with `similarity_score` and `combined_score`.
+- On export/import: persist the above; do not persist raw full text.
+- On refresh: version embeddings and keep `embedding_provider` in metadata.
+
+KB alignment hooks (to implement):
+- Normalize disease terms (e.g., map “myelomatosis” → “multiple myeloma”).
+- Normalize drugs to canonical names/classes (e.g., “dabrafenib” → class `BRAF inhibitor`).
+- Attach `clinvar_link` when gene/hgvs_p present.
+
+---
+
+## Query Builder — Evidence‑First Templates
+
+Current file: `core/query_builder.py` (uses LLM to produce PubMed query). Improve with explicit templates:
+- Variant efficacy (drug):
+  `(("{gene}"[tiab] OR "{gene} mutation"[tiab]) AND ("{hgvs_p}"[tiab] OR "V600E"[tiab] OR mutation[tiab])) AND ("{disease}"[mh] OR "{disease}"[tiab]) AND (randomized controlled trial[pt] OR clinical trial[pt] OR guideline[pt]) AND english[lang]`
+- Mechanism/function:
+  `("{gene}"[tiab] AND ("{hgvs_p}"[tiab] OR mutation[tiab]) AND (function[tiab] OR mechanism[tiab])) AND english[lang]`
+- Resistance patterns:
+  `("{drug}"[tiab] AND (resistance[tiab] OR refractory[tiab]) AND ("{disease}"[mh] OR "{disease}"[tiab]))`
+
+Additions to builder:
+- Always include disease MeSH (e.g., `multiple myeloma[mh]`) and synonyms.
+- Inject inferred filters into response `{inferred_filters:{study_type:["rct","guideline"], years:"2015-3000"}}`.
+
+---
+
+## RAG Pipeline — Boosts, Rerank, Diffbot
+
+Files: `rag_query_processor.py`, `knowledge_base.py`, `llm_rerank.py`.
+
+Retrieval improvements:
+- Boost papers by study_type weight (RCT: +0.3, guideline: +0.25, cohort: +0.1) and recentness (≥2020: +0.1) in `_calculate_variant_relevance_boost`.
+- Add optional reranker `llm_rerank.py` on top‑N for higher precision.
+- If abstracts too thin, call backend `/api/evidence/extract` (Diffbot) to fetch full text and then re‑embed snippets; cache extraction URLs in KB.
+
+Answer confidence mapping:
+- Map `evidence_level` to badges and provide a short “Why”: number of RCTs, guideline presence, recency.
+- Return `{evidence_tier_hint}` to help the evidence owner crosswalk into S/P/E E‑field.
+
+---
+
+## Co‑Pilot ↔ Backend Usage Contract
+
+Use backend for all external I/O:
+- PubMed: call `/api/evidence/literature` with `{gene,hgvs_p,disease,max_results,time_window}`
+- Diffbot: call `/api/evidence/extract` on URLs; do not call Diffbot from the browser
+- ClinVar/Deep: call `/api/evidence/deep_analysis`
+
+Return to UI:
+- Always include `citations:[{pmid,title,url,badges[]}]`, `tier_hint`, and actionable `links`.
+- Provide `actions[]` with endpoint + payload to launch deeper analysis or design.
+
+---
+
+## Gaps & Next Items
+
+1) KB normalization & schema — implement study_type/drug mapping and evidence_tags; persist in JSON now, plan Supabase table later.
+2) Query builder templates — add disease MeSH and trial/guideline filters; return `inferred_filters`.
+3) Retrieval boosts — add study type/recency weighting; optional LLM rerank.
+4) Diffbot loop — integrate `/api/evidence/extract` into RAG when abstracts are short.
+5) Confidence harmonization — map RAG `evidence_level/confidence` → backend tiering language for consistency in Co‑Pilot answers.

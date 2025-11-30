@@ -1,0 +1,307 @@
+# 🧬 PATHWAY VALIDATION ROADMAP
+
+**Version**: 1.1  
+**Date**: January 28, 2025  
+**Status**: ✅ DAY 1 COMPLETE - Proceeding to Day 2  
+**Owner**: Manager Agent (Coordinating Data Acquisition)  
+**Working Directory**: `/Users/fahadkiani/Desktop/development/crispr-assistant-main` (MAIN REPO - NOT WORKTREE)
+
+---
+
+## 📊 EXECUTIVE SUMMARY
+
+**Mission**: Validate all 7 pathways (DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux) across multiple cancer types for mechanism-based trial matching and resistance prediction.
+
+**Current Status**: 
+- ✅ **DAY 1 COMPLETE**: Dataset transformed, TMB computed, format standardized
+- ✅ **469 patients** with mutations + platinum response 
+- ✅ **TMB computed**: Mean 2.34 mut/Mb, 321 patients with mutations
+- ✅ **Response standardized**: 396 sensitive, 31 resistant, 42 refractory
+- ⏳ **Day 2**: Acquire HRD scores from TCGA publications
+- ❌ Missing: HRD scores, other cancer types
+
+**Priority**: Complete ovarian cancer first (P0), then Tier 1 gynecological cancers (P1)
+
+---
+
+## ✅ DAY 1 COMPLETION SUMMARY
+
+**Executed**: January 28, 2025
+
+| Task | Status | Output |
+|------|--------|--------|
+| 1. Transform dataset | ✅ DONE | `data/validation/tcga_ov_469_transformed.json` |
+| 2. Compute TMB | ✅ DONE | `data/validation/tcga_ov_469_with_tmb.json` |
+| 3. Standardize format | ✅ DONE | `data/validation/tcga_ov_469_validated.json` |
+
+**TMB Results**:
+- Patients with TMB: 321/469 (68.4%)
+- Mean TMB: 2.34 mut/Mb
+- Median TMB: 1.79 mut/Mb
+- Range: 0.05 - 49.82 mut/Mb
+- TMB-Low: 462 | TMB-Intermediate: 4 | TMB-High: 3
+
+**Response Distribution**:
+- Sensitive: 396 (84.4%)
+- Resistant: 31 (6.6%)
+- Refractory: 42 (9.0%)
+
+---
+
+## 🎯 DAY 2 TASKS - JR AGENT ASSIGNMENT
+
+### Mission: Acquire HRD Scores for 469 TCGA-OV Patients
+
+**Agent**: Jr  
+**Timeline**: 2-4 hours  
+**Priority**: HIGH
+
+---
+
+### Task 2.1: Download TCGA HRD Scores (Primary Source)
+
+**Source**: Marquard et al. 2015 - "Pan-cancer analysis of genomic scar signatures"
+- **PubMed**: https://pubmed.ncbi.nlm.nih.gov/25749574/
+- **Expected fields**: LOH score, TAI score, LST score, HRD sum
+
+**Steps**:
+1. Download supplementary data from paper
+2. Extract TCGA-OV patient HRD scores
+3. Match by `tcga_patient_id` to our 469 patients
+4. Report coverage (target: ≥80%)
+
+**Output file**: `data/validation/tcga_ov_hrd_scores_raw.json`
+
+---
+
+### Task 2.2: Alternative Source - cBioPortal CHORD Scores
+
+If Marquard coverage <80%, check cBioPortal:
+
+```python
+import httpx
+
+BASE_URL = "https://www.cbioportal.org/api"
+STUDY_ID = "ov_tcga_pan_can_atlas_2018"
+
+# Check for HRD/CHORD clinical attributes
+response = httpx.get(
+    f"{BASE_URL}/studies/{STUDY_ID}/clinical-data",
+    params={"clinicalDataType": "SAMPLE", "projection": "DETAILED"}
+)
+
+# Look for: HRD_SCORE, CHORD_HRD, HOMOLOGOUS_RECOMBINATION_DEFICIENCY
+```
+
+---
+
+### Task 2.3: Merge HRD Scores into Validated Dataset
+
+**Input**: 
+- `data/validation/tcga_ov_469_validated.json` (Day 1 output)
+- `data/validation/tcga_ov_hrd_scores_raw.json` (Task 2.1 output)
+
+**Output**: `data/validation/tcga_ov_469_with_hrd.json`
+
+**Schema**:
+```python
+for patient in patients:
+    patient["biomarkers"]["hrd_score"] = matched_hrd.get("hrd_sum")
+    patient["biomarkers"]["loh_score"] = matched_hrd.get("loh_score")
+    patient["biomarkers"]["tai_score"] = matched_hrd.get("tai_score")
+    patient["biomarkers"]["lst_score"] = matched_hrd.get("lst_score")
+    patient["biomarkers"]["hrd_status"] = "HRD+" if hrd_sum >= 42 else "HRD-"
+```
+
+**HRD Thresholds**:
+- HRD+: HRD sum ≥ 42 (Myriad threshold)
+- HRD-: HRD sum < 42
+
+---
+
+### Task 2.4: Generate HRD Summary Report
+
+**Output**: `data/validation/tcga_ov_hrd_summary.json`
+
+```json
+{
+  "total_patients": 469,
+  "patients_with_hrd": "N",
+  "hrd_coverage": "N/469 (X%)",
+  "hrd_distribution": {
+    "HRD+": "N",
+    "HRD-": "N"
+  },
+  "hrd_statistics": {
+    "mean": "X",
+    "median": "X",
+    "min": "X",
+    "max": "X"
+  },
+  "source": "Marquard et al. 2015 / cBioPortal",
+  "acquisition_date": "2025-01-28"
+}
+```
+
+---
+
+### Task 2.5: Success Criteria
+
+| Metric | Target | Status |
+|--------|--------|--------|
+| HRD coverage | ≥80% (375/469) | ⏳ |
+| Match rate | ≥90% of available | ⏳ |
+| HRD+ patients | >0 | ⏳ |
+| HRD- patients | >0 | ⏳ |
+
+**If coverage <80%**: Report gap, defer to Phase 2 (proceed with TMB-only validation)
+
+---
+
+## 🔍 CURRENT DATA INVENTORY
+
+### ✅ What We Have (Day 1 Complete)
+
+#### 1. Ovarian Cancer (TCGA-OV) - ✅ TRANSFORMED
+
+**Files**:
+| File | Status | Description |
+|------|--------|-------------|
+| `tcga_ov_platinum_with_mutations.json` | ✅ Source | 469 patients, 28,517 mutations |
+| `tcga_ov_469_transformed.json` | ✅ Task 1 | Standardized schema |
+| `tcga_ov_469_with_tmb.json` | ✅ Task 2 | TMB scores added |
+| `tcga_ov_469_validated.json` | ✅ Task 3 | Final validated format |
+
+**Data Quality**:
+| Element | Coverage | Status |
+|---------|----------|--------|
+| Patients | 469 | ✅ |
+| Mutations | 321/469 (68.4%) | ✅ |
+| Platinum Response | 469/469 (100%) | ✅ |
+| TMB Scores | 469/469 (100%) | ✅ |
+| HRD Scores | 0/469 (0%) | ⏳ Day 2 |
+
+---
+
+## 🗺️ EXECUTION ROADMAP
+
+### **Phase 1: Complete Ovarian Cancer (P0)** - 3 days
+
+| Day | Tasks | Status |
+|-----|-------|--------|
+| Day 1 | Transform, TMB, Standardize | ✅ COMPLETE |
+| Day 2 | Acquire HRD scores | ⏳ IN PROGRESS |
+| Day 3 | Validate pathways, Generate report | ⏳ PENDING |
+
+#### Day 1 Tasks ✅ COMPLETE
+- [x] Transform 469-patient dataset to validation schema
+- [x] Compute TMB for all patients (Mean: 2.34 mut/Mb)
+- [x] Standardize treatment response format
+- [x] Generate validated dataset
+
+#### Day 2 Tasks ⏳ JR AGENT ASSIGNED
+- [ ] Download HRD scores from Marquard et al. 2015
+- [ ] Alternative: Check cBioPortal for CHORD scores
+- [ ] Match to 469 patients by patient_id
+- [ ] Add HRD scores to validated dataset
+- [ ] Generate HRD summary report
+
+#### Day 3 Tasks 📋 PENDING
+- [ ] Run pathway validation scripts
+- [ ] Generate validation report
+- [ ] Confirm resistance prediction signals (MAPK/NF1)
+- [ ] Manager review and sign-off
+
+**Deliverable**: Fully compliant ovarian cancer dataset (469 patients with TMB + HRD)
+
+---
+
+### **Phase 2: Tier 1 Gynecological Cancers (P1)** - 5-7 days
+
+**Goal**: Acquire endometrial and cervical cancer datasets
+
+- [ ] Endometrial (TCGA-UCEC): 500+ patients, PI3K/MSI focus
+- [ ] Cervical (TCGA-CESC): 300+ patients, HPV/IO focus
+
+**Deliverable**: 800+ additional patients
+
+---
+
+### **Phase 3: Tier 2 High-Signal Cancers (P2)** - 7-10 days
+
+- [ ] Breast (TCGA-BRCA): 1000+ patients, DDR/HER2/PI3K
+- [ ] Melanoma (TCGA-SKCM): 400+ patients, MAPK/IO
+- [ ] Lung Adeno (TCGA-LUAD): 500+ patients, MAPK/IO
+- [ ] Colorectal (TCGA-COAD): 600+ patients, MAPK/MSI
+
+**Deliverable**: 2500+ additional patients
+
+---
+
+### **Phase 4: Tier 3 Complete Coverage (P3)** - 5-7 days
+
+- [ ] Kidney (TCGA-KIRC): VEGF pathway
+- [ ] Pancreatic (TCGA-PAAD): DDR/MAPK
+- [ ] Prostate (TCGA-PRAD): DDR (BRCA2)
+- [ ] Gastric (TCGA-STAD): HER2/MSI
+- [ ] Bladder (TCGA-BLCA): IO (TMB)
+
+**Deliverable**: Complete 7 pathways × 10+ cancer types
+
+---
+
+## 📊 SUCCESS METRICS
+
+### Phase 1 (Ovarian Cancer) - Current Focus
+
+| Metric | Target | Current | Status |
+|--------|--------|---------|--------|
+| Patients | 469 | 469 | ✅ |
+| TMB coverage | 100% | 100% | ✅ |
+| HRD coverage | ≥80% | 0% | ⏳ Day 2 |
+| Response labels | 100% | 100% | ✅ |
+| Validation ready | Yes | Pending HRD | ⏳ |
+
+---
+
+## 🚨 IMPORTANT: WORKSPACE CONFIGURATION
+
+**USE MAIN REPO - NOT WORKTREE**
+
+| Setting | Value |
+|---------|-------|
+| Working Directory | `/Users/fahadkiani/Desktop/development/crispr-assistant-main` |
+| Data Location | `data/validation/` |
+| Scripts Location | `scripts/data_acquisition/` |
+
+**DO NOT USE**: `/Users/fahadkiani/.cursor/worktrees/crispr-assistant-main/apd/` (worktree has missing files)
+
+---
+
+## 📋 JR AGENT CHECKLIST - DAY 2
+
+```bash
+# Working directory
+cd /Users/fahadkiani/Desktop/development/crispr-assistant-main
+
+# Task 2.1: Download HRD scores
+python scripts/data_acquisition/download_tcga_hrd.py
+
+# Task 2.3: Merge into validated dataset
+python scripts/data_acquisition/merge_hrd_scores.py
+
+# Task 2.4: Generate summary
+python scripts/data_acquisition/generate_hrd_summary.py
+```
+
+**Expected outputs**:
+- `data/validation/tcga_ov_hrd_scores_raw.json`
+- `data/validation/tcga_ov_469_with_hrd.json`
+- `data/validation/tcga_ov_hrd_summary.json`
+
+---
+
+**Status**: ✅ DAY 1 COMPLETE - ⏳ DAY 2 IN PROGRESS  
+**Last Updated**: January 28, 2025  
+**Manager Review**: Day 1 verified, Day 2 tasks assigned to Jr  
+**Next Milestone**: Day 2 complete (HRD acquisition + merge)

@@ -1,0 +1,934 @@
+---
+alwaysApply: false
+description: "Complete plan: Resistance Prophet prediction engine → Mission Control dashboard integration"
+---
+
+# ⚔️ RESISTANCE PROPHET → MISSION CONTROL: THE COMPLETE PLAN ⚔️
+
+**Date:** January 14, 2025  
+**Status:** APPROVED - Ready for Implementation  
+**Timeline:** 3 weeks to production  
+**Owner:** Zo (prediction engine) + Jr (dashboard integration)
+
+---
+
+## 🎯 **THE VISION: ONE INTEGRATED SYSTEM**
+
+### **What We're Building:**
+
+**Resistance Prophet** = The prediction engine that forecasts treatment failure 3-6 months early
+
+**Mission Control** = The dashboard that surfaces predictions and enables immediate action
+
+**Together:** A complete system that predicts resistance → displays insights → enables intervention
+
+---
+
+## 🧠 **THE BREAKTHROUGH INSIGHT**
+
+### **What the Manager Revealed:**
+
+> "Instant Oracle overlaps with existing Co-Pilot endpoint - enhance it instead of creating new one"
+
+**Translation:**
+- ❌ **Don't build:** Separate "Instant Oracle" agent
+- ✅ **Do enhance:** `/api/ayesha/complete_care_v2` with Resistance Prophet predictions
+- ✅ **Mission Control:** Calls enhanced endpoint, displays predictions
+
+### **What Jr's Data Hunt Revealed:**
+
+**161 patients with:**
+- ✅ Genomic data (mutations, SAE features)
+- ✅ Platinum response outcomes (sensitive/resistant/refractory)
+- ✅ Clinical data (stage, OS, treatment history)
+
+**This IS the resistance prediction training set.**
+
+---
+
+## 📋 **PHASE 1: RESISTANCE PROPHET PREDICTION ENGINE (WEEK 1-2)**
+
+### **Objective:** Build CA-125 kinetics-based resistance prediction (MVP)
+
+### **Why CA-125 First (Manager-Approved):**
+- ✅ **Service exists:** `ca125_intelligence.py` already operational
+- ✅ **Data available:** CA-125 tracking already implemented
+- ✅ **Proven signal:** GOG-218 shows CA-125 kinetics predict progression 3-6 weeks early
+- ✅ **Fast to ship:** 2 weeks vs 4+ weeks for full multi-signal
+
+---
+
+### **Architecture: Resistance Prophet Service**
+
+**File:** `oncology-backend-minimal/api/services/resistance_prophet_service.py`
+
+```python
+"""
+Resistance Prophet Service - Predicts treatment resistance 3-6 months early.
+
+Methodology:
+- CA-125 kinetics (rising trend detection)
+- SAE mechanism vector (pathway activation shifts)
+- Treatment line context (cross-resistance patterns)
+- 2-of-3 signal detection (high confidence threshold)
+
+Integration:
+- Uses existing CA125Intelligence service
+- Uses existing SAE feature extraction
+- Uses existing TreatmentLineIntelligence framework
+"""
+
+from typing import Dict, List, Optional
+from datetime import datetime, timedelta
+import numpy as np
+
+class ResistanceProphetService:
+    """
+    Predicts treatment resistance before clinical progression.
+    
+    Core Capabilities:
+    1. CA-125 kinetics analysis (trend detection)
+    2. DNA repair capacity monitoring (SAE mechanism vector)
+    3. Pathway activation shift detection (escape mechanisms)
+    4. Multi-signal integration (2-of-3 confidence rule)
+    """
+    
+    def __init__(self, ca125_service, sae_service, treatment_line_service):
+        self.ca125_service = ca125_service
+        self.sae_service = sae_service
+        self.treatment_line_service = treatment_line_service
+    
+    async def predict_resistance(
+        self,
+        patient_id: str,
+        current_therapy: str,
+        treatment_start_date: datetime,
+        ca125_history: List[Dict],  # [{date, value}, ...]
+        current_mutations: List[Dict],
+        baseline_sae_features: Dict
+    ) -> Dict:
+        """
+        Predict resistance probability and timeline.
+        
+        Returns:
+        {
+            "resistance_probability": 0.75,  # 0-1 scale
+            "confidence": "HIGH",  # HIGH/MEDIUM/LOW
+            "predicted_progression_date": "2025-04-15",
+            "signals_detected": [
+                {
+                    "type": "CA125_RISE",
+                    "confidence": 0.85,
+                    "mechanism": "On-therapy CA-125 rise detected",
+                    "evidence": "Cycle 4: 1200 U/mL (↑33% from Cycle 3: 900 U/mL)"
+                },
+                {
+                    "type": "DNA_REPAIR_RESTORATION",
+                    "confidence": 0.70,
+                    "mechanism": "DNA repair capacity increased",
+                    "evidence": "Baseline: 0.30 → Current: 0.52 (↑73%)"
+                }
+            ],
+            "recommendations": [
+                {
+                    "action": "ESCALATE_IMAGING",
+                    "urgency": "IMMEDIATE",
+                    "rationale": "CA-125 rise suggests progression 3-6 weeks before imaging"
+                },
+                {
+                    "action": "CONSIDER_SWITCH",
+                    "urgency": "HIGH",
+                    "rationale": "2-of-3 resistance signals detected (confidence >70%)"
+                },
+                {
+                    "action": "REVIEW_RESISTANCE_PLAYBOOK",
+                    "urgency": "HIGH",
+                    "rationale": "Prepare next-line therapy (Niraparib + Bevacizumab 96.6%)"
+                }
+            ],
+            "next_line_options": [
+                {
+                    "therapy": "Niraparib + Bevacizumab",
+                    "rank": 0.966,
+                    "rationale": "Dual mechanism (PARP + anti-angio) overcomes HR restoration"
+                }
+            ]
+        }
+        """
+        
+        # 1. SIGNAL DETECTION
+        signals = []
+        
+        # Signal 1: CA-125 Kinetics
+        ca125_signal = await self._detect_ca125_resistance_signal(
+            ca125_history,
+            treatment_start_date,
+            current_therapy
+        )
+        if ca125_signal:
+            signals.append(ca125_signal)
+        
+        # Signal 2: DNA Repair Restoration
+        dna_repair_signal = await self._detect_dna_repair_restoration(
+            current_mutations,
+            baseline_sae_features,
+            current_therapy
+        )
+        if dna_repair_signal:
+            signals.append(dna_repair_signal)
+        
+        # Signal 3: Pathway Activation Shift
+        pathway_signal = await self._detect_pathway_escape(
+            current_mutations,
+            baseline_sae_features,
+            current_therapy
+        )
+        if pathway_signal:
+            signals.append(pathway_signal)
+        
+        # 2. CALCULATE RESISTANCE PROBABILITY
+        resistance_prob = self._calculate_resistance_probability(signals)
+        
+        # 3. PREDICT PROGRESSION TIMELINE
+        predicted_date = self._predict_progression_date(
+            signals,
+            ca125_history,
+            treatment_start_date
+        )
+        
+        # 4. GENERATE RECOMMENDATIONS
+        recommendations = self._generate_recommendations(
+            signals,
+            resistance_prob,
+            current_therapy
+        )
+        
+        # 5. GET NEXT-LINE OPTIONS
+        next_line = await self.treatment_line_service.get_next_line_options(
+            patient_id,
+            current_therapy,
+            signals
+        )
+        
+        return {
+            "resistance_probability": resistance_prob,
+            "confidence": self._get_confidence_level(resistance_prob, len(signals)),
+            "predicted_progression_date": predicted_date,
+            "signals_detected": signals,
+            "recommendations": recommendations,
+            "next_line_options": next_line
+        }
+    
+    # ==================== SIGNAL DETECTION METHODS ====================
+    
+    async def _detect_ca125_resistance_signal(
+        self,
+        ca125_history: List[Dict],
+        treatment_start_date: datetime,
+        current_therapy: str
+    ) -> Optional[Dict]:
+        """
+        Detect CA-125 kinetics suggesting resistance.
+        
+        Signals:
+        1. On-therapy rise (ANY cycle) → 85% confidence
+        2. <50% drop by Cycle 3 → 65% confidence
+        3. <70% drop by Cycle 6 → 70% confidence
+        
+        Evidence: GOG-218, ICON7, SOLO-1 post-hoc analyses
+        """
+        
+        if len(ca125_history) < 2:
+            return None
+        
+        # Sort by date
+        ca125_sorted = sorted(ca125_history, key=lambda x: x['date'])
+        
+        # Get baseline (pre-treatment or first measurement)
+        baseline_value = ca125_sorted[0]['value']
+        
+        # Check for on-therapy rise
+        for i in range(1, len(ca125_sorted)):
+            current_value = ca125_sorted[i]['value']
+            prev_value = ca125_sorted[i-1]['value']
+            
+            if current_value > prev_value:
+                # Calculate % increase
+                pct_increase = ((current_value - prev_value) / prev_value) * 100
+                
+                # Significant rise (>20%) on therapy
+                if pct_increase > 20:
+                    cycle_number = self._calculate_cycle_number(
+                        treatment_start_date,
+                        ca125_sorted[i]['date']
+                    )
+                    
+                    return {
+                        "type": "CA125_RISE",
+                        "confidence": 0.85,
+                        "mechanism": "On-therapy CA-125 rise detected",
+                        "evidence": f"Cycle {cycle_number}: {current_value} U/mL (↑{pct_increase:.0f}% from Cycle {cycle_number-1}: {prev_value} U/mL)",
+                        "data": {
+                            "baseline": baseline_value,
+                            "current": current_value,
+                            "previous": prev_value,
+                            "pct_change": pct_increase,
+                            "cycle": cycle_number
+                        }
+                    }
+        
+        # Check for inadequate response at Cycle 3
+        cycle3_value = self._get_value_at_cycle(ca125_sorted, treatment_start_date, 3)
+        if cycle3_value:
+            pct_drop = ((baseline_value - cycle3_value) / baseline_value) * 100
+            
+            if pct_drop < 50:  # <50% drop by Cycle 3
+                return {
+                    "type": "CA125_INADEQUATE_RESPONSE",
+                    "confidence": 0.65,
+                    "mechanism": "Inadequate CA-125 response by Cycle 3",
+                    "evidence": f"Cycle 3: {cycle3_value} U/mL (only {pct_drop:.0f}% drop from baseline {baseline_value} U/mL; expected ≥50%)",
+                    "data": {
+                        "baseline": baseline_value,
+                        "cycle3": cycle3_value,
+                        "pct_drop": pct_drop,
+                        "expected_drop": 50
+                    }
+                }
+        
+        return None
+    
+    async def _detect_dna_repair_restoration(
+        self,
+        current_mutations: List[Dict],
+        baseline_sae_features: Dict,
+        current_therapy: str
+    ) -> Optional[Dict]:
+        """
+        Detect DNA repair capacity restoration (resistance to PARP/platinum).
+        
+        Signals:
+        1. DNA repair capacity increase >0.20 → 75% confidence
+        2. BRCA1/2 reversion mutations → 80% confidence
+        3. RAD51C/D restoration → 70% confidence
+        
+        Evidence: PMID:28588062, PMID:27775701
+        """
+        
+        # Only relevant for PARP/platinum therapies
+        if not any(x in current_therapy.lower() for x in ['parp', 'platinum', 'olaparib', 'carboplatin']):
+            return None
+        
+        # Compute current SAE features
+        current_sae = await self.sae_service.extract_sae_features(current_mutations)
+        
+        # Compare DNA repair capacity
+        baseline_dna_repair = baseline_sae_features.get('dna_repair_capacity', 0.5)
+        current_dna_repair = current_sae.get('dna_repair_capacity', 0.5)
+        
+        capacity_change = current_dna_repair - baseline_dna_repair
+        
+        # Significant increase in DNA repair capacity
+        if capacity_change > 0.20:
+            pct_change = (capacity_change / baseline_dna_repair) * 100
+            
+            return {
+                "type": "DNA_REPAIR_RESTORATION",
+                "confidence": 0.75,
+                "mechanism": "DNA repair capacity increased (HR restoration)",
+                "evidence": f"Baseline: {baseline_dna_repair:.2f} → Current: {current_dna_repair:.2f} (↑{pct_change:.0f}%)",
+                "data": {
+                    "baseline_capacity": baseline_dna_repair,
+                    "current_capacity": current_dna_repair,
+                    "change": capacity_change,
+                    "pct_change": pct_change
+                }
+            }
+        
+        # Check for BRCA reversion mutations (TODO: Add ctDNA monitoring in Phase 2.1)
+        # This will be enhanced when ctDNA integration is added
+        
+        return None
+    
+    async def _detect_pathway_escape(
+        self,
+        current_mutations: List[Dict],
+        baseline_sae_features: Dict,
+        current_therapy: str
+    ) -> Optional[Dict]:
+        """
+        Detect pathway activation shifts (escape mechanisms).
+        
+        Signals:
+        1. MAPK activation (>0.60) → 65% confidence
+        2. PI3K/AKT activation (>0.60) → 60% confidence
+        3. Efflux pathway (>0.50) → 70% confidence
+        
+        Evidence: PMID:29945933, PMID:30952680
+        """
+        
+        # Compute current SAE features
+        current_sae = await self.sae_service.extract_sae_features(current_mutations)
+        
+        # Get pathway activation scores
+        current_pathways = current_sae.get('mechanism_vector', [0]*7)
+        baseline_pathways = baseline_sae_features.get('mechanism_vector', [0]*7)
+        
+        # Pathway indices: DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux
+        pathway_names = ['DDR', 'MAPK', 'PI3K', 'VEGF', 'HER2', 'IO', 'Efflux']
+        
+        # Check for activation shifts
+        for i, name in enumerate(pathway_names):
+            if i == 0:  # Skip DDR (covered by DNA repair restoration)
+                continue
+            
+            baseline_score = baseline_pathways[i] if i < len(baseline_pathways) else 0
+            current_score = current_pathways[i] if i < len(current_pathways) else 0
+            
+            activation_change = current_score - baseline_score
+            
+            # Significant pathway activation
+            if current_score > 0.60 and activation_change > 0.20:
+                confidence_map = {
+                    'MAPK': 0.65,
+                    'PI3K': 0.60,
+                    'Efflux': 0.70,
+                    'VEGF': 0.55
+                }
+                
+                return {
+                    "type": f"{name}_ACTIVATION",
+                    "confidence": confidence_map.get(name, 0.60),
+                    "mechanism": f"{name} pathway activation (escape mechanism)",
+                    "evidence": f"{name} score: Baseline {baseline_score:.2f} → Current {current_score:.2f} (↑{activation_change:.2f})",
+                    "data": {
+                        "pathway": name,
+                        "baseline_score": baseline_score,
+                        "current_score": current_score,
+                        "change": activation_change
+                    }
+                }
+        
+        return None
+    
+    # ==================== PROBABILITY CALCULATION ====================
+    
+    def _calculate_resistance_probability(self, signals: List[Dict]) -> float:
+        """
+        Calculate resistance probability from detected signals.
+        
+        Method: Weighted average of signal confidences
+        - 0 signals: 0.30 (low baseline risk)
+        - 1 signal: Average confidence (MEDIUM risk)
+        - 2+ signals: Average confidence (HIGH risk if >0.70)
+        """
+        
+        if not signals:
+            return 0.30  # Low baseline risk
+        
+        # Average confidence across signals
+        avg_confidence = sum(s['confidence'] for s in signals) / len(signals)
+        
+        # Boost if multiple signals (higher confidence)
+        if len(signals) >= 2:
+            avg_confidence = min(avg_confidence * 1.1, 1.0)
+        
+        return round(avg_confidence, 2)
+    
+    def _get_confidence_level(self, probability: float, signal_count: int) -> str:
+        """
+        Determine confidence level for resistance prediction.
+        
+        Rules:
+        - HIGH: probability ≥0.70 AND 2+ signals
+        - MEDIUM: probability 0.50-0.70 OR 1 signal
+        - LOW: probability <0.50
+        """
+        
+        if probability >= 0.70 and signal_count >= 2:
+            return "HIGH"
+        elif probability >= 0.50:
+            return "MEDIUM"
+        else:
+            return "LOW"
+    
+    def _predict_progression_date(
+        self,
+        signals: List[Dict],
+        ca125_history: List[Dict],
+        treatment_start_date: datetime
+    ) -> str:
+        """
+        Predict date of clinical progression.
+        
+        Method:
+        - If CA-125 rise detected: progression in 3-6 weeks
+        - If inadequate response: progression in 8-12 weeks
+        - If no CA-125 signal: use pathway-based estimate (12-16 weeks)
+        """
+        
+        # Check for CA-125 signal
+        ca125_signals = [s for s in signals if s['type'].startswith('CA125')]
+        
+        if ca125_signals:
+            signal = ca125_signals[0]
+            
+            if signal['type'] == 'CA125_RISE':
+                # Progression in 3-6 weeks
+                weeks_to_progression = 4.5  # Midpoint
+            else:  # INADEQUATE_RESPONSE
+                # Progression in 8-12 weeks
+                weeks_to_progression = 10
+        else:
+            # Pathway-based estimate: 12-16 weeks
+            weeks_to_progression = 14
+        
+        # Calculate predicted date
+        predicted_date = datetime.now() + timedelta(weeks=weeks_to_progression)
+        
+        return predicted_date.strftime("%Y-%m-%d")
+    
+    # ==================== RECOMMENDATIONS ====================
+    
+    def _generate_recommendations(
+        self,
+        signals: List[Dict],
+        resistance_prob: float,
+        current_therapy: str
+    ) -> List[Dict]:
+        """
+        Generate actionable recommendations based on resistance signals.
+        
+        Priority:
+        1. IMMEDIATE: Escalate imaging (if CA-125 rise)
+        2. HIGH: Consider therapy switch (if 2+ signals)
+        3. HIGH: Review resistance playbook (if probability >0.70)
+        4. MEDIUM: Monitor weekly (if 1 signal)
+        """
+        
+        recommendations = []
+        
+        # Check for CA-125 rise → IMMEDIATE action
+        if any(s['type'] == 'CA125_RISE' for s in signals):
+            recommendations.append({
+                "action": "ESCALATE_IMAGING",
+                "urgency": "IMMEDIATE",
+                "rationale": "CA-125 rise suggests progression 3-6 weeks before imaging",
+                "timeline": "Order CT/PET scan within 1 week"
+            })
+        
+        # Check for 2+ signals → HIGH urgency
+        if len(signals) >= 2:
+            recommendations.append({
+                "action": "CONSIDER_SWITCH",
+                "urgency": "HIGH",
+                "rationale": f"{len(signals)}-of-3 resistance signals detected (confidence {resistance_prob*100:.0f}%)",
+                "timeline": "Discuss therapy switch at next visit (within 2 weeks)"
+            })
+        
+        # Check for high probability → HIGH urgency
+        if resistance_prob >= 0.70:
+            recommendations.append({
+                "action": "REVIEW_RESISTANCE_PLAYBOOK",
+                "urgency": "HIGH",
+                "rationale": f"Resistance probability {resistance_prob*100:.0f}% (HIGH) - prepare next-line options",
+                "timeline": "Review resistance playbook within 1 week"
+            })
+        
+        # Default: monitor more frequently
+        if len(signals) == 1:
+            recommendations.append({
+                "action": "MONITOR_WEEKLY",
+                "urgency": "MEDIUM",
+                "rationale": "1 resistance signal detected - increase monitoring frequency",
+                "timeline": "Check CA-125 weekly for next 4 weeks"
+            })
+        
+        return recommendations
+    
+    # ==================== HELPER METHODS ====================
+    
+    def _calculate_cycle_number(self, treatment_start: datetime, measurement_date: datetime) -> int:
+        """Calculate treatment cycle number (3-week cycles)."""
+        days_since_start = (measurement_date - treatment_start).days
+        return (days_since_start // 21) + 1
+    
+    def _get_value_at_cycle(self, ca125_history: List[Dict], treatment_start: datetime, cycle: int) -> Optional[float]:
+        """Get CA-125 value closest to specified cycle."""
+        target_date = treatment_start + timedelta(weeks=cycle*3)
+        
+        # Find closest measurement
+        closest = min(
+            ca125_history,
+            key=lambda x: abs((x['date'] - target_date).days)
+        )
+        
+        # Only return if within 1 week of target cycle
+        if abs((closest['date'] - target_date).days) <= 7:
+            return closest['value']
+        
+        return None
+```
+
+---
+
+### **Integration: Add to Main Router**
+
+**File:** `oncology-backend-minimal/api/routers/ayesha_complete_care.py`
+
+```python
+from api.services.resistance_prophet_service import ResistanceProphetService
+
+# Initialize service
+resistance_prophet = ResistanceProphetService(
+    ca125_service=ca125_intelligence,
+    sae_service=sae_service,
+    treatment_line_service=treatment_line_service
+)
+
+@router.post("/api/ayesha/complete_care_v2")
+async def complete_care_v2_with_resistance_prophet(request: CompleteCareRequest):
+    """
+    Enhanced Co-Pilot endpoint with Resistance Prophet predictions.
+    
+    NEW: Includes resistance prediction in response.
+    """
+    
+    # ... existing code (SOC, trials, supplements, CA-125) ...
+    
+    # NEW: Add Resistance Prophet prediction
+    resistance_prediction = None
+    
+    if request.include_resistance_prediction and request.ca125_history:
+        resistance_prediction = await resistance_prophet.predict_resistance(
+            patient_id=request.patient_id,
+            current_therapy=request.current_therapy or "carboplatin_paclitaxel",
+            treatment_start_date=request.treatment_start_date,
+            ca125_history=request.ca125_history,
+            current_mutations=request.mutations,
+            baseline_sae_features=request.baseline_sae_features or {}
+        )
+    
+    return {
+        # ... existing response fields ...
+        "resistance_prediction": resistance_prediction  # NEW
+    }
+```
+
+---
+
+## 📋 **PHASE 2: MISSION CONTROL INTEGRATION (WEEK 3)**
+
+### **Objective:** Surface Resistance Prophet predictions in Mission Control dashboard
+
+### **Jr's Task:** Integrate resistance predictions into dashboard components
+
+---
+
+### **Integration Point 1: Critical Alerts Banner**
+
+**File:** `oncology-frontend/src/pages/MissionControl/components/header/CriticalAlerts.jsx`
+
+```jsx
+// When resistance prediction comes back from API
+if (data.resistance_prediction && data.resistance_prediction.confidence === 'HIGH') {
+  const { resistance_probability, signals_detected, recommendations } = data.resistance_prediction;
+  
+  alerts.push({
+    severity: "IMMEDIATE",
+    type: "RESISTANCE_PREDICTED",
+    message: `Resistance Risk: ${Math.round(resistance_probability * 100)}% probability detected`,
+    action: recommendations[0]?.rationale,
+    action_button: {
+      label: "VIEW RESISTANCE PLAYBOOK",
+      onClick: () => window.location.href = '/resistance-playbook'
+    }
+  });
+}
+```
+
+---
+
+### **Integration Point 2: Resistance Playbook Card**
+
+**File:** `oncology-frontend/src/pages/MissionControl/components/mechanism/ResistancePlaybook.jsx`
+
+```jsx
+export default function ResistancePlaybook({ data }) {
+  // data comes from resistance_prediction API response
+  
+  if (!data || !data.resistance_probability || data.resistance_probability < 0.50) {
+    return (
+      <Card>
+        <Typography>✓ No Resistance Signals Detected</Typography>
+      </Card>
+    );
+  }
+  
+  const { resistance_probability, signals_detected, recommendations, next_line_options } = data;
+  
+  return (
+    <Card sx={{ border: '2px solid #f44336' }}>
+      <CardContent>
+        <Typography variant="h6" sx={{ color: '#f44336' }}>
+          ⚔️ RESISTANCE PLAYBOOK (ACTIVE)
+        </Typography>
+        
+        <Box mt={2}>
+          <Typography variant="body2" fontWeight="bold">
+            Resistance Probability: {Math.round(resistance_probability * 100)}%
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            Confidence: {data.confidence}
+          </Typography>
+        </Box>
+        
+        <Box mt={2}>
+          <Typography variant="body2" fontWeight="bold" mb={1}>
+            Detected Signals ({signals_detected.length}-of-3):
+          </Typography>
+          
+          {signals_detected.map((signal, idx) => (
+            <Box key={idx} display="flex" alignItems="center" mb={0.5}>
+              <CheckCircleIcon sx={{ color: '#f44336', fontSize: 18, mr: 1 }} />
+              <Typography variant="body2">
+                {signal.mechanism} ({Math.round(signal.confidence * 100)}% confidence)
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+        
+        <Box mt={2}>
+          <Typography variant="body2" fontWeight="bold" mb={1}>
+            Recommended Next-Line:
+          </Typography>
+          
+          {next_line_options?.slice(0, 2).map((option, idx) => (
+            <Card key={idx} sx={{ bgcolor: '#0a0e27', p: 1.5, mb: 1 }}>
+              <Typography variant="body2" fontWeight="bold">
+                {idx + 1}. {option.therapy} ({Math.round(option.rank * 100)}%)
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {option.rationale}
+              </Typography>
+            </Card>
+          ))}
+        </Box>
+        
+        <Button 
+          fullWidth 
+          variant="outlined" 
+          sx={{ mt: 2, color: '#f44336', borderColor: '#f44336' }}
+        >
+          VIEW FULL PLAYBOOK
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+---
+
+### **Integration Point 3: Next Best Actions**
+
+**File:** `oncology-frontend/src/pages/MissionControl/components/monitoring/NextBestActions.jsx`
+
+```jsx
+// Add resistance recommendations to actions list
+if (data.resistance_prediction && data.resistance_prediction.recommendations) {
+  const resistanceActions = data.resistance_prediction.recommendations.map((rec, idx) => ({
+    priority: rec.urgency === 'IMMEDIATE' ? 1 : rec.urgency === 'HIGH' ? 2 : 3,
+    title: rec.action.replace(/_/g, ' ').toLowerCase().replace(/^\w/, c => c.toUpperCase()),
+    rationale: rec.rationale,
+    impact: rec.timeline,
+    action_button: rec.action === 'ESCALATE_IMAGING' ? {
+      label: "ORDER IMAGING",
+      onClick: () => alert('Order CT/PET scan')
+    } : null
+  }));
+  
+  actions = [...resistanceActions, ...actions];
+}
+```
+
+---
+
+## 🎯 **SUCCESS METRICS**
+
+### **Resistance Prophet Validation (Week 1):**
+- ✅ Test on Jr's 161 patients (retrospective validation)
+- ✅ Target: >70% accuracy for resistance prediction
+- ✅ Target: 3-6 weeks earlier detection vs imaging alone
+
+### **Mission Control Integration (Week 3):**
+- ✅ Resistance predictions display in real-time
+- ✅ Critical alerts fire when resistance detected (>70% probability)
+- ✅ Next best actions include resistance recommendations
+- ✅ Complete care plan includes resistance playbook
+
+---
+
+## 📋 **COMPLETE TIMELINE**
+
+### **Week 1: Resistance Prophet Core**
+- [ ] Day 1-2: Build `ResistanceProphetService` (CA-125 kinetics)
+- [ ] Day 3: Add DNA repair restoration detection
+- [ ] Day 4: Add pathway escape detection
+- [ ] Day 5: Test on Jr's 161 patients (validation)
+
+### **Week 2: Backend Integration**
+- [ ] Day 6-7: Integrate into `/api/ayesha/complete_care_v2`
+- [ ] Day 8: Add resistance prediction endpoint
+- [ ] Day 9: Test end-to-end (API → predictions)
+- [ ] Day 10: Document + provenance
+
+### **Week 3: Mission Control Integration (Jr)**
+- [ ] Day 11-12: Critical Alerts integration
+- [ ] Day 13-14: Resistance Playbook card
+- [ ] Day 15: Next Best Actions integration
+- [ ] Day 16-17: Testing + polish
+
+---
+
+## ⚔️ **WHAT MAKES THIS REVOLUTIONARY**
+
+### **Before:**
+- ❌ Resistance detected AFTER imaging shows progression
+- ❌ Oncologists react to failure (too late to intervene)
+- ❌ Patients lose 3-6 months of treatment window
+
+### **After (With Resistance Prophet + Mission Control):**
+- ✅ Resistance predicted 3-6 WEEKS before imaging
+- ✅ Oncologists switch therapy PROACTIVELY (before failure)
+- ✅ Patients preserve treatment window (better outcomes)
+
+### **The Competitive Advantage:**
+**NOBODY ELSE PREDICTS RESISTANCE BEFORE PROGRESSION.**
+
+- Tempus: Reports mutations, doesn't predict resistance
+- Foundation Medicine: Reports biomarkers, doesn't predict resistance
+- Guardant: Reports ctDNA changes, doesn't predict resistance
+
+**We integrate CA-125 + SAE + Treatment Line Intelligence → Predict failure BEFORE it happens.**
+
+---
+
+## 🔥 **COMMANDER - THIS IS THE PATH**
+
+**Week 1-2: Zo builds Resistance Prophet prediction engine**
+- CA-125 kinetics analysis
+- DNA repair restoration detection
+- Pathway escape detection
+- Validated on Jr's 161 patients
+
+**Week 3: Jr integrates into Mission Control dashboard**
+- Critical Alerts banner
+- Resistance Playbook card
+- Next Best Actions
+- Complete end-to-end workflow
+
+**Result:** A complete system that predicts resistance → displays insights → enables action
+
+**FOR AYESHA'S LIFE.** ⚔️
+
+---
+
+## 🛠️ BUILD & RUN (READY NOW)
+
+### Backend (Resistance Prophet integrated)
+- Endpoint: `POST /api/ayesha/complete_care_v2`
+  - Opt-in flag: `include_resistance_prediction: true`
+  - Response field: `resistance_prediction` (risk_level, probability, confidence, signals, urgency, actions)
+- Health: `GET /api/ayesha/complete_care_v2/health` → shows `resistance_prophet_enabled: true`
+
+### Local Validation
+```bash
+# 1) Merge platinum response with genomics (creates 166 merged patients)
+python3 scripts/merge_platinum_with_genomics.py
+
+# 2) Phase 1 (retrospective, no CA-125): runs + writes report
+python3 scripts/validate_resistance_prophet.py
+# Outputs: results/resistance_prophet_validation/
+
+# 3) Phase 1b (prospective-style synthetic): runs + writes report
+python3 scripts/generate_synthetic_longitudinal_data.py
+python3 scripts/validate_resistance_prophet_longitudinal.py
+# Outputs: results/resistance_prophet_synthetic/
+```
+
+### Enable in Orchestrator
+- Request schema (new flags):
+  - `include_resistance_prediction: boolean` (default false)
+- Response schema (new field):
+  - `resistance_prediction: object | null`
+
+---
+
+## ✅ IMPLEMENTATION CHECKLIST (CODE MATCHED)
+
+### Week 1-2 (Zo) – Prediction Engine
+- [x] Create `api/services/resistance_prophet_service.py`
+  - Signals: DNA repair restoration, Pathway escape, (CA-125 ready)
+  - Risk stratification + urgency actions
+- [x] Integrate into `complete_care_v2` (opt-in flag)
+  - Added `include_resistance_prediction` (request)
+  - Added `resistance_prediction` (response)
+  - Provenance updated with `resistance_prophet_phase`
+- [x] Validation scripts
+  - `scripts/merge_platinum_with_genomics.py` (166-patient overlap)
+  - `scripts/validate_resistance_prophet.py` (retrospective)
+  - `scripts/generate_synthetic_longitudinal_data.py` (prospective-style)
+  - `scripts/validate_resistance_prophet_longitudinal.py` (AUROC + lead-time)
+
+### Week 3 (Jr) – Mission Control Wiring
+- [ ] Critical Alerts banner: auto-fire when `risk_level = HIGH`
+- [ ] Resistance Playbook Card: render `signals`, `recommendations`, `next_line_options`
+- [ ] Next Best Actions: prepend Prophet actions (IMMEDIATE/HIGH/MEDIUM)
+- [ ] RUO banner + strict mode (3-of-3 for HIGH when enabled)
+
+---
+
+## 📦 CONTRACT (FRONTEND INTEGRATION)
+
+`resistance_prediction` shape (abridged):
+```json
+{
+  "risk_level": "HIGH|MEDIUM|LOW",
+  "probability": 0.75,
+  "confidence": 0.6,
+  "signal_count": 2,
+  "signals": [
+    { "type": "DNA_REPAIR_RESTORATION", "detected": true, "probability": 0.8, "confidence": 0.75, "rationale": "..." },
+    { "type": "PATHWAY_ESCAPE", "detected": true, "probability": 0.7, "confidence": 0.65, "rationale": "..." }
+  ],
+  "urgency": "CRITICAL|ELEVATED|ROUTINE",
+  "recommended_actions": [ { "action": "ESCALATE_IMAGING", "timeframe": "within 1 week", "rationale": "..." } ],
+  "next_line_options": [ { "therapy": "Niraparib + Bevacizumab", "rank": 0.966 } ],
+  "rationale": [ "Overall resistance probability: 75% (HIGH)" ],
+  "warnings": [],
+  "provenance": { "model_version": "resistance_prophet_v1.0_phase1", "thresholds": { "high_risk_probability": 0.7 } }
+}
+```
+
+---
+
+## 🚦 POLICY (MANAGER ANSWERS APPLIED)
+- Q7: Opt-in compute via `include_resistance_prediction=true` (default off)
+- Q9: HIGH = prob ≥0.70 AND ≥2 signals; MEDIUM = 0.50–0.69 or 1 signal; LOW <0.50
+- Q10: Actions: ESCALATE_IMAGING (1w), CONSIDER_SWITCH (2w), REVIEW_RESISTANCE_PLAYBOOK (1w)
+- Q13: If retrospective AUROC <0.70 → RUO only; raise thresholds; strict mode optional
+- Q15: If CA-125 missing → skip; cap confidence unless ≥2 non-CA-125 signals
+
+---
+
+## 🧪 RESULTS SNAPSHOT
+- Retrospective (real 166-patient merge): AUROC 0.464 (NO-GO → RUO only)
+- Prospective-style (synthetic): AUROC 1.00; Avg lead-time 4.0 months (signals active ≥4 months pre-progression)
+
+---
+
+## 🔜 NEXT
+- Enable CA-125 kinetics in service for Ayesha (Phase 1b)
+- Jr to wire Mission Control UI (alerts, playbook, actions) using `resistance_prediction`
+- Add strict mode + RUO banners in UI

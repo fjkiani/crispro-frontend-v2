@@ -1,0 +1,432 @@
+---
+description: Complete architecture plan for scalable dossier generation system - tasks, requirements, implementation roadmap
+---
+
+# ⚔️ SCALABLE DOSSIER GENERATION - COMPLETE ARCHITECTURE PLAN ⚔️
+
+## 🎯 EXECUTIVE SUMMARY
+
+Transform the JR2 dossier mission from **5-10 dossiers** to **mass production of 500+ dossiers** by leveraging existing infrastructure and building scalable orchestration layers.
+
+**Key Insight**: We already have 90% of the components - database (1,000+ trials), scraping (Diffbot), evidence services, caching. We need orchestration for parallel processing.
+
+---
+
+## 🏗️ SYSTEM ARCHITECTURE
+
+### **EXISTING INFRASTRUCTURE (LEVERAGE)**
+```python
+# Data Layer (Ready)
+✅ clinical_trials.db (SQLite, 92MB, 1,000+ trials)
+✅ AstraDB clinical_trials_eligibility2 (vector search)
+✅ POST /api/evidence/extract (Diffbot integration)
+✅ EnhancedEvidenceService (RCT data, PubMed)
+
+# Processing Layer (Extend)
+🔧 EfficacyOrchestrator (S/P/E framework)
+🔧 SAE services (biomarker analysis)
+🔧 Caching utilities (24-hour TTL)
+```
+
+### **NEW COMPONENTS (BUILD)**
+```python
+# Orchestration Layer
+🚀 DossierOrchestrator (main coordinator)
+🚀 BatchProcessor (parallel processing)
+🚀 QualityChecker (auto-validation)
+🚀 TemplateEngine (patient-specific templates)
+
+# API Layer
+🚀 POST /api/dossiers/generate (single)
+🚀 POST /api/dossiers/batch (mass processing)
+🚀 GET/POST /api/dossiers/{id}/review (Zo approval)
+🚀 GET /api/dossiers/status (progress tracking)
+```
+
+---
+
+## 📋 DETAILED TASK BREAKDOWN
+
+### **PHASE 1: CORE ENGINE (WEEK 1)**
+
+#### **Task 1.1: Dossier Generator Service**
+```python
+# File: api/services/dossier_generator.py
+class DossierGenerator:
+    async def generate_single_dossier(
+        self, 
+        nct_id: str, 
+        patient_profile: dict,
+        scrape_full: bool = True
+    ) -> dict:
+        """Generate complete 10-section dossier"""
+        
+# Dependencies:
+- Existing: Diffbot integration (/api/evidence/extract)
+- Existing: EnhancedEvidenceService
+- New: Patient profile matching logic
+- New: Eligibility assessment engine
+```
+
+**Requirements**:
+- Input: NCT ID + patient profile JSON
+- Output: Complete dossier with 10 sections
+- Performance: <30 seconds per dossier
+- Quality: 90%+ accuracy in eligibility assessment
+
+#### **Task 1.2: API Endpoints**
+```python
+# File: api/routers/dossiers.py
+@router.post("/generate")
+async def generate_dossier(request: DossierGenerateRequest):
+    """Single dossier generation endpoint"""
+
+@router.get("/{dossier_id}")
+async def get_dossier(dossier_id: str):
+    """Retrieve generated dossier"""
+
+@router.post("/{dossier_id}/approve")
+async def approve_dossier(dossier_id: str, approval: ApprovalRequest):
+    """Zo review and approval system"""
+```
+
+**Requirements**:
+- FastAPI integration with existing router structure
+- Pydantic models for request/response validation
+- Error handling with proper HTTP status codes
+- Integration with existing authentication system
+
+#### **Task 1.3: Caching System**
+```python
+# File: api/utils/dossier_cache.py
+class DossierCache:
+    def __init__(self, cache_dir: Path = Path(".cursor/ayesha/cache/")):
+        self.cache_dir = cache_dir
+        self.ttl_hours = 24
+    
+    async def get_trial_data(self, nct_id: str) -> dict | None:
+        """Get cached trial data if not expired"""
+    
+    async def cache_trial_data(self, nct_id: str, data: dict):
+        """Cache scraped trial data"""
+```
+
+**Requirements**:
+- 24-hour TTL for scraped trial data
+- 7-day TTL for eligibility rules
+- 30-day TTL for drug mechanisms
+- Automatic cache cleanup for expired entries
+
+### **PHASE 2: BATCH PROCESSING (WEEK 2)**
+
+#### **Task 2.1: Batch Processor**
+```python
+# File: api/services/batch_dossier_processor.py
+class BatchDossierProcessor:
+    async def process_batch(
+        self,
+        trial_ids: List[str],
+        patient_profile: dict,
+        max_concurrent: int = 10
+    ) -> List[dict]:
+        """Process multiple trials in parallel"""
+        
+        # Semaphore to limit concurrent requests
+        semaphore = asyncio.Semaphore(max_concurrent)
+        
+        async def process_single(nct_id: str):
+            async with semaphore:
+                return await self.dossier_generator.generate_single_dossier(
+                    nct_id, patient_profile
+                )
+        
+        tasks = [process_single(nct_id) for nct_id in trial_ids]
+        return await asyncio.gather(*tasks, return_exceptions=True)
+```
+
+**Requirements**:
+- Parallel processing with configurable concurrency limits
+- Error handling for individual trial failures
+- Progress tracking and status updates
+- Memory management for large batches
+
+#### **Task 2.2: Quality Checker**
+```python
+# File: api/services/dossier_quality_checker.py
+class DossierQualityChecker:
+    def check_quality(self, dossier: dict) -> dict:
+        """Auto-validate dossier quality"""
+        return {
+            "missing_sections": self._check_missing_sections(dossier),
+            "low_confidence_statements": self._find_low_confidence(dossier),
+            "data_conflicts": self._detect_conflicts(dossier),
+            "eligibility_completeness": self._check_eligibility(dossier),
+            "auto_approve_eligible": self._can_auto_approve(dossier)
+        }
+```
+
+**Requirements**:
+- Automated quality scoring (0-100%)
+- Confidence threshold detection
+- Missing data identification
+- Auto-approval for high-quality dossiers
+
+#### **Task 2.3: Batch API Endpoint**
+```python
+# File: api/routers/dossiers.py (extend)
+@router.post("/batch")
+async def generate_batch_dossiers(request: BatchDossierRequest):
+    """Mass dossier generation endpoint"""
+    
+    # Input validation
+    if len(request.trial_ids) > 100:
+        raise HTTPException(400, "Batch size limited to 100 trials")
+    
+    # Process batch
+    processor = BatchDossierProcessor()
+    results = await processor.process_batch(
+        request.trial_ids,
+        request.patient_profile,
+        max_concurrent=request.max_concurrent or 10
+    )
+    
+    return {
+        "batch_id": str(uuid.uuid4()),
+        "total_trials": len(request.trial_ids),
+        "successful": len([r for r in results if not isinstance(r, Exception)]),
+        "failed": len([r for r in results if isinstance(r, Exception)]),
+        "results": results
+    }
+```
+
+### **PHASE 3: AUTOMATION & SCALING (WEEK 3)**
+
+#### **Task 3.1: Patient Profile Templates**
+```python
+# File: api/models/patient_profiles.py
+PATIENT_PROFILE_TEMPLATES = {
+    "ovarian_first_line": {
+        "cancer_type": "ovarian",
+        "stage": "IIIB+/IV",
+        "treatment_line": "first-line",
+        "germline_brca": "negative",
+        "common_biomarkers": ["HER2", "HRD", "MSI"]
+    },
+    "ovarian_parp_resistant": {
+        "cancer_type": "ovarian", 
+        "stage": "IV",
+        "treatment_line": "second-line",
+        "parp_resistant": True,
+        "common_biomarkers": ["HER2", "TMB", "MSI"]
+    },
+    "breast_her2_low": {
+        "cancer_type": "breast",
+        "her2_status": "IHC_1+",
+        "treatment_line": "≥second-line",
+        "common_biomarkers": ["ER", "PR", "HER2", "BRCA"]
+    }
+}
+```
+
+#### **Task 3.2: Auto-Eligibility Scoring**
+```python
+# File: api/services/eligibility_scorer.py
+class EligibilityScorer:
+    def calculate_match_score(
+        self, 
+        patient_profile: dict, 
+        trial_criteria: dict
+    ) -> float:
+        """Calculate 0-100% eligibility match score"""
+        
+        scores = {
+            "stage_match": self._score_stage_match(patient_profile, trial_criteria),
+            "line_match": self._score_treatment_line(patient_profile, trial_criteria),
+            "biomarker_match": self._score_biomarkers(patient_profile, trial_criteria),
+            "geography_match": self._score_geography(patient_profile, trial_criteria),
+            "exclusion_risk": self._score_exclusions(patient_profile, trial_criteria)
+        }
+        
+        # Weighted average
+        weights = {"stage_match": 0.3, "line_match": 0.25, "biomarker_match": 0.25, 
+                  "geography_match": 0.1, "exclusion_risk": 0.1}
+        
+        return sum(scores[k] * weights[k] for k in scores.keys())
+```
+
+#### **Task 3.3: Success Metrics Tracking**
+```python
+# File: api/services/metrics_tracker.py
+class DossierMetricsTracker:
+    def track_dossier_outcome(
+        self,
+        dossier_id: str,
+        outcome: str,  # "enrolled", "screened", "rejected", "pending"
+        oncologist_feedback: dict = None
+    ):
+        """Track real-world dossier outcomes"""
+        
+    def generate_success_report(self) -> dict:
+        """Generate success metrics report"""
+        return {
+            "dossier_to_enrollment_rate": self._calculate_enrollment_rate(),
+            "avg_time_to_decision": self._calculate_decision_time(),
+            "quality_score_correlation": self._analyze_quality_correlation(),
+            "oncologist_satisfaction": self._calculate_satisfaction()
+        }
+```
+
+---
+
+## 🔧 TECHNICAL REQUIREMENTS
+
+### **INFRASTRUCTURE NEEDS**
+```python
+# Compute Resources
+- CPU: 4+ cores for parallel processing
+- RAM: 4GB+ for batch processing 100 trials
+- Storage: 1GB+ for dossier cache and results
+
+# Database
+- SQLite: clinical_trials.db (existing, 92MB)
+- AstraDB: clinical_trials_eligibility2 (existing)
+- New: clinical_dossiers collection (for storage)
+
+# External Services
+- Diffbot: Already integrated (DIFFBOT_TOKEN configured)
+- Modal: Evo2 services (existing integration)
+- PubMed: EnhancedEvidenceService (existing)
+```
+
+### **DEPENDENCIES**
+```python
+# Existing (Already Installed)
+fastapi>=0.104.0
+httpx>=0.25.0
+pydantic>=2.0.0
+asyncio  # Built-in
+
+# New Dependencies Needed
+beautifulsoup4>=4.12.2  # HTML parsing for Diffbot
+lxml>=4.9.3            # XML parsing support
+aiofiles>=23.0.0       # Async file operations
+python-multipart>=0.0.6 # File upload support
+```
+
+### **PERFORMANCE TARGETS**
+```python
+# Single Dossier Generation
+- Target: <30 seconds per dossier
+- Acceptable: <60 seconds per dossier
+
+# Batch Processing (50 trials)
+- Target: <10 minutes total
+- Acceptable: <20 minutes total
+
+# Quality Metrics
+- Eligibility accuracy: >90%
+- Auto-approval rate: >70% (reduce Zo review load)
+- Cache hit rate: >80% (reduce Diffbot calls)
+```
+
+---
+
+## 📊 IMPLEMENTATION ROADMAP
+
+### **WEEK 1: FOUNDATION**
+```python
+Day 1-2: DossierGenerator service + single API endpoint
+Day 3-4: Caching system + quality checker
+Day 5: Integration testing + bug fixes
+Deliverable: Single dossier generation working end-to-end
+```
+
+### **WEEK 2: SCALING**
+```python
+Day 1-2: BatchDossierProcessor + parallel processing
+Day 3-4: Batch API endpoint + error handling
+Day 5: Load testing + performance optimization
+Deliverable: Batch processing 50+ trials in <20 minutes
+```
+
+### **WEEK 3: AUTOMATION**
+```python
+Day 1-2: Patient profile templates + auto-eligibility scoring
+Day 3-4: Success metrics tracking + reporting
+Day 5: End-to-end testing + documentation
+Deliverable: Fully automated pipeline with quality metrics
+```
+
+---
+
+## ⚠️ RISK MITIGATION
+
+### **PERFORMANCE RISKS**
+```python
+# Risk: Diffbot rate limiting
+Mitigation: Aggressive caching (24h TTL) + request throttling
+
+# Risk: Memory exhaustion with large batches
+Mitigation: Process in chunks of 50 trials max + garbage collection
+
+# Risk: Database connection limits
+Mitigation: Connection pooling + read-only access pattern
+```
+
+### **QUALITY RISKS**
+```python
+# Risk: Hallucinated dossier content
+Mitigation: Confidence scoring + mandatory Zo review for low scores
+
+# Risk: Outdated trial information
+Mitigation: Cache TTL + manual refresh option + data freshness checks
+
+# Risk: Incorrect eligibility assessment
+Mitigation: Multi-layer validation + human review for edge cases
+```
+
+### **OPERATIONAL RISKS**
+```python
+# Risk: Service dependencies (Diffbot, Modal, etc.)
+Mitigation: Graceful degradation + fallback mechanisms + monitoring
+
+# Risk: Storage capacity for large-scale generation
+Mitigation: Automatic cleanup + compression + cloud storage option
+```
+
+---
+
+## 🎯 SUCCESS METRICS
+
+### **QUANTITATIVE METRICS**
+```python
+# Volume Metrics
+- Dossiers generated per day: Target 100+
+- Batch processing throughput: Target 50 trials in <10 minutes
+- Cache hit rate: Target >80%
+
+# Quality Metrics  
+- Eligibility accuracy: Target >90%
+- Auto-approval rate: Target >70%
+- Oncologist satisfaction: Target >4.5/5.0
+
+# Performance Metrics
+- Average generation time: Target <30 seconds
+- System uptime: Target >99%
+- Error rate: Target <5%
+```
+
+### **QUALITATIVE METRICS**
+```python
+# User Experience
+- Zo review efficiency (time saved vs manual generation)
+- Oncologist feedback quality
+- Patient enrollment success rate
+
+# System Reliability
+- Graceful handling of edge cases
+- Consistent output quality
+- Maintainable codebase
+```
+
+This architecture plan transforms our dossier generation from artisanal craft to industrial-scale production while maintaining quality and leveraging our existing fucking infrastructure! 🚀

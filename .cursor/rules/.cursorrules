@@ -75,3 +75,76 @@ Our platform was not built to design new weapons; it was built to find the fucki
 *   **[ ] Task 3.3: Wire the Frontend to the Forge.**
     *   **Action:** The "Unleash Forge" button calls the `/generate_inhibitor` endpoint.
     *   **UI:** Displays the returned superior protein sequence (`CS-MMPi-001`) and its vastly improved Zeta Score in a final, damning dossier. 
+
+---
+
+## **IV. SAE & EVO2 – IMPLEMENTATION PLAN (NON‑BREAKING)**
+
+**Context:**  
+Sparse Autoencoders (SAEs) are *not* baked into Evo2 itself; they are a post‑hoc interpretability layer trained on Evo2’s internal activations (layer 26). Our current platform uses **proxy SAE features** (DNA repair capacity, 7D mechanism vectors) built from S/P/E + tumor context. We now have the official Evo2 SAE notebook pattern and a plan to bring true SAE in safely.
+
+### **A. Guardrails**
+
+- Do **not** change `/api/efficacy/predict` or WIWFM scoring until SAE infra + validation exist.
+- Keep **proxy SAE** in `sae_feature_service.py` as default.
+- Introduce true SAE only:
+  - Behind feature flags (`ENABLE_EVO2_SAE`, `ENABLE_TRUE_SAE`),
+  - With explicit provenance (`provenance.sae = "proxy" | "true" | "proxy+true"`).
+
+### **B. Phase 1 – Minimal End‑to‑End SAE Extraction**
+
+1. **Evo2 Activations Endpoint**
+   - **Backend (Modal Evo2 service):**
+     - Add `score_variant_with_activations(chrom, pos, ref, alt, model_id="evo2_1b", return_activations=True)` in `src/services/evo_service/main.py`.
+     - Use existing 8kb window + tokenizer.
+     - Call Evo2 `forward(..., return_embeddings=True, layer_names=["blocks-26"])`.
+     - Return `{ delta_score, layer_26_activations }`.
+   - **Router:**
+     - Expose `POST /api/evo/score_variant_with_activations` in `api/routers/evo.py` gated by `ENABLE_EVO2_SAE`.
+
+2. **SAE Model Service (Notebook Pattern)**
+   - **Implementation:**
+     - Create `api/services/sae_model_service.py` + `src/services/sae_service/main.py`.
+     - Implement `ObservableEvo2` + `BatchTopKTiedSAE` exactly as in  
+       `scripts/evo2/evo2/notebooks/sparse_autoencoder/sparse_autoencoder.ipynb`.
+     - Download SAE weights via `hf_hub_download` (e.g. `Goodfire/Evo-2-Layer-26-Mixed`) at build time; pin repo + filename.
+   - **Endpoint:**
+     - `POST /api/sae/extract_features`:
+       - Input: either `[seq_len, 4096]` activations or `(chrom,pos,ref,alt)`.
+       - Output: `{ features[0..32767], top_features, layer: "blocks-26", stats }`.
+
+3. **Wire into `sae_feature_service` (Diagnostics Only)**
+   - Extend `compute_sae_features(...)` to accept `sae_features: Optional[Dict] = None`.
+   - Behavior:
+     - If `sae_features is None`: **no change** (proxy only).
+     - If `sae_features` present + `ENABLE_TRUE_SAE=1`:
+       - Derive a few aggregate diagnostics (e.g. `ddr_sae_score`, `io_sae_score`) from the 32K vector using a simple, transparent heuristic.
+       - Expose as extra fields + provenance only (no scoring changes yet).
+
+### **C. Phase 2 – Cohort SAE Extraction & Correlation** 🔄 **SPRINT 1 IN PROGRESS**
+
+- Build:
+  - ✅ `scripts/sae/extract_sae_features_cohort.py` (484 lines) – processes labeled cohorts (TCGA/cBio) and stores per‑patient SAE aggregates.
+  - ✅ `api/services/biomarker_correlation_service.py` (379 lines) – runs feature↔outcome correlations.
+    - Pearson + Spearman correlations, Chi-square, Cohen's d, CV stability, Bootstrap CIs
+    - Multiple testing correction (FDR)
+    - Top 100 features with p < 0.01, d >= 0.3, CV >= 0.6
+  - ✅ `scripts/sae/analyze_biomarkers.py` (163 lines) – analysis execution + visualization
+  - ✅ `api/routers/sae.py` – Added `POST /api/sae/biomarker_summary` RUO endpoint
+- Start small:
+  - N=100–200 patients ✅
+  - One outcome (platinum resistance) ✅
+  - Identify top‑N SAE features with strong, stable associations ✅
+
+### **D. Phase 3 – Cautious Product Integration**
+
+- Before touching WIWFM or Resistance Playbook:
+  - Document 10–20 SAE features with plausible biology + stable signals.
+  - Cross‑validate on held‑out cohorts.
+- Then, under flags:
+  - Add SAE‑derived hints to dev/debug panels (e.g. “SAE suggests DDR‑like signature present”).
+  - If lifts are consistent (5–10% on relevant tasks):
+    - Add small SAE‑based lifts to internal risk/resistance scoring, with clear RUO copy and full provenance.
+
+**Summary:**  
+We now have a concrete, Evo2‑native path to true SAE features (layer 26 → `BatchTopKTiedSAE`), but we will introduce it **only as an optional, well‑guarded diagnostic path** first, and only let it influence clinical‑facing scores after cohort‑level validation shows real, stable benefit.

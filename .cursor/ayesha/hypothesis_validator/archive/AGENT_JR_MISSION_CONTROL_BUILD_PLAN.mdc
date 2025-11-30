@@ -1,0 +1,2214 @@
+---
+alwaysApply: false
+description: "Complete build plan for Agent JR to implement Mission Control dashboard exactly as designed"
+---
+
+# ⚔️ AGENT JR: MISSION CONTROL DASHBOARD BUILD PLAN ⚔️
+
+**Mission Date:** January 14, 2025  
+**Assigned To:** Agent JR (Frontend Implementation Specialist)  
+**Mission Duration:** 5 weeks (phased implementation)  
+**Priority:** 🔥 **P0 - LIFE-SAVING CRITICAL**
+
+---
+
+## 🎯 MISSION OBJECTIVE
+
+**Build the Mission Control Dashboard EXACTLY as specified in:**
+1. `MISSION_CONTROL_DASHBOARD_DOCTRINE.mdc` - War room philosophy & layout
+2. `MISSION_CONTROL_DASHBOARD_DESIGN.mdc` - Detailed technical specification
+
+**Success Criteria:**
+- ✅ Every section from the design spec is implemented
+- ✅ All backend integrations working (live API calls, not mocks)
+- ✅ UI matches design spec exactly (colors, typography, layout)
+- ✅ Real-time updates functional (WebSocket integration)
+- ✅ All user workflows testable end-to-end
+- ✅ Performance targets met (<2s load time)
+
+---
+
+## 📋 BUILD PHASES (5-Week Implementation Plan)
+
+### **PHASE 1: CORE INFRASTRUCTURE (Week 1)**
+
+#### Day 1-2: Project Setup & Scaffolding
+**Location:** `oncology-coPilot/oncology-frontend/src/`
+
+**Tasks:**
+- [ ] Create directory structure:
+  ```
+  src/pages/MissionControl/
+  ├── MissionControlDashboard.jsx (main container)
+  ├── components/
+  │   ├── header/
+  │   │   ├── SitrepHeader.jsx
+  │   │   └── CriticalAlerts.jsx
+  │   ├── treatment/
+  │   │   ├── SOCRecommendation.jsx
+  │   │   ├── ClinicalTrials.jsx
+  │   │   └── SupportiveCare.jsx
+  │   ├── monitoring/
+  │   │   ├── CA125Tracker.jsx
+  │   │   ├── BiomarkerStatus.jsx
+  │   │   └── NextBestActions.jsx
+  │   └── mechanism/
+  │       ├── SAEMechanismMap.jsx
+  │       ├── ResistancePlaybook.jsx
+  │       └── ProvenancePanel.jsx
+  └── hooks/
+      ├── useMissionControlData.js
+      ├── useRiskAssessment.js
+      └── useRealTimeUpdates.js
+  ```
+
+- [ ] Create route in `App.jsx`:
+  ```jsx
+  import MissionControlDashboard from './pages/MissionControl/MissionControlDashboard';
+  
+  // Add route
+  <Route path="/mission-control" element={<MissionControlDashboard />} />
+  ```
+
+- [ ] Add navigation link in `constants/index.js`:
+  ```javascript
+  {
+    title: "Mission Control",
+    url: "/mission-control",
+    icon: <DashboardIcon />,
+    description: "Command Center Dashboard"
+  }
+  ```
+
+#### Day 3-4: Data Fetching Infrastructure
+
+**Create Hook:** `src/pages/MissionControl/hooks/useMissionControlData.js`
+
+```javascript
+import { useEffect, useState } from 'react';
+
+export const useMissionControlData = (patientId = 'ayesha') => {
+  const [data, setData] = useState({
+    sitrep: null,
+    alerts: [],
+    soc_recommendation: null,
+    clinical_trials: [],
+    supportive_care: [],
+    ca125_tracker: null,
+    biomarker_status: null,
+    next_actions: [],
+    sae_mechanism_map: null,
+    resistance_playbook: null,
+    provenance: null,
+    loading: true,
+    error: null
+  });
+
+  useEffect(() => {
+    const fetchAllData = async () => {
+      try {
+        setData(prev => ({ ...prev, loading: true }));
+
+        // PARALLEL API CALLS (critical for performance)
+        const [
+          sitrepRes,
+          alertsRes,
+          socRes,
+          trialsRes,
+          supportiveRes,
+          ca125Res,
+          biomarkersRes,
+          actionsRes,
+          saeRes,
+          resistanceRes,
+          provenanceRes
+        ] = await Promise.all([
+          // 1. SITREP (patient status)
+          fetch(`/api/patients/${patientId}`),
+          
+          // 2. CRITICAL ALERTS
+          fetch(`/api/clinical_genomics/alerts?patient_id=${patientId}`),
+          
+          // 3. SOC RECOMMENDATION
+          fetch(`/api/ayesha/trials/search`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              patient_id: patientId,
+              stage: 'IVB',
+              histology: 'HGSOC',
+              germline_status: 'negative'
+            })
+          }),
+          
+          // 4. CLINICAL TRIALS
+          fetch(`/api/ayesha/trials/search`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              patient_id: patientId,
+              filters: { frontline: true, recruiting: true, location: 'NYC' }
+            })
+          }),
+          
+          // 5. SUPPORTIVE CARE (Food/Supplements)
+          fetch(`/api/hypothesis/validate_food_dynamic`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              compound: "Vitamin D",
+              disease_context: {
+                disease: "ovarian_cancer_hgs",
+                biomarkers: { HRD: "POSITIVE", TMB: 8.2 }
+              }
+            })
+          }),
+          
+          // 6. CA-125 TRACKER
+          fetch(`/api/ayesha/ca125_intelligence`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              current_value: 2842,
+              disease: 'ovarian_hgs'
+            })
+          }),
+          
+          // 7. BIOMARKER STATUS
+          fetch(`/api/ayesha/biomarker_status?patient_id=${patientId}`),
+          
+          // 8. NEXT BEST ACTIONS (AI recommendations)
+          fetch(`/api/ayesha/next_actions?patient_id=${patientId}`),
+          
+          // 9. SAE MECHANISM MAP
+          fetch(`/api/clinical_genomics/analyze_variant`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              mutations: [], // Patient's mutations
+              disease: 'ovarian_carcinoma',
+              profile: 'richer',
+              options: { include_sae_features: true }
+            })
+          }),
+          
+          // 10. RESISTANCE PLAYBOOK
+          fetch(`/api/care/resistance_playbook`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              mutations: [], // Patient's mutations
+              treatment_history: []
+            })
+          }),
+          
+          // 11. PROVENANCE
+          fetch(`/api/ayesha/provenance?patient_id=${patientId}`)
+        ]);
+
+        // Parse all responses
+        const sitrepData = await sitrepRes.json();
+        const alertsData = await alertsRes.json();
+        const socData = await socRes.json();
+        const trialsData = await trialsRes.json();
+        const supportiveData = await supportiveRes.json();
+        const ca125Data = await ca125Res.json();
+        const biomarkersData = await biomarkersRes.json();
+        const actionsData = await actionsRes.json();
+        const saeData = await saeRes.json();
+        const resistanceData = await resistanceRes.json();
+        const provenanceData = await provenanceRes.json();
+
+        setData({
+          sitrep: sitrepData,
+          alerts: alertsData.alerts || [],
+          soc_recommendation: socData.soc_recommendation,
+          clinical_trials: trialsData.trials || [],
+          supportive_care: supportiveData,
+          ca125_tracker: ca125Data,
+          biomarker_status: biomarkersData,
+          next_actions: actionsData.actions || [],
+          sae_mechanism_map: saeData.sae_features,
+          resistance_playbook: resistanceData,
+          provenance: provenanceData,
+          loading: false,
+          error: null
+        });
+
+      } catch (error) {
+        console.error('Mission Control data fetch error:', error);
+        setData(prev => ({
+          ...prev,
+          loading: false,
+          error: error.message
+        }));
+      }
+    };
+
+    fetchAllData();
+
+    // Refresh every 5 minutes
+    const interval = setInterval(fetchAllData, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+
+  }, [patientId]);
+
+  return data;
+};
+```
+
+#### Day 5: Basic Grid Layout
+
+**Create Main Container:** `src/pages/MissionControl/MissionControlDashboard.jsx`
+
+```jsx
+import React from 'react';
+import { Grid, Box, CircularProgress, Alert } from '@mui/material';
+import { useMissionControlData } from './hooks/useMissionControlData';
+
+// Header Components
+import SitrepHeader from './components/header/SitrepHeader';
+import CriticalAlerts from './components/header/CriticalAlerts';
+
+// Treatment Column
+import SOCRecommendation from './components/treatment/SOCRecommendation';
+import ClinicalTrials from './components/treatment/ClinicalTrials';
+import SupportiveCare from './components/treatment/SupportiveCare';
+
+// Monitoring Column
+import CA125Tracker from './components/monitoring/CA125Tracker';
+import BiomarkerStatus from './components/monitoring/BiomarkerStatus';
+import NextBestActions from './components/monitoring/NextBestActions';
+
+// Mechanism Column
+import SAEMechanismMap from './components/mechanism/SAEMechanismMap';
+import ResistancePlaybook from './components/mechanism/ResistancePlaybook';
+import ProvenancePanel from './components/mechanism/ProvenancePanel';
+
+export default function MissionControlDashboard() {
+  const { 
+    sitrep,
+    alerts,
+    soc_recommendation,
+    clinical_trials,
+    supportive_care,
+    ca125_tracker,
+    biomarker_status,
+    next_actions,
+    sae_mechanism_map,
+    resistance_playbook,
+    provenance,
+    loading,
+    error
+  } = useMissionControlData('ayesha');
+
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="80vh">
+        <CircularProgress size={60} />
+        <Box ml={2}>Loading Mission Control...</Box>
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box p={3}>
+        <Alert severity="error">
+          Error loading Mission Control: {error}
+        </Alert>
+      </Box>
+    );
+  }
+
+  return (
+    <Box className="mission-control" sx={{ p: 3, bgcolor: '#0a0e27' }}>
+      {/* HEADER */}
+      <SitrepHeader data={sitrep} />
+      <CriticalAlerts alerts={alerts} />
+
+      {/* MAIN GRID (3 Columns) */}
+      <Grid container spacing={3} sx={{ mt: 2 }}>
+        
+        {/* LEFT COLUMN: Treatment Intelligence */}
+        <Grid item xs={12} md={4}>
+          <SOCRecommendation data={soc_recommendation} />
+          <Box mt={2}>
+            <ClinicalTrials trials={clinical_trials} />
+          </Box>
+          <Box mt={2}>
+            <SupportiveCare data={supportive_care} />
+          </Box>
+        </Grid>
+
+        {/* MIDDLE COLUMN: Monitoring Intelligence */}
+        <Grid item xs={12} md={4}>
+          <CA125Tracker data={ca125_tracker} />
+          <Box mt={2}>
+            <BiomarkerStatus data={biomarker_status} />
+          </Box>
+          <Box mt={2}>
+            <NextBestActions actions={next_actions} />
+          </Box>
+        </Grid>
+
+        {/* RIGHT COLUMN: Mechanism Intelligence */}
+        <Grid item xs={12} md={4}>
+          <SAEMechanismMap data={sae_mechanism_map} />
+          <Box mt={2}>
+            <ResistancePlaybook data={resistance_playbook} />
+          </Box>
+          <Box mt={2}>
+            <ProvenancePanel data={provenance} />
+          </Box>
+        </Grid>
+
+      </Grid>
+    </Box>
+  );
+}
+```
+
+---
+
+### **PHASE 2: CRITICAL SECTIONS (Week 2)**
+
+#### Task 2.1: SITREP Header Component
+
+**File:** `src/pages/MissionControl/components/header/SitrepHeader.jsx`
+
+**Design Spec (FROM DOCTRINE):**
+```
+┌─────────────────────────────────────────────────────────┐
+│ 🎯 PATIENT: AYESHA                                      │
+│ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ │
+│ Diagnosis: Stage IVB High-Grade Serous Ovarian Cancer   │
+│ Status: Post-Surgery | Considering First-Line Chemo     │
+│ CA-125: 2,842 U/mL (EXTENSIVE burden)                   │
+│ Germline: NEGATIVE (85% of patients - Sporadic)         │
+│ Next Action: AWAITING TUMOR NGS (7-10 days to unlock)   │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Implementation:**
+```jsx
+import React from 'react';
+import { Card, CardContent, Typography, Box, Chip } from '@mui/material';
+import PersonIcon from '@mui/icons-material/Person';
+
+export default function SitrepHeader({ data }) {
+  if (!data) return null;
+
+  return (
+    <Card 
+      sx={{ 
+        mb: 2,
+        bgcolor: '#1a1f3a',
+        border: '2px solid #3d5afe',
+        borderRadius: 2
+      }}
+    >
+      <CardContent>
+        <Box display="flex" alignItems="center" mb={2}>
+          <PersonIcon sx={{ fontSize: 40, color: '#3d5afe', mr: 2 }} />
+          <Typography variant="h4" sx={{ color: '#fff', fontWeight: 'bold' }}>
+            PATIENT: AYESHA
+          </Typography>
+        </Box>
+
+        <Box sx={{ borderTop: '1px solid #3d5afe', pt: 2 }}>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Typography variant="body1" sx={{ color: '#fff', mb: 1 }}>
+                <strong>Diagnosis:</strong> Stage IVB High-Grade Serous Ovarian Cancer
+              </Typography>
+              <Typography variant="body1" sx={{ color: '#fff', mb: 1 }}>
+                <strong>Status:</strong> Post-Surgery | Considering First-Line Chemo
+              </Typography>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="body1" sx={{ color: '#fff', mb: 1 }}>
+                <strong>CA-125:</strong> 
+                <Chip 
+                  label="2,842 U/mL (EXTENSIVE burden)" 
+                  color="error" 
+                  size="small" 
+                  sx={{ ml: 1 }}
+                />
+              </Typography>
+              <Typography variant="body1" sx={{ color: '#fff', mb: 1 }}>
+                <strong>Germline:</strong> 
+                <Chip 
+                  label="NEGATIVE (85% of patients - Sporadic)" 
+                  color="info" 
+                  size="small" 
+                  sx={{ ml: 1 }}
+                />
+              </Typography>
+            </Grid>
+          </Grid>
+
+          <Box mt={2}>
+            <Typography variant="body1" sx={{ color: '#ffd700', fontWeight: 'bold' }}>
+              ⚠️ Next Action: AWAITING TUMOR NGS (7-10 days to unlock)
+            </Typography>
+          </Box>
+        </Box>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+**Backend Integration:**
+```bash
+# Uses existing endpoint: GET /api/patients/{patient_id}
+# Already implemented in oncology-backend-minimal/api/main.py (lines 393-405)
+```
+
+---
+
+#### Task 2.2: Critical Alerts Banner
+
+**File:** `src/pages/MissionControl/components/header/CriticalAlerts.jsx`
+
+**Design Spec:**
+- Red banner for IMMEDIATE alerts
+- Orange banner for URGENT alerts
+- Yellow banner for MONITOR alerts
+
+**Implementation:**
+```jsx
+import React from 'react';
+import { Alert, Box, Button, Collapse } from '@mui/material';
+import WarningIcon from '@mui/icons-material/Warning';
+import ErrorIcon from '@mui/icons-material/Error';
+
+export default function CriticalAlerts({ alerts = [] }) {
+  const [expanded, setExpanded] = React.useState({});
+
+  const getSeverityColor = (severity) => {
+    switch (severity) {
+      case 'IMMEDIATE': return 'error';
+      case 'URGENT': return 'warning';
+      case 'MONITOR': return 'info';
+      default: return 'info';
+    }
+  };
+
+  const getSeverityIcon = (severity) => {
+    return severity === 'IMMEDIATE' ? <ErrorIcon /> : <WarningIcon />;
+  };
+
+  // Filter alerts by severity
+  const immediateAlerts = alerts.filter(a => a.severity === 'IMMEDIATE');
+  const urgentAlerts = alerts.filter(a => a.severity === 'URGENT');
+  const monitorAlerts = alerts.filter(a => a.severity === 'MONITOR');
+
+  return (
+    <Box sx={{ mb: 2 }}>
+      {/* IMMEDIATE ALERTS (Always Visible) */}
+      {immediateAlerts.map((alert, idx) => (
+        <Alert 
+          key={`immediate-${idx}`}
+          severity={getSeverityColor(alert.severity)}
+          icon={getSeverityIcon(alert.severity)}
+          sx={{ mb: 1, fontSize: '16px', fontWeight: 'bold' }}
+          action={
+            alert.action_button && (
+              <Button color="inherit" size="small" onClick={alert.action_button.onClick}>
+                {alert.action_button.label}
+              </Button>
+            )
+          }
+        >
+          <strong>{alert.type}:</strong> {alert.message}
+          {alert.action && (
+            <Box mt={1} sx={{ fontSize: '14px', fontWeight: 'normal' }}>
+              Recommended Action: {alert.action}
+            </Box>
+          )}
+        </Alert>
+      ))}
+
+      {/* URGENT ALERTS (Collapsible) */}
+      {urgentAlerts.length > 0 && (
+        <>
+          <Button 
+            onClick={() => setExpanded(prev => ({ ...prev, urgent: !prev.urgent }))}
+            sx={{ mb: 1 }}
+          >
+            {urgentAlerts.length} Urgent Alerts {expanded.urgent ? '▼' : '▶'}
+          </Button>
+          <Collapse in={expanded.urgent}>
+            {urgentAlerts.map((alert, idx) => (
+              <Alert 
+                key={`urgent-${idx}`}
+                severity={getSeverityColor(alert.severity)}
+                sx={{ mb: 1 }}
+              >
+                {alert.message}
+              </Alert>
+            ))}
+          </Collapse>
+        </>
+      )}
+
+      {/* MONITOR ALERTS (Collapsible) */}
+      {monitorAlerts.length > 0 && (
+        <>
+          <Button 
+            onClick={() => setExpanded(prev => ({ ...prev, monitor: !prev.monitor }))}
+            sx={{ mb: 1 }}
+          >
+            {monitorAlerts.length} Monitoring Alerts {expanded.monitor ? '▼' : '▶'}
+          </Button>
+          <Collapse in={expanded.monitor}>
+            {monitorAlerts.map((alert, idx) => (
+              <Alert 
+                key={`monitor-${idx}`}
+                severity={getSeverityColor(alert.severity)}
+                sx={{ mb: 1 }}
+              >
+                {alert.message}
+              </Alert>
+            ))}
+          </Collapse>
+        </>
+      )}
+    </Box>
+  );
+}
+```
+
+**Backend Integration:**
+```bash
+# NEW ENDPOINT REQUIRED (Zo will create this)
+# GET /api/clinical_genomics/alerts?patient_id=ayesha
+# Returns: {
+#   "alerts": [
+#     {
+#       "severity": "IMMEDIATE",
+#       "type": "TUMOR_NGS_PENDING",
+#       "message": "Tumor NGS pending - personalized predictions unavailable",
+#       "action": "Order ctDNA (7d) + HRD test (10d)",
+#       "action_button": {
+#         "label": "ORDER NOW",
+#         "onClick": "openNGSOrderModal()"
+#       }
+#     }
+#   ]
+# }
+```
+
+---
+
+#### Task 2.3: SOC Recommendation Card
+
+**File:** `src/pages/MissionControl/components/treatment/SOCRecommendation.jsx`
+
+**Design Spec (FROM DOCTRINE - Pre-NGS):**
+```
+┌─────────────────────────────────────────┐
+│ 🏥 STANDARD OF CARE (95-100% confidence)│
+│ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ │
+│ Regimen: Carboplatin + Paclitaxel      │
+│          + Bevacizumab (ascites boost) │
+│                                         │
+│ Why: NCCN first-line for Stage IVB HGSOC│
+│ Evidence: GOG-218 (HR 0.72, p<0.001)   │
+│                                         │
+│ [VIEW DETAILED PROTOCOL] button        │
+└─────────────────────────────────────────┘
+```
+
+**Implementation:**
+```jsx
+import React, { useState } from 'react';
+import { Card, CardContent, Typography, Box, Button, Chip, Collapse } from '@mui/material';
+import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+
+export default function SOCRecommendation({ data }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!data) return null;
+
+  return (
+    <Card sx={{ bgcolor: '#1e2a3a', border: '1px solid #4caf50' }}>
+      <CardContent>
+        <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+          <Box display="flex" alignItems="center">
+            <LocalHospitalIcon sx={{ color: '#4caf50', mr: 1 }} />
+            <Typography variant="h6" sx={{ color: '#fff' }}>
+              STANDARD OF CARE
+            </Typography>
+          </Box>
+          <Chip 
+            label={`${Math.round(data.confidence * 100)}% confidence`}
+            sx={{ 
+              bgcolor: data.confidence >= 0.9 ? '#4caf50' : '#ff9800',
+              color: '#fff',
+              fontWeight: 'bold'
+            }}
+          />
+        </Box>
+
+        <Box sx={{ borderTop: '1px solid #4caf50', pt: 2 }}>
+          <Typography variant="body1" sx={{ color: '#fff', mb: 1, fontWeight: 'bold' }}>
+            Regimen: {data.regimen}
+          </Typography>
+          {data.add_ons && (
+            <Typography variant="body2" sx={{ color: '#b0bec5', ml: 2, mb: 2 }}>
+              + {data.add_ons.join(', ')}
+            </Typography>
+          )}
+
+          <Typography variant="body2" sx={{ color: '#90caf9', mb: 1 }}>
+            <strong>Why:</strong> {data.rationale}
+          </Typography>
+
+          <Typography variant="body2" sx={{ color: '#90caf9' }}>
+            <strong>Evidence:</strong> {data.evidence}
+          </Typography>
+
+          <Button 
+            fullWidth
+            variant="outlined"
+            startIcon={<ExpandMoreIcon />}
+            onClick={() => setExpanded(!expanded)}
+            sx={{ mt: 2, color: '#4caf50', borderColor: '#4caf50' }}
+          >
+            VIEW DETAILED PROTOCOL
+          </Button>
+
+          <Collapse in={expanded}>
+            <Box sx={{ mt: 2, p: 2, bgcolor: '#0a0e27', borderRadius: 1 }}>
+              <Typography variant="body2" sx={{ color: '#fff', mb: 1 }}>
+                <strong>Dosing:</strong> {data.dosing || 'Calvert formula for Carboplatin, standard Paclitaxel dosing'}
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#fff', mb: 1 }}>
+                <strong>Schedule:</strong> {data.schedule || '6 cycles q3w + bevacizumab maintenance'}
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#fff' }}>
+                <strong>Monitoring:</strong> {data.monitoring || 'Labs, toxicity assessment, RECIST 1.1 imaging'}
+              </Typography>
+            </Box>
+          </Collapse>
+        </Box>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+**Backend Integration:**
+```bash
+# Uses existing endpoint: POST /api/ayesha/trials/search
+# Returns: { soc_recommendation: {...} }
+# Already implemented in api/routers/ayesha_trials.py
+```
+
+---
+
+#### Task 2.4: Clinical Trials Card
+
+**File:** `src/pages/MissionControl/components/treatment/ClinicalTrials.jsx`
+
+**Design Spec (FROM DOCTRINE):**
+```
+┌─────────────────────────────────────────┐
+│ 🧪 CLINICAL TRIALS (90-95% confidence)  │
+│ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ │
+│ Top Matches (Frontline, NYC, Recruiting):│
+│                                         │
+│ 1. NCT05116189 (96.6% match)           │
+│    Niraparib + Bevacizumab + Chemo     │
+│    Phase III, MSK, Eligibility: ✅ ALL  │
+│    Contact: trials@msk.org              │
+└─────────────────────────────────────────┘
+```
+
+**Implementation:**
+```jsx
+import React from 'react';
+import { Card, CardContent, Typography, Box, Button, Chip, List, ListItem } from '@mui/material';
+import ScienceIcon from '@mui/icons-material/Science';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import EmailIcon from '@mui/icons-material/Email';
+
+export default function ClinicalTrials({ trials = [] }) {
+  const handleViewAll = () => {
+    window.location.href = '/ayesha-trials';
+  };
+
+  const handleCopyTrialSummary = () => {
+    // Copy trial summary to clipboard
+    const summary = trials.map((t, idx) => 
+      `${idx + 1}. ${t.nct_id} - ${t.title}\n` +
+      `   Match: ${Math.round(t.match_score * 100)}%\n` +
+      `   Eligibility: ${t.eligibility_summary}\n` +
+      `   Contact: ${t.contact}\n`
+    ).join('\n');
+    
+    navigator.clipboard.writeText(summary);
+    alert('Trial summary copied to clipboard!');
+  };
+
+  return (
+    <Card sx={{ bgcolor: '#1e2a3a', border: '1px solid #00bcd4' }}>
+      <CardContent>
+        <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+          <Box display="flex" alignItems="center">
+            <ScienceIcon sx={{ color: '#00bcd4', mr: 1 }} />
+            <Typography variant="h6" sx={{ color: '#fff' }}>
+              CLINICAL TRIALS
+            </Typography>
+          </Box>
+          <Chip 
+            label="90-95% confidence"
+            sx={{ bgcolor: '#4caf50', color: '#fff', fontWeight: 'bold' }}
+          />
+        </Box>
+
+        <Typography variant="body2" sx={{ color: '#b0bec5', mb: 2 }}>
+          Top Matches (Frontline, NYC, Recruiting)
+        </Typography>
+
+        <List>
+          {trials.slice(0, 3).map((trial, idx) => (
+            <ListItem 
+              key={trial.nct_id}
+              sx={{ 
+                bgcolor: '#0a0e27', 
+                borderRadius: 1, 
+                mb: 1,
+                flexDirection: 'column',
+                alignItems: 'flex-start'
+              }}
+            >
+              <Box display="flex" alignItems="center" width="100%" mb={1}>
+                <Typography variant="body1" sx={{ color: '#fff', fontWeight: 'bold', mr: 1 }}>
+                  {idx + 1}. {trial.nct_id}
+                </Typography>
+                <Chip 
+                  label={`${Math.round(trial.match_score * 100)}% match`}
+                  size="small"
+                  sx={{ bgcolor: '#4caf50', color: '#fff' }}
+                />
+              </Box>
+
+              <Typography variant="body2" sx={{ color: '#90caf9', mb: 1 }}>
+                {trial.title}
+              </Typography>
+
+              <Typography variant="caption" sx={{ color: '#b0bec5', mb: 1 }}>
+                {trial.phase} | {trial.institution} | Eligibility: 
+                {trial.eligibility_all_met ? (
+                  <CheckCircleIcon sx={{ fontSize: 16, color: '#4caf50', ml: 0.5 }} />
+                ) : (
+                  <span style={{ color: '#ff9800' }}> ⚠️ Conditional</span>
+                )}
+              </Typography>
+
+              <Box display="flex" gap={1}>
+                <Button 
+                  size="small" 
+                  variant="outlined" 
+                  startIcon={<EmailIcon />}
+                  sx={{ color: '#00bcd4', borderColor: '#00bcd4' }}
+                  href={`mailto:${trial.contact}`}
+                >
+                  Contact
+                </Button>
+                <Button 
+                  size="small" 
+                  variant="text"
+                  sx={{ color: '#90caf9' }}
+                  onClick={() => window.open(`https://clinicaltrials.gov/study/${trial.nct_id}`, '_blank')}
+                >
+                  View Details
+                </Button>
+              </Box>
+            </ListItem>
+          ))}
+        </List>
+
+        <Box display="flex" gap={1} mt={2}>
+          <Button 
+            fullWidth
+            variant="contained"
+            onClick={handleViewAll}
+            sx={{ bgcolor: '#00bcd4' }}
+          >
+            VIEW ALL {trials.length} TRIALS
+          </Button>
+          <Button 
+            fullWidth
+            variant="outlined"
+            onClick={handleCopyTrialSummary}
+            sx={{ color: '#00bcd4', borderColor: '#00bcd4' }}
+          >
+            COPY TRIAL SUMMARY
+          </Button>
+        </Box>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+**Backend Integration:**
+```bash
+# Uses existing endpoint: POST /api/ayesha/trials/search
+# Already implemented in api/routers/ayesha_trials.py
+# Returns: { trials: [...], soc_recommendation: {...} }
+```
+
+---
+
+#### Task 2.5: CA-125 Tracker Component
+
+**File:** `src/pages/MissionControl/components/monitoring/CA125Tracker.jsx`
+
+**Design Spec (FROM DOCTRINE):**
+```
+┌─────────────────────────────────────────┐
+│ 📈 CA-125 KINETICS (Resistance Radar)   │
+│ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ │
+│ Current: 2,842 U/mL (EXTENSIVE burden) │
+│                                         │
+│ Expected Response (GOG-218/ICON7):     │
+│ Cycle 3: ≥70% drop → <854 U/mL         │
+│ Cycle 6: ≥90% drop → <284 U/mL         │
+│ Target: <35 U/mL (normal)               │
+│                                         │
+│ ⚠️ ALERT IF:                            │
+│ - On-therapy rise (any cycle)          │
+│ - <50% drop by Cycle 3                 │
+│ - <70% drop by Cycle 6                 │
+└─────────────────────────────────────────┘
+```
+
+**Implementation:**
+```jsx
+import React, { useState } from 'react';
+import { Card, CardContent, Typography, Box, LinearProgress, Button, TextField, Dialog } from '@mui/material';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import WarningIcon from '@mui/icons-material/Warning';
+
+export default function CA125Tracker({ data }) {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [newValue, setNewValue] = useState('');
+
+  if (!data) return null;
+
+  const { 
+    current_value = 2842,
+    burden_class = 'EXTENSIVE',
+    forecast = {},
+    resistance_rule = {}
+  } = data;
+
+  const calculatePercentDrop = (baseline, target) => {
+    return Math.round(((baseline - target) / baseline) * 100);
+  };
+
+  const getBurdenColor = (burden) => {
+    switch (burden) {
+      case 'MINIMAL': return '#4caf50';
+      case 'MODERATE': return '#ff9800';
+      case 'SIGNIFICANT': return '#f44336';
+      case 'EXTENSIVE': return '#d32f2f';
+      default: return '#90caf9';
+    }
+  };
+
+  return (
+    <>
+      <Card sx={{ bgcolor: '#1e2a3a', border: '1px solid #ff9800' }}>
+        <CardContent>
+          <Box display="flex" alignItems="center" mb={2}>
+            <TrendingUpIcon sx={{ color: '#ff9800', mr: 1 }} />
+            <Typography variant="h6" sx={{ color: '#fff' }}>
+              CA-125 KINETICS
+            </Typography>
+            <Typography variant="caption" sx={{ color: '#b0bec5', ml: 1 }}>
+              (Resistance Radar)
+            </Typography>
+          </Box>
+
+          {/* Current Value */}
+          <Box mb={3}>
+            <Typography variant="h4" sx={{ color: getBurdenColor(burden_class), fontWeight: 'bold' }}>
+              {current_value.toLocaleString()} U/mL
+            </Typography>
+            <Chip 
+              label={`${burden_class} burden`}
+              size="small"
+              sx={{ bgcolor: getBurdenColor(burden_class), color: '#fff', mt: 1 }}
+            />
+          </Box>
+
+          {/* Expected Response */}
+          <Box mb={2}>
+            <Typography variant="body2" sx={{ color: '#90caf9', mb: 1, fontWeight: 'bold' }}>
+              Expected Response (GOG-218/ICON7):
+            </Typography>
+
+            <Box ml={2}>
+              <Typography variant="body2" sx={{ color: '#fff', mb: 0.5 }}>
+                Cycle 3: ≥70% drop → &lt;{forecast.cycle3_target || 854} U/mL
+              </Typography>
+              <LinearProgress 
+                variant="determinate" 
+                value={70} 
+                sx={{ mb: 1, height: 6, bgcolor: '#424242', '& .MuiLinearProgress-bar': { bgcolor: '#4caf50' } }}
+              />
+
+              <Typography variant="body2" sx={{ color: '#fff', mb: 0.5 }}>
+                Cycle 6: ≥90% drop → &lt;{forecast.cycle6_target || 284} U/mL
+              </Typography>
+              <LinearProgress 
+                variant="determinate" 
+                value={90} 
+                sx={{ mb: 1, height: 6, bgcolor: '#424242', '& .MuiLinearProgress-bar': { bgcolor: '#4caf50' } }}
+              />
+
+              <Typography variant="body2" sx={{ color: '#fff' }}>
+                Target: &lt;{forecast.target || 35} U/mL (normal)
+              </Typography>
+            </Box>
+          </Box>
+
+          {/* Alert Triggers */}
+          <Box sx={{ bgcolor: '#3a2a1e', p: 1.5, borderRadius: 1, border: '1px solid #ff9800' }}>
+            <Box display="flex" alignItems="center" mb={1}>
+              <WarningIcon sx={{ color: '#ff9800', mr: 1, fontSize: 20 }} />
+              <Typography variant="body2" sx={{ color: '#ff9800', fontWeight: 'bold' }}>
+                ALERT IF:
+              </Typography>
+            </Box>
+            <Box ml={3}>
+              <Typography variant="caption" sx={{ color: '#fff', display: 'block' }}>
+                • On-therapy rise (any cycle)
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#fff', display: 'block' }}>
+                • &lt;50% drop by Cycle 3
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#fff', display: 'block' }}>
+                • &lt;70% drop by Cycle 6
+              </Typography>
+            </Box>
+          </Box>
+
+          <Typography variant="caption" sx={{ color: '#b0bec5', display: 'block', mt: 2 }}>
+            Monitoring: Every 3 weeks during chemo
+          </Typography>
+
+          <Button 
+            fullWidth
+            variant="contained"
+            onClick={() => setDialogOpen(true)}
+            sx={{ mt: 2, bgcolor: '#ff9800' }}
+          >
+            ENTER NEW CA-125 VALUE
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Dialog for entering new value */}
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)}>
+        <Box p={3}>
+          <Typography variant="h6" mb={2}>Enter New CA-125 Value</Typography>
+          <TextField 
+            fullWidth
+            label="CA-125 (U/mL)"
+            type="number"
+            value={newValue}
+            onChange={(e) => setNewValue(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          <Box display="flex" gap={1}>
+            <Button variant="outlined" onClick={() => setDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              variant="contained" 
+              onClick={() => {
+                // TODO: Submit new value to backend
+                alert(`New CA-125 value: ${newValue} U/mL submitted`);
+                setDialogOpen(false);
+              }}
+            >
+              Submit
+            </Button>
+          </Box>
+        </Box>
+      </Dialog>
+    </>
+  );
+}
+```
+
+**Backend Integration:**
+```bash
+# Uses existing endpoint: POST /api/ayesha/ca125_intelligence
+# Already implemented in api/services/ca125_intelligence.py
+# Returns: {
+#   current_value: 2842,
+#   burden_class: 'EXTENSIVE',
+#   forecast: { cycle3_target: 854, cycle6_target: 284, target: 35 },
+#   resistance_rule: {...}
+# }
+```
+
+---
+
+### **PHASE 3: SAE & MECHANISM INTELLIGENCE (Week 3)**
+
+#### Task 3.1: SAE Mechanism Map Component
+
+**File:** `src/pages/MissionControl/components/mechanism/SAEMechanismMap.jsx`
+
+**Design Spec (FROM DOCTRINE):**
+```
+┌─────────────────────────────────────────┐
+│ 🧬 MECHANISM MAP (SAE-Powered)          │
+│ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ │
+│ DNA Repair Capacity: 0.32 (LOW - PARP+)│
+│ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ │
+│ Pathway Activation (7D Vector):        │
+│                                         │
+│ DDR:    ████████░░ 0.80 (HIGH)         │
+│ MAPK:   ████░░░░░░ 0.45 (MODERATE)     │
+│ PI3K:   ██░░░░░░░░ 0.20 (LOW)          │
+│ VEGF:   ██████░░░░ 0.65 (HIGH)         │
+│ HER2:   █░░░░░░░░░ 0.10 (LOW)          │
+│ IO:     ███░░░░░░░ 0.35 (MODERATE)     │
+│ Efflux: ░░░░░░░░░░ 0.05 (NONE)         │
+└─────────────────────────────────────────┘
+```
+
+**Implementation:**
+```jsx
+import React from 'react';
+import { Card, CardContent, Typography, Box, LinearProgress, Chip, Button } from '@mui/material';
+import BiotechIcon from '@mui/icons-material/Biotech';
+
+export default function SAEMechanismMap({ data }) {
+  if (!data || !data.mechanism_vector) {
+    return (
+      <Card sx={{ bgcolor: '#1e2a3a', border: '1px solid #607d8b' }}>
+        <CardContent>
+          <Typography variant="body2" sx={{ color: '#b0bec5', textAlign: 'center' }}>
+            SAE Mechanism Map - Awaiting NGS Data
+          </Typography>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const { dna_repair_capacity, mechanism_vector } = data;
+
+  // Pathway definitions
+  const pathways = [
+    { name: 'DDR', value: mechanism_vector[0] || 0, label: 'DNA Damage Repair' },
+    { name: 'MAPK', value: mechanism_vector[1] || 0, label: 'MAPK Signaling' },
+    { name: 'PI3K', value: mechanism_vector[2] || 0, label: 'PI3K/AKT/mTOR' },
+    { name: 'VEGF', value: mechanism_vector[3] || 0, label: 'Angiogenesis' },
+    { name: 'HER2', value: mechanism_vector[4] || 0, label: 'HER2 Signaling' },
+    { name: 'IO', value: mechanism_vector[5] || 0, label: 'Immune Oncology' },
+    { name: 'Efflux', value: mechanism_vector[6] || 0, label: 'Drug Efflux' }
+  ];
+
+  const getPathwayLevel = (value) => {
+    if (value >= 0.7) return { label: 'HIGH', color: '#f44336' };
+    if (value >= 0.4) return { label: 'MODERATE', color: '#ff9800' };
+    if (value >= 0.2) return { label: 'LOW', color: '#ffc107' };
+    return { label: 'NONE', color: '#4caf50' };
+  };
+
+  const getDNARepairStatus = (capacity) => {
+    if (capacity < 0.4) return { label: 'LOW - PARP+', color: '#4caf50', implication: 'PARP Inhibitor Sensitive' };
+    if (capacity < 0.7) return { label: 'MODERATE', color: '#ff9800', implication: 'Platinum Primary' };
+    return { label: 'HIGH', color: '#f44336', implication: 'Reduced PARP Benefit' };
+  };
+
+  const dnaRepairStatus = getDNARepairStatus(dna_repair_capacity);
+
+  return (
+    <Card sx={{ bgcolor: '#1e2a3a', border: '1px solid #9c27b0' }}>
+      <CardContent>
+        <Box display="flex" alignItems="center" mb={2}>
+          <BiotechIcon sx={{ color: '#9c27b0', mr: 1 }} />
+          <Typography variant="h6" sx={{ color: '#fff' }}>
+            MECHANISM MAP
+          </Typography>
+          <Typography variant="caption" sx={{ color: '#b0bec5', ml: 1 }}>
+            (SAE-Powered)
+          </Typography>
+        </Box>
+
+        {/* DNA Repair Capacity */}
+        <Box mb={3} sx={{ borderBottom: '1px solid #9c27b0', pb: 2 }}>
+          <Typography variant="body2" sx={{ color: '#b0bec5', mb: 1 }}>
+            DNA Repair Capacity:
+          </Typography>
+          <Box display="flex" alignItems="center" gap={1}>
+            <Typography variant="h5" sx={{ color: dnaRepairStatus.color, fontWeight: 'bold' }}>
+              {dna_repair_capacity.toFixed(2)}
+            </Typography>
+            <Chip 
+              label={dnaRepairStatus.label}
+              size="small"
+              sx={{ bgcolor: dnaRepairStatus.color, color: '#fff' }}
+            />
+          </Box>
+          <Typography variant="caption" sx={{ color: '#90caf9', mt: 1, display: 'block' }}>
+            Implication: {dnaRepairStatus.implication}
+          </Typography>
+        </Box>
+
+        {/* Pathway Activation (7D Vector) */}
+        <Typography variant="body2" sx={{ color: '#b0bec5', mb: 2 }}>
+          Pathway Activation (7D Vector):
+        </Typography>
+
+        {pathways.map((pathway) => {
+          const level = getPathwayLevel(pathway.value);
+          return (
+            <Box key={pathway.name} mb={1.5}>
+              <Box display="flex" justifyContent="space-between" alignItems="center" mb={0.5}>
+                <Typography variant="body2" sx={{ color: '#fff', fontWeight: 'bold' }}>
+                  {pathway.name}:
+                </Typography>
+                <Box display="flex" alignItems="center" gap={1}>
+                  <Typography variant="body2" sx={{ color: '#fff' }}>
+                    {pathway.value.toFixed(2)}
+                  </Typography>
+                  <Chip 
+                    label={level.label}
+                    size="small"
+                    sx={{ bgcolor: level.color, color: '#fff', minWidth: 80 }}
+                  />
+                </Box>
+              </Box>
+              <LinearProgress 
+                variant="determinate" 
+                value={pathway.value * 100} 
+                sx={{ 
+                  height: 8, 
+                  borderRadius: 1,
+                  bgcolor: '#424242', 
+                  '& .MuiLinearProgress-bar': { bgcolor: level.color }
+                }}
+              />
+              <Typography variant="caption" sx={{ color: '#b0bec5' }}>
+                {pathway.label}
+              </Typography>
+            </Box>
+          );
+        })}
+
+        <Button 
+          fullWidth
+          variant="outlined"
+          sx={{ mt: 2, color: '#9c27b0', borderColor: '#9c27b0' }}
+          onClick={() => alert('View SAE Details - Feature coming soon')}
+        >
+          VIEW SAE DETAILS
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+**Backend Integration:**
+```bash
+# Uses existing endpoint: POST /api/clinical_genomics/analyze_variant
+# With options: { include_sae_features: true }
+# Returns: {
+#   sae_features: {
+#     dna_repair_capacity: 0.32,
+#     mechanism_vector: [0.80, 0.45, 0.20, 0.65, 0.10, 0.35, 0.05],
+#     pathway_ddr: 0.30,
+#     hrr_essentiality: 0.35,
+#     exon_disruption_score: 0.40
+#   }
+# }
+```
+
+---
+
+#### Task 3.2: Resistance Playbook Component
+
+**File:** `src/pages/MissionControl/components/mechanism/ResistancePlaybook.jsx`
+
+**Design Spec (FROM DOCTRINE):**
+```
+┌─────────────────────────────────────────┐
+│ ⚔️ RESISTANCE PLAYBOOK (ACTIVE)         │
+│ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ │
+│ Detected Patterns (2-of-3 triggers):    │
+│ ✓ HR restoration (70% confidence)      │
+│ ✓ ABCB1 upregulation (drug efflux)     │
+│ ✗ MAPK activation (below threshold)    │
+│                                         │
+│ Recommended Next-Line:                  │
+│ 1. Niraparib + Bevacizumab (96.6%)     │
+│ 2. Ceralasertib (ATR inhibitor) (82%)  │
+└─────────────────────────────────────────┘
+```
+
+**Implementation:**
+```jsx
+import React from 'react';
+import { Card, CardContent, Typography, Box, Chip, List, ListItem, Button } from '@mui/material';
+import ShieldIcon from '@mui/icons-material/Shield';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CancelIcon from '@mui/icons-material/Cancel';
+
+export default function ResistancePlaybook({ data }) {
+  if (!data || !data.resistance_detected) {
+    return (
+      <Card sx={{ bgcolor: '#1e2a3a', border: '1px solid #4caf50' }}>
+        <CardContent>
+          <Typography variant="body2" sx={{ color: '#4caf50', textAlign: 'center' }}>
+            ✓ No Resistance Patterns Detected
+          </Typography>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const {
+    resistance_patterns = [],
+    recommended_combos = [],
+    recommended_switches = []
+  } = data;
+
+  return (
+    <Card sx={{ bgcolor: '#1e2a3a', border: '2px solid #f44336' }}>
+      <CardContent>
+        <Box display="flex" alignItems="center" mb={2}>
+          <ShieldIcon sx={{ color: '#f44336', mr: 1 }} />
+          <Typography variant="h6" sx={{ color: '#f44336' }}>
+            RESISTANCE PLAYBOOK
+          </Typography>
+          <Chip 
+            label="ACTIVE"
+            size="small"
+            sx={{ bgcolor: '#f44336', color: '#fff', ml: 1 }}
+          />
+        </Box>
+
+        {/* Detected Patterns */}
+        <Box mb={2}>
+          <Typography variant="body2" sx={{ color: '#90caf9', mb: 1, fontWeight: 'bold' }}>
+            Detected Patterns (2-of-3 triggers):
+          </Typography>
+          
+          {resistance_patterns.map((pattern, idx) => (
+            <Box key={idx} display="flex" alignItems="center" mb={0.5}>
+              {pattern.detected ? (
+                <CheckCircleIcon sx={{ color: '#f44336', fontSize: 18, mr: 1 }} />
+              ) : (
+                <CancelIcon sx={{ color: '#424242', fontSize: 18, mr: 1 }} />
+              )}
+              <Typography variant="body2" sx={{ color: pattern.detected ? '#fff' : '#757575' }}>
+                {pattern.name} {pattern.confidence && `(${Math.round(pattern.confidence * 100)}% confidence)`}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+
+        {/* Recommended Next-Line */}
+        <Box>
+          <Typography variant="body2" sx={{ color: '#90caf9', mb: 1, fontWeight: 'bold' }}>
+            Recommended Next-Line:
+          </Typography>
+
+          <List>
+            {recommended_combos.slice(0, 2).map((combo, idx) => (
+              <ListItem 
+                key={idx}
+                sx={{ 
+                  bgcolor: '#0a0e27', 
+                  borderRadius: 1, 
+                  mb: 1,
+                  flexDirection: 'column',
+                  alignItems: 'flex-start',
+                  p: 1.5
+                }}
+              >
+                <Box display="flex" alignItems="center" width="100%" mb={0.5}>
+                  <Typography variant="body2" sx={{ color: '#fff', fontWeight: 'bold', mr: 1 }}>
+                    {idx + 1}. {combo.name}
+                  </Typography>
+                  <Chip 
+                    label={`${Math.round(combo.rank * 100)}%`}
+                    size="small"
+                    sx={{ bgcolor: '#4caf50', color: '#fff' }}
+                  />
+                </Box>
+                <Typography variant="caption" sx={{ color: '#b0bec5' }}>
+                  Why: {combo.rationale}
+                </Typography>
+              </ListItem>
+            ))}
+          </List>
+
+          <Button 
+            fullWidth
+            variant="outlined"
+            sx={{ mt: 1, color: '#f44336', borderColor: '#f44336' }}
+            onClick={() => window.location.href = '/resistance-playbook'}
+          >
+            VIEW FULL PLAYBOOK (7 combos)
+          </Button>
+        </Box>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+**Backend Integration:**
+```bash
+# Uses existing endpoint: POST /api/care/resistance_playbook
+# Already implemented in api/services/resistance_playbook_service.py
+# Returns: {
+#   resistance_detected: true,
+#   resistance_patterns: [
+#     { name: "HR restoration", detected: true, confidence: 0.70 },
+#     { name: "ABCB1 upregulation", detected: true, confidence: 0.65 },
+#     { name: "MAPK activation", detected: false }
+#   ],
+#   recommended_combos: [
+#     { name: "Niraparib + Bevacizumab", rank: 0.966, rationale: "..." },
+#     { name: "Ceralasertib (ATR)", rank: 0.82, rationale: "..." }
+#   ]
+# }
+```
+
+---
+
+#### Task 3.3: Biomarker Status Component
+
+**File:** `src/pages/MissionControl/components/monitoring/BiomarkerStatus.jsx`
+
+**Design Spec (FROM DOCTRINE - Pre-NGS):**
+```
+┌─────────────────────────────────────────┐
+│ 🧬 TUMOR BIOMARKERS (PENDING)           │
+│ Status: AWAITING NGS (7-10 days)        │
+│ [ORDER NGS NOW] button                 │
+│ → ctDNA (Guardant360) - 7 days         │
+│ → HRD (MyChoice CDx) - 10 days         │
+│ → IHC (WT1/PAX8/p53) - 3 days          │
+└─────────────────────────────────────────┘
+```
+
+**Implementation:**
+```jsx
+import React, { useState } from 'react';
+import { Card, CardContent, Typography, Box, Button, Dialog, List, ListItem, Checkbox } from '@mui/material';
+import BiotechIcon from '@mui/icons-material/Biotech';
+import WarningIcon from '@mui/icons-material/Warning';
+
+export default function BiomarkerStatus({ data }) {
+  const [orderDialogOpen, setOrderDialogOpen] = useState(false);
+  const [selectedTests, setSelectedTests] = useState({
+    ctDNA: true,
+    HRD: true,
+    IHC: true
+  });
+
+  const hasNGS = data && data.hrd_score !== null;
+
+  // PRE-NGS VIEW
+  if (!hasNGS) {
+    return (
+      <>
+        <Card sx={{ bgcolor: '#1e2a3a', border: '2px solid #ff9800' }}>
+          <CardContent>
+            <Box display="flex" alignItems="center" mb={2}>
+              <WarningIcon sx={{ color: '#ff9800', mr: 1 }} />
+              <Typography variant="h6" sx={{ color: '#fff' }}>
+                TUMOR BIOMARKERS
+              </Typography>
+              <Chip 
+                label="PENDING"
+                size="small"
+                sx={{ bgcolor: '#ff9800', color: '#fff', ml: 1 }}
+              />
+            </Box>
+
+            <Typography variant="body2" sx={{ color: '#b0bec5', mb: 2 }}>
+              Status: AWAITING NGS (7-10 days)
+            </Typography>
+
+            <Button 
+              fullWidth
+              variant="contained"
+              sx={{ bgcolor: '#ff9800', mb: 2 }}
+              onClick={() => setOrderDialogOpen(true)}
+            >
+              ORDER NGS NOW
+            </Button>
+
+            <Typography variant="caption" sx={{ color: '#90caf9' }}>
+              Unlocks: Personalized WIWFM (70-85% confidence)
+            </Typography>
+          </CardContent>
+        </Card>
+
+        {/* Order NGS Dialog */}
+        <Dialog 
+          open={orderDialogOpen} 
+          onClose={() => setOrderDialogOpen(false)}
+          maxWidth="sm"
+          fullWidth
+        >
+          <Box p={3}>
+            <Typography variant="h6" mb={2}>NGS Fast-Track Checklist</Typography>
+            
+            <List>
+              <ListItem>
+                <Checkbox 
+                  checked={selectedTests.ctDNA}
+                  onChange={(e) => setSelectedTests(prev => ({ ...prev, ctDNA: e.target.checked }))}
+                />
+                <Box>
+                  <Typography variant="body2" fontWeight="bold">
+                    ctDNA (Guardant360 CDx)
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Turnaround: 7 days | Detects: Somatic BRCA/HRR, TMB, MSI
+                  </Typography>
+                </Box>
+              </ListItem>
+
+              <ListItem>
+                <Checkbox 
+                  checked={selectedTests.HRD}
+                  onChange={(e) => setSelectedTests(prev => ({ ...prev, HRD: e.target.checked }))}
+                />
+                <Box>
+                  <Typography variant="body2" fontWeight="bold">
+                    HRD (MyChoice CDx)
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Turnaround: 10 days | Detects: HRD score for PARP maintenance
+                  </Typography>
+                </Box>
+              </ListItem>
+
+              <ListItem>
+                <Checkbox 
+                  checked={selectedTests.IHC}
+                  onChange={(e) => setSelectedTests(prev => ({ ...prev, IHC: e.target.checked }))}
+                />
+                <Box>
+                  <Typography variant="body2" fontWeight="bold">
+                    IHC (WT1/PAX8/p53)
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Turnaround: 3 days | Confirms: HGSOC histology
+                  </Typography>
+                </Box>
+              </ListItem>
+            </List>
+
+            <Box display="flex" gap={1} mt={2}>
+              <Button 
+                variant="outlined" 
+                onClick={() => setOrderDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button 
+                variant="contained" 
+                onClick={() => {
+                  alert('NGS tests ordered: ' + Object.keys(selectedTests).filter(k => selectedTests[k]).join(', '));
+                  setOrderDialogOpen(false);
+                }}
+              >
+                Order Selected Tests
+              </Button>
+            </Box>
+          </Box>
+        </Dialog>
+      </>
+    );
+  }
+
+  // POST-NGS VIEW
+  return (
+    <Card sx={{ bgcolor: '#1e2a3a', border: '1px solid #4caf50' }}>
+      <CardContent>
+        <Box display="flex" alignItems="center" mb={2}>
+          <BiotechIcon sx={{ color: '#4caf50', mr: 1 }} />
+          <Typography variant="h6" sx={{ color: '#fff' }}>
+            TUMOR BIOMARKERS
+          </Typography>
+          <Chip 
+            label="COMPLETE"
+            size="small"
+            sx={{ bgcolor: '#4caf50', color: '#fff', ml: 1 }}
+          />
+        </Box>
+
+        <Box>
+          <Typography variant="body2" sx={{ color: '#fff', mb: 1 }}>
+            <strong>HRD Score:</strong> 
+            <Chip 
+              label={`${data.hrd_score} (HIGH - PARP eligible)`}
+              size="small"
+              sx={{ bgcolor: '#4caf50', color: '#fff', ml: 1 }}
+            />
+          </Typography>
+
+          <Typography variant="body2" sx={{ color: '#fff', mb: 1 }}>
+            <strong>TMB:</strong> {data.tmb} mut/Mb (MODERATE - IO boost)
+          </Typography>
+
+          <Typography variant="body2" sx={{ color: '#fff', mb: 1 }}>
+            <strong>MSI:</strong> {data.msi_status}
+          </Typography>
+
+          <Box mt={2} sx={{ bgcolor: '#0a0e27', p: 1.5, borderRadius: 1 }}>
+            <Typography variant="caption" sx={{ color: '#b0bec5', fontWeight: 'bold', display: 'block', mb: 1 }}>
+              Key Mutations:
+            </Typography>
+            {data.key_mutations?.map((mut, idx) => (
+              <Typography key={idx} variant="caption" sx={{ color: '#fff', display: 'block' }}>
+                • {mut.gene} ({mut.variant}) → {mut.implication}
+              </Typography>
+            ))}
+          </Box>
+
+          <Button 
+            fullWidth
+            variant="outlined"
+            sx={{ mt: 2, color: '#4caf50', borderColor: '#4caf50' }}
+          >
+            VIEW FULL NGS REPORT
+          </Button>
+        </Box>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+**Backend Integration:**
+```bash
+# NEW ENDPOINT REQUIRED (Zo will create this)
+# GET /api/ayesha/biomarker_status?patient_id=ayesha
+# Returns: {
+#   hrd_score: 58 | null,
+#   tmb: 12 | null,
+#   msi_status: "MSS" | "MSI-H" | null,
+#   key_mutations: [
+#     { gene: "BRCA1", variant: "biallelic loss", implication: "PARP RESCUE" },
+#     { gene: "TP53", variant: "hotspot", implication: "99% HGSOC confirm" }
+#   ]
+# }
+```
+
+---
+
+### **PHASE 4: SUPPORTING FEATURES (Week 4)**
+
+#### Task 4.1: Supportive Care Component
+
+**File:** `src/pages/MissionControl/components/treatment/SupportiveCare.jsx`
+
+**Implementation:**
+```jsx
+import React from 'react';
+import { Card, CardContent, Typography, Box, Button, List, ListItem, Chip } from '@mui/material';
+import RestaurantIcon from '@mui/icons-material/Restaurant';
+import WarningIcon from '@mui/icons-material/Warning';
+
+export default function SupportiveCare({ data }) {
+  if (!data || !data.recommendations) {
+    return null;
+  }
+
+  const { recommendations = [] } = data;
+
+  return (
+    <Card sx={{ bgcolor: '#1e2a3a', border: '1px solid #8bc34a' }}>
+      <CardContent>
+        <Box display="flex" alignItems="center" mb={2}>
+          <RestaurantIcon sx={{ color: '#8bc34a', mr: 1 }} />
+          <Typography variant="h6" sx={{ color: '#fff' }}>
+            SUPPORTIVE CARE
+          </Typography>
+        </Box>
+
+        <Typography variant="caption" sx={{ color: '#b0bec5', mb: 2, display: 'block' }}>
+          Biomarker-Aware (HRD+, TP53 mutant)
+        </Typography>
+
+        <List>
+          {recommendations.slice(0, 3).map((rec, idx) => (
+            <ListItem 
+              key={idx}
+              sx={{ 
+                bgcolor: '#0a0e27', 
+                borderRadius: 1, 
+                mb: 1,
+                flexDirection: 'column',
+                alignItems: 'flex-start',
+                p: 1.5
+              }}
+            >
+              <Box display="flex" alignItems="center" width="100%" mb={0.5}>
+                <Typography variant="body2" sx={{ color: '#fff', fontWeight: 'bold', mr: 1 }}>
+                  {idx + 1}. {rec.name} ({rec.dosage})
+                </Typography>
+              </Box>
+
+              <Typography variant="caption" sx={{ color: '#90caf9', mb: 0.5 }}>
+                Targets: {rec.targets}
+              </Typography>
+
+              <Typography variant="caption" sx={{ color: '#b0bec5', mb: 0.5 }}>
+                Evidence: {rec.evidence}
+              </Typography>
+
+              {rec.interactions && (
+                <Box display="flex" alignItems="center" mt={0.5}>
+                  <WarningIcon sx={{ color: '#ff9800', fontSize: 14, mr: 0.5 }} />
+                  <Typography variant="caption" sx={{ color: '#ff9800' }}>
+                    {rec.interactions}
+                  </Typography>
+                </Box>
+              )}
+            </ListItem>
+          ))}
+        </List>
+
+        <Button 
+          fullWidth
+          variant="outlined"
+          sx={{ mt: 1, color: '#8bc34a', borderColor: '#8bc34a' }}
+          onClick={() => window.location.href = '/holistic-hypothesis-tester'}
+        >
+          VIEW ALL RECOMMENDATIONS
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+**Backend Integration:**
+```bash
+# Uses existing endpoint: POST /api/hypothesis/validate_food_dynamic
+# Returns multiple food/supplement recommendations
+# Need to call in a loop for top compounds (Vitamin D, Omega-3, Curcumin)
+```
+
+---
+
+#### Task 4.2: Next Best Actions Component
+
+**File:** `src/pages/MissionControl/components/monitoring/NextBestActions.jsx`
+
+**Design Spec (FROM DOCTRINE - Pre-NGS):**
+```
+┌─────────────────────────────────────────┐
+│ 🎯 NEXT BEST ACTIONS (AI-Powered)       │
+│ Suggested Actions (Priority Order):     │
+│ 1. ⚠️ Order ctDNA + HRD (7-10d)         │
+│    Why: Unlock personalized WIWFM      │
+│    Impact: 70-85% confidence vs 50%    │
+│ 2. 📞 Contact MSK Trial (NCT05116189)   │
+│ 3. 📊 Establish CA-125 baseline         │
+└─────────────────────────────────────────┘
+```
+
+**Implementation:**
+```jsx
+import React from 'react';
+import { Card, CardContent, Typography, Box, Button, List, ListItem, Chip } from '@mui/material';
+import GpsFixedIcon from '@mui/icons-material/GpsFixed';
+
+export default function NextBestActions({ actions = [] }) {
+  const getPriorityColor = (priority) => {
+    switch (priority) {
+      case 1: return '#f44336'; // Critical
+      case 2: return '#ff9800'; // High
+      case 3: return '#ffc107'; // Medium
+      default: return '#4caf50'; // Low
+    }
+  };
+
+  const getPriorityIcon = (priority) => {
+    switch (priority) {
+      case 1: return '🚨';
+      case 2: return '⚠️';
+      case 3: return '📊';
+      default: return '✓';
+    }
+  };
+
+  return (
+    <Card sx={{ bgcolor: '#1e2a3a', border: '1px solid #ffc107' }}>
+      <CardContent>
+        <Box display="flex" alignItems="center" mb={2}>
+          <GpsFixedIcon sx={{ color: '#ffc107', mr: 1 }} />
+          <Typography variant="h6" sx={{ color: '#fff' }}>
+            NEXT BEST ACTIONS
+          </Typography>
+          <Typography variant="caption" sx={{ color: '#b0bec5', ml: 1 }}>
+            (AI-Powered)
+          </Typography>
+        </Box>
+
+        <Typography variant="caption" sx={{ color: '#b0bec5', mb: 2, display: 'block' }}>
+          Suggested Actions (Priority Order):
+        </Typography>
+
+        <List>
+          {actions.map((action, idx) => (
+            <ListItem 
+              key={idx}
+              sx={{ 
+                bgcolor: '#0a0e27', 
+                borderRadius: 1, 
+                mb: 1.5,
+                flexDirection: 'column',
+                alignItems: 'flex-start',
+                p: 1.5,
+                borderLeft: `4px solid ${getPriorityColor(action.priority)}`
+              }}
+            >
+              <Box display="flex" alignItems="center" width="100%" mb={1}>
+                <Typography variant="body2" sx={{ mr: 1 }}>
+                  {getPriorityIcon(action.priority)}
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#fff', fontWeight: 'bold', flex: 1 }}>
+                  {action.title}
+                </Typography>
+                <Chip 
+                  label={`Priority ${action.priority}`}
+                  size="small"
+                  sx={{ bgcolor: getPriorityColor(action.priority), color: '#fff' }}
+                />
+              </Box>
+
+              <Typography variant="caption" sx={{ color: '#90caf9', mb: 0.5, display: 'block' }}>
+                <strong>Why:</strong> {action.rationale}
+              </Typography>
+
+              {action.impact && (
+                <Typography variant="caption" sx={{ color: '#4caf50', display: 'block' }}>
+                  <strong>Impact:</strong> {action.impact}
+                </Typography>
+              )}
+
+              {action.action_button && (
+                <Button 
+                  size="small"
+                  variant="contained"
+                  sx={{ mt: 1, bgcolor: getPriorityColor(action.priority) }}
+                  onClick={action.action_button.onClick}
+                >
+                  {action.action_button.label}
+                </Button>
+              )}
+            </ListItem>
+          ))}
+        </List>
+
+        <Button 
+          fullWidth
+          variant="outlined"
+          sx={{ mt: 1, color: '#ffc107', borderColor: '#ffc107' }}
+        >
+          COMPLETE ALL
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+**Backend Integration:**
+```bash
+# NEW ENDPOINT REQUIRED (Zo will create this)
+# GET /api/ayesha/next_actions?patient_id=ayesha
+# Returns: {
+#   "actions": [
+#     {
+#       "priority": 1,
+#       "title": "Order ctDNA + HRD (7-10d)",
+#       "rationale": "Unlock personalized WIWFM",
+#       "impact": "70-85% confidence vs 50%",
+#       "action_button": {
+#         "label": "ORDER NOW",
+#         "onClick": "openNGSOrderModal()"
+#       }
+#     },
+#     {
+#       "priority": 2,
+#       "title": "Contact MSK Trial (NCT05116189)",
+#       "rationale": "96.6% match, frontline, NYC",
+#       "impact": "Access to Niraparib + Bevacizumab"
+#     }
+#   ]
+# }
+```
+
+---
+
+### **PHASE 5: POLISH & TESTING (Week 5)**
+
+#### Task 5.1: Styling & Theme
+
+**Create Theme File:** `src/pages/MissionControl/theme.js`
+
+```javascript
+export const missionControlTheme = {
+  colors: {
+    background: {
+      primary: '#0a0e27',
+      secondary: '#1e2a3a',
+      tertiary: '#2a3f5f'
+    },
+    border: {
+      critical: '#f44336',
+      warning: '#ff9800',
+      info: '#00bcd4',
+      success: '#4caf50'
+    },
+    text: {
+      primary: '#ffffff',
+      secondary: '#b0bec5',
+      tertiary: '#757575'
+    },
+    severity: {
+      immediate: '#f44336',
+      urgent: '#ff9800',
+      monitor: '#ffc107',
+      normal: '#4caf50'
+    },
+    pathways: {
+      DDR: '#9c27b0',
+      MAPK: '#e91e63',
+      PI3K: '#3f51b5',
+      VEGF: '#00bcd4',
+      HER2: '#009688',
+      IO: '#4caf50',
+      Efflux: '#ff9800'
+    }
+  },
+  typography: {
+    riskScore: {
+      fontSize: 48,
+      fontWeight: 'bold'
+    },
+    sectionHeader: {
+      fontSize: 24,
+      fontWeight: 'bold'
+    },
+    cardTitle: {
+      fontSize: 18,
+      fontWeight: 600
+    },
+    body: {
+      fontSize: 14
+    },
+    caption: {
+      fontSize: 12
+    }
+  }
+};
+```
+
+#### Task 5.2: Performance Optimization
+
+**Optimization Checklist:**
+- [ ] Implement React.memo() for expensive components
+- [ ] Add useMemo() for computed values (risk scores, pathway levels)
+- [ ] Add useCallback() for event handlers
+- [ ] Lazy load components not in viewport
+- [ ] Implement virtual scrolling for long lists (trials, mutations)
+- [ ] Add loading skeletons for better perceived performance
+- [ ] Optimize image loading (lazy load AlphaFold3 structures)
+- [ ] Add service worker for offline support
+
+#### Task 5.3: Testing
+
+**Create Test File:** `src/pages/MissionControl/__tests__/MissionControl.test.jsx`
+
+```jsx
+import React from 'react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import MissionControlDashboard from '../MissionControlDashboard';
+
+// Mock fetch
+global.fetch = jest.fn();
+
+describe('MissionControl Dashboard', () => {
+  beforeEach(() => {
+    fetch.mockClear();
+  });
+
+  test('renders loading state initially', () => {
+    fetch.mockImplementation(() => new Promise(() => {})); // Never resolves
+    render(<MissionControlDashboard />);
+    expect(screen.getByText(/Loading Mission Control/i)).toBeInTheDocument();
+  });
+
+  test('renders error state on fetch failure', async () => {
+    fetch.mockRejectedValue(new Error('API Error'));
+    render(<MissionControlDashboard />);
+    
+    await waitFor(() => {
+      expect(screen.getByText(/Error loading Mission Control/i)).toBeInTheDocument();
+    });
+  });
+
+  test('renders all sections with data', async () => {
+    // Mock successful API responses
+    fetch.mockResolvedValue({
+      json: async () => ({
+        sitrep: { patient_id: 'ayesha', stage: 'IVB' },
+        alerts: [],
+        soc_recommendation: { regimen: 'Carboplatin + Paclitaxel', confidence: 0.95 },
+        clinical_trials: [],
+        // ... other data
+      })
+    });
+
+    render(<MissionControlDashboard />);
+    
+    await waitFor(() => {
+      expect(screen.getByText(/PATIENT: AYESHA/i)).toBeInTheDocument();
+      expect(screen.getByText(/STANDARD OF CARE/i)).toBeInTheDocument();
+      expect(screen.getByText(/CLINICAL TRIALS/i)).toBeInTheDocument();
+    });
+  });
+
+  test('clicking ORDER NGS NOW opens dialog', async () => {
+    // Test biomarker status component interaction
+    // ... test implementation
+  });
+
+  test('alert severity colors are correct', async () => {
+    // Test that IMMEDIATE alerts are red, URGENT are orange, etc.
+    // ... test implementation
+  });
+});
+```
+
+---
+
+## ✅ ACCEPTANCE CRITERIA (Must Pass Before Completion)
+
+### Functional Requirements
+- [ ] All 11 sections render correctly (SITREP, Alerts, SOC, Trials, Supportive Care, CA-125, Biomarkers, Next Actions, SAE Map, Resistance, Provenance)
+- [ ] All backend API integrations working (11 endpoints called successfully)
+- [ ] Pre-NGS vs Post-NGS views implemented correctly
+- [ ] All buttons functional (no dead clicks)
+- [ ] All modals/dialogs working (NGS order, trial contact, etc.)
+- [ ] Data refreshes automatically every 5 minutes
+- [ ] Error handling graceful (API failures don't crash UI)
+
+### Performance Requirements
+- [ ] Initial page load: <2 seconds
+- [ ] All API calls complete: <3 seconds total (parallel fetching)
+- [ ] Smooth animations (60fps)
+- [ ] No layout shift during loading
+- [ ] Mobile responsive (works on all screen sizes)
+
+### Design Requirements
+- [ ] Matches design spec exactly (colors, typography, layout)
+- [ ] 3-column grid on desktop
+- [ ] 2-column grid on tablet
+- [ ] Single column on mobile
+- [ ] All severity colors correct (Red/Orange/Yellow/Green)
+- [ ] All icons present and correct
+- [ ] Typography hierarchy matches spec (48px risk score, 24px headers, etc.)
+
+### Accessibility Requirements
+- [ ] WCAG 2.1 AA compliance
+- [ ] Keyboard navigation works
+- [ ] Screen reader support functional
+- [ ] Color contrast ratios ≥4.5:1
+- [ ] Focus indicators visible
+
+### Testing Requirements
+- [ ] Unit tests for all components (>80% coverage)
+- [ ] Integration tests for API calls
+- [ ] E2E test for complete workflow
+- [ ] Performance test (load time, API latency)
+- [ ] Accessibility audit passing
+
+---
+
+## 🔧 BACKEND ENDPOINTS CHECKLIST
+
+### ✅ Already Implemented (Use As-Is):
+1. `POST /api/clinical_genomics/analyze_variant` - Drug efficacy + SAE features
+2. `POST /api/ayesha/trials/search` - Clinical trials + SOC recommendation
+3. `POST /api/ayesha/ca125_intelligence` - CA-125 tracking
+4. `POST /api/hypothesis/validate_food_dynamic` - Food/supplement validator
+5. `POST /api/care/resistance_playbook` - Resistance detection + recommendations
+6. `POST /api/metastasis/assess` - 8-step cascade assessment
+7. `POST /api/safety/toxicity_risk` - PGx toxicity warnings
+8. `GET /api/patients/{patient_id}` - Patient data
+
+### ⚠️ NEW ENDPOINTS REQUIRED (Zo Will Create):
+1. `GET /api/clinical_genomics/alerts` - Critical alerts aggregation
+2. `GET /api/ayesha/biomarker_status` - Biomarker status (HRD, TMB, MSI)
+3. `GET /api/ayesha/next_actions` - AI-powered action recommendations
+4. `GET /api/clinical_genomics/risk_assessment` - Overall risk score aggregation
+
+**NOTE:** JR should implement frontend with mock data for NEW endpoints first. Zo will create real endpoints in parallel.
+
+---
+
+## 📋 STEP-BY-STEP EXECUTION SEQUENCE
+
+### Week 1: Foundation
+```bash
+# Day 1
+cd oncology-coPilot/oncology-frontend
+mkdir -p src/pages/MissionControl/{components/{header,treatment,monitoring,mechanism},hooks}
+
+# Create all component files (stub each with basic structure)
+touch src/pages/MissionControl/components/header/SitrepHeader.jsx
+touch src/pages/MissionControl/components/header/CriticalAlerts.jsx
+touch src/pages/MissionControl/components/treatment/SOCRecommendation.jsx
+touch src/pages/MissionControl/components/treatment/ClinicalTrials.jsx
+touch src/pages/MissionControl/components/treatment/SupportiveCare.jsx
+touch src/pages/MissionControl/components/monitoring/CA125Tracker.jsx
+touch src/pages/MissionControl/components/monitoring/BiomarkerStatus.jsx
+touch src/pages/MissionControl/components/monitoring/NextBestActions.jsx
+touch src/pages/MissionControl/components/mechanism/SAEMechanismMap.jsx
+touch src/pages/MissionControl/components/mechanism/ResistancePlaybook.jsx
+touch src/pages/MissionControl/components/mechanism/ProvenancePanel.jsx
+
+# Create hooks
+touch src/pages/MissionControl/hooks/useMissionControlData.js
+
+# Create main dashboard
+touch src/pages/MissionControl/MissionControlDashboard.jsx
+
+# Day 2-3: Implement useMissionControlData.js hook
+# (Copy implementation from this plan)
+
+# Day 4-5: Implement MissionControlDashboard.jsx container
+# Add routing and navigation
+```
+
+### Week 2: Critical Components
+```bash
+# Day 6-7: Implement SitrepHeader + CriticalAlerts
+# Day 8-9: Implement SOCRecommendation + ClinicalTrials
+# Day 10: Implement CA125Tracker
+```
+
+### Week 3: SAE & Mechanism
+```bash
+# Day 11-12: Implement SAEMechanismMap
+# Day 13: Implement ResistancePlaybook
+# Day 14-15: Implement BiomarkerStatus + NextBestActions
+```
+
+### Week 4: Supporting Features
+```bash
+# Day 16-17: Implement SupportiveCare
+# Day 18: Implement ProvenancePanel
+# Day 19-20: Add real-time updates (WebSocket)
+```
+
+### Week 5: Polish & Test
+```bash
+# Day 21-22: UI/UX polish (colors, typography, animations)
+# Day 23: Performance optimization
+# Day 24: Accessibility audit + fixes
+# Day 25: E2E testing + bug fixes
+```
+
+---
+
+## 🚨 CRITICAL DO's AND DON'Ts
+
+### ✅ DO:
+1. **Follow design spec EXACTLY** - Colors, typography, layout from DOCTRINE
+2. **Use existing backend endpoints** - Don't wait for new ones, mock them first
+3. **Test EVERY component** - Unit tests + visual verification
+4. **Make it responsive** - 3-column → 2-column → 1-column
+5. **Add loading states** - Skeleton loaders, not blank screens
+6. **Handle errors gracefully** - User-friendly error messages
+7. **Add tooltips** - Explain medical terms
+8. **Document your work** - Comment complex logic
+
+### ❌ DON'T:
+1. **Don't deviate from design** - No creative liberties on layout/colors
+2. **Don't hardcode data** - Use mock data structures that match backend schema
+3. **Don't skip accessibility** - WCAG compliance is mandatory
+4. **Don't ignore performance** - <2s load time requirement
+5. **Don't skip testing** - Every component must have tests
+6. **Don't forget RUO labels** - Research Use Only disclaimers required
+7. **Don't merge without review** - Get approval before committing
+8. **Don't break existing pages** - Mission Control is additive, not replacement
+
+---
+
+## 📊 PROGRESS TRACKING
+
+**Report Progress Daily:**
+Create daily updates in: `.cursor/ayesha/jr_mission_control_progress/`
+
+**Format:**
+```markdown
+# JR Mission Control Progress - Day X
+
+**Date:** YYYY-MM-DD
+**Hours Worked:** X hours
+**Status:** On Track / Blocked / Need Help
+
+## Completed Today:
+- [X] Task 1
+- [X] Task 2
+
+## In Progress:
+- [ ] Task 3
+
+## Blockers:
+- Issue 1: Description
+- Issue 2: Description
+
+## Tomorrow's Plan:
+- [ ] Task 4
+- [ ] Task 5
+
+## Screenshots:
+[Attach screenshots of implemented components]
+```
+
+---
+
+## ⚔️ MISSION STATUS
+
+**Agent JR - You are CLEARED FOR TAKEOFF**
+
+**Expected Completion:** 5 weeks from start  
+**Report To:** Commander (Zo) daily with progress updates  
+**Questions:** Ask Zo immediately if blocked (don't spin for hours)
+
+**Remember:** This dashboard could literally save Ayesha's life. Every pixel matters.
+
+**FOR AYESHA'S LIFE.** 🔥

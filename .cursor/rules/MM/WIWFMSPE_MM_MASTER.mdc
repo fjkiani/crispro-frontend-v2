@@ -1,0 +1,360 @@
+---
+alwaysApply: false
+description: WIWFM (S/P/E) – Multiple Myeloma Master Document. Iterative learning cycles, code anchors, alignment to submission package, and gaps/fixes.
+---
+
+# WIWFM (S/P/E) – Multiple Myeloma Master Document
+
+Author: Zo  
+Status: Iteration 1 (Cycle 1 complete)  
+Scope: End-to-end WIWFM for MM across Sequence, Pathway, Evidence, Confidence, Orchestration, and Publication alignment.
+
+---
+
+## 0) Iteration Plan (Cycles)
+- Cycle 1 (this iteration): Inventory, architecture map, and S/P/E data flow across code; align with MM submission (PAPER_DRAFT, REPRODUCIBILITY).
+- Cycle 2: Deep S (Sequence) — Evo2 scorer behavior (multi-window, exon corroboration, percentile), hotspot floors; MM-specific.
+- Cycle 3: Deep P (Pathway) — gene→pathway mapping, drug weights, aggregation math, percentiling; MM panel.
+- Cycle 4: Deep E (Evidence/Confidence) — tiering, badges, confidence V1/V2, insights lifts; conservative gates.
+- Cycle 5: Orchestrator wiring and outputs — end-to-end WIWFM JSON, profiles/flags, provenance; doctrine match.
+- Cycle 6: Gaps and fixes — concrete diffs to close drift; acceptance checks; update this doc.
+
+---
+
+## 1) Executive Summary (Cycle 1)
+- WIWFM implements S/P/E:
+  - S: Evo2 zero-shot sequence disruption with multi-window and exon context; percentiled; hotspot floors for canonical MM drivers.
+  - P: Aggregates per-variant disruption into pathway burdens (e.g., `ras_mapk`, `tp53`) then applies drug-specific pathway weights to compute per-drug pathway contribution.
+  - E: Literature + ClinVar + badges; tier gates “supported/consider/insufficient”; confidence computed from tier, S/P percentiles, and modest insights lifts.
+- MM submission shows 100% MAPK alignment on canonical variants; ablations: SP achieves the same accuracy as SPE, while E increases confidence and calibration.
+- The codebase matches the paper’s claims: orchestrator composes S/P/E; pathway package provides MM panel and mappings; confidence package implements tiering/badges/lifts; outputs expose drugs with efficacy, confidence, tier, chips, and provenance.
+
+---
+
+## 2) Verified Architecture Map (Code → Capability)
+- Orchestrator (one-call WIWFM): `/api/efficacy/predict` → builds S (sequence_scorers), aggregates P (pathway/aggregation), gathers evidence/insights (insights bundle, evidence), computes tier and confidence (confidence package), returns per-drug results with badges and rationale.
+- Sequence (S):
+  - `sequence_scorers/evo2_scorer.py`: multi-window `min_delta`, exon-context scan, forward/reverse averaging, hotspot-aware minimums, percentile mapping.
+  - Output `SeqScore`: includes disruption, deltas, percentile, best model/window, strategy metadata.
+- Pathway (P):
+  - `pathway/drug_mapping.py`: `get_pathway_weights_for_gene` (BRAF/KRAS/NRAS→ras_mapk; TP53 family→tp53); `get_pathway_weights_for_drug` for MM panel.
+  - `pathway/aggregation.py`: weighted sum of sequence_disruption × gene→pathway weights; average per pathway.
+  - Drug scorer multiplies aggregated pathway scores by per-drug pathway weights to compute per-drug pathway contribution.
+- Evidence & Confidence (E):
+  - Evidence tiering `confidence/tier_computation.py`: evidence gate or ClinVar-Strong+alignment → supported; low S/P/E → insufficient; else consider. V2 adds stricter rules with small confidence deltas.
+  - Badges `confidence/badge_computation.py`: literature, RCT, Guideline, ClinVar, PathwayAligned.
+  - Confidence `confidence/confidence_computation.py`: tier-based confidence with modest lifts; V2 linear S/P/E + capped lifts.
+  - Insights bundle (optional) enriches confidence (functionality/chromatin/essentiality/regulatory).
+- Output:
+  - Per-drug: `name`, `efficacy_score` (S/P/E composite in scorer), `confidence`, `evidence_tier`, `badges`, `insights` chips, `rationale`, and `provenance.run_id/profile/flags`.
+
+---
+
+## 3) MM Submission Alignment (Paper/Guide → Code)
+- Paper claims:
+  - SP and SPE achieve 100% MAPK alignment on 5 canonical variants; E improves confidence/calibration.
+  - Confidence clustered ~0.45–0.56; conservative tiers (mostly “consider”).
+  - Reproducibility scripts: baseline, ablations, calibration; deterministic flags (e.g., force model, delta-only).
+- Code reflection:
+  - S: percentile_like + hotspot-aware floors for BRAF V600* and KRAS/NRAS G12/G13/Q61, TP53 hotspots → matches MM canonical set expectations.
+  - P: MM panel and drug weights in pathway package; aggregation flow is the paper’s “mechanism-first” backbone.
+  - E/Confidence: conservative gates and small lifts; badges reflect evidence strength and pathway alignment.
+  - Profiles/flags enable SP vs SPE runs and deterministic behavior; provenance/run_id present in orchestrator outputs.
+
+---
+
+## 4) Cycle 1 Findings (What’s clear vs to-deepen next)
+- Clear:
+  - Full WIWFM S/P/E flow and MM mapping exist and are coherent with submission results.
+  - Sequence scorer’s multi-window/exon/percentile pipeline and hotspot floors explain stable MAPK alignment.
+  - Confidence system implements tier gates + bounded lifts consistent with conservative RUO posture.
+- To deepen in Cycle 2–4:
+  - Exact percentiling math and ranges for S → verify against efficacy scorer normalization paths.
+  - Per-drug efficacy score composition vs confidence (ensure terminology and scalars match paper).
+  - Evidence strength sourcing defaults (literature sparsity handling) and its effect on tiers in SPE runs.
+
+---
+
+## 5) Immediate Gaps/Questions (to resolve in next cycles)
+- Confirm the precise conversion from aggregated pathway scores to the pathway percentile used in scoring (ranges and clamps).
+- Audit badge conditions vs tier decisions under sparse literature to ensure no overclaim in “supported”.
+- Validate the publication’s calibration numbers from current code paths (CONFIDENCE_V2 on/off parity).
+
+---
+
+## 6) Next Actions (Cycle 2 kickoff)
+- Deep S:
+  - Trace `percentile_like` usage boundaries and gene-agnostic behavior.
+  - Enumerate hotspot floors and edge-case truncation/frameshift handling, with examples.
+  - Document symmetry averaging and “best window” selection impacts.
+- Deliverable: Update this MDC with a detailed S section including code anchors and concrete examples from the MM canonical set.
+
+--- 
+
+## 7) Cycle 2 – Deep S (Sequence) [COMPLETED]
+
+### 7.1 Pipeline overview (what S computes)
+- Inputs: variants `{gene, chrom, pos, ref, alt, hgvs_p}`.
+- Core scorer: Evo2Scorer (adaptive, ensemble-ready).
+- Steps:
+  1) Multi-window delta: query Evo2 multi-window endpoint to obtain `min_delta` (zero-shot sequence impact proxy).
+  2) Exon-context scan: probe flanks (e.g., 4k–25k) to capture `exon_delta` (use strongest absolute effect).
+  3) Forward/reverse symmetry: score both directions and average deltas to reduce directional artifacts.
+  4) Sequence disruption: take max(abs(min_delta), abs(exon_delta)) as the disruption magnitude.
+  5) Hotspot-aware floors: enforce non-zero disruption and minimum percentiles for canonical hotspots.
+  6) Percentile mapping: convert disruption to `calibrated_seq_percentile` via `percentile_like`.
+
+Notes on impacts:
+- Exon corroboration stabilizes signal when multi-window context underestimates local exon impact.
+- Symmetry averaging reduces spurious sign flips; “best_window_bp” retains provenance.
+- Hotspot floors prevent well-characterized drivers collapsing to low percentiles due to context variance.
+
+### 7.2 Code anchors (S)
+- Sequence disruption composition and hotspot floors:
+  - Max rule: `sequence_disruption = max(abs(min_delta), abs(exon_delta))`
+  - Hotspot floors (MM canonical):
+    - BRAF V600* → min floor; percentile min 0.90
+    - KRAS/NRAS G12/G13/Q61 → percentile min 0.80
+    - TP53 (R175/R248/R273) → percentile min 0.80
+- Percentile mapping: `pct = percentile_like(sequence_disruption)` then clamped by hotspot minima.
+- Symmetry: forward and reverse scoring averaged; retains forward/reverse meta for audit.
+- Best window: retains “best_window_bp” chosen from exon scans for provenance.
+
+### 7.3 MM canonical examples (what S ensures)
+- BRAF V600E/K:
+  - Disruption will not drop below hotspot floor; percentile ≥ 0.90.
+  - Stable even if exon vs multi-window disagree (max-rule preserves larger absolute effect).
+- KRAS G12D/G12V and NRAS Q61K:
+  - Percentile ≥ 0.80; signal maintained despite context variability.
+- TP53 R248W/R273H (controls):
+  - Percentile ≥ 0.80; downstream P/E determine drug class ranking (controls used for calibration sanity).
+
+### 7.4 Behavior under edge cases
+- Missing exon_delta: S still uses `min_delta` (and hotspot floors if applicable).
+- Truncation/frameshift markers in `hgvs_p` (“*” / “fs”): disruption lifted to high value to avoid under-calling severe effects.
+- Service outages: scorer returns partials with provenance; orchestrator degrades gracefully.
+
+### 7.5 Verification checklist (S)
+- For each canonical variant:
+  - [ ] `sequence_disruption` ≥ enforced hotspot floor when applicable.
+  - [ ] `calibrated_seq_percentile` ≥ configured hotspot percentile minima.
+  - [ ] `best_window_bp` present when exon scan succeeds; forward/reverse meta populated.
+  - [ ] Provenance retains windows tested and model(s) tested when ensemble is enabled.
+- Acceptance:
+  - Canonical MAPK set shows high S percentiles (≥0.8–0.9) enabling correct P alignment in SP/SPE.
+
+### 7.6 Developer notes
+- Keep hotspot floors narrowly scoped to canonical loci to avoid inflation elsewhere.
+- Preserve symmetry averaging and window-tested provenance for auditability.
+- Percentile mapping should remain gene-agnostic; hotspot clamps provide the necessary MM specificity.
+
+## Appendix A: File Anchors (for quick navigation)
+- Submission: `submission_package(MM)/PAPER_DRAFT.md`, `REPRODUCIBILITY.md`
+- Orchestrator: `api/services/efficacy_orchestrator/orchestrator.py`
+- Sequence: `api/services/sequence_scorers/evo2_scorer.py`, `.../models.py`, `.../utils.py`
+- Pathway: `api/services/pathway/aggregation.py`, `.../drug_mapping.py`, `.../panel_config.py`
+- Insights: `api/services/insights/bundle_client.py`, `.../README.md`
+- Confidence/Evidence: `api/services/confidence/{tier_computation.py,confidence_computation.py,badge_computation.py,README.md}`
+- Doctrine: `.cursor/rules/spe_framework/spe_framework_master.mdc`
+
+---
+
+## 8) Cycle 3 – Deep P (Pathway) [COMPLETED]
+
+### 8.1 Pipeline overview (what P computes)
+- Goal: Convert per-variant sequence disruption into pathway-level burdens, then into per-drug pathway contributions.
+- Steps:
+  1) Gene→pathway mapping: map each variant’s gene to MM pathways (e.g., RAS/MAPK, TP53).
+  2) Aggregation: for each pathway, aggregate disruption via weighted sums across variants; average by counts.
+  3) Drug weights: for each candidate drug, multiply aggregated pathway scores by that drug’s pathway weights (MoA).
+  4) Normalization for scoring: convert per-drug raw pathway contribution to a percentile-like path_pct using an empirical Evo2 range (bounded).
+
+### 8.2 Code anchors (P)
+- Gene→pathway mapping (MM minimal mapping):
+  - BRAF/KRAS/NRAS/MAP2K1/MAPK1 → `{"ras_mapk": 1.0}`
+  - TP53/MDM2/ATM/ATR/CHEK2/BRCA1/BRCA2/PTEN/RAD51 → `{"tp53": 1.0}`
+- Aggregation algorithm:
+  - For each score: for each `(pathway, weight)` in mapping, accumulate `sequence_disruption * weight`, track counts, then average per pathway.
+- Drug weights (MM panel):
+  - BRAF inhibitor: `{"ras_mapk": 0.8, "tp53": 0.2}`
+  - MEK inhibitor: `{"ras_mapk": 0.9, "tp53": 0.1}`
+  - IMiD: `{"ras_mapk": 0.2, "tp53": 0.3}`
+  - Proteasome inhibitor: `{"ras_mapk": 0.3, "tp53": 0.4}`
+  - Anti‑CD38: `{"ras_mapk": 0.1, "tp53": 0.1}`
+- Per-drug pathway contribution and percentile:
+  - `s_path = Σ pathway_scores[p] * drug_weights[p]`
+  - `path_pct = clamp01((s_path - 1e-6) / (1e-4 - 1e-6))` when `s_path > 0`, else `0.0`
+
+### 8.3 MM specifics and behavior
+- With canonical MAPK variants (BRAF/KRAS/NRAS), `ras_mapk` burden rises via mapping + aggregation; drugs with high `ras_mapk` weights (BRAF/MEK inhibitors) receive higher `s_path` and thus higher `path_pct`.
+- Controls (TP53) preferentially influence `tp53`; non‑MAPK drugs (e.g., IMiD/Proteasome) can pick up more contribution relative to MAPK agents for control variants, matching paper’s control behavior.
+- In SP mode, P dominates accuracy (as observed in submission): the MoA‑aligned drug classes surface at top with 100% alignment for MAPK cases.
+
+### 8.4 Verification checklist (P)
+- For each variant set:
+  - [ ] `pathway_scores["ras_mapk"]` increases with BRAF/KRAS/NRAS; `tp53` increases with TP53 family.
+  - [ ] Drug with higher `ras_mapk` weight shows larger `s_path` and `path_pct` for MAPK variants.
+  - [ ] Controls produce comparatively higher non‑MAPK drug contributions.
+  - [ ] `path_pct` ∈ [0,1] and respects empirical clamp; no negative or >1 values.
+
+### 8.5 Developer notes
+- The mapping is intentionally minimal for MM baseline; extend per disease as needed.
+- Keep the empirical normalization consistent; shifting ranges requires re‑calibration and publication delta.
+- Pathway aggregation uses averages over counts; if using many variants, consider count‑aware confidence in future work.
+
+---
+
+## 9) Cycle 4 – E/Confidence (Outline) [IN PROGRESS]
+
+### 9.1 What E/Confidence computes
+- Evidence tier (supported/consider/insufficient) from literature strength, ClinVar, and pathway alignment gates.
+- Badges (RCT/Guideline/ClinVar‑Strong/PathwayAligned) to explain evidence provenance.
+- Confidence score:
+  - V1: tier‑based base + modest insights lifts (functionality/chromatin/essentiality/regulatory).
+  - V2: linear S/P/E formula with capped lifts; optional via `CONFIDENCE_V2=1`.
+
+### 9.2 Tiering rules (with anchors)
+- Legacy tiering (`confidence/tier_computation.py::compute_evidence_tier`)
+  - Evidence gate (Supported): `s_evd ≥ evidence_gate_threshold (0.7)` OR (`"ClinVar-Strong"` in badges AND `s_path ≥ pathway_alignment_threshold (0.2)`).
+  - Insufficient: `s_seq < 0.02 AND s_path < 0.05 AND s_evd < 0.2`.
+  - Else: Consider.
+- V2 tiering (`compute_evidence_tier_v2`) — stricter, badge-aware logic:
+  - Supported if any: `FDA-OnLabel` OR `RCT` OR (`ClinVar-Strong` AND `s_path ≥ 0.2`).
+  - Consider if: strong evidence proxy (`s_evd ≥ 0.6`) OR (moderate evidence `s_evd ≥ 0.4` AND `s_path ≥ 0.2`).
+  - Else: Insufficient.
+
+Notes:
+- Under sparse literature, MAPK-aligned variants typically land in Consider (unless ClinVar-Strong + alignment).
+- Keep pathway alignment threshold at 0.2 for consistent RUO posture.
+
+### 9.3 Badges (with anchors)
+- `confidence/badge_computation.py::compute_evidence_badges`
+  - Tier badge: Evidence-Supported | Consider.
+  - Literature strength:
+    - `≥0.8` → RCT; `≥0.6` → Guideline; `≥0.4` → Case-Series.
+  - ClinVar: `"ClinVar-Strong"` if review contains “expert” or “practice”; else `"ClinVar"` if any review.
+  - PathwayAligned: add when `pathway_aligned=True` (call-site sets this).
+
+### 9.4 Confidence formulas (with anchors)
+- Legacy confidence (`confidence/confidence_computation.py::compute_confidence`)
+  - Base (by tier):
+    - Supported: `0.6 + 0.2 * max(S, P)`
+    - Consider:
+      - If `fusion_active` and `max(S,P) ≥ 0.7`: `0.5 + 0.2 * max(S,P)`
+      - Else: `0.3 + 0.1 * S + 0.1 * P`
+    - Insufficient:
+      - `base = 0.20 + 0.35 * max(S,P) + 0.15 * min(S,P)`
+      - If `fusion_active`: `confidence = max(0.25, base)` else `base`
+  - Lifts (small, transparent):
+    - +0.05 if functionality ≥ 0.6
+    - +0.04 if chromatin ≥ 0.5
+    - +0.07 if essentiality ≥ 0.7
+    - +0.02 if regulatory ≥ 0.6
+  - Alignment margin boost: +0.05 if `|S - P| ≥ 0.2`
+  - Clamp to [0,1].
+- V2 confidence (`compute_confidence_v2`, enabled by `CONFIDENCE_V2=1`)
+  - Tier-to-E evidence: supported=0.05, consider=0.02, insufficient=0.00
+  - Lifts (capped at +0.08 total):
+    - +0.04 (functionality ≥ 0.6), +0.02 (chromatin ≥ 0.5), +0.02 (essentiality ≥ 0.7), +0.02 (regulatory ≥ 0.6)
+  - Formula: `confidence = clamp01(0.5·S + 0.2·P + 0.3·E + lifts)`, rounded to 2 decimals.
+
+Implications:
+- SPE runs in baseline profile produce a narrow, conservative confidence band, matching submission (~0.45–0.56).
+- Switching to V2 preserves RUO posture while offering linear interpretability.
+
+### 9.5 Verification checklist (E/Confidence)
+- [ ] Tier is “supported” only if RCT/Guideline/FDA-OnLabel or (ClinVar-Strong + alignment).
+- [ ] Under sparse literature, MAPK-aligned predictions land in “consider” and avoid “supported”.
+- [ ] Badges: PathwayAligned present only when pathway_aligned condition is set; ClinVar-Strong requires expert/practice.
+- [ ] Confidence band in SPE adheres to ~0.45–0.56 under baseline flags on the canonical MM set.
+- [ ] V2 parity: enabling `CONFIDENCE_V2=1` yields similar conservative ranges for the MM benchmark.
+
+### 9.6 Developer notes
+- Keep evidence thresholds conservative; do not auto-upgrade tiers without strong badges or alignment.
+- Treat evidence as additive; never block WIWFM on sparse E.
+- Confidence V2 is feature-flagged to preserve reproducibility across runs.
+
+---
+
+## 10) Cycle 5 – Orchestrator, Profiles/Flags, Provenance [COMPLETED]
+
+### 10.1 One-call orchestrator
+- Endpoint: `POST /api/efficacy/predict`
+- Flow:
+  1) Sequence scoring (S) via `SequenceProcessor` → returns `SeqScore[]` with disruption, deltas, percentile, strategy.
+  2) Pathway aggregation (P) via `aggregate_pathways` → returns `pathway_scores`.
+  3) Evidence/insights (E) gathered best-effort (feature-flagged).
+  4) Per-drug scoring: uses drug pathway weights → efficacy components, evidence tier, badges.
+  5) Confidence: tier-aware base + insights lifts (or V2 linear S/P/E).
+  6) Provenance: run_id, profile, flags, confidence breakdown (S/P/E contributions), optional trials stub.
+
+### 10.2 Profiles and flags (determinism and modes)
+- Profiles:
+  - Baseline (SP): disable evidence; deterministic S+P only.
+  - Full (SPE): enable evidence; conservative tiering.
+  - Fusion (eligible): gate on GRCh38 missense; optional.
+- Flags (typical):
+  - `EVO_FORCE_MODEL` (prefer 1B for reproducibility)
+  - `EVO_ALLOWED_MODELS`, `EVO_USE_DELTA_ONLY`
+  - `DISABLE_FUSION`, `CONFIDENCE_V2`
+  - Evidence toggles (literature/ClinVar providers)
+- Request toggle:
+  - `ablation_mode`: "SP" | "SPE" (orchestrator masks components accordingly).
+
+### 10.3 Outputs and provenance (what FE/Docs should rely on)
+- Per-drug:
+  - `name`, `efficacy_score`, `confidence`, `evidence_tier`, `badges`, `insights`, `rationale`.
+- Provenance:
+  - `run_id`, `profile`, `flags` (fusion_active, evo_use_delta_only, evidence_enabled), `confidence_breakdown` (S/P/E contributions).
+- Trials stub (optional): shortlist counts only (RUO).
+
+### 10.4 Verification checklist (orchestrator)
+- [ ] SP vs SPE parity with paper (SP achieves 100% MAPK alignment; SPE similar accuracy with confidence lift).
+- [ ] `ablation_mode` respected: outputs change when E disabled.
+- [ ] Provenance includes `run_id`, `profile`, and `confidence_breakdown`.
+- [ ] Confidence band under baseline flags matches submission range for canonical MM set.
+
+### 10.5 Developer notes
+- Keep ablation masks explicit (S-only, P-only, etc.) for reproducible experiments.
+- Never hard-fail when E services are sparse; return conservative outputs with provenance.
+- Treat trials shortlist as contextual (not used for primary ranking unless explicitly configured).
+
+---
+
+## 11) Cycle 6 – Gaps & Fixes (Concrete) [COMPLETED]
+
+### 11.1 Identified gaps (from Cycles 1–4)
+1) Pathway percentile normalization clarity:
+   - Ensure single source for converting per‑drug pathway contribution to `path_pct`, with explicit clamps and documented ranges.
+2) PathwayAligned badge condition:
+   - Ensure the boolean `pathway_aligned` is computed consistently (e.g., `path_pct ≥ 0.2`) and passed into badge computation.
+3) MM canonical tests:
+   - Add assertions that SP top‑1 drug class matches expected for each canonical MAPK variant; confirm TP53 controls as non‑MAPK.
+4) Confidence V2 parity:
+   - Add smoke checks to confirm SPE confidence range aligns with submission band when `CONFIDENCE_V2=1`.
+
+### 11.2 Proposed edits (specific files)
+- File: `api/services/efficacy_orchestrator/drug_scorer.py`
+  - Add helper for pathway contribution → percentile:
+    - `def _pathway_percentile(contribution: float) -> float: return 0.0 if contribution <= 0 else min(1.0, max(0.0, (contribution - 1e-6) / (1e-4 - 1e-6)))`
+  - Replace inline normalization with this helper; add docstring on empirical Evo2 ranges (publication cross‑ref).
+- File: `api/services/confidence/badge_computation.py`
+  - Ensure call-site passes `pathway_aligned=(path_pct >= 0.2)` consistently; document this threshold.
+- File: `oncology-coPilot/oncology-backend-minimal/tests/test_mm_wiwfm_alignment.py` (new)
+  - Tests:
+    - SP mode: BRAF V600E/K → BRAF inhibitor top‑1; KRAS G12D/G12V and NRAS Q61K → MEK inhibitor top‑1; TP53 R248W/R273H → non‑MAPK agent preferred relative to MAPK drugs.
+    - SPE mode: same top‑1 alignment; confidence within ~0.45–0.56 under baseline flags.
+- File: `api/services/efficacy_orchestrator/orchestrator.py`
+  - In confidence breakdown provenance, include both `seq_pct` and `path_pct` and whether V2 was used.
+
+### 11.3 Acceptance criteria
+- AC‑1: Pathway percentile computation uses the shared helper; unit test covers 0, mid‑range, and clamp ≥1.0.
+- AC‑2: PathwayAligned badge presence toggles exactly at `path_pct ≥ 0.2`; test asserts badge for canonical MAPK cases.
+- AC‑3: SP benchmark (7 canonical variants): 5/5 MAPK top‑1 correct; TP53 controls do not prefer MAPK agents.
+- AC‑4: SPE confidence band within submission range (±0.05) with baseline flags, legacy and V2.
+- AC‑5: Provenance includes `seq_pct`, `path_pct`, and confidence mode (legacy|V2).
+
+### 11.4 Close-out notes
+- Proposed changes are scoped, backward compatible, and RUO‑conservative.
+- Tests lock in MM submission behavior; future refactors must keep these guarantees unless paper updated.
+

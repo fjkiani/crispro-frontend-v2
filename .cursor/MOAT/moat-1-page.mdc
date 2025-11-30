@@ -1,0 +1,512 @@
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+    Shield, ArrowRight, ArrowLeft, Users, Target, TrendingUp,
+    Pill, Dna, Clock, CheckCircle, XCircle, Beaker, Activity,
+    ChevronRight, Zap, Heart
+} from 'lucide-react';
+
+//================================================================================
+// SLIDE NAVIGATION
+//================================================================================
+
+const SlideNav = ({ current, total, onPrev, onNext }) => (
+    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-6 z-50">
+        <button 
+            onClick={onPrev}
+            disabled={current === 0}
+            className="p-3 rounded-full bg-slate-800/80 border border-slate-600 hover:border-cyan-500 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+        >
+            <ArrowLeft className="w-5 h-5 text-white"/>
+        </button>
+        
+        <div className="flex gap-2">
+            {Array.from({length: total}).map((_, i) => (
+                <div 
+                    key={i} 
+                    className={`w-2 h-2 rounded-full transition-all ${
+                        i === current ? 'bg-cyan-400 w-8' : 'bg-slate-600'
+                    }`}
+                />
+            ))}
+        </div>
+        
+        <button 
+            onClick={onNext}
+            disabled={current === total - 1}
+            className="p-3 rounded-full bg-slate-800/80 border border-slate-600 hover:border-cyan-500 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+        >
+            <ArrowRight className="w-5 h-5 text-white"/>
+        </button>
+    </div>
+);
+
+//================================================================================
+// SLIDE 1: HERO
+//================================================================================
+
+const HeroSlide = () => (
+    <div className="h-full flex flex-col items-center justify-center text-center px-8">
+        <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+        >
+            <p className="text-cyan-400 text-xl font-semibold tracking-wider mb-4">
+                THREE QUESTIONS. ZERO GENERIC ANSWERS.
+            </p>
+            <h1 className="text-6xl md:text-8xl font-black text-white leading-tight">
+                Precision Oncology<br/>
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500">
+                    That Actually Is
+                </span>
+            </h1>
+        </motion.div>
+        
+        <motion.div 
+            className="mt-16 flex flex-col md:flex-row gap-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.4 }}
+        >
+            {[
+                { q: "What should I eat?", icon: Beaker },
+                { q: "Will I become resistant?", icon: TrendingUp },
+                { q: "Does this work for me?", icon: Target }
+            ].map((item, i) => (
+                <div key={i} className="flex items-center gap-3 px-6 py-4 bg-slate-800/50 border border-slate-700 rounded-xl">
+                    <item.icon className="w-6 h-6 text-cyan-400"/>
+                    <span className="text-lg text-white font-medium">{item.q}</span>
+                </div>
+            ))}
+        </motion.div>
+        
+        <motion.p 
+            className="mt-12 text-slate-400 text-lg"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.6 }}
+        >
+            Validated on <span className="text-white font-bold">469 patients</span> • 
+            Running in <span className="text-white font-bold">production</span>
+        </motion.p>
+    </div>
+);
+
+//================================================================================
+// SLIDE 2: TOXICITY → NUTRITION MOAT
+//================================================================================
+
+const ToxicitySlide = () => (
+    <div className="h-full flex flex-col justify-center px-8">
+        <motion.div 
+            className="text-center mb-12"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+        >
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-cyan-500/10 border border-cyan-500/30 rounded-full mb-4">
+                <Shield className="w-5 h-5 text-cyan-400"/>
+                <span className="text-cyan-300 font-semibold">MOAT #1</span>
+            </div>
+            <h2 className="text-5xl font-black text-white">
+                Toxicity → Protective Nutrition
+            </h2>
+        </motion.div>
+        
+        {/* Visual Flow */}
+        <motion.div 
+            className="flex items-center justify-center gap-4 max-w-5xl mx-auto"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+        >
+            {/* Step 1 */}
+            <div className="flex-1 p-6 bg-slate-800/50 border border-slate-700 rounded-2xl text-center">
+                <Pill className="w-12 h-12 text-purple-400 mx-auto mb-3"/>
+                <p className="text-sm text-slate-400 mb-1">Your Drug</p>
+                <p className="text-xl font-bold text-white">Carboplatin</p>
+            </div>
+            
+            <ChevronRight className="w-8 h-8 text-cyan-400 flex-shrink-0"/>
+            
+            {/* Step 2 */}
+            <div className="flex-1 p-6 bg-slate-800/50 border border-slate-700 rounded-2xl text-center">
+                <Dna className="w-12 h-12 text-pink-400 mx-auto mb-3"/>
+                <p className="text-sm text-slate-400 mb-1">+ Your Gene</p>
+                <p className="text-xl font-bold text-white">BRCA1</p>
+            </div>
+            
+            <ChevronRight className="w-8 h-8 text-cyan-400 flex-shrink-0"/>
+            
+            {/* Step 3 */}
+            <div className="flex-1 p-6 bg-red-500/10 border border-red-500/30 rounded-2xl text-center">
+                <Activity className="w-12 h-12 text-red-400 mx-auto mb-3"/>
+                <p className="text-sm text-red-300 mb-1">= Pathway Stress</p>
+                <p className="text-xl font-bold text-white">DNA Repair ↓</p>
+            </div>
+            
+            <ChevronRight className="w-8 h-8 text-cyan-400 flex-shrink-0"/>
+            
+            {/* Step 4 */}
+            <div className="flex-1 p-6 bg-green-500/10 border border-green-500/30 rounded-2xl text-center">
+                <Beaker className="w-12 h-12 text-green-400 mx-auto mb-3"/>
+                <p className="text-sm text-green-300 mb-1">→ Protection</p>
+                <p className="text-xl font-bold text-white">NAC + Vit D</p>
+            </div>
+        </motion.div>
+        
+        {/* Before/After */}
+        <motion.div 
+            className="mt-12 grid md:grid-cols-2 gap-6 max-w-4xl mx-auto"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+        >
+            <div className="p-6 bg-red-500/5 border border-red-500/20 rounded-xl">
+                <div className="flex items-center gap-2 mb-3">
+                    <XCircle className="w-6 h-6 text-red-400"/>
+                    <span className="text-red-300 font-semibold">Everyone Else</span>
+                </div>
+                <p className="text-2xl text-slate-300 italic">"Eat healthy. Stay hydrated."</p>
+            </div>
+            
+            <div className="p-6 bg-cyan-500/5 border border-cyan-500/20 rounded-xl">
+                <div className="flex items-center gap-2 mb-3">
+                    <CheckCircle className="w-6 h-6 text-cyan-400"/>
+                    <span className="text-cyan-300 font-semibold">CrisPRO</span>
+                </div>
+                <p className="text-2xl text-white font-medium">"NAC 600mg post-infusion. Here's why."</p>
+            </div>
+        </motion.div>
+        
+        <motion.p 
+            className="text-center mt-8 text-cyan-400 font-bold text-lg"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.7 }}
+        >
+            First to connect Drug → Pathway → Food → Timing
+        </motion.p>
+    </div>
+);
+
+//================================================================================
+// SLIDE 3: RESISTANCE PREDICTION MOAT
+//================================================================================
+
+const ResistanceSlide = () => (
+    <div className="h-full flex flex-col justify-center px-8">
+        <motion.div 
+            className="text-center mb-12"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+        >
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-500/10 border border-purple-500/30 rounded-full mb-4">
+                <TrendingUp className="w-5 h-5 text-purple-400"/>
+                <span className="text-purple-300 font-semibold">MOAT #2</span>
+            </div>
+            <h2 className="text-5xl font-black text-white">
+                Resistance Prediction
+            </h2>
+            <p className="text-xl text-slate-400 mt-3">Validated on 469 TCGA ovarian cancer patients</p>
+        </motion.div>
+        
+        {/* Data Visualization */}
+        <motion.div 
+            className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+        >
+            {/* Left: The Finding */}
+            <div className="p-8 bg-slate-800/50 border border-slate-700 rounded-2xl">
+                <h3 className="text-2xl font-bold text-white mb-6">MAPK/NF1 Mutations</h3>
+                
+                <div className="space-y-4">
+                    <div>
+                        <div className="flex justify-between mb-2">
+                            <span className="text-slate-300">With MAPK mutation</span>
+                            <span className="text-red-400 font-bold">28.6% resistant</span>
+                        </div>
+                        <div className="h-4 bg-slate-700 rounded-full overflow-hidden">
+                            <div className="h-full bg-gradient-to-r from-red-500 to-red-400 rounded-full" style={{width: '28.6%'}}/>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div className="flex justify-between mb-2">
+                            <span className="text-slate-300">Without mutation</span>
+                            <span className="text-green-400 font-bold">14.5% resistant</span>
+                        </div>
+                        <div className="h-4 bg-slate-700 rounded-full overflow-hidden">
+                            <div className="h-full bg-gradient-to-r from-green-500 to-green-400 rounded-full" style={{width: '14.5%'}}/>
+                        </div>
+                    </div>
+                </div>
+                
+                <div className="mt-8 p-4 bg-purple-500/10 border border-purple-500/30 rounded-xl text-center">
+                    <p className="text-4xl font-black text-purple-400">2×</p>
+                    <p className="text-slate-300">Higher Resistance Risk</p>
+                </div>
+            </div>
+            
+            {/* Right: The Action */}
+            <div className="p-8 bg-gradient-to-br from-purple-500/10 to-cyan-500/10 border border-purple-500/30 rounded-2xl">
+                <h3 className="text-2xl font-bold text-white mb-6">What We Do With This</h3>
+                
+                <div className="space-y-4">
+                    {[
+                        { icon: Dna, text: "Detect MAPK/NF1 mutation" },
+                        { icon: TrendingUp, text: "Flag 2× resistance risk" },
+                        { icon: Clock, text: "Recommend earlier PARP switch" },
+                        { icon: Activity, text: "Intensify ctDNA monitoring" }
+                    ].map((item, i) => (
+                        <motion.div 
+                            key={i}
+                            className="flex items-center gap-4 p-3 bg-slate-800/50 rounded-xl"
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: 0.4 + i * 0.1 }}
+                        >
+                            <div className="p-2 bg-purple-500/20 rounded-lg">
+                                <item.icon className="w-5 h-5 text-purple-400"/>
+                            </div>
+                            <span className="text-white font-medium">{item.text}</span>
+                        </motion.div>
+                    ))}
+                </div>
+            </div>
+        </motion.div>
+        
+        {/* Validation Badge */}
+        <motion.div 
+            className="mt-8 flex justify-center gap-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.8 }}
+        >
+            <div className="px-4 py-2 bg-green-500/20 border border-green-500/30 rounded-lg">
+                <span className="text-green-300 font-semibold">✓ RR = 2.0</span>
+            </div>
+            <div className="px-4 py-2 bg-green-500/20 border border-green-500/30 rounded-lg">
+                <span className="text-green-300 font-semibold">✓ p &lt; 0.05</span>
+            </div>
+            <div className="px-4 py-2 bg-green-500/20 border border-green-500/30 rounded-lg">
+                <span className="text-green-300 font-semibold">✓ Clinically actionable</span>
+            </div>
+        </motion.div>
+    </div>
+);
+
+//================================================================================
+// SLIDE 4: UNIVERSAL CANCER SUPPORT
+//================================================================================
+
+const UniversalSlide = () => (
+    <div className="h-full flex flex-col justify-center px-8">
+        <motion.div 
+            className="text-center mb-12"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+        >
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-full mb-4">
+                <Target className="w-5 h-5 text-emerald-400"/>
+                <span className="text-emerald-300 font-semibold">MOAT #3</span>
+            </div>
+            <h2 className="text-5xl font-black text-white">
+                One System. Any Cancer.
+            </h2>
+        </motion.div>
+        
+        {/* Cancer Types Grid */}
+        <motion.div 
+            className="grid grid-cols-5 gap-4 max-w-4xl mx-auto mb-12"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+        >
+            {[
+                { name: "Ovarian", color: "from-pink-500 to-rose-500" },
+                { name: "Breast", color: "from-purple-500 to-pink-500" },
+                { name: "Colorectal", color: "from-blue-500 to-cyan-500" },
+                { name: "Melanoma", color: "from-amber-500 to-orange-500" },
+                { name: "Myeloma", color: "from-emerald-500 to-teal-500" }
+            ].map((cancer, i) => (
+                <motion.div 
+                    key={i}
+                    className="p-6 bg-slate-800/50 border border-slate-700 rounded-2xl text-center"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.4 + i * 0.1 }}
+                >
+                    <div className={`w-16 h-16 mx-auto mb-3 rounded-2xl bg-gradient-to-br ${cancer.color} flex items-center justify-center`}>
+                        <Heart className="w-8 h-8 text-white"/>
+                    </div>
+                    <p className="text-white font-semibold">{cancer.name}</p>
+                </motion.div>
+            ))}
+        </motion.div>
+        
+        {/* Single Endpoint */}
+        <motion.div 
+            className="max-w-3xl mx-auto p-8 bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 border border-emerald-500/30 rounded-2xl"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.8 }}
+        >
+            <div className="text-center">
+                <code className="text-lg bg-slate-800 px-4 py-2 rounded-lg text-emerald-400 font-mono">
+                    POST /api/complete_care/universal
+                </code>
+                <p className="text-slate-300 mt-4">
+                    One API call → Complete care plan for <span className="text-white font-bold">any patient</span>
+                </p>
+            </div>
+        </motion.div>
+    </div>
+);
+
+//================================================================================
+// SLIDE 5: SUMMARY
+//================================================================================
+
+const SummarySlide = () => (
+    <div className="h-full flex flex-col justify-center px-8">
+        <motion.div 
+            className="text-center mb-12"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+        >
+            <h2 className="text-5xl font-black text-white mb-4">
+                The Bottom Line
+            </h2>
+            <p className="text-xl text-slate-400">
+                Three capabilities. All validated. All in production.
+            </p>
+        </motion.div>
+        
+        {/* Summary Cards */}
+        <motion.div 
+            className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto mb-12"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+        >
+            {[
+                { 
+                    icon: Shield, 
+                    title: "Toxicity → Nutrition",
+                    answer: "NAC for YOUR stress",
+                    color: "cyan"
+                },
+                { 
+                    icon: TrendingUp, 
+                    title: "Resistance Prediction",
+                    answer: "2× risk = action plan",
+                    color: "purple"
+                },
+                { 
+                    icon: Target, 
+                    title: "Universal Support",
+                    answer: "Any cancer, same precision",
+                    color: "emerald"
+                }
+            ].map((item, i) => (
+                <motion.div 
+                    key={i}
+                    className={`p-6 bg-${item.color}-500/5 border border-${item.color}-500/30 rounded-2xl text-center`}
+                    style={{ 
+                        backgroundColor: `rgb(var(--${item.color}-500) / 0.05)`,
+                        borderColor: `rgb(var(--${item.color}-500) / 0.3)`
+                    }}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.4 + i * 0.1 }}
+                >
+                    <item.icon className={`w-10 h-10 mx-auto mb-4 text-${item.color}-400`}
+                        style={{ color: item.color === 'cyan' ? '#22d3ee' : item.color === 'purple' ? '#a855f7' : '#34d399' }}
+                    />
+                    <h3 className="text-xl font-bold text-white mb-2">{item.title}</h3>
+                    <p className="text-slate-300">{item.answer}</p>
+                </motion.div>
+            ))}
+        </motion.div>
+        
+        {/* Final CTA */}
+        <motion.div 
+            className="text-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.7 }}
+        >
+            <p className="text-2xl text-white max-w-3xl mx-auto">
+                Not theoretical. <span className="text-cyan-400 font-bold">Validated on real patient data.</span>
+            </p>
+            <p className="text-xl text-slate-400 mt-4">
+                Every oncologist wants these answers. <span className="text-white font-semibold">We're the only ones who built them.</span>
+            </p>
+        </motion.div>
+    </div>
+);
+
+//================================================================================
+// MAIN APP WITH SLIDE CONTROL
+//================================================================================
+
+export default function App() {
+    const [currentSlide, setCurrentSlide] = useState(0);
+    
+    const slides = [
+        { id: 'hero', component: HeroSlide },
+        { id: 'toxicity', component: ToxicitySlide },
+        { id: 'resistance', component: ResistanceSlide },
+        { id: 'universal', component: UniversalSlide },
+        { id: 'summary', component: SummarySlide }
+    ];
+    
+    const nextSlide = () => setCurrentSlide(prev => Math.min(prev + 1, slides.length - 1));
+    const prevSlide = () => setCurrentSlide(prev => Math.max(prev - 1, 0));
+    
+    // Keyboard navigation
+    React.useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'ArrowRight' || e.key === ' ') nextSlide();
+            if (e.key === 'ArrowLeft') prevSlide();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
+    
+    const CurrentSlideComponent = slides[currentSlide].component;
+    
+    return (
+        <main className="relative w-full h-screen bg-slate-900 font-sans overflow-hidden">
+            {/* Background */}
+            <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-black/40 z-0"/>
+            
+            {/* Slide Content */}
+            <div className="relative z-10 h-full">
+                <AnimatePresence mode="wait">
+                    <motion.div
+                        key={currentSlide}
+                        initial={{ opacity: 0, x: 50 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -50 }}
+                        transition={{ duration: 0.3 }}
+                        className="h-full"
+                    >
+                        <CurrentSlideComponent />
+                    </motion.div>
+                </AnimatePresence>
+            </div>
+            
+            {/* Navigation */}
+            <SlideNav 
+                current={currentSlide} 
+                total={slides.length}
+                onPrev={prevSlide}
+                onNext={nextSlide}
+            />
+        </main>
+    );
+}

@@ -1,0 +1,391 @@
+---
+alwaysApply: false
+description: Complete doctrine for exporting and restoring Cursor chat history from SQLite databases
+---
+
+# ⚔️ CURSOR CHAT HISTORY EXPORT & RESTORE DOCTRINE
+
+**Last Updated:** January 19, 2025  
+**Status:** ✅ **BATTLE-TESTED** - Complete export/restore workflow  
+**Purpose:** Recover deleted chat histories and maintain chat backups
+
+---
+
+## 🎯 EXECUTIVE SUMMARY
+
+Cursor stores all chat history in a SQLite database. This doctrine provides complete procedures for:
+- **Exporting** chat history from current database and backups
+- **Restoring** deleted chat histories
+- **Merging** multiple chat sources
+- **Troubleshooting** missing conversations
+
+---
+
+## 📊 DATABASE ARCHITECTURE
+
+### **Primary Database Location**
+```
+/Users/fahadkiani/Library/Application Support/Cursor/User/globalStorage/state.vscdb
+```
+
+### **Backup Database Location**
+```
+/Users/fahadkiani/Library/Application Support/Cursor/User/globalStorage/state.vscdb.backup
+```
+
+### **Database Schema**
+
+#### **Table 1: `cursorDiskKV` (Primary Chat Storage)**
+- **Schema:** `CREATE TABLE cursorDiskKV (key TEXT UNIQUE ON CONFLICT REPLACE, value BLOB);`
+- **Purpose:** Stores actual chat messages, bubbles, checkpoints, and conversation data
+- **Key Patterns:**
+  - `bubbleId:{conversation_id}:{bubble_id}` - Individual chat messages (361+ entries)
+  - `checkpointId:{conversation_id}:{checkpoint_id}` - Conversation checkpoints (48+ entries)
+  - `messageRequestContext:{conversation_id}:{context_id}` - Message context (30+ entries)
+  - `composerData:{composer_id}` - Composer chat data (15+ entries)
+
+#### **Table 2: `ItemTable` (UI State & Metadata)**
+- **Schema:** `CREATE TABLE ItemTable (key TEXT UNIQUE ON CONFLICT REPLACE, value BLOB);`
+- **Purpose:** Stores UI state, panel visibility, and chat metadata
+- **Key Patterns:**
+  - `chat.workspaceTransfer` - Workspace transfer data
+  - `cursor/agentLayout.sidebarLocation` - Agent layout state
+  - `workbench.panel.composerChatViewPane.{uuid}.hidden` - Panel visibility (27+ entries)
+
+### **Conversation ID Structure**
+- **Format:** `{36-char-uuid}` (e.g., `9c34745e-6162-4acc-9c78-0d78c041d091`)
+- **Location:** First 36 characters of `bubbleId:` keys
+- **Example Keys:**
+  - `bubbleId:9c34745e-6162-4acc-9c78-0d78c041d091:{bubble_uuid}`
+  - `checkpointId:9c34745e-6162-4acc-9c78-0d78c041d091:{checkpoint_uuid}`
+
+---
+
+## 🔍 DATA DISCOVERY PATTERNS
+
+### **Complete Chat Data Patterns**
+All chat/agent data matches these patterns:
+
+```sql
+-- cursorDiskKV patterns (primary storage)
+key LIKE '%bubble%'      -- Chat messages (361+ entries)
+key LIKE '%message%'     -- Message contexts (30+ entries)
+key LIKE '%checkpoint%'  -- Conversation checkpoints (48+ entries)
+key LIKE '%composer%'    -- Composer data (15+ entries)
+key LIKE '%agent%'       -- Agent-related data
+key LIKE '%chat%'        -- Chat metadata
+key LIKE '%conversation%' -- Conversation metadata
+key LIKE '%thread%'      -- Thread data
+
+-- ItemTable patterns (UI state)
+key LIKE '%chat%'        -- Chat UI state (27+ entries)
+key LIKE '%agent%'       -- Agent UI state (2+ entries)
+key LIKE '%composer%'    -- Composer UI state
+```
+
+### **Counting Chat Entries**
+```bash
+# Count all chat entries in cursorDiskKV
+sqlite3 "$CURSOR_DB" "SELECT COUNT(*) FROM cursorDiskKV WHERE 
+  key LIKE '%bubble%' OR 
+  key LIKE '%message%' OR 
+  key LIKE '%checkpoint%' OR 
+  key LIKE '%composer%' OR 
+  key LIKE '%agent%' OR 
+  key LIKE '%chat%' OR
+  key LIKE '%conversation%' OR
+  key LIKE '%thread%';"
+
+# Count all chat entries in ItemTable
+sqlite3 "$CURSOR_DB" "SELECT COUNT(*) FROM ItemTable WHERE 
+  key LIKE '%chat%' OR 
+  key LIKE '%agent%' OR 
+  key LIKE '%composer%';"
+```
+
+### **Finding Conversation IDs**
+```bash
+# List all conversation IDs
+sqlite3 "$CURSOR_DB" "SELECT DISTINCT substr(key, 1, 36) as conv_id 
+FROM cursorDiskKV 
+WHERE key LIKE 'bubbleId:%' 
+ORDER BY conv_id;"
+
+# Count entries per conversation
+sqlite3 "$CURSOR_DB" "SELECT substr(key, 1, 36) as conv_id, COUNT(*) as count
+FROM cursorDiskKV 
+WHERE key LIKE 'bubbleId:%'
+GROUP BY conv_id
+ORDER BY count DESC;"
+```
+
+---
+
+## 📤 EXPORT PROCEDURES
+
+### **Script 1: Export Current Database**
+**Location:** `/Users/fahadkiani/EXPORT_ALL_CHAT_HISTORY.sh`
+
+**What It Does:**
+1. Exports ALL chat data from current `state.vscdb`
+2. Captures both `cursorDiskKV` and `ItemTable`
+3. Creates timestamped SQL export file
+4. Creates full database backup
+5. Shows conversation IDs and entry counts
+
+**Usage:**
+```bash
+/Users/fahadkiani/EXPORT_ALL_CHAT_HISTORY.sh
+```
+
+**Output:**
+- SQL Export: `~/cursor_chat_backups/cursor_chat_history_COMPLETE_{timestamp}.sql`
+- Full Backup: `~/cursor_chat_backups/state.vscdb.backup_{timestamp}`
+
+### **Script 2: Export From Backup**
+**Location:** `/Users/fahadkiani/EXPORT_FROM_BACKUP.sh`
+
+**What It Does:**
+1. Exports ALL chat data from `state.vscdb.backup` (older chats)
+2. Captures both `cursorDiskKV` and `ItemTable`
+3. Creates timestamped SQL export file
+4. Shows conversation IDs and entry counts
+
+**Usage:**
+```bash
+/Users/fahadkiani/EXPORT_FROM_BACKUP.sh
+```
+
+**Output:**
+- SQL Export: `~/cursor_chat_backups/cursor_chat_history_FROM_BACKUP_{timestamp}.sql`
+
+### **Manual Export (SQLite Direct)**
+```bash
+# Export from current database
+sqlite3 "/Users/fahadkiani/Library/Application Support/Cursor/User/globalStorage/state.vscdb" <<'EOF' > ~/cursor_chat_backups/manual_export.sql
+.mode insert cursorDiskKV
+SELECT key, value FROM cursorDiskKV WHERE 
+  key LIKE '%bubble%' OR 
+  key LIKE '%message%' OR 
+  key LIKE '%checkpoint%' OR 
+  key LIKE '%composer%' OR 
+  key LIKE '%agent%' OR 
+  key LIKE '%chat%' OR
+  key LIKE '%conversation%' OR
+  key LIKE '%thread%'
+ORDER BY key;
+
+.mode insert ItemTable
+SELECT key, value FROM ItemTable WHERE 
+  key LIKE '%chat%' OR 
+  key LIKE '%agent%' OR 
+  key LIKE '%composer%' OR
+  key LIKE '%conversation%' OR
+  key LIKE '%history%'
+ORDER BY key;
+EOF
+```
+
+---
+
+## 📥 RESTORE PROCEDURES
+
+### **Script: Restore From SQL Export**
+**Location:** `/Users/fahadkiani/RESTORE_CHAT_HISTORY_FROM_SQL.sh`
+
+**What It Does:**
+1. Checks if Cursor is running (safety check)
+2. Finds most recent export file
+3. Backs up current database (before restore)
+4. Imports SQL export into current database
+5. Verifies restore success
+
+**Usage:**
+```bash
+# 1. Quit Cursor completely (Cmd+Q)
+# 2. Run restore script
+/Users/fahadkiani/RESTORE_CHAT_HISTORY_FROM_SQL.sh
+# 3. Open Cursor and wait 1-2 minutes
+```
+
+### **Manual Restore (SQLite Direct)**
+```bash
+# 1. Quit Cursor completely (Cmd+Q)
+# 2. Import SQL export
+sqlite3 "/Users/fahadkiani/Library/Application Support/Cursor/User/globalStorage/state.vscdb" < ~/cursor_chat_backups/cursor_chat_history_COMPLETE_*.sql
+
+# 3. Verify import
+sqlite3 "/Users/fahadkiani/Library/Application Support/Cursor/User/globalStorage/state.vscdb" "SELECT COUNT(*) FROM cursorDiskKV WHERE key LIKE '%bubble%';"
+
+# 4. Open Cursor and wait 1-2 minutes
+```
+
+### **Merging Multiple Sources**
+To restore older chats from backup while keeping current chats:
+
+```bash
+# 1. Export from backup (has older chats)
+/Users/fahadkiani/EXPORT_FROM_BACKUP.sh
+
+# 2. Quit Cursor (Cmd+Q)
+
+# 3. Import backup export (adds to current, doesn't replace)
+sqlite3 "/Users/fahadkiani/Library/Application Support/Cursor/User/globalStorage/state.vscdb" < ~/cursor_chat_backups/cursor_chat_history_FROM_BACKUP_*.sql
+
+# 4. Open Cursor and wait 1-2 minutes
+```
+
+---
+
+## 🔧 TROUBLESHOOTING
+
+### **Problem: Chats Don't Appear After Restore**
+
+**Diagnosis:**
+1. Check if Cursor was completely quit before restore
+2. Verify import succeeded (check entry count)
+3. Check if conversation IDs match
+4. Wait 1-2 minutes for Cursor to sync
+
+**Solutions:**
+```bash
+# Verify restore worked
+sqlite3 "$CURSOR_DB" "SELECT COUNT(*) FROM cursorDiskKV WHERE key LIKE '%bubble%';"
+
+# Check conversation IDs
+sqlite3 "$CURSOR_DB" "SELECT DISTINCT substr(key, 1, 36) FROM cursorDiskKV WHERE key LIKE 'bubbleId:%';"
+
+# Try restarting Cursor (Cmd+Q, then reopen)
+```
+
+### **Problem: Export Has Fewer Entries Than Database**
+
+**Diagnosis:**
+- Export patterns might be missing some keys
+- Check what patterns are actually in the database
+
+**Solution:**
+```bash
+# Find all unique key patterns
+sqlite3 "$CURSOR_DB" "SELECT DISTINCT substr(key, 1, 20) as pattern, COUNT(*) 
+FROM cursorDiskKV 
+GROUP BY pattern 
+ORDER BY COUNT(*) DESC 
+LIMIT 30;"
+
+# Update export script with missing patterns
+```
+
+### **Problem: Backup Has More Entries Than Current**
+
+**Diagnosis:**
+- Backup contains older chats that were deleted from current DB
+- This is expected - backup is from November 19, 2025
+
+**Solution:**
+- Export from backup to restore older chats:
+```bash
+/Users/fahadkiani/EXPORT_FROM_BACKUP.sh
+# Then restore using RESTORE_CHAT_HISTORY_FROM_SQL.sh
+```
+
+### **Problem: Database Locked / Cursor Still Running**
+
+**Error:** `database is locked`
+
+**Solution:**
+1. Quit Cursor completely (Cmd+Q, not just close window)
+2. Wait 5 seconds
+3. Verify Cursor is not running: `pgrep -x "Cursor"`
+4. Retry restore
+
+---
+
+## 📋 BEST PRACTICES
+
+### **Regular Backups**
+1. **Weekly Exports:** Run `EXPORT_ALL_CHAT_HISTORY.sh` weekly
+2. **Before Major Updates:** Export before Cursor updates
+3. **Cloud Backup:** Upload exports to Google Drive/Dropbox
+
+### **Export File Management**
+- **Naming:** Use timestamped filenames (automatic in scripts)
+- **Location:** `~/cursor_chat_backups/`
+- **Retention:** Keep last 10 exports, archive older ones
+
+### **Restore Safety**
+1. **Always backup current DB** before restore (scripts do this automatically)
+2. **Quit Cursor** before any database operations
+3. **Verify restore** by checking entry counts
+4. **Test in separate workspace** if possible
+
+### **Database Size Management**
+- **Current DB:** ~4.7MB (496 entries)
+- **Backup DB:** ~7.2MB (541 entries)
+- **Export Files:** ~4-5MB each
+- **Monitor size** - if DB grows >100MB, consider cleanup
+
+---
+
+## 🎯 QUICK REFERENCE
+
+### **Export Current Chats**
+```bash
+/Users/fahadkiani/EXPORT_ALL_CHAT_HISTORY.sh
+```
+
+### **Export Older Chats (From Backup)**
+```bash
+/Users/fahadkiani/EXPORT_FROM_BACKUP.sh
+```
+
+### **Restore Chats**
+```bash
+# 1. Quit Cursor (Cmd+Q)
+# 2. Run restore
+/Users/fahadkiani/RESTORE_CHAT_HISTORY_FROM_SQL.sh
+# 3. Open Cursor
+```
+
+### **Check Chat Count**
+```bash
+sqlite3 "/Users/fahadkiani/Library/Application Support/Cursor/User/globalStorage/state.vscdb" "SELECT COUNT(*) FROM cursorDiskKV WHERE key LIKE '%bubble%';"
+```
+
+### **List Conversations**
+```bash
+sqlite3 "/Users/fahadkiani/Library/Application Support/Cursor/User/globalStorage/state.vscdb" "SELECT DISTINCT substr(key, 1, 36) FROM cursorDiskKV WHERE key LIKE 'bubbleId:%';"
+```
+
+---
+
+## 📊 KNOWN STATISTICS
+
+### **Current Database (state.vscdb)**
+- **Size:** 4.7MB
+- **Total Chat Entries:** 496
+- **Bubble Entries:** 361
+- **Conversation IDs:** 2
+  - `46bfc8c2-1578-4953-b58c-5316d107b521` (96 bubbles)
+  - `9c34745e-6162-4acc-9c78-0d78c041d091` (251 bubbles)
+
+### **Backup Database (state.vscdb.backup)**
+- **Size:** 7.2MB
+- **Date:** November 19, 2025
+- **Total Chat Entries:** 541
+- **Additional Entries:** 45 (older chats)
+
+### **Export Files**
+- **Format:** SQL INSERT statements
+- **Size:** ~4-5MB per export
+- **Location:** `~/cursor_chat_backups/`
+
+---
+
+## ⚔️ DOCTRINE STATUS: ACTIVE
+
+**LAST UPDATED:** January 19, 2025  
+**APPLIES TO:** All Cursor chat history export/restore operations  
+**ENFORCEMENT:** Mandatory for chat recovery operations
+
+**This doctrine represents the complete knowledge base for Cursor chat history management. Every pattern, procedure, and troubleshooting step is documented for maximum clarity and actionability.**

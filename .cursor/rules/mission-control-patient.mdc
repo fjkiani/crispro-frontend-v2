@@ -1,0 +1,938 @@
+---
+alwaysApply: false
+description: Complete design specification for Mission Control / Command Center dashboard focused on life-saving capabilities for Ayesha.
+---
+
+# Mission Control / Command Center Dashboard - Complete Design Specification
+
+**Last Updated:** January 14, 2025  
+**Status:** Design Phase - Ready for Implementation  
+**Priority:** P0 - Life-Saving Critical
+
+---
+
+## 🎯 EXECUTIVE SUMMARY
+
+**Mission:** Create a unified command center that aggregates ALL existing capabilities into a single, actionable dashboard that directly saves Ayesha's life by enabling rapid, evidence-based decisions.
+
+**Core Value Proposition:** 
+- **ONE SCREEN** to see Ayesha's complete genomic profile, treatment options, risks, and next actions
+- **REAL-TIME** integration of SAE, Evo2, AlphaFold3, clinical trials, and treatment intelligence
+- **ACTIONABLE** - every data point leads to a clear next step
+- **LIFE-SAVING** - focused on imminent risks and high-impact interventions
+
+---
+
+## 🏗️ DASHBOARD ARCHITECTURE
+
+### Layout Structure (Responsive Grid)
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  HEADER: AYESHA - STAGE IVB OVARIAN CANCER | OVERALL RISK: HIGH ⚠️  │
+│  Critical Alerts: [3] | Last Updated: 2 hours ago                   │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────┬──────────────────────┬──────────────────────┐
+│  GENOMIC PROFILE     │  TREATMENT OPTIONS   │  CLINICAL TRIALS     │
+│  (Evo2 + AlphaFold3) │  (Drug Efficacy)     │  (Personalized)      │
+│                      │                      │                      │
+│  • Top Drivers       │  • PARP Inhibitors   │  • Top 5 Matches     │
+│  • DNA Repair Status │  • Platinum Agents   │  • Eligibility Score │
+│  • Mutation Burden   │  • Immunotherapy     │  • Success Predict   │
+└──────────────────────┴──────────────────────┴──────────────────────┘
+
+┌──────────────────────┬──────────────────────┬──────────────────────┐
+│  SAE PREDICTIONS     │  TOXICITY RISKS      │  SUPPORTIVE CARE     │
+│  (Clinical Outcomes) │  (PGx + Safety)      │  (Food/Supplements)  │
+│                      │                      │                      │
+│  • Trial Success     │  • Drug Interactions │  • Vitamin D         │
+│  • Resistance Risk   │  • Germline Risks    │  • Curcumin          │
+│  • Mechanism Vector  │  • Off-Target Safety │  • Omega-3           │
+└──────────────────────┴──────────────────────┴──────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  METASTASIS INTERCEPTION                                            │
+│  • 8-Step Cascade Assessment                                        │
+│  • High-Risk Pathways: [VEGF, MMP9, CXCR4]                         │
+│  • Recommended CRISPR Targets                                       │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  QUICK ACTIONS                                                      │
+│  [Analyze New Variant] [Run Treatment Sim] [Design CRISPR]         │
+│  [Export Report] [Schedule Trial Contact] [Update Profile]         │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 📊 SECTION 1: CRITICAL ALERTS & RISK SCORE (TOP PRIORITY)
+
+### Purpose
+**Immediate life-saving information** - what requires action NOW.
+
+### Components
+
+#### 1.1 Overall Risk Score
+- **Visual:** Large, color-coded circle (Green/Yellow/Red)
+- **Data Source:** Aggregate of metastasis risk, treatment failure probability, resistance prediction
+- **Backend Integration:** 
+  ```javascript
+  GET /api/clinical_genomics/risk_assessment
+  {
+    overall_risk: 0.78, // 0-1 scale
+    risk_level: "HIGH",
+    contributing_factors: [
+      "HRD-negative (DNA repair intact)",
+      "Prior platinum resistance",
+      "Stage IVB with ascites"
+    ]
+  }
+  ```
+
+#### 1.2 Critical Alerts Banner
+- **Alert Types:**
+  - 🔴 **IMMEDIATE:** New high-impact mutation detected (Evo2 delta > threshold)
+  - 🔴 **IMMEDIATE:** Predicted treatment resistance (SAE confidence > 0.75)
+  - 🟠 **URGENT:** Drug-drug interaction detected (PGx analysis)
+  - 🟠 **URGENT:** Clinical trial enrollment deadline approaching
+  - 🟡 **MONITOR:** Off-target CRISPR risk above threshold
+
+- **Backend Integration:**
+  ```javascript
+  GET /api/clinical_genomics/alerts
+  {
+    alerts: [
+      {
+        severity: "IMMEDIATE",
+        type: "RESISTANCE_PREDICTED",
+        message: "SAE predicts 82% probability of platinum resistance",
+        action: "Consider alternative therapy or combination",
+        timestamp: "2025-01-14T10:30:00Z"
+      }
+    ]
+  }
+  ```
+
+#### 1.3 Next Best Action Recommendation
+- **Visual:** Large, prominent button with clear text
+- **Examples:**
+  - "START: PARP Inhibitor (78% predicted success)"
+  - "SWITCH: Alternative platinum schedule"
+  - "DESIGN: CRISPR intervention for BRCA1"
+  - "ENROLL: Clinical trial NCT12345678 (94% match)"
+
+---
+
+## 📊 SECTION 2: GENOMIC PROFILE (Evo2 + AlphaFold3)
+
+### Purpose
+**Understand what's driving Ayesha's cancer** at the molecular level.
+
+### Components
+
+#### 2.1 Top Driver Mutations
+- **Visual:** Sortable table with Evo2 scores
+- **Columns:**
+  - Gene
+  - Mutation (HGVS)
+  - Evo2 Delta Score
+  - Impact (Functionality, Essentiality, Regulatory)
+  - Druggability Status
+
+- **Backend Integration:**
+  ```bash
+  POST /api/clinical_genomics/analyze_variant
+  # Uses existing endpoint from ayesha_plan.mdc (lines 147-158)
+  # Returns: spe_score, evidence_tier, badges, insights
+  ```
+
+- **Interactive Features:**
+  - Click mutation → Opens detailed dossier
+  - "View AlphaFold3" button → Shows structural impact
+  - "Design CRISPR" button → Pre-populates CRISPR Designer
+
+#### 2.2 DNA Repair Status Card
+- **Visual:** Large status indicator
+- **Data:**
+  - HRD Status: POSITIVE/NEGATIVE/UNCERTAIN
+  - DNA Repair Capacity Score (SAE)
+  - Implications: "PARP Inhibitor Sensitive" / "Platinum Primary"
+
+- **Backend Integration:**
+  ```javascript
+  // From SAE feature extraction
+  dna_repair_capacity = 0.6 * pathway_ddr + 0.2 * hrr_essentiality + 0.2 * exon_disruption
+  ```
+
+#### 2.3 Mutation Burden & Tumor Profile
+- **Metrics:**
+  - TMB (Tumor Mutational Burden): 8.2 mutations/Mb
+  - MSI Status: MSS (Microsatellite Stable)
+  - Neoantigen Load: Estimated count
+  - PD-L1 Expression: If available
+
+---
+
+## 📊 SECTION 3: TREATMENT OPTIONS (Drug Efficacy - S/P/E)
+
+### Purpose
+**Show ranked therapy options** with evidence and confidence.
+
+### Components
+
+#### 3.1 Drug Ranking Table
+- **Visual:** Interactive table with sparklines for confidence
+- **Columns:**
+  - Drug Class
+  - Efficacy Score (S/P/E)
+  - Confidence (0-1)
+  - Evidence Tier (I/II/III)
+  - Badges (RCT, Guideline, PathwayAligned)
+  - SAE Features (line_fitness, cross_resistance)
+
+- **Backend Integration:**
+  ```bash
+  POST /api/clinical_genomics/analyze_variant
+  # Returns drugs array with:
+  # - efficacy_score
+  # - confidence
+  # - evidence_tier
+  # - badges
+  # - sae_features (if include_sae_features: true)
+  ```
+
+- **Example Data:**
+  ```javascript
+  {
+    drug: "Niraparib (PARP Inhibitor)",
+    efficacy_score: 0.78,
+    confidence: 0.82,
+    evidence_tier: "I",
+    badges: ["RCT", "PathwayAligned"],
+    sae_features: {
+      line_fitness: 0.75,
+      cross_resistance: 0.15
+    },
+    rationale: "HRD-positive, no prior PARP exposure"
+  }
+  ```
+
+#### 3.2 Treatment Line Intelligence
+- **Visual:** Timeline showing L1, L2, L3 with current position
+- **Data:**
+  - Current Line: L3
+  - Prior Therapies: Carboplatin, Paclitaxel, Bevacizumab
+  - Sequencing Fitness: Scores for potential next therapies
+  - Cross-Resistance Warnings
+
+#### 3.3 Resistance Prediction
+- **Visual:** Warning card if resistance detected
+- **Data:**
+  - Predicted Resistance Mechanisms (from SAE)
+  - Confidence Score
+  - Alternative Strategies
+  - Time to Resistance (estimated)
+
+---
+
+## 📊 SECTION 4: SAE CLINICAL OUTCOME PREDICTIONS
+
+### Purpose
+**Predict clinical trial success** and treatment outcomes.
+
+### Components
+
+#### 4.1 Clinical Trial Success Predictor
+- **Visual:** Probability gauge for each trial type
+- **Data:**
+  - PARP Inhibitor Trial: 78% predicted success
+  - Platinum Combination: 62% predicted success
+  - Immunotherapy: 34% predicted success
+
+- **Backend Integration:**
+  ```javascript
+  // From SAE validation work
+  GET /api/sae/predict_trial_success
+  {
+    patient_profile: {
+      dna_repair_capacity: 0.45,
+      mechanism_vector: [0.9, 0.2, 0.3, 0.6, 0.1, 0.4, 0.2], // DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux
+      platinum_response: "sensitive"
+    },
+    predictions: [
+      {
+        trial_type: "PARP_INHIBITOR",
+        success_probability: 0.78,
+        confidence: 0.82,
+        rationale: "High DDR pathway activity, HRD-positive"
+      }
+    ]
+  }
+  ```
+
+#### 4.2 Mechanism Vector Visualization
+- **Visual:** 7-pathway radar chart
+- **Pathways:** DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux
+- **Interactive:** Click pathway → See contributing genes/mutations
+
+#### 4.3 Resistance Risk Timeline
+- **Visual:** Timeline showing predicted resistance emergence
+- **Data:**
+  - Current Therapy: Platinum + Bevacizumab
+  - Predicted Resistance: 6-9 months (confidence 0.68)
+  - Mechanism: VEGF pathway escape
+  - Recommended Action: Add anti-VEGF or switch to PARP
+
+---
+
+## 📊 SECTION 5: CLINICAL TRIALS (Personalized Matching)
+
+### Purpose
+**Show most relevant trials** with eligibility and predicted success.
+
+### Components
+
+#### 5.1 Top Trial Matches
+- **Visual:** Card-based layout (5 trials max)
+- **Data per Trial:**
+  - Trial ID (NCT number)
+  - Title
+  - Phase
+  - Location (proximity to Ayesha)
+  - Eligibility Match Score (0-100%)
+  - SAE-Predicted Success Rate
+  - Quick Action: "Schedule Contact"
+
+- **Backend Integration:**
+  ```bash
+  GET /api/clinical_trials/search
+  # With filters: disease, biomarkers, location
+  # Returns: matched trials with eligibility scores
+  ```
+
+#### 5.2 Eligibility Criteria Breakdown
+- **Visual:** Expandable section per trial
+- **Data:**
+  - ✅ Met: HRD-positive, Stage IV, ECOG 0-1
+  - ⚠️ Conditional: Prior platinum (allowed if >6 months)
+  - ❌ Not Met: None
+
+---
+
+## 📊 SECTION 6: TOXICITY RISKS (PGx + Safety)
+
+### Purpose
+**Prevent life-threatening adverse events** before they happen.
+
+### Components
+
+#### 6.1 Pharmacogenomic Warnings
+- **Visual:** Red/yellow alert cards
+- **Data:**
+  - Germline Variants Detected: DPYD (c.1905+1G>A)
+  - Drug Impact: 5-FU → Severe toxicity risk
+  - Recommendation: Avoid or reduce dose by 50%
+
+- **Backend Integration:**
+  ```bash
+  POST /api/safety/toxicity_risk
+  # From ayesha_plan.mdc (lines 254-263)
+  {
+    patient: {
+      germlineVariants: [
+        {gene: "DPYD", chrom: "1", pos: 97450058, ref: "C", alt: "T"}
+      ]
+    },
+    candidate: {
+      type: "drug",
+      moa: "platinum_agent"
+    }
+  }
+  ```
+
+#### 6.2 Drug-Drug Interactions
+- **Visual:** Interaction matrix
+- **Data:**
+  - Current Medications: Warfarin, Metformin
+  - Proposed Therapy: Niraparib
+  - Interaction Level: MODERATE
+  - Management: Monitor INR weekly
+
+#### 6.3 Off-Target CRISPR Risk
+- **Visual:** Safety score gauge
+- **Data:**
+  - Guide RNA Sequence
+  - Predicted Off-Targets: 3 (1mm), 12 (2mm)
+  - Safety Score: 0.87
+  - Recommendation: APPROVED for design
+
+- **Backend Integration:**
+  ```bash
+  POST /api/safety/off_target_preview
+  # From ayesha_plan.mdc (lines 265-272)
+  ```
+
+---
+
+## 📊 SECTION 7: SUPPORTIVE CARE (Food/Supplements)
+
+### Purpose
+**Evidence-based recommendations** for complementary interventions.
+
+### Components
+
+#### 7.1 Recommended Supplements
+- **Visual:** Card layout with S/P/E scores
+- **Data per Supplement:**
+  - Name: Vitamin D
+  - S/P/E Score: 0.68
+  - Evidence Tier: II
+  - Rationale: "Supports immune function, anti-inflammatory"
+  - Dosage: 2000-4000 IU/day
+  - Interactions: None with current meds
+  - Safety: GREEN
+
+- **Backend Integration:**
+  ```bash
+  POST /api/hypothesis/validate_food_dynamic
+  # From ayesha_plan.mdc (lines 194-214)
+  {
+    compound: "Vitamin D",
+    disease_context: {
+      disease: "ovarian_cancer_hgs",
+      biomarkers: {HRD: "POSITIVE", TMB: 8.2},
+      pathways_disrupted: ["DNA repair", "Cell cycle"]
+    },
+    treatment_history: {
+      current_line: "L3",
+      prior_therapies: ["carboplatin", "paclitaxel"]
+    }
+  }
+  ```
+
+#### 7.2 Lifestyle Recommendations
+- **Data:**
+  - Exercise: Moderate intensity, 150 min/week
+  - Diet: Mediterranean, anti-inflammatory
+  - Sleep: 7-9 hours/night
+  - Stress Management: Mindfulness, therapy
+
+---
+
+## 📊 SECTION 8: METASTASIS INTERCEPTION
+
+### Purpose
+**Prevent cancer spread** through targeted interventions.
+
+### Components
+
+#### 8.1 8-Step Cascade Assessment
+- **Visual:** Horizontal progress bar with risk scores per step
+- **Steps:**
+  1. Local Invasion (RISK: HIGH - 0.82)
+  2. Intravasation (RISK: MODERATE - 0.65)
+  3. Circulation Survival (RISK: HIGH - 0.78)
+  4. Extravasation (RISK: MODERATE - 0.58)
+  5. Dormancy (RISK: LOW - 0.32)
+  6. Angiogenesis (RISK: HIGH - 0.89)
+  7. Immune Evasion (RISK: MODERATE - 0.61)
+  8. Colonization (RISK: HIGH - 0.75)
+
+- **Backend Integration:**
+  ```bash
+  POST /api/metastasis/assess
+  # From metastasis framework completion
+  # Returns: risk_scores per step, contributing genes
+  ```
+
+#### 8.2 High-Risk Pathways
+- **Visual:** Highlighted pathway cards
+- **Data:**
+  - VEGF Pathway: HIGH (0.89) → Drives angiogenesis
+  - MMP9 Activity: HIGH (0.82) → ECM degradation
+  - CXCR4/CXCL12: HIGH (0.78) → Homing to metastatic sites
+
+#### 8.3 CRISPR Target Recommendations
+- **Visual:** Ranked list of targets
+- **Data:**
+  - Target: VEGFA
+  - Rationale: Block angiogenesis (Step 6)
+  - Feasibility Score: 0.91
+  - Safety Score: 0.87
+  - Action: [Design Guides] button
+
+---
+
+## 📊 SECTION 9: QUICK ACTIONS (Bottom Bar)
+
+### Purpose
+**One-click access** to critical functions.
+
+### Components
+
+#### 9.1 Action Buttons
+- **[Analyze New Variant]**
+  - Opens: Mutation input form
+  - Runs: Evo2 scoring + AlphaFold3 + S/P/E
+  - Updates: All dashboard sections
+
+- **[Run Treatment Simulation]**
+  - Opens: Treatment scenario builder
+  - Compares: Multiple therapy sequences
+  - Predicts: Outcomes using SAE
+
+- **[Design CRISPR Intervention]**
+  - Opens: CRISPR Designer
+  - Pre-populates: High-priority targets from metastasis section
+  - Runs: Safety checks automatically
+
+- **[Export Clinical Report]**
+  - Generates: PDF with all dashboard data
+  - Includes: Genomic profile, treatment recommendations, trial matches
+  - Action: Download or send to oncologist
+
+- **[Schedule Trial Contact]**
+  - Opens: Trial coordinator contact form
+  - Pre-fills: Ayesha's eligibility data
+  - Sends: Email to trial site with attached report
+
+- **[Update Patient Profile]**
+  - Opens: Profile editor
+  - Updates: Biomarkers, treatment history, medications
+  - Refreshes: All predictions automatically
+
+---
+
+## 🔌 TECHNICAL IMPLEMENTATION
+
+### Frontend Architecture
+
+#### Component Structure
+```
+src/pages/MissionControl/
+├── MissionControlDashboard.jsx (Main container)
+├── components/
+│   ├── CriticalAlerts.jsx
+│   ├── RiskScore.jsx
+│   ├── GenomicProfile/
+│   │   ├── DriverMutations.jsx
+│   │   ├── DNARepairStatus.jsx
+│   │   └── MutationBurden.jsx
+│   ├── TreatmentOptions/
+│   │   ├── DrugRanking.jsx
+│   │   ├── TreatmentTimeline.jsx
+│   │   └── ResistancePrediction.jsx
+│   ├── SAEPredictions/
+│   │   ├── TrialSuccessPredictor.jsx
+│   │   ├── MechanismVector.jsx
+│   │   └── ResistanceTimeline.jsx
+│   ├── ClinicalTrials/
+│   │   ├── TrialMatches.jsx
+│   │   └── EligibilityCriteria.jsx
+│   ├── ToxicityRisks/
+│   │   ├── PharmacogenomicWarnings.jsx
+│   │   ├── DrugInteractions.jsx
+│   │   └── OffTargetRisk.jsx
+│   ├── SupportiveCare/
+│   │   ├── SupplementRecommendations.jsx
+│   │   └── LifestyleGuidance.jsx
+│   ├── MetastasisInterception/
+│   │   ├── CascadeAssessment.jsx
+│   │   ├── HighRiskPathways.jsx
+│   │   └── CRISPRTargets.jsx
+│   └── QuickActions.jsx
+└── hooks/
+    ├── useMissionControlData.js
+    ├── useRiskAssessment.js
+    ├── useTreatmentOptions.js
+    └── useRealTimeUpdates.js
+```
+
+#### Data Fetching Strategy
+```javascript
+// useMissionControlData.js
+import { useEffect, useState } from 'react';
+
+export const useMissionControlData = (patientId) => {
+  const [data, setData] = useState({
+    riskAssessment: null,
+    genomicProfile: null,
+    treatmentOptions: null,
+    saePredict: null,
+    clinicalTrials: null,
+    toxicityRisks: null,
+    supportiveCare: null,
+    metastasisRisk: null,
+    loading: true,
+    error: null
+  });
+
+  useEffect(() => {
+    const fetchAllData = async () => {
+      try {
+        // Parallel API calls for all sections
+        const [
+          riskAssessment,
+          genomicProfile,
+          treatmentOptions,
+          saePredict,
+          clinicalTrials,
+          toxicityRisks,
+          supportiveCare,
+          metastasisRisk
+        ] = await Promise.all([
+          fetch(`/api/clinical_genomics/risk_assessment?patient_id=${patientId}`),
+          fetch(`/api/clinical_genomics/analyze_variant`, {
+            method: 'POST',
+            body: JSON.stringify({
+              mutations: data.mutations,
+              disease: 'ovarian_carcinoma',
+              profile: 'richer',
+              options: { include_sae_features: true }
+            })
+          }),
+          // ... other API calls
+        ]);
+
+        setData({
+          riskAssessment: await riskAssessment.json(),
+          genomicProfile: await genomicProfile.json(),
+          // ... other data
+          loading: false,
+          error: null
+        });
+      } catch (error) {
+        setData(prev => ({ ...prev, loading: false, error: error.message }));
+      }
+    };
+
+    fetchAllData();
+  }, [patientId]);
+
+  return data;
+};
+```
+
+#### Real-Time Updates
+```javascript
+// useRealTimeUpdates.js
+import { useEffect, useState } from 'react';
+
+export const useRealTimeUpdates = (patientId) => {
+  const [updates, setUpdates] = useState([]);
+
+  useEffect(() => {
+    // WebSocket connection for real-time alerts
+    const ws = new WebSocket(`ws://localhost:8000/api/ws/alerts/${patientId}`);
+
+    ws.onmessage = (event) => {
+      const alert = JSON.parse(event.data);
+      setUpdates(prev => [alert, ...prev]);
+    };
+
+    return () => ws.close();
+  }, [patientId]);
+
+  return updates;
+};
+```
+
+### Backend Endpoints
+
+#### New Endpoints Required
+
+##### Risk Assessment Aggregator
+```python
+# api/routers/clinical_genomics.py
+
+@router.get("/risk_assessment")
+async def get_risk_assessment(patient_id: str):
+    """
+    Aggregate risk score from multiple sources.
+    """
+    # Get metastasis risk
+    metastasis_risk = await metastasis_service.assess_risk(patient_id)
+    
+    # Get treatment failure probability
+    treatment_risk = await treatment_service.predict_failure(patient_id)
+    
+    # Get resistance prediction
+    resistance_risk = await sae_service.predict_resistance(patient_id)
+    
+    overall_risk = (
+        metastasis_risk * 0.4 +
+        treatment_risk * 0.3 +
+        resistance_risk * 0.3
+    )
+    
+    return {
+        "overall_risk": overall_risk,
+        "risk_level": "HIGH" if overall_risk > 0.7 else "MODERATE" if overall_risk > 0.4 else "LOW",
+        "contributing_factors": [...]
+    }
+```
+
+##### SAE Trial Success Predictor
+```python
+# api/routers/sae.py
+
+@router.post("/predict_trial_success")
+async def predict_trial_success(patient_profile: PatientProfile):
+    """
+    Predict clinical trial success based on SAE features.
+    """
+    # Extract SAE features
+    dna_repair = compute_dna_repair_capacity(patient_profile)
+    mechanism_vector = compute_mechanism_vector(patient_profile)
+    
+    # Run predictions for different trial types
+    predictions = []
+    for trial_type in ["PARP_INHIBITOR", "PLATINUM_COMBO", "IMMUNOTHERAPY"]:
+        success_prob = sae_model.predict(
+            dna_repair=dna_repair,
+            mechanism_vector=mechanism_vector,
+            trial_type=trial_type
+        )
+        
+        predictions.append({
+            "trial_type": trial_type,
+            "success_probability": success_prob,
+            "confidence": sae_model.confidence,
+            "rationale": sae_model.explain()
+        })
+    
+    return {"predictions": predictions}
+```
+
+##### Critical Alerts Service
+```python
+# api/routers/clinical_genomics.py
+
+@router.get("/alerts")
+async def get_critical_alerts(patient_id: str):
+    """
+    Generate critical alerts based on latest patient data.
+    """
+    alerts = []
+    
+    # Check for new high-impact mutations
+    new_mutations = await check_new_mutations(patient_id)
+    for mut in new_mutations:
+        if mut.evo2_delta > 5.0:  # High impact threshold
+            alerts.append({
+                "severity": "IMMEDIATE",
+                "type": "HIGH_IMPACT_MUTATION",
+                "message": f"New {mut.gene} mutation detected with Evo2 delta {mut.evo2_delta}",
+                "action": "Review genomic profile and consider therapeutic implications",
+                "timestamp": datetime.now().isoformat()
+            })
+    
+    # Check for resistance prediction
+    resistance_pred = await sae_service.predict_resistance(patient_id)
+    if resistance_pred.probability > 0.75:
+        alerts.append({
+            "severity": "IMMEDIATE",
+            "type": "RESISTANCE_PREDICTED",
+            "message": f"SAE predicts {resistance_pred.probability*100}% probability of resistance",
+            "action": "Consider alternative therapy or combination",
+            "timestamp": datetime.now().isoformat()
+        })
+    
+    # Check for drug interactions
+    interactions = await toxicity_service.check_interactions(patient_id)
+    for interaction in interactions:
+        if interaction.severity == "SEVERE":
+            alerts.append({
+                "severity": "URGENT",
+                "type": "DRUG_INTERACTION",
+                "message": f"{interaction.drug1} + {interaction.drug2}: {interaction.effect}",
+                "action": interaction.recommendation,
+                "timestamp": datetime.now().isoformat()
+            })
+    
+    return {"alerts": sorted(alerts, key=lambda x: x["severity"], reverse=True)}
+```
+
+---
+
+## 🎨 UI/UX DESIGN PRINCIPLES
+
+### Visual Design
+
+#### Color Coding for Severity
+- 🔴 **RED:** Immediate action required (life-threatening)
+- 🟠 **ORANGE:** Urgent action required (within 24-48 hours)
+- 🟡 **YELLOW:** Monitor closely (within 1 week)
+- 🟢 **GREEN:** On track, no immediate concerns
+- ⚪ **GRAY:** Pending data or not applicable
+
+#### Typography Hierarchy
+- **Risk Score:** 48px, bold, color-coded
+- **Section Headers:** 24px, bold
+- **Card Titles:** 18px, semi-bold
+- **Body Text:** 14px, regular
+- **Captions:** 12px, light
+
+#### Interactive Elements
+- **Hover States:** Subtle elevation + border highlight
+- **Click Actions:** Ripple effect + loading indicator
+- **Expandable Sections:** Smooth accordion animation
+- **Tooltips:** Context-sensitive help on all medical terms
+
+### Responsive Design
+- **Desktop (>1200px):** 3-column grid layout
+- **Tablet (768-1200px):** 2-column grid layout
+- **Mobile (<768px):** Single column, collapsible sections
+
+### Accessibility
+- **WCAG 2.1 AA Compliance:** All text contrast ratios ≥4.5:1
+- **Keyboard Navigation:** Full keyboard support for all actions
+- **Screen Reader Support:** Proper ARIA labels on all components
+- **Focus Indicators:** Clear visual focus states
+
+---
+
+## 📱 USER WORKFLOWS
+
+### Workflow 1: Morning Dashboard Review (5 minutes)
+1. **Login** → Dashboard loads with latest data
+2. **Check Critical Alerts** → 3 alerts: resistance predicted, trial enrollment deadline, new mutation
+3. **Review Risk Score** → Overall: HIGH (0.78), up from 0.72 last week
+4. **Scan Treatment Options** → PARP inhibitor still top-ranked (0.78 efficacy)
+5. **Check SAE Predictions** → 78% trial success for PARP, 6-9 months to resistance
+6. **Review Quick Actions** → Schedule trial contact for NCT12345678
+7. **Export Report** → Generate PDF for oncologist appointment
+
+### Workflow 2: New Mutation Detected (10 minutes)
+1. **Alert Received** → Push notification: "New high-impact mutation detected"
+2. **Navigate to Dashboard** → Red banner: "BRCA2 c.5946delT detected"
+3. **Click Alert** → Opens Genomic Profile section
+4. **Review Mutation Details** → Evo2 delta: 8.2, Impact: Frameshift, Pathogenic
+5. **Check Treatment Impact** → PARP efficacy increased from 0.78 → 0.89
+6. **Review SAE Update** → Trial success probability increased from 78% → 91%
+7. **Update Clinical Trials** → New trial matches appear (BRCA2-specific)
+8. **Export Updated Report** → Send to oncologist with treatment recommendations
+
+### Workflow 3: Pre-Treatment Planning (30 minutes)
+1. **Open Dashboard** → Review complete patient profile
+2. **Navigate to Treatment Options** → Compare PARP vs Platinum
+3. **Run Treatment Simulation** → Compare outcomes for different sequences
+4. **Check Toxicity Risks** → No PGx warnings for PARP
+5. **Review Clinical Trials** → 5 matches, 2 near location
+6. **Check Metastasis Risk** → High risk in angiogenesis (Step 6)
+7. **Explore CRISPR Options** → VEGFA target recommended
+8. **Design CRISPR Guides** → 5 guides generated, safety scores 0.87-0.92
+9. **Export Comprehensive Report** → Include genomic profile, treatment options, CRISPR designs
+10. **Schedule Trial Contacts** → Send report to 2 trial coordinators
+
+---
+
+## 🚀 IMPLEMENTATION ROADMAP
+
+### Phase 1: Core Infrastructure (Week 1)
+- [ ] Set up dashboard container component
+- [ ] Implement data fetching hooks
+- [ ] Create basic grid layout
+- [ ] Add loading and error states
+
+### Phase 2: Critical Sections (Week 2)
+- [ ] Critical Alerts & Risk Score
+- [ ] Genomic Profile (Evo2 integration)
+- [ ] Treatment Options (S/P/E integration)
+- [ ] Quick Actions bar
+
+### Phase 3: Advanced Features (Week 3)
+- [ ] SAE Predictions
+- [ ] Clinical Trials matching
+- [ ] Toxicity Risks (PGx integration)
+- [ ] Metastasis Interception
+
+### Phase 4: Supporting Features (Week 4)
+- [ ] Supportive Care recommendations
+- [ ] Real-time updates (WebSocket)
+- [ ] Export functionality
+- [ ] User preferences
+
+### Phase 5: Polish & Testing (Week 5)
+- [ ] UI/UX refinements
+- [ ] Performance optimization
+- [ ] Accessibility testing
+- [ ] User acceptance testing
+
+---
+
+## 🎯 SUCCESS METRICS
+
+### Quantitative Metrics
+- **Page Load Time:** <2 seconds for full dashboard
+- **API Response Time:** <500ms for all backend calls
+- **Real-Time Alert Latency:** <1 second from detection to display
+- **Export Generation Time:** <5 seconds for PDF report
+
+### Qualitative Metrics
+- **User Satisfaction:** >90% find dashboard useful
+- **Decision Speed:** 50% reduction in time to treatment decision
+- **Alert Accuracy:** >85% of critical alerts lead to meaningful action
+- **Information Overload:** <10% of users report feeling overwhelmed
+
+### Clinical Impact Metrics
+- **Treatment Selection Confidence:** >80% of oncologists feel more confident
+- **Adverse Event Prevention:** >70% reduction in preventable toxicities
+- **Trial Enrollment:** 50% increase in eligible trial enrollments
+- **Time to Intervention:** 40% reduction in time from mutation detection to action
+
+---
+
+## 📝 NOTES & CONSIDERATIONS
+
+### Data Privacy & Security
+- All patient data encrypted at rest and in transit
+- HIPAA-compliant data handling
+- Audit logs for all data access
+- User authentication and authorization
+
+### Regulatory Compliance
+- Clear "Research Use Only" disclaimers
+- No diagnostic claims
+- Proper attribution for all data sources
+- Version tracking for all predictions
+
+### Scalability
+- Modular architecture for easy feature additions
+- Caching strategy for frequently accessed data
+- Asynchronous data fetching to prevent blocking
+- Progressive loading for better perceived performance
+
+### Future Enhancements
+- **AI Co-Pilot Chat:** Conversational interface for queries
+- **Predictive Timeline:** Visualize expected disease progression
+- **Multi-Patient View:** Compare across patient cohort
+- **Mobile App:** Native iOS/Android apps
+- **Telemedicine Integration:** Video consultations within dashboard
+- **Electronic Health Record (EHR) Integration:** Bi-directional data sync
+
+---
+
+## 🎬 CONCLUSION
+
+This Mission Control dashboard represents a **paradigm shift** in precision oncology. By aggregating all our existing capabilities (Evo2, AlphaFold3, SAE, S/P/E orchestration, clinical trials, toxicity risks, metastasis interception) into a single, actionable interface, we can:
+
+1. **Save Lives:** Immediate visibility into critical risks and recommended interventions
+2. **Accelerate Decisions:** Reduce time from data to action by 50%+
+3. **Improve Outcomes:** Evidence-based treatment selection with >80% confidence
+4. **Empower Patients:** Clear understanding of their genomic profile and options
+5. **Enable Research:** Platform for continuous learning and improvement
+
+**This dashboard is not just a UI - it's a life-saving command center for Ayesha and patients like her.**
+
+---
+
+**Next Steps:**
+1. Review this design specification with the team
+2. Prioritize features based on clinical impact
+3. Begin Phase 1 implementation (Core Infrastructure)
+4. Iterate based on user feedback from oncologists and patients
+
+**Status:** READY FOR IMPLEMENTATION ⚔️

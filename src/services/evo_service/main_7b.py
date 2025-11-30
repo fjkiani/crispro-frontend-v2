@@ -110,6 +110,133 @@ class Evo7BService:
             ll = self.model.score_sequences([ref_seq, alt_seq])
             return {"exon_delta": float(ll[1]) - float(ll[0]), "window_used": flank * 2}
 
+        @self.fastapi_app.post("/score_variant_with_activations")
+        def score_variant_with_activations(item: dict):
+            """
+            Score a variant AND return layer 26 activations for SAE extraction (7B).
+            Request: { assembly, chrom, pos, ref, alt, window?: int, return_activations?: bool }
+            Response: { ref_likelihood, alt_likelihood, delta_score, layer_26_activations?: array, window_start, window_end }
+            """
+            import httpx
+            import torch
+            assembly = item.get("assembly", "GRCh38")
+            chrom = str(item.get("chrom"))
+            pos = int(item.get("pos"))
+            ref = str(item.get("ref")).upper()
+            alt = str(item.get("alt")).upper()
+            window = int(item.get("window", 8192))
+            return_activations = item.get("return_activations", True)
+            logger.info(f"/score_variant_with_activations (7B) called | {chrom}:{pos} {ref}>{alt} window={window} return_activations={return_activations}")
+            
+            if alt == ref:
+                raise HTTPException(status_code=400, detail="ref and alt must differ")
+            
+            flank = max(1, window // 2)
+            start = max(1, pos - flank)
+            end = pos + flank
+            asm = "GRCh38" if assembly.lower() in ("grch38", "hg38") else "GRCh37"
+            region = f"{chrom}:{start}-{end}:1"
+            url = f"https://rest.ensembl.org/sequence/region/human/{region}?content-type=text/plain;coord_system_version={asm}"
+            
+            try:
+                with httpx.Client(timeout=30) as client:
+                    resp = client.get(url)
+                    resp.raise_for_status()
+                    seq = resp.text.strip().upper()
+            except Exception as e:
+                logger.error(f"Reference fetch failed: {e}")
+                raise HTTPException(status_code=502, detail=f"Failed to fetch reference: {e}")
+            
+            idx = pos - start
+            if idx < 0 or idx >= len(seq):
+                raise HTTPException(status_code=400, detail="position out of fetched window")
+            ref_base = seq[idx]
+            if ref_base != ref and ref_base != "N":
+                raise HTTPException(status_code=400, detail=f"Reference allele mismatch: fetched='{ref_base}' provided='{ref}' at {chrom}:{pos}")
+            
+            ref_sequence = seq
+            alt_sequence = seq[:idx] + alt + seq[idx+1:]
+            
+            if return_activations:
+                try:
+                    # Tokenize sequences
+                    ref_tokens = self.model.tokenizer.tokenize(ref_sequence)
+                    alt_tokens = self.model.tokenizer.tokenize(alt_sequence)
+                    if isinstance(ref_tokens, list):
+                        ref_tokens = torch.tensor(ref_tokens, dtype=torch.long).unsqueeze(0)
+                    if isinstance(alt_tokens, list):
+                        alt_tokens = torch.tensor(alt_tokens, dtype=torch.long).unsqueeze(0)
+                    
+                    # Get activations from layer 26
+                    with torch.no_grad():
+                        _, ref_embs = self.model.forward(ref_tokens, return_embeddings=True, layer_names=["blocks.26"])
+                        _, alt_embs = self.model.forward(alt_tokens, return_embeddings=True, layer_names=["blocks.26"])
+                    
+                    ref_acts = ref_embs.get("blocks.26", None)
+                    alt_acts = alt_embs.get("blocks.26", None)
+                    
+                    if ref_acts is not None and alt_acts is not None:
+                        # Take mean over sequence dimension if needed
+                        if len(ref_acts.shape) > 1:
+                            ref_acts = ref_acts.mean(dim=1).squeeze().cpu().numpy().tolist()
+                        else:
+                            ref_acts = ref_acts.squeeze().cpu().numpy().tolist()
+                        if len(alt_acts.shape) > 1:
+                            alt_acts = alt_acts.mean(dim=1).squeeze().cpu().numpy().tolist()
+                        else:
+                            alt_acts = alt_acts.squeeze().cpu().numpy().tolist()
+                        
+                        # Score sequences
+                        ll = self.model.score_sequences([ref_sequence, alt_sequence])
+                        delta = float(ll[1]) - float(ll[0])
+                        
+                        logger.info(f"/score_variant_with_activations (7B) done | delta={delta:.4f} | activations extracted")
+                        return {
+                            "ref_likelihood": float(ll[0]),
+                            "alt_likelihood": float(ll[1]),
+                            "delta_score": delta,
+                            "layer_26_activations": {
+                                "ref": ref_acts,
+                                "alt": alt_acts
+                            },
+                            "window_start": start,
+                            "window_end": end
+                        }
+                    else:
+                        # Fallback to scoring without activations
+                        ll = self.model.score_sequences([ref_sequence, alt_sequence])
+                        delta = float(ll[1]) - float(ll[0])
+                        logger.warning(f"/score_variant_with_activations (7B) | activations not available, returning scores only")
+                        return {
+                            "ref_likelihood": float(ll[0]),
+                            "alt_likelihood": float(ll[1]),
+                            "delta_score": delta,
+                            "window_start": start,
+                            "window_end": end
+                        }
+                except Exception as e:
+                    logger.error(f"Activation extraction failed: {e}, falling back to scoring only")
+                    ll = self.model.score_sequences([ref_sequence, alt_sequence])
+                    delta = float(ll[1]) - float(ll[0])
+                    return {
+                        "ref_likelihood": float(ll[0]),
+                        "alt_likelihood": float(ll[1]),
+                        "delta_score": delta,
+                        "window_start": start,
+                        "window_end": end
+                    }
+            else:
+                ll = self.model.score_sequences([ref_sequence, alt_sequence])
+                delta = float(ll[1]) - float(ll[0])
+                logger.info(f"/score_variant_with_activations (7B) done | delta={delta:.4f} | no activations")
+                return {
+                    "ref_likelihood": float(ll[0]),
+                    "alt_likelihood": float(ll[1]),
+                    "delta_score": delta,
+                    "window_start": start,
+                    "window_end": end
+                }
+
     @modal.asgi_app()
     def api(self):
         return self.fastapi_app 

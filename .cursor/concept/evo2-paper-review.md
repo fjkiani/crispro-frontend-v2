@@ -78,4 +78,80 @@
 - **4.1 Training**: Next-token prediction on byte-tokenized DNA; two-phase schedule (pretraining at 1k→8k context, then midtraining to 1M) with sequence packing. SH2 with RoPE; mixed precision with 3D parallelism; FP8 where applicable. Reweighted CE loss downweights repetitive DNA (0.1). Needle-in-haystack long-context retrieval evaluation defined with categorical Jacobian metric.
 - **4.2 Data (OpenGenome2)**: Expanded to 8.84T nt. Rigorous curation for eukaryotes (clustering via Mash distances, filtering ambiguous bases/short contigs), metagenomes (ORF-filtered, redundancy-reduced), organelles, mRNA/ncRNA, promoters. Augmentations: stitched genic windows, exon overhangs, strand flips; special tokens ‘@’/‘#’; phylogenetic tags during midtraining.
 - **4.3 Evaluations**: Standardized zero-shot scoring: delta log-likelihood with window normalization; comprehensive benchmarks: start/stop contexts, prok/euk mutation sweeps, genetic code tests, DART-Eval regulatory tasks, DMS protein/ncRNA fitness, mRNA decay, exon/intron classification, gene and lncRNA essentiality, ClinVar, SpliceVarDB, BRCA1/2.
-- **4.4 SAEs**: Batch-TopK SAE trained on layer-26 activations; 1B-activation corpus; metrics include activation density and UMAP embeddings; contrastive feature search pipelines for prophage, genome organization, protein secondary structure, frameshift/stop sensitivity, TF motifs, and exon/intron boundaries; public viewer built on igv.js. 
+- **4.4 SAEs**: Batch-TopK SAE trained on layer-26 activations; 1B-activation corpus; metrics include activation density and UMAP embeddings; contrastive feature search pipelines for prophage, genome organization, protein secondary structure, frameshift/stop sensitivity, TF motifs, and exon/intron boundaries; public viewer built on igv.js.
+
+## 4.5. Unconstrained generation — methods details
+- **Gene completion setup**: Prompts = 1 kb upstream + 0.5–1 kb gene start; decoding with temperature 0.7, top-k 4; evaluate amino-acid recovery across 10 samples per prompt.
+- **Mitochondria generation**: 3 kb prompts; 250×16 kb sequences (temp 1.0/0.7, top-k 4); annotate with MitoZ; synteny via LoVis4u; BLASTp diversity; AF3 multimer plausibility.
+- **M. genitalium generation**: Prompt 10.5 kb; 35×580 kb sequences (temp 1.0, top-k 4); ORFs via Prodigal; Pfam via HHpred; protein quality via ESMFold pLDDT, DSSP; structures visualized in ChimeraX.
+- **Yeast chromosome generation**: 20×330 kb sequences (temp 1.0, top-k 4); genes via GeneMark-S/Prot-hint; promoters via Promoter 2.0; tRNAs via YGAP; fold with ESMFold.
+
+## 4.6.1. Beam search algorithm (formal)
+- **Procedure**: Sample K chunks per step from the LM; score partial sequences with an external function f; append best (or keep K′ beams) and iterate until length L.
+- **Chunking**: Fixed chunk length C; concatenative growth with rescoring at each step; supports multi-beam K′ ≤ K.
+
+## 4.6.2. Beam search for generative epigenomics
+- **Parameters**: C=128, L=19,968, K=42, K′=2; Evo 2 7B, temp 1.0, top-k 4; mouse chrX context upstream/downstream to meet model input lengths.
+- **Scoring**: Enformer (896 bins @128 bp) and Borzoi (6144 bins @32 bp) normalized; loss = average L1 to desired binary peak pattern; Borzoi uses ensemble with variance penalty.
+
+## 4.6.3. Design patterns and tasks
+- **Peak patterns**: Long/medium/short square waves; Morse code “LO” (dot=768 bp), “ARC” (384 bp), “EVO2” (384 bp); dots/dashes=open chromatin, spaces=closed.
+
+## 4.6.4. Inference-time scaling experiments
+- **tok/bp sweep**: Configs from 1 to 60 tok/bp by varying K and K′; AUROC averaged across Enformer and Borzoi predictions vs desired patterns.
+- **Result**: More inference-time compute → better adherence to target patterns; uniform proposal baseline underperforms.
+
+## 5. Data availability
+- **OpenGenome2**: https://huggingface.co/datasets/arcinstitute/opengenome2
+
+## 6. Code and model availability
+- **Code**: Top-level repo, training (Savanna), inference (Vortex), Evo Designer UI, SAE viewer, NVIDIA BioNeMo links.
+- **Weights**: Evo 2 40B/7B and base variants, plus 1B base on Hugging Face.
+
+## 7. Acknowledgments
+- **Note**: Extensive academic/industry support and funding acknowledgments.
+
+## 8. Author contributions
+- **Note**: Project conception, architecture/training/inference, data/SAE curation, evaluations, UI tools, safety analyses, and manuscript writing roles delineated.
+
+## 9. Competing interests
+- **Note**: Disclosures provided (various affiliations, advisory, and startup roles); others declare none.
+
+## What this means for disease (plain language)
+- **Think of Evo 2 as a “DNA grammar checker + autocomplete”**: It learned what healthy DNA looks like across many species. When it sees a change (a variant), it can tell how “surprising” that change is. Big surprises often mean the change could break function.
+- **Faster variant interpretation**: Many patients carry “variants of uncertain significance” (VUS). Evo 2 helps rank which variants are likely harmful, including in the 98% of the genome that doesn’t code for proteins (noncoding) and in splice regions that control how genes are cut and pasted.
+- **Better splicing and noncoding insight**: The model’s ability to recognize exon/intron boundaries and transcription factor motifs means it can flag variants that disrupt gene on/off switches or RNA processing—common culprits in rare disease and cancer.
+- **From prediction to design**: Beyond reading DNA, Evo 2 can write realistic DNA. Guided by a “coach” (models like Enformer/Borzoi), it can design sequences predicted to open or close chromatin at the right places—useful for gene therapies and cell engineering.
+- **Safety by design**: The team intentionally removed human-infecting viral genomes from training. Evo 2 performs poorly on those viruses—which is good for biosecurity.
+
+## How each capability maps to medicine
+- **Zero-shot likelihoods (surprise score)**: A quick, alignment-free way to triage variants in clinical reports, including indels and noncoding changes.
+- **Exon/intron and motif detection**: Helps annotate poorly understood genes/regions, spot splicing defects, and prioritize follow-up assays (e.g., minigene tests, RNA-seq).
+- **BRCA1/2 results**: Shows promise for hereditary cancer genetics; similar pipelines could extend to other clinically important genes.
+- **Mechanistic interpretability (SAEs)**: Reveals what the model “notices” (e.g., motifs, exon boundaries). That transparency builds trust and enables feature-level tools (e.g., scanning for risky promoter motifs).
+- **Genome-scale generation**: Aids rapid prototyping of constructs, libraries, and test sequences that still “look natural” to cellular machinery.
+- **Controllable epigenomic design**: Early path to tuning expression without changing the underlying gene—potentially safer, more targeted control knobs for future therapies.
+
+## Figure guide (what to look for, in plain terms)
+- **Figure 1 (overview)**: How the model is built and trained to read long DNA (up to a million letters) and still remember important bits far apart—important for diseases where distant DNA affects genes.
+- **Figure 2 (mutation effects across life)**: The model rediscovers core genetics (start/stop patterns, codon periodicity) and shows predictions align with lab measurements. This builds confidence that disease variant scores are meaningful.
+- **Figure 3 (human variants)**: Benchmark results showing strong performance on noncoding and splice variants and competitive coding predictions. BRCA tests demonstrate clinical relevance.
+- **Figure 4 (interpretability)**: Shows the model’s “concepts” lines up with biology (motifs, exon-intron, protein structure) and even helps annotate extinct genomes—evidence of generalization.
+- **Figure 5 (generation)**: The model can write entire mitochondria, minimal bacteria, and yeast-like chromosomes that look realistic to analysis tools—useful for design.
+- **Figure 6 (epigenomic design)**: Using a steering strategy (beam search + scoring), more compute yields better designs that match desired accessibility patterns—an actionable knob for future therapeutic design.
+
+## Practical disease workflows this can enable
+- **Clinical genetics**: Prioritize VUS in coding and noncoding regions; add splicing-aware scoring to reports; route top candidates to functional assays.
+- **Rare disease research**: Rapidly annotate genes and regulatory elements in understudied organisms or patient-derived assemblies; generate hypotheses for regulatory variants.
+- **Oncology**: Improve triage of tumor variants including noncoding drivers; design regulatory elements for cell models and screens.
+- **Therapeutic design**: Prototype regulatory DNA to achieve cell-type-specific expression; explore safer control via epigenomic patterning instead of editing the gene body.
+
+## Limitations and care points
+- **Lab validation still needed**: Model scores are hypothesis generators, not diagnoses. Use as decision support alongside assays (e.g., RNA-seq, MPRA, CRISPR tests).
+- **Eukaryotic viruses excluded**: By design, viral predictions/generation are weak—good for safety, but not a tool for viral genomics.
+- **Bias and coverage**: Early population analyses look comparable to other methods, but equitable performance needs continued evaluation with broader data.
+
+## If you’re new to this area, here’s the gist
+- **Evo 2 learned the “rules” of DNA** from many species, so it can spot changes that likely break those rules (possible disease-causing variants).
+- **It can also write DNA** that follows those rules and be steered to create sequences with desired activity patterns, a step toward programmable biology.
+- **It’s open** (data, code, models), so clinicians, researchers, and tool builders can test, validate, and improve it for real medical impact. 

@@ -416,6 +416,119 @@ class EvoService:
                 logger.error(f"/score_variant_probe failed: {e}")
                 raise HTTPException(status_code=500, detail=f"Evo2 probe failed: {e}")
 
+        @self.fastapi_app.post("/score_variant_with_activations")
+        def score_variant_with_activations(item: dict):
+            """
+            Score a variant AND return layer 26 activations for SAE extraction.
+            Request: { assembly, chrom, pos, ref, alt, window?: int, return_activations?: bool }
+            Response: { ref_likelihood, alt_likelihood, delta_score, layer_26_activations?: array, window_start, window_end }
+            """
+            import httpx
+            import torch
+            assembly = item.get("assembly", "GRCh38")
+            chrom = str(item.get("chrom"))
+            pos = int(item.get("pos"))
+            ref = str(item.get("ref")).upper()
+            alt = str(item.get("alt")).upper()
+            window = int(item.get("window", 8192))
+            return_activations = item.get("return_activations", True)
+            logger.info(f"/score_variant_with_activations called | {chrom}:{pos} {ref}>{alt} window={window} return_activations={return_activations}")
+            
+            if alt == ref:
+                raise HTTPException(status_code=400, detail="ref and alt must differ")
+            
+            flank = max(1, window // 2)
+            start = max(1, pos - flank)
+            end = pos + flank
+            asm = "GRCh38" if assembly.lower() in ("grch38", "hg38") else "GRCh37"
+            region = f"{chrom}:{start}-{end}:1"
+            url = f"https://rest.ensembl.org/sequence/region/human/{region}?content-type=text/plain;coord_system_version={asm}"
+            
+            try:
+                with httpx.Client(timeout=30) as client:
+                    resp = client.get(url)
+                    resp.raise_for_status()
+                    seq = resp.text.strip().upper()
+            except Exception as e:
+                logger.error(f"Reference fetch failed: {e}")
+                raise HTTPException(status_code=502, detail=f"Failed to fetch reference: {e}")
+            
+            idx = pos - start
+            if idx < 0 or idx >= len(seq):
+                raise HTTPException(status_code=400, detail="position out of fetched window")
+            
+            ref_base = seq[idx]
+            if ref_base != ref and ref_base != "N":
+                raise HTTPException(status_code=400, detail=f"Reference allele mismatch: fetched='{ref_base}' provided='{ref}' at {chrom}:{pos}")
+            
+            ref_sequence = seq
+            alt_sequence = seq[:idx] + alt + seq[idx+1:]
+            
+            try:
+                # Tokenize sequences
+                ref_input_ids = torch.tensor([self.model.tokenizer.encode(ref_sequence)])
+                alt_input_ids = torch.tensor([self.model.tokenizer.encode(alt_sequence)])
+                
+                # Move to GPU if available
+                device = next(self.model.model.parameters()).device
+                ref_input_ids = ref_input_ids.to(device)
+                alt_input_ids = alt_input_ids.to(device)
+                
+                if return_activations:
+                    # Forward pass with activation extraction for both sequences
+                    ref_logits, ref_embeddings = self.model.forward(
+                        ref_input_ids,
+                        return_embeddings=True,
+                        layer_names=["blocks.26"]
+                    )
+                    alt_logits, alt_embeddings = self.model.forward(
+                        alt_input_ids,
+                        return_embeddings=True,
+                        layer_names=["blocks.26"]
+                    )
+                    
+                    # Extract layer 26 activations
+                    ref_layer26 = ref_embeddings.get("blocks.26")
+                    alt_layer26 = alt_embeddings.get("blocks.26")
+                    
+                    # Compute log-likelihoods from logits
+                    ref_ll = self.model.score_sequences([ref_sequence])[0]
+                    alt_ll = self.model.score_sequences([alt_sequence])[0]
+                    
+                    logger.info(f"/score_variant_with_activations done | delta={alt_ll - ref_ll:.4f} | activations extracted")
+                    
+                    return {
+                        "ref_likelihood": float(ref_ll),
+                        "alt_likelihood": float(alt_ll),
+                        "delta_score": float(alt_ll - ref_ll),
+                        "window_start": start,
+                        "window_end": end,
+                        "variant_index": idx,
+                        "layer_26_activations": {
+                            "ref": ref_layer26.cpu().numpy().tolist() if ref_layer26 is not None else None,
+                            "alt": alt_layer26.cpu().numpy().tolist() if alt_layer26 is not None else None,
+                            "shape": list(ref_layer26.shape) if ref_layer26 is not None else None
+                        }
+                    }
+                else:
+                    # Standard scoring without activations
+                    ll = self.model.score_sequences([ref_sequence, alt_sequence])
+                    ref_ll = float(ll[0])
+                    alt_ll = float(ll[1])
+                    delta = alt_ll - ref_ll
+                    logger.info(f"/score_variant_with_activations done | delta={delta:.4f} | no activations")
+                    return {
+                        "ref_likelihood": ref_ll,
+                        "alt_likelihood": alt_ll,
+                        "delta_score": delta,
+                        "window_start": start,
+                        "window_end": end,
+                        "variant_index": idx,
+                    }
+            except Exception as e:
+                logger.error(f"Scoring/activation extraction failed: {e}")
+                raise HTTPException(status_code=500, detail=f"Evo2 scoring/activation failed: {e}")
+
     @modal.method()
     def generate_in_background(self, job_id: str, prompt: str, n_tokens: int):
         """Runs the model inference in the background with a general-purpose prompt."""
@@ -448,137 +561,57 @@ if os.getenv("ENABLE_EVO_7B", "0") == "1":
         timeout=1800,
     )
     class EvoService7B:
-    @modal.enter()
-    def load_model_and_api(self):
-        from evo2 import Evo2
-        import os as _os
-        _os.environ["EVO_MODEL_ID"] = "evo2_7b"
-        model_id = "evo2_7b"
-        logger.info(f"🚀 Loading Evo2 model: {model_id} ...")
-        self.model = Evo2(model_id)
-        logger.info("🎉 Evo2 7B model loaded successfully!")
+        @modal.enter()
+        def load_model_and_api(self):
+            from evo2 import Evo2
+            import os as _os
+            _os.environ["EVO_MODEL_ID"] = "evo2_7b"
+            model_id = "evo2_7b"
+            logger.info(f"🚀 Loading Evo2 model: {model_id} ...")
+            self.model = Evo2(model_id)
+            logger.info("🎉 Evo2 7B model loaded successfully!")
 
-        self.fastapi_app = FastAPI(title="Evo2 7B Scoring Service (within main)")
+            self.fastapi_app = FastAPI(title="Evo2 7B Scoring Service (within main)")
 
-        @self.fastapi_app.post("/score_delta")
-        def score_delta(item: dict):
-            ref_sequence = item.get("ref_sequence", "")
-            alt_sequence = item.get("alt_sequence", "")
-            if not ref_sequence or not alt_sequence:
-                raise HTTPException(status_code=400, detail="ref_sequence and alt_sequence are required")
-            ll = self.model.score_sequences([ref_sequence, alt_sequence])
-            return {
-                "ref_likelihood": float(ll[0]),
-                "alt_likelihood": float(ll[1]),
-                "delta_score": float(ll[1]) - float(ll[0]),
-            }
+            @self.fastapi_app.post("/score_delta")
+            def score_delta(item: dict):
+                ref_sequence = item.get("ref_sequence", "")
+                alt_sequence = item.get("alt_sequence", "")
+                if not ref_sequence or not alt_sequence:
+                    raise HTTPException(status_code=400, detail="ref_sequence and alt_sequence are required")
+                ll = self.model.score_sequences([ref_sequence, alt_sequence])
+                return {
+                    "ref_likelihood": float(ll[0]),
+                    "alt_likelihood": float(ll[1]),
+                    "delta_score": float(ll[1]) - float(ll[0]),
+                }
 
-        @self.fastapi_app.post("/score_variant")
-        def score_variant(item: dict):
-            import httpx
-            assembly = item.get("assembly", "GRCh38")
-            chrom = str(item.get("chrom"))
-            pos = int(item.get("pos"))
-            ref = str(item.get("ref")).upper()
-            alt = str(item.get("alt")).upper()
-            window = int(item.get("window", 8192))
-            logger.info(f"/score_variant (7B) | asm={assembly} {chrom}:{pos} {ref}>{alt} window={window}")
-            if alt == ref:
-                raise HTTPException(status_code=400, detail="ref and alt must differ")
-            flank = max(1, window // 2)
-            start = max(1, pos - flank)
-            end = pos + flank
-            asm = "GRCh38" if assembly.lower() in ("grch38", "hg38") else "GRCh37"
-            region = f"{chrom}:{start}-{end}:1"
-            url = f"https://rest.ensembl.org/sequence/region/human/{region}?content-type=text/plain;coord_system_version={asm}"
-            try:
-                with httpx.Client(timeout=30) as client:
-                    resp = client.get(url)
-                    resp.raise_for_status()
-                    seq = resp.text.strip().upper()
-            except Exception as e:
-                logger.error(f"Reference fetch failed: {e}")
-                raise HTTPException(status_code=502, detail=f"Failed to fetch reference: {e}")
-            idx = pos - start
-            if idx < 0 or idx >= len(seq):
-                raise HTTPException(status_code=400, detail="position out of fetched window")
-            ref_base = seq[idx]
-            if ref_base != ref and ref_base != "N":
-                raise HTTPException(status_code=400, detail=f"Reference allele mismatch: fetched='{ref_base}' provided='{ref}' at {chrom}:{pos}")
-            ref_sequence = seq
-            alt_sequence = seq[:idx] + alt + seq[idx+1:]
-            ll = self.model.score_sequences([ref_sequence, alt_sequence])
-            return {
-                "ref_likelihood": float(ll[0]),
-                "alt_likelihood": float(ll[1]),
-                "delta_score": float(ll[1]) - float(ll[0]),
-            }
-
-        @self.fastapi_app.post("/score_variant_multi")
-        def score_variant_multi(item: dict):
-            import httpx
-            assembly = item.get("assembly", "GRCh38")
-            chrom = str(item.get("chrom"))
-            pos = int(item.get("pos"))
-            ref = str(item.get("ref")).upper()
-            alt = str(item.get("alt")).upper()
-            windows = item.get("windows") or [1024, 2048, 4096, 8192]
-            logger.info(f"/score_variant_multi (7B) | {chrom}:{pos} {ref}>{alt} windows={windows}")
-            deltas = []
-            try:
-                with httpx.Client(timeout=30) as client:
-                    for w in windows:
-                        flank = max(1, int(w) // 2)
-                        start = max(1, pos - flank)
-                        end = pos + flank
-                        asm = "GRCh38" if assembly.lower() in ("grch38", "hg38") else "GRCh37"
-                        region = f"{chrom}:{start}-{end}:1"
-                        url = f"https://rest.ensembl.org/sequence/region/human/{region}?content-type=text/plain;coord_system_version={asm}"
-                        resp = client.get(url)
-                        resp.raise_for_status()
-                        seq = resp.text.strip().upper()
-                        idx = pos - start
-                        if idx < 0 or idx >= len(seq):
-                            raise HTTPException(status_code=400, detail="position out of fetched window")
-                        ref_base = seq[idx]
-                        if ref_base != ref and ref_base != "N":
-                            raise HTTPException(status_code=400, detail=f"Reference allele mismatch: fetched='{ref_base}' provided='{ref}' at {chrom}:{pos}")
-                        ref_sequence = seq
-                        alt_sequence = seq[:idx] + alt + seq[idx+1:]
-                        ll = self.model.score_sequences([ref_sequence, alt_sequence])
-                        ref_ll = float(ll[0])
-                        alt_ll = float(ll[1])
-                        delta = alt_ll - ref_ll
-                        deltas.append({"window": int(w), "delta": delta})
-                min_entry = min(deltas, key=lambda d: d["delta"]) if deltas else {"window": None, "delta": 0.0}
-                logger.info(f"/score_variant_multi (7B) done | min_delta={min_entry['delta']:.4f} window={min_entry['window']}")
-                return {"deltas": deltas, "min_delta": min_entry["delta"], "window_used": min_entry["window"]}
-            except HTTPException:
-                raise
-            except Exception as e:
-                logger.error(f"/score_variant_multi (7B) failed: {e}")
-                raise HTTPException(status_code=500, detail=f"Evo2 multi-window scoring failed: {e}")
-
-        @self.fastapi_app.post("/score_variant_exon")
-        def score_variant_exon(item: dict):
-            import httpx
-            assembly = item.get("assembly", "GRCh38")
-            chrom = str(item.get("chrom"))
-            pos = int(item.get("pos"))
-            ref = str(item.get("ref")).upper()
-            alt = str(item.get("alt")).upper()
-            flank = int(item.get("flank", 600))
-            logger.info(f"/score_variant_exon (7B) | {chrom}:{pos} {ref}>{alt} flank={flank}")
-            try:
+            @self.fastapi_app.post("/score_variant")
+            def score_variant(item: dict):
+                import httpx
+                assembly = item.get("assembly", "GRCh38")
+                chrom = str(item.get("chrom"))
+                pos = int(item.get("pos"))
+                ref = str(item.get("ref")).upper()
+                alt = str(item.get("alt")).upper()
+                window = int(item.get("window", 8192))
+                logger.info(f"/score_variant (7B) | asm={assembly} {chrom}:{pos} {ref}>{alt} window={window}")
+                if alt == ref:
+                    raise HTTPException(status_code=400, detail="ref and alt must differ")
+                flank = max(1, window // 2)
                 start = max(1, pos - flank)
                 end = pos + flank
                 asm = "GRCh38" if assembly.lower() in ("grch38", "hg38") else "GRCh37"
                 region = f"{chrom}:{start}-{end}:1"
                 url = f"https://rest.ensembl.org/sequence/region/human/{region}?content-type=text/plain;coord_system_version={asm}"
-                with httpx.Client(timeout=30) as client:
-                    resp = client.get(url)
-                    resp.raise_for_status()
-                    seq = resp.text.strip().upper()
+                try:
+                    with httpx.Client(timeout=30) as client:
+                        resp = client.get(url)
+                        resp.raise_for_status()
+                        seq = resp.text.strip().upper()
+                except Exception as e:
+                    logger.error(f"Reference fetch failed: {e}")
+                    raise HTTPException(status_code=502, detail=f"Failed to fetch reference: {e}")
                 idx = pos - start
                 if idx < 0 or idx >= len(seq):
                     raise HTTPException(status_code=400, detail="position out of fetched window")
@@ -588,106 +621,313 @@ if os.getenv("ENABLE_EVO_7B", "0") == "1":
                 ref_sequence = seq
                 alt_sequence = seq[:idx] + alt + seq[idx+1:]
                 ll = self.model.score_sequences([ref_sequence, alt_sequence])
-                ref_ll = float(ll[0])
-                alt_ll = float(ll[1])
-                delta = alt_ll - ref_ll
-                logger.info(f"/score_variant_exon (7B) done | exon_delta={delta:.4f}")
-                return {"exon_delta": delta, "window_used": flank * 2}
-            except HTTPException:
-                raise
-            except Exception as e:
-                logger.error(f"/score_variant_exon (7B) failed: {e}")
-                raise HTTPException(status_code=500, detail=f"Evo2 exon scoring failed: {e}")
+                return {
+                    "ref_likelihood": float(ll[0]),
+                    "alt_likelihood": float(ll[1]),
+                "delta_score": float(ll[1]) - float(ll[0]),
+                }
 
-        @self.fastapi_app.post("/score_variant_profile")
-        def score_variant_profile(item: dict):
-            import httpx
-            assembly = item.get("assembly", "GRCh38")
-            chrom = str(item.get("chrom"))
-            pos = int(item.get("pos"))
-            ref = str(item.get("ref")).upper()
-            alt = str(item.get("alt")).upper()
-            flank = int(item.get("flank", 600))
-            radius = int(item.get("radius", 100))
-            logger.info(f"/score_variant_profile (7B) | {chrom}:{pos} {ref}>{alt} radius={radius}")
-            try:
+            @self.fastapi_app.post("/score_variant_multi")
+            def score_variant_multi(item: dict):
+                import httpx
+                assembly = item.get("assembly", "GRCh38")
+                chrom = str(item.get("chrom"))
+                pos = int(item.get("pos"))
+                ref = str(item.get("ref")).upper()
+                alt = str(item.get("alt")).upper()
+                windows = item.get("windows") or [1024, 2048, 4096, 8192]
+                logger.info(f"/score_variant_multi (7B) | {chrom}:{pos} {ref}>{alt} windows={windows}")
+                deltas = []
+                try:
+                    with httpx.Client(timeout=30) as client:
+                        for w in windows:
+                            flank = max(1, int(w) // 2)
+                            start = max(1, pos - flank)
+                            end = pos + flank
+                            asm = "GRCh38" if assembly.lower() in ("grch38", "hg38") else "GRCh37"
+                            region = f"{chrom}:{start}-{end}:1"
+                            url = f"https://rest.ensembl.org/sequence/region/human/{region}?content-type=text/plain;coord_system_version={asm}"
+                            resp = client.get(url)
+                            resp.raise_for_status()
+                            seq = resp.text.strip().upper()
+                            idx = pos - start
+                            if idx < 0 or idx >= len(seq):
+                                raise HTTPException(status_code=400, detail="position out of fetched window")
+                            ref_base = seq[idx]
+                            if ref_base != ref and ref_base != "N":
+                                raise HTTPException(status_code=400, detail=f"Reference allele mismatch: fetched='{ref_base}' provided='{ref}' at {chrom}:{pos}")
+                            ref_sequence = seq
+                            alt_sequence = seq[:idx] + alt + seq[idx+1:]
+                            ll = self.model.score_sequences([ref_sequence, alt_sequence])
+                            ref_ll = float(ll[0])
+                            alt_ll = float(ll[1])
+                            delta = alt_ll - ref_ll
+                            deltas.append({"window": int(w), "delta": delta})
+                    min_entry = min(deltas, key=lambda d: d["delta"]) if deltas else {"window": None, "delta": 0.0}
+                    logger.info(f"/score_variant_multi (7B) done | min_delta={min_entry['delta']:.4f} window={min_entry['window']}")
+                    return {"deltas": deltas, "min_delta": min_entry["delta"], "window_used": min_entry["window"]}
+                except HTTPException:
+                    raise
+                except Exception as e:
+                    logger.error(f"/score_variant_multi (7B) failed: {e}")
+                    raise HTTPException(status_code=500, detail=f"Evo2 multi-window scoring failed: {e}")
+
+            @self.fastapi_app.post("/score_variant_exon")
+            def score_variant_exon(item: dict):
+                import httpx
+                assembly = item.get("assembly", "GRCh38")
+                chrom = str(item.get("chrom"))
+                pos = int(item.get("pos"))
+                ref = str(item.get("ref")).upper()
+                alt = str(item.get("alt")).upper()
+                flank = int(item.get("flank", 600))
+                logger.info(f"/score_variant_exon (7B) | {chrom}:{pos} {ref}>{alt} flank={flank}")
+                try:
+                    start = max(1, pos - flank)
+                    end = pos + flank
+                    asm = "GRCh38" if assembly.lower() in ("grch38", "hg38") else "GRCh37"
+                    region = f"{chrom}:{start}-{end}:1"
+                    url = f"https://rest.ensembl.org/sequence/region/human/{region}?content-type=text/plain;coord_system_version={asm}"
+                    with httpx.Client(timeout=30) as client:
+                        resp = client.get(url)
+                        resp.raise_for_status()
+                        seq = resp.text.strip().upper()
+                    idx = pos - start
+                    if idx < 0 or idx >= len(seq):
+                        raise HTTPException(status_code=400, detail="position out of fetched window")
+                    ref_base = seq[idx]
+                    if ref_base != ref and ref_base != "N":
+                        raise HTTPException(status_code=400, detail=f"Reference allele mismatch: fetched='{ref_base}' provided='{ref}' at {chrom}:{pos}")
+                    ref_sequence = seq
+                    alt_sequence = seq[:idx] + alt + seq[idx+1:]
+                    ll = self.model.score_sequences([ref_sequence, alt_sequence])
+                    ref_ll = float(ll[0])
+                    alt_ll = float(ll[1])
+                    delta = alt_ll - ref_ll
+                    logger.info(f"/score_variant_exon (7B) done | exon_delta={delta:.4f}")
+                    return {"exon_delta": delta, "window_used": flank * 2}
+                except HTTPException:
+                    raise
+                except Exception as e:
+                    logger.error(f"/score_variant_exon (7B) failed: {e}")
+                    raise HTTPException(status_code=500, detail=f"Evo2 exon scoring failed: {e}")
+
+            @self.fastapi_app.post("/score_variant_profile")
+            def score_variant_profile(item: dict):
+                import httpx
+                assembly = item.get("assembly", "GRCh38")
+                chrom = str(item.get("chrom"))
+                pos = int(item.get("pos"))
+                ref = str(item.get("ref")).upper()
+                alt = str(item.get("alt")).upper()
+                flank = int(item.get("flank", 600))
+                radius = int(item.get("radius", 100))
+                logger.info(f"/score_variant_profile (7B) | {chrom}:{pos} {ref}>{alt} radius={radius}")
+                try:
+                    start = max(1, pos - flank)
+                    end = pos + flank
+                    asm = "GRCh38" if assembly.lower() in ("grch38", "hg38") else "GRCh37"
+                    region = f"{chrom}:{start}-{end}:1"
+                    url = f"https://rest.ensembl.org/sequence/region/human/{region}?content-type=text/plain;coord_system_version={asm}"
+                    with httpx.Client(timeout=30) as client:
+                        resp = client.get(url)
+                        resp.raise_for_status()
+                        seq = resp.text.strip().upper()
+                    idx0 = pos - start
+                    if idx0 < 0 or idx0 >= len(seq):
+                        raise HTTPException(status_code=400, detail="position out of fetched window")
+                    if seq[idx0] != ref and seq[idx0] != "N":
+                        raise HTTPException(status_code=400, detail=f"Reference allele mismatch: fetched='{seq[idx0]}' provided='{ref}' at {chrom}:{pos}")
+                    profile = []
+                    for off in range(-radius, radius + 1):
+                        idx = idx0 + off
+                        if idx < 0 or idx >= len(seq):
+                            continue
+                        if seq[idx] not in "ACGTN":
+                            continue
+                        ref_seq = seq
+                        alt_seq = ref_seq[:idx] + alt + ref_seq[idx+1:]
+                        ll = self.model.score_sequences([ref_seq, alt_seq])
+                        ref_ll = float(ll[0])
+                        alt_ll = float(ll[1])
+                        profile.append({"offset": off, "delta": alt_ll - ref_ll})
+                    peak = min(profile, key=lambda x: x["delta"]) if profile else {"offset": 0, "delta": 0.0}
+                    logger.info(f"/score_variant_profile (7B) done | peak_delta={peak['delta']:.4f} @ offset {peak['offset']}")
+                    return {"profile": profile, "peak_delta": peak["delta"], "peak_offset": peak["offset"]}
+                except HTTPException:
+                    raise
+                except Exception as e:
+                    logger.error(f"/score_variant_profile (7B) failed: {e}")
+                    raise HTTPException(status_code=500, detail=f"Evo2 profile failed: {e}")
+
+            @self.fastapi_app.post("/score_variant_probe")
+            def score_variant_probe(item: dict):
+                import httpx
+                assembly = item.get("assembly", "GRCh38")
+                chrom = str(item.get("chrom"))
+                pos = int(item.get("pos"))
+                ref = str(item.get("ref")).upper()
+                logger.info(f"/score_variant_probe (7B) | {chrom}:{pos} ref={ref}")
+                try:
+                    start = max(1, pos - 600)
+                    end = pos + 600
+                    asm = "GRCh38" if assembly.lower() in ("grch38", "hg38") else "GRCh37"
+                    region = f"{chrom}:{start}-{end}:1"
+                    url = f"https://rest.ensembl.org/sequence/region/human/{region}?content-type=text/plain;coord_system_version={asm}"
+                    with httpx.Client(timeout=30) as client:
+                        resp = client.get(url)
+                        resp.raise_for_status()
+                        seq = resp.text.strip().upper()
+                    idx = pos - start
+                    if idx < 0 or idx >= len(seq):
+                        raise HTTPException(status_code=400, detail="position out of fetched window")
+                    ref_base = seq[idx]
+                    if ref_base != ref and ref_base != "N":
+                        raise HTTPException(status_code=400, detail=f"Reference allele mismatch: fetched='{ref_base}' provided='{ref}' at {chrom}:{pos}")
+                    alts = [b for b in "ACGT" if b != ref]
+                    results = []
+                    for a in alts:
+                        ref_seq = seq
+                        alt_seq = ref_seq[:idx] + a + ref_seq[idx+1:]
+                        ll = self.model.score_sequences([ref_seq, alt_seq])
+                        ref_ll = float(ll[0])
+                        alt_ll = float(ll[1])
+                        results.append({"alt": a, "delta": alt_ll - ref_ll})
+                    top = min(results, key=lambda x: x["delta"]) if results else {"alt": None, "delta": 0.0}
+                    logger.info(f"/score_variant_probe (7B) done | top_alt={top['alt']} delta={top['delta']:.4f}")
+                    return {"probes": results, "top_alt": top["alt"], "top_delta": top["delta"]}
+                except HTTPException:
+                    raise
+                except Exception as e:
+                    logger.error(f"/score_variant_probe (7B) failed: {e}")
+                    raise HTTPException(status_code=500, detail=f"Evo2 probe failed: {e}")
+
+            @self.fastapi_app.post("/score_variant_with_activations")
+            def score_variant_with_activations(item: dict):
+                """
+                Score a variant AND return layer 26 activations for SAE extraction (7B).
+                Request: { assembly, chrom, pos, ref, alt, window?: int, return_activations?: bool }
+                Response: { ref_likelihood, alt_likelihood, delta_score, layer_26_activations?: array, window_start, window_end }
+                """
+                import httpx
+                import torch
+                assembly = item.get("assembly", "GRCh38")
+                chrom = str(item.get("chrom"))
+                pos = int(item.get("pos"))
+                ref = str(item.get("ref")).upper()
+                alt = str(item.get("alt")).upper()
+                window = int(item.get("window", 8192))
+                return_activations = item.get("return_activations", True)
+                logger.info(f"/score_variant_with_activations (7B) called | {chrom}:{pos} {ref}>{alt} window={window} return_activations={return_activations}")
+                
+                if alt == ref:
+                    raise HTTPException(status_code=400, detail="ref and alt must differ")
+                
+                flank = max(1, window // 2)
                 start = max(1, pos - flank)
                 end = pos + flank
                 asm = "GRCh38" if assembly.lower() in ("grch38", "hg38") else "GRCh37"
                 region = f"{chrom}:{start}-{end}:1"
                 url = f"https://rest.ensembl.org/sequence/region/human/{region}?content-type=text/plain;coord_system_version={asm}"
-                with httpx.Client(timeout=30) as client:
-                    resp = client.get(url)
-                    resp.raise_for_status()
-                    seq = resp.text.strip().upper()
-                idx0 = pos - start
-                if idx0 < 0 or idx0 >= len(seq):
-                    raise HTTPException(status_code=400, detail="position out of fetched window")
-                if seq[idx0] != ref and seq[idx0] != "N":
-                    raise HTTPException(status_code=400, detail=f"Reference allele mismatch: fetched='{seq[idx0]}' provided='{ref}' at {chrom}:{pos}")
-                profile = []
-                for off in range(-radius, radius + 1):
-                    idx = idx0 + off
-                    if idx < 0 or idx >= len(seq):
-                        continue
-                    if seq[idx] not in "ACGTN":
-                        continue
-                    ref_seq = seq
-                    alt_seq = ref_seq[:idx] + alt + ref_seq[idx+1:]
-                    ll = self.model.score_sequences([ref_seq, alt_seq])
-                    ref_ll = float(ll[0])
-                    alt_ll = float(ll[1])
-                    profile.append({"offset": off, "delta": alt_ll - ref_ll})
-                peak = min(profile, key=lambda x: x["delta"]) if profile else {"offset": 0, "delta": 0.0}
-                logger.info(f"/score_variant_profile (7B) done | peak_delta={peak['delta']:.4f} @ offset {peak['offset']}")
-                return {"profile": profile, "peak_delta": peak["delta"], "peak_offset": peak["offset"]}
-            except HTTPException:
-                raise
-            except Exception as e:
-                logger.error(f"/score_variant_profile (7B) failed: {e}")
-                raise HTTPException(status_code=500, detail=f"Evo2 profile failed: {e}")
-
-        @self.fastapi_app.post("/score_variant_probe")
-        def score_variant_probe(item: dict):
-            import httpx
-            assembly = item.get("assembly", "GRCh38")
-            chrom = str(item.get("chrom"))
-            pos = int(item.get("pos"))
-            ref = str(item.get("ref")).upper()
-            logger.info(f"/score_variant_probe (7B) | {chrom}:{pos} ref={ref}")
-            try:
-                start = max(1, pos - 600)
-                end = pos + 600
-                asm = "GRCh38" if assembly.lower() in ("grch38", "hg38") else "GRCh37"
-                region = f"{chrom}:{start}-{end}:1"
-                url = f"https://rest.ensembl.org/sequence/region/human/{region}?content-type=text/plain;coord_system_version={asm}"
-                with httpx.Client(timeout=30) as client:
-                    resp = client.get(url)
-                    resp.raise_for_status()
-                    seq = resp.text.strip().upper()
+                
+                try:
+                    with httpx.Client(timeout=30) as client:
+                        resp = client.get(url)
+                        resp.raise_for_status()
+                        seq = resp.text.strip().upper()
+                except Exception as e:
+                    logger.error(f"Reference fetch failed: {e}")
+                    raise HTTPException(status_code=502, detail=f"Failed to fetch reference: {e}")
+                
                 idx = pos - start
                 if idx < 0 or idx >= len(seq):
                     raise HTTPException(status_code=400, detail="position out of fetched window")
                 ref_base = seq[idx]
                 if ref_base != ref and ref_base != "N":
                     raise HTTPException(status_code=400, detail=f"Reference allele mismatch: fetched='{ref_base}' provided='{ref}' at {chrom}:{pos}")
-                alts = [b for b in "ACGT" if b != ref]
-                results = []
-                for a in alts:
-                    ref_seq = seq
-                    alt_seq = ref_seq[:idx] + a + ref_seq[idx+1:]
-                    ll = self.model.score_sequences([ref_seq, alt_seq])
-                    ref_ll = float(ll[0])
-                    alt_ll = float(ll[1])
-                    results.append({"alt": a, "delta": alt_ll - ref_ll})
-                top = min(results, key=lambda x: x["delta"]) if results else {"alt": None, "delta": 0.0}
-                logger.info(f"/score_variant_probe (7B) done | top_alt={top['alt']} delta={top['delta']:.4f}")
-                return {"probes": results, "top_alt": top["alt"], "top_delta": top["delta"]}
-            except HTTPException:
-                raise
-            except Exception as e:
-                logger.error(f"/score_variant_probe (7B) failed: {e}")
-                raise HTTPException(status_code=500, detail=f"Evo2 probe failed: {e}")
+                
+                ref_sequence = seq
+                alt_sequence = seq[:idx] + alt + seq[idx+1:]
+                
+                if return_activations:
+                    try:
+                        # Tokenize sequences
+                        ref_tokens = self.model.tokenizer.tokenize(ref_sequence)
+                        alt_tokens = self.model.tokenizer.tokenize(alt_sequence)
+                        if isinstance(ref_tokens, list):
+                            ref_tokens = torch.tensor(ref_tokens, dtype=torch.long).unsqueeze(0)
+                        if isinstance(alt_tokens, list):
+                            alt_tokens = torch.tensor(alt_tokens, dtype=torch.long).unsqueeze(0)
+                        
+                        # Get activations from layer 26
+                        with torch.no_grad():
+                            _, ref_embs = self.model.forward(ref_tokens, return_embeddings=True, layer_names=["blocks.26"])
+                            _, alt_embs = self.model.forward(alt_tokens, return_embeddings=True, layer_names=["blocks.26"])
+                        
+                        ref_acts = ref_embs.get("blocks.26", None)
+                        alt_acts = alt_embs.get("blocks.26", None)
+                        
+                        if ref_acts is not None and alt_acts is not None:
+                            # Take mean over sequence dimension if needed
+                            if len(ref_acts.shape) > 1:
+                                ref_acts = ref_acts.mean(dim=1).squeeze().cpu().numpy().tolist()
+                            else:
+                                ref_acts = ref_acts.squeeze().cpu().numpy().tolist()
+                            if len(alt_acts.shape) > 1:
+                                alt_acts = alt_acts.mean(dim=1).squeeze().cpu().numpy().tolist()
+                            else:
+                                alt_acts = alt_acts.squeeze().cpu().numpy().tolist()
+                            
+                            # Score sequences
+                            ll = self.model.score_sequences([ref_sequence, alt_sequence])
+                            delta = float(ll[1]) - float(ll[0])
+                            
+                            logger.info(f"/score_variant_with_activations (7B) done | delta={delta:.4f} | activations extracted")
+                            return {
+                                "ref_likelihood": float(ll[0]),
+                                "alt_likelihood": float(ll[1]),
+                                "delta_score": delta,
+                                "layer_26_activations": {
+                                    "ref": ref_acts,
+                                    "alt": alt_acts
+                                },
+                                "window_start": start,
+                                "window_end": end
+                            }
+                        else:
+                            # Fallback to scoring without activations
+                            ll = self.model.score_sequences([ref_sequence, alt_sequence])
+                            delta = float(ll[1]) - float(ll[0])
+                            logger.warning(f"/score_variant_with_activations (7B) | activations not available, returning scores only")
+                            return {
+                                "ref_likelihood": float(ll[0]),
+                                "alt_likelihood": float(ll[1]),
+                                "delta_score": delta,
+                                "window_start": start,
+                                "window_end": end
+                            }
+                    except Exception as e:
+                        logger.error(f"Activation extraction failed: {e}, falling back to scoring only")
+                        ll = self.model.score_sequences([ref_sequence, alt_sequence])
+                        delta = float(ll[1]) - float(ll[0])
+                        return {
+                            "ref_likelihood": float(ll[0]),
+                            "alt_likelihood": float(ll[1]),
+                            "delta_score": delta,
+                            "window_start": start,
+                            "window_end": end
+                        }
+                else:
+                    ll = self.model.score_sequences([ref_sequence, alt_sequence])
+                    delta = float(ll[1]) - float(ll[0])
+                    logger.info(f"/score_variant_with_activations (7B) done | delta={delta:.4f} | no activations")
+                    return {
+                        "ref_likelihood": float(ll[0]),
+                        "alt_likelihood": float(ll[1]),
+                        "delta_score": delta,
+                        "window_start": start,
+                        "window_end": end
+                    }
 
         @modal.asgi_app()
         def api_7b(self):

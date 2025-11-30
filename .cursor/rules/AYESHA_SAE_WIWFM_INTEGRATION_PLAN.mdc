@@ -1,0 +1,516 @@
+---
+description: Strategic plan for integrating SAE biomarkers into WIWFM drug efficacy predictions for Ayesha's clinical care
+---
+
+# ⚔️ AYESHA SAE → WIWFM INTEGRATION PLAN ⚔️
+
+**Created**: November 21, 2025  
+**Owner**: Zo (Lead Commander)  
+**Priority**: HIGH - Required for personalized drug efficacy post-NGS  
+**Status**: 🎯 STRATEGIC PLAN - Ready for Execution
+
+---
+
+## 🎯 MISSION OBJECTIVE
+
+**Build the missing bridge** between SAE biomarker discovery and WIWFM drug efficacy scoring so that when Ayesha's NGS results arrive, we can provide personalized drug rankings based on real genomic features correlated with platinum response.
+
+---
+
+## 📊 CURRENT STATE ASSESSMENT
+
+### ✅ **What We Have (Operational)**
+
+1. **SAE Feature Extraction Pipeline**
+   - Location: `scripts/sae/extract_sae_features_cohort.py`
+   - Status: ✅ Functional (Modal service working, dtype/shape issues resolved)
+   - Output: 32K-dimensional SAE features per variant
+   - Limitation: Using random 1920×32K SAE (Goodfire 4096×32K incompatible)
+
+2. **Biomarker Correlation Service**
+   - Location: `api/services/biomarker_correlation_service.py` (689 lines)
+   - Status: ✅ Complete statistical engine
+   - Methods: Pearson r, Spearman ρ, chi-square, Cohen's d, bootstrap CI
+   - Output: Ranked list of top 100 SAE features correlated with platinum response
+
+3. **WIWFM Drug Scoring Framework**
+   - Location: `api/services/efficacy_orchestrator/`
+   - Status: ✅ S/P/E scoring operational
+   - Components: Sequence scorer, pathway scorer, evidence integrator
+   - Gap: **No SAE biomarker integration**
+
+4. **Ayesha Orchestrator v2**
+   - Location: `api/routers/ayesha_orchestrator_v2.py`
+   - Status: ✅ Complete care coordination
+   - Features: Trials, SOC, CA-125, WIWFM, Food, Resistance
+   - Gap: WIWFM shows "awaiting NGS" (correct), but post-NGS lacks SAE boost
+
+5. **TCGA-OV Mutation Dataset**
+   - Location: `data/validation/sae_cohort/tcga_ov_platinum_with_mutations.json` (6.4MB)
+   - Status: ✅ Complete (469 patients, 321 with mutations, 28,517 variants)
+   - Platform: Real TCGA-OV data with platinum response labels
+
+### ❌ **What's Missing (The Integration Gap)**
+
+1. **SAE Biomarker → Drug Mapping**
+   - No module that maps "SAE feature #15,847 predicts platinum response" → "Carboplatin efficacy boost"
+   - No drug-specific biomarker weights
+   - No mechanism to apply patient's SAE features to compute personalized scores
+
+2. **Real SAE Cohort Extraction**
+   - Current file: 405 bytes, 0/400 patients (all failed in previous run)
+   - Need: Re-run with working Modal service to get real features
+   - Timeline: ~30-60 min for 200-400 patients
+
+3. **Biomarker Analysis Execution**
+   - Have: Mock analysis (`sae_tcga_ov_platinum_biomarkers_MOCK.json`)
+   - Need: Real analysis on actual extracted features
+   - Blocks: Real cohort extraction completion
+
+---
+
+## 🗺️ EXECUTION ROADMAP
+
+### **PHASE 1: Complete SAE Cohort Extraction** (2-4 hours)
+**Priority**: P0 - Blocks all downstream work
+
+**Tasks**:
+1. ✅ **Verify Modal SAE Service** (DONE)
+   - Service operational: ✅
+   - Random 1920×32K SAE: ✅ (acceptable for RUO)
+   - Dtype/shape issues: ✅ Resolved
+
+2. **Re-run Cohort Extraction** (1-2 hours)
+   ```bash
+   cd /Users/fahadkiani/Desktop/development/crispr-assistant-main
+   ENABLE_EVO2_SAE=1 ENABLE_TRUE_SAE=1 ENABLE_SAE_COHORT_RUN=1 \
+   MAX_PATIENTS=200 MAX_TOTAL_VARIANTS=10000 \
+   python3 scripts/sae/extract_sae_features_cohort.py
+   ```
+   - Input: `tcga_ov_platinum_with_mutations.json` (6.4MB, ready)
+   - Output: `sae_features_tcga_ov_platinum.json` (~200MB expected)
+   - Safety: Circuit breaker at 30% error rate, max 200 patients
+
+3. **Monitor & Validate** (30 min)
+   - Watch Modal logs for errors
+   - Verify output file size grows
+   - Check checkpoint for completion rate
+   - Success: ≥100 patients with features
+
+**Acceptance Criteria**:
+- [ ] ≥100 patients successfully processed
+- [ ] Output file >50MB
+- [ ] No critical errors in logs
+- [ ] Checkpoint shows completion
+
+---
+
+### **PHASE 2: Run Biomarker Analysis** (1-2 hours)
+**Priority**: P0 - Generates biomarkers for integration
+
+**Tasks**:
+1. **Execute Analysis Script**
+   ```bash
+   cd /Users/fahadkiani/Desktop/development/crispr-assistant-main
+   python3 scripts/sae/analyze_biomarkers.py \
+     --input data/validation/sae_cohort/sae_features_tcga_ov_platinum.json \
+     --output data/validation/sae_cohort/sae_tcga_ov_platinum_biomarkers.json \
+     --plots-dir data/validation/sae_cohort/plots_real
+   ```
+   - Computes Pearson r for all 32K features
+   - Ranks by p-value + effect size
+   - Applies Bonferroni correction
+   - Bootstrap confidence intervals
+
+2. **Review Results**
+   - Check `sae_tcga_ov_platinum_biomarkers.json`
+   - Identify top 10-20 features with p<0.01, |r|>0.3
+   - Validate against biological plausibility (if possible)
+
+**Output Schema**:
+```json
+{
+  "top_features": [
+    {
+      "feature_index": 15847,
+      "pearson_r": 0.73,
+      "p_value": 0.0001,
+      "cohen_d": 0.85,
+      "bootstrap_ci_lower": 0.65,
+      "bootstrap_ci_upper": 0.81
+    }
+  ],
+  "stats": {
+    "n_patients": 150,
+    "n_features_tested": 32768,
+    "n_significant": 87,
+    "bonferroni_threshold": 1.5e-6
+  }
+}
+```
+
+**Acceptance Criteria**:
+- [ ] Analysis completes without errors
+- [ ] ≥10 features with p<0.01
+- [ ] Biomarker file <5MB
+- [ ] Plots generated (correlation heatmap, effect size distribution)
+
+---
+
+### **PHASE 3: Build SAE → WIWFM Integration Layer** (4-6 hours)
+**Priority**: P1 - Core integration logic
+
+**Module 1: Drug-Specific Biomarker Mapper** (2 hours)
+```python
+# api/services/sae_biomarker_drug_mapper.py
+
+class SAEBiomarkerDrugMapper:
+    """
+    Maps SAE biomarkers to drug-specific efficacy modifiers.
+    
+    For RUO Phase 1: Use platinum-response biomarkers as proxy for:
+    - Platinum agents: Direct application (Carboplatin, Cisplatin)
+    - PARP inhibitors: Indirect (DNA repair capacity marker)
+    - Other DNA-damaging: Moderate correlation
+    """
+    
+    def __init__(self, biomarker_file: str):
+        self.biomarkers = self.load_biomarkers(biomarker_file)
+        self.drug_mappings = self.define_drug_mappings()
+    
+    def define_drug_mappings(self) -> Dict[str, Dict]:
+        """
+        Define how each drug class uses SAE biomarkers.
+        
+        Returns:
+            {
+                "Carboplatin": {
+                    "biomarker_weight": 1.0,  # Direct platinum response
+                    "feature_weights": {15847: 0.73, 8432: 0.65, ...}
+                },
+                "Olaparib": {
+                    "biomarker_weight": 0.6,  # Indirect (DNA repair)
+                    "feature_weights": {15847: 0.44, ...}
+                }
+            }
+        """
+        return {
+            "Carboplatin": {
+                "biomarker_weight": 1.0,
+                "mechanism": "platinum_direct",
+                "feature_weights": self.get_top_features(n=20, weight=1.0)
+            },
+            "Cisplatin": {
+                "biomarker_weight": 0.95,
+                "mechanism": "platinum_direct",
+                "feature_weights": self.get_top_features(n=20, weight=0.95)
+            },
+            "Olaparib": {
+                "biomarker_weight": 0.6,
+                "mechanism": "dna_repair_proxy",
+                "feature_weights": self.get_top_features(n=15, weight=0.6)
+            },
+            "Niraparib": {
+                "biomarker_weight": 0.6,
+                "mechanism": "dna_repair_proxy",
+                "feature_weights": self.get_top_features(n=15, weight=0.6)
+            },
+            "Rucaparib": {
+                "biomarker_weight": 0.6,
+                "mechanism": "dna_repair_proxy",
+                "feature_weights": self.get_top_features(n=15, weight=0.6)
+            }
+        }
+    
+    def compute_patient_sae_score(
+        self,
+        drug_name: str,
+        patient_sae_features: np.ndarray  # 32K-dim vector
+    ) -> float:
+        """
+        Compute drug-specific SAE score for patient.
+        
+        Args:
+            drug_name: Drug to score
+            patient_sae_features: Patient's 32K SAE feature vector
+        
+        Returns:
+            SAE score in [-1.0, +1.0] range (0 = neutral)
+        """
+        if drug_name not in self.drug_mappings:
+            return 0.0  # No biomarker info for this drug
+        
+        mapping = self.drug_mappings[drug_name]
+        feature_weights = mapping["feature_weights"]
+        biomarker_weight = mapping["biomarker_weight"]
+        
+        # Weighted sum of patient's features
+        score = 0.0
+        for feat_idx, feat_weight in feature_weights.items():
+            score += patient_sae_features[feat_idx] * feat_weight
+        
+        # Normalize to [-1, +1]
+        score = np.tanh(score / len(feature_weights))
+        
+        # Apply drug-specific biomarker weight
+        score *= biomarker_weight
+        
+        return score
+```
+
+**Module 2: WIWFM Integration Point** (1 hour)
+```python
+# api/services/efficacy_orchestrator/sae_booster.py
+
+def apply_sae_biomarker_boost(
+    drug_name: str,
+    base_confidence: float,
+    patient_mutations: List[Dict],
+    sae_biomarker_mapper: SAEBiomarkerDrugMapper
+) -> Tuple[float, Dict]:
+    """
+    Apply SAE biomarker boost to WIWFM confidence.
+    
+    Args:
+        drug_name: Drug being scored
+        base_confidence: S/P/E confidence (0-1)
+        patient_mutations: List of patient mutations (for SAE extraction)
+        sae_biomarker_mapper: Pre-loaded biomarker mapper
+    
+    Returns:
+        (boosted_confidence, provenance)
+    """
+    # Extract SAE features for patient's mutations
+    patient_sae_features = extract_patient_sae_features(patient_mutations)
+    
+    # Compute drug-specific SAE score
+    sae_score = sae_biomarker_mapper.compute_patient_sae_score(
+        drug_name, patient_sae_features
+    )
+    
+    # Convert SAE score to confidence boost
+    # sae_score in [-1, +1] → boost in [-0.15, +0.15]
+    sae_boost = sae_score * 0.15
+    
+    # Apply boost with capping
+    boosted_confidence = min(base_confidence + sae_boost, 0.95)
+    
+    # Provenance
+    provenance = {
+        "sae_score": float(sae_score),
+        "sae_boost": float(sae_boost),
+        "base_confidence": float(base_confidence),
+        "boosted_confidence": float(boosted_confidence),
+        "biomarker_features_used": len(sae_biomarker_mapper.drug_mappings.get(drug_name, {}).get("feature_weights", {}))
+    }
+    
+    return boosted_confidence, provenance
+```
+
+**Module 3: Orchestrator Integration** (1 hour)
+```python
+# In api/services/efficacy_orchestrator/orchestrator.py
+
+# Add to EfficacyOrchestrator.__init__():
+self.sae_biomarker_mapper = None
+if os.path.exists("data/validation/sae_cohort/sae_tcga_ov_platinum_biomarkers.json"):
+    from api.services.sae_biomarker_drug_mapper import SAEBiomarkerDrugMapper
+    self.sae_biomarker_mapper = SAEBiomarkerDrugMapper(
+        "data/validation/sae_cohort/sae_tcga_ov_platinum_biomarkers.json"
+    )
+
+# Add to drug scoring loop (after base confidence computed):
+if self.sae_biomarker_mapper and request.tumor_context:
+    drug_result.confidence, sae_provenance = apply_sae_biomarker_boost(
+        drug["name"],
+        drug_result.confidence,
+        request.mutations,
+        self.sae_biomarker_mapper
+    )
+    drug_result.provenance["sae_biomarker_boost"] = sae_provenance
+```
+
+**Acceptance Criteria**:
+- [ ] SAEBiomarkerDrugMapper class complete
+- [ ] Drug mappings defined for ≥5 drugs
+- [ ] Integration point in orchestrator
+- [ ] Unit tests passing
+- [ ] Provenance cards show SAE boost
+
+---
+
+### **PHASE 4: Frontend Visualization** (2-3 hours)
+**Priority**: P2 - User-facing display
+
+**Tasks**:
+1. **SAE Biomarker Card Component**
+   ```jsx
+   // src/components/ayesha/SAEBiomarkerCard.jsx
+   
+   export default function SAEBiomarkerCard({ saeProvenance }) {
+     if (!saeProvenance) return null;
+     
+     return (
+       <Card sx={{ mb: 2 }}>
+         <CardContent>
+           <Typography variant="h6">
+             🧬 SAE Biomarker Analysis
+           </Typography>
+           <Box sx={{ mt: 1 }}>
+             <Chip
+               label={`SAE Score: ${(saeProvenance.sae_score * 100).toFixed(0)}%`}
+               color={saeProvenance.sae_score > 0 ? "success" : "warning"}
+             />
+             <Chip
+               label={`Confidence Boost: ${saeProvenance.sae_boost > 0 ? '+' : ''}${(saeProvenance.sae_boost * 100).toFixed(1)}%`}
+               sx={{ ml: 1 }}
+             />
+           </Box>
+           <Typography variant="body2" sx={{ mt: 1 }}>
+             Based on {saeProvenance.biomarker_features_used} platinum-response biomarkers
+             from TCGA-OV cohort analysis.
+           </Typography>
+         </CardContent>
+       </Card>
+     );
+   }
+   ```
+
+2. **Integration into WIWFM Results**
+   - Add SAEBiomarkerCard to drug result display
+   - Show in HypothesisValidator and Clinical Genomics pages
+   - Add tooltip explaining SAE biomarkers
+
+**Acceptance Criteria**:
+- [ ] SAE card displays correctly
+- [ ] Shows positive/negative boosts
+- [ ] Tooltip with methodology
+- [ ] Renders only when SAE data available
+
+---
+
+### **PHASE 5: Validation & Testing** (2-3 hours)
+**Priority**: P1 - Ensure clinical safety
+
+**Test Scenarios**:
+1. **Platinum-Sensitive Profile**
+   - Mutations: BRCA1 loss-of-function
+   - Expected: Carboplatin +10-15% boost, Olaparib +5-10% boost
+
+2. **Platinum-Resistant Profile**
+   - Mutations: BRCA1 reversion mutation
+   - Expected: Carboplatin -10-15% penalty, Olaparib -5-10% penalty
+
+3. **No SAE Data Available**
+   - Expected: Graceful fallback, no boost/penalty, note in provenance
+
+4. **Edge Cases**
+   - Single mutation
+   - 50+ mutations
+   - Novel gene not in training set
+
+**Acceptance Criteria**:
+- [ ] All test scenarios pass
+- [ ] No crashes on edge cases
+- [ ] Provenance always populated
+- [ ] Confidence stays in [0, 0.95] range
+
+---
+
+## 📋 IMPLEMENTATION FILES
+
+### **New Files to Create**:
+1. `api/services/sae_biomarker_drug_mapper.py` (~300 lines)
+2. `api/services/efficacy_orchestrator/sae_booster.py` (~150 lines)
+3. `src/components/ayesha/SAEBiomarkerCard.jsx` (~100 lines)
+4. `tests/test_sae_biomarker_integration.py` (~200 lines)
+
+### **Files to Modify**:
+1. `api/services/efficacy_orchestrator/orchestrator.py` (+50 lines)
+2. `api/services/efficacy_orchestrator/drug_scorer.py` (+30 lines)
+3. `src/pages/HypothesisValidator.jsx` (+20 lines)
+4. `src/components/ClinicalGenomicsCommandCenter/tabs/MechanisticEvidenceTab.jsx` (+20 lines)
+
+---
+
+## 🎯 SUCCESS METRICS
+
+### **Technical**:
+- ✅ SAE cohort extraction: ≥100 patients
+- ✅ Biomarker analysis: ≥10 significant features (p<0.01)
+- ✅ Integration: SAE boost applied to ≥5 drugs
+- ✅ Tests: 100% pass rate
+
+### **Clinical**:
+- ✅ Ayesha's mutations → SAE features extracted
+- ✅ WIWFM shows confidence boost/penalty with SAE
+- ✅ Provenance clearly explains SAE contribution
+- ✅ Oncologist can understand the boost rationale
+
+---
+
+## ⚠️ RISKS & MITIGATIONS
+
+### **Risk 1: SAE Extraction Fails Again**
+- **Likelihood**: Low (Modal service now stable)
+- **Impact**: High (blocks all downstream)
+- **Mitigation**: Monitor Modal logs in real-time, restart if needed
+
+### **Risk 2: No Significant Biomarkers Found**
+- **Likelihood**: Low (mock analysis found 87 significant)
+- **Impact**: High (no boost possible)
+- **Mitigation**: Use mock biomarkers for demo, document limitation
+
+### **Risk 3: Random SAE Weights Reduce Clinical Validity**
+- **Likelihood**: High (confirmed using random 1920×32K)
+- **Impact**: Medium (stats work, interpretability limited)
+- **Mitigation**: Document as RUO, label "exploratory biomarkers"
+
+### **Risk 4: Integration Breaks Existing WIWFM**
+- **Likelihood**: Medium (touching core orchestrator)
+- **Impact**: High (clinical blocker)
+- **Mitigation**: Feature flag `ENABLE_SAE_BIOMARKERS`, extensive testing
+
+---
+
+## 🚀 NEXT ACTIONS
+
+### **Immediate (Today)**:
+1. ✅ Complete this strategic plan
+2. ✅ Create Cursor rules
+3. 🎯 **Re-run SAE cohort extraction** (START NOW - takes 1-2 hours)
+4. Monitor extraction progress
+
+### **After Extraction Completes**:
+1. Run biomarker analysis
+2. Review top features
+3. Start Phase 3 implementation
+
+### **This Week**:
+1. Complete Phases 1-3
+2. Demo to team
+3. Validate with Ayesha's profile (once NGS available)
+
+---
+
+## 📖 REFERENCES
+
+### **Key Files**:
+- [Biomarker Correlation Service](mdc:oncology-coPilot/oncology-backend-minimal/api/services/biomarker_correlation_service.py)
+- [SAE Cohort Extraction](mdc:scripts/sae/extract_sae_features_cohort.py)
+- [WIWFM Orchestrator](mdc:oncology-coPilot/oncology-backend-minimal/api/services/efficacy_orchestrator/orchestrator.py)
+- [Ayesha Orchestrator v2](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/ayesha_orchestrator_v2.py)
+
+### **Data Files**:
+- TCGA-OV Mutations: `data/validation/sae_cohort/tcga_ov_platinum_with_mutations.json` (6.4MB)
+- SAE Features: `data/validation/sae_cohort/sae_features_tcga_ov_platinum.json` (pending)
+- Biomarkers: `data/validation/sae_cohort/sae_tcga_ov_platinum_biomarkers.json` (pending)
+- Mock Data: `data/validation/sae_cohort/*_MOCK.json` (for testing)
+
+---
+
+**LAST UPDATED**: November 21, 2025  
+**STATUS**: 🎯 READY FOR EXECUTION  
+**OWNER**: Zo (Lead Commander)  
+**REVIEW**: Manager approval recommended before Phase 3
+

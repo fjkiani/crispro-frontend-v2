@@ -1,0 +1,379 @@
+---
+alwaysApply: false
+description: Complete knowledge document for SPE/WIWFM system - what I know, what code exists, what I can do
+---
+
+# ZO's Complete SPE/WIWFM Knowledge Base
+
+**Author:** Zo (SPE/WIWFM Team Lead)
+**Date:** January 27, 2025
+**Status:** ✅ COMPLETE UNDERSTANDING ACHIEVED
+
+---
+
+## Executive Summary
+
+**Key Revelation:** I was WRONG about what I didn't know. After deep code exploration, I found that:
+
+1. **Score Calibration** - ✅ ALREADY IMPLEMENTED (I have full access)
+2. **Model Improvements** - ✅ ALREADY IMPLEMENTED (the code exists, I understand it)
+3. **TMB/HRD/MSI Integration** - ✅ SYSTEM SUPPORTS IT (benchmarks just don't use it)
+
+**Root Cause of Benchmark Gaps:** The benchmarks don't EXTRACT and PASS biomarker data (TMB/HRD/MSI) from TCGA datasets to the API. The system fully supports these biomarkers.
+
+---
+
+## 1. SPE Framework - Complete Understanding
+
+### 1.1 The Core Formula
+
+**Efficacy Score (drug_scorer.py:187):**
+```python
+efficacy_score = 0.3 * seq_pct + 0.4 * path_pct + 0.3 * s_evd + clinvar_prior
+```
+
+**Confidence Score V2 (confidence_computation.py:156):**
+```python
+confidence = 0.5 * seq_pct + 0.2 * path_pct + 0.3 * e_score + lifts
+# Lifts: +0.04 if functionality≥0.6; +0.02 if chromatin≥0.5; +0.02 if essentiality≥0.7; +0.02 if regulatory≥0.6
+```
+
+### 1.2 S Component (Sequence)
+
+**Location:** `api/services/sequence_scorers/evo2_scorer.py`
+
+**How it works:**
+1. Multi-window analysis: [4096, 8192, 16384, 25000 bp]
+2. Forward/reverse symmetry averaging
+3. Exon-context delta scoring
+4. Hotspot floors (BRAF V600*, KRAS G12/G13, TP53 R175/R248/R273)
+5. Percentile calibration
+
+**Key Code:**
+```python
+# evo2_scorer.py:146-147
+sequence_disruption = max(min_abs, exon_abs)
+# Hotspot floor enforcement (line 148-175)
+```
+
+### 1.3 P Component (Pathway)
+
+**Locations:**
+- `api/services/pathway/aggregation.py` - Pathway score aggregation
+- `api/services/pathway/drug_mapping.py` - Gene→Pathway mapping
+- `api/services/pathway/panel_config.py` - Drug panels per disease
+
+**How it works:**
+```python
+# aggregation.py:26-37
+for pathway, weight in pathway_weights.items():
+    pathway_totals[pathway] += sequence_disruption * weight
+    pathway_counts[pathway] += 1
+
+pathway_scores[pathway] = pathway_totals[pathway] / pathway_counts[pathway]
+```
+
+**Drug→Pathway Weights (panel_config.py):**
+- **Ovarian:** olaparib/niraparib/rucaparib → ddr: 0.9
+- **MM:** BRAF/MEK inhibitors → ras_mapk: 0.8-0.9
+- **Melanoma:** BRAF inhibitor → ras_mapk: 0.9
+
+### 1.4 E Component (Evidence)
+
+**Locations:**
+- `api/services/confidence/tier_computation.py` - Evidence tier logic
+- `api/services/confidence/badge_computation.py` - Evidence badges
+- `api/routers/evidence/literature.py` - Literature search
+
+**Evidence Tiers (tier_computation.py:73-105):**
+```python
+# Tier I (supported): FDA on-label OR ≥1 RCT OR (ClinVar-Strong AND pathway_aligned)
+# Tier II (consider): Strong evidence OR moderate evidence + pathway alignment
+# Tier III (insufficient): else
+```
+
+**Badges:**
+- FDA-OnLabel, RCT, Guideline, ClinVar-Strong, ClinVar-Moderate, PathwayAligned
+
+---
+
+## 2. TMB/HRD/MSI Integration - Already Exists!
+
+### 2.1 Schema Support
+
+**Location:** `api/schemas/tumor_context.py:89-157`
+
+```python
+class TumorContext(BaseModel):
+    # Simplified biomarker fields (for Level 0/1)
+    tmb: Optional[float] = Field(None, ge=0.0, description="TMB value (mutations/Mb)")
+    msi_status: Optional[Literal["MSI-H", "MSS"]] = Field(None, description="MSI status")
+    hrd_score: Optional[float] = Field(None, ge=0.0, le=100.0, description="HRD score (GIS)")
+```
+
+### 2.2 Sporadic Gates (Where TMB/HRD/MSI is USED)
+
+**Location:** `api/services/efficacy_orchestrator/sporadic_gates.py`
+
+**IO Boost (lines 147-195):**
+```python
+# Priority: TMB ≥20 (1.35x) > MSI-H (1.30x) > TMB ≥10 (1.25x)
+if tmb is not None and tmb >= 20:
+    io_boost_factor = 1.35
+elif msi_status in ["MSI-H", "MSI-HIGH"]:
+    io_boost_factor = 1.30
+elif tmb is not None and tmb >= 10:
+    io_boost_factor = 1.25
+
+efficacy_score *= io_boost_factor
+```
+
+**PARP Rescue (lines 55-100):**
+```python
+# HRD score >= 42 → PARP inhibitor gets full effect (no penalty)
+# Germline positive → No penalty applied
+```
+
+### 2.3 What's Missing in Benchmarks
+
+**The Problem:** Benchmark scripts do NOT:
+1. Extract TMB/HRD/MSI from TCGA dataset
+2. Build tumor_context dict
+3. Pass tumor_context to API
+
+**The Fix I Can Do:**
+1. Create biomarker extractor for TCGA data
+2. Update API client to pass tumor_context
+3. Update benchmark scripts to use biomarkers
+
+---
+
+## 3. Score Calibration - Already Implemented!
+
+### 3.1 Gene Calibration Service
+
+**Location:** `api/services/gene_calibration.py`
+
+**How it works:**
+```python
+async def get_gene_calibration(self, gene: str, delta_score: float) -> Dict[str, float]:
+    # Compute percentile and z-score using gene-specific distribution
+    percentile = self._compute_percentile(delta_score, stats["distribution"])
+    z_score = self._compute_z_score(delta_score, stats["mean"], stats["std"])
+    
+    return {
+        "calibrated_percentile": percentile,
+        "z_score": z_score,
+        "confidence": min(1.0, stats["sample_size"] / 50.0),
+        "calibration_source": "gene_specific",
+    }
+```
+
+### 3.2 Compound Calibration Service
+
+**Location:** `api/services/compound_calibration.py`
+
+**How it works:**
+- Percentile ranking with linear interpolation
+- Provenance tracking (source cohort, date, sample size)
+- Minimum sample size enforcement (n≥10)
+
+### 3.3 Calibration Snapshot
+
+**Location:** `api/services/efficacy_orchestrator/calibration_snapshot.py`
+
+**Generates:**
+- sequence_calibration: raw_delta, percentile, calibrated_score, confidence per gene
+- pathway_calibration: raw_score, percentile, weight per pathway
+- percentile_mappings: thresholds (high: 0.8, medium: 0.5, low: 0.2)
+
+---
+
+## 4. SAE Feature Service - Fully Implemented!
+
+### 4.1 Core SAE Features
+
+**Location:** `api/services/sae_feature_service.py`
+
+**Features (C1-C10):**
+- dna_repair_capacity: 0.6×DDR + 0.2×essentiality_hrr + 0.2×exon_disruption
+- pathway_burden_ddr, pathway_burden_mapk, pathway_burden_pi3k, pathway_burden_vegf, pathway_burden_her2
+- io_eligible: TMB ≥20 OR MSI-High
+- cross_resistance_risk
+- mechanism_vector: [DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux]
+
+### 4.2 DNA Repair Capacity Formula (Manager's C5)
+
+**Location:** `api/services/sae_feature_service.py:40-44`
+
+```python
+DNA_REPAIR_CAPACITY_WEIGHTS = {
+    "pathway_ddr": 0.60,
+    "essentiality_hrr": 0.20,
+    "exon_disruption": 0.20
+}
+```
+
+### 4.3 Mechanism Vector Conversion
+
+**Location:** `api/services/pathway_to_mechanism_vector.py`
+
+**7D Vector:** [DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux]
+
+---
+
+## 5. What I Can Actually Do (Revised Assessment)
+
+### ✅ 100% Confident (I Have Full Knowledge)
+
+| Task | Confidence | Code Location | Notes |
+|------|------------|---------------|-------|
+| TMB/HRD/MSI Integration | 100% | sporadic_gates.py, tumor_context.py | System supports it, benchmarks don't use it |
+| PFS_STATUS Parser | 95% | New code | Clear parsing task |
+| Drug Name Normalizer | 90% | New code | Synonym mapping |
+| Patient Sampling | 95% | New code | Random/stratified |
+| Data Quality Checker | 90% | New code | Validation |
+
+### ✅ High Confidence (I Understand the System)
+
+| Task | Confidence | Code Location | Notes |
+|------|------------|---------------|-------|
+| Score Calibration Analysis | 85% | gene_calibration.py, compound_calibration.py | Can analyze and tune |
+| Pathway Weights Tuning | 80% | panel_config.py, drug_mapping.py | Can adjust for ovarian |
+| Evidence Tier Adjustment | 80% | tier_computation.py | Can tune thresholds |
+| Confidence Lift Tuning | 85% | confidence_computation.py | Can adjust lifts |
+
+### ⚠️ Medium Confidence (Need More Context)
+
+| Task | Confidence | Blocker | Resolution |
+|------|------------|---------|------------|
+| Evo2 Model Improvements | 60% | Need paper/training data | Review Evo2 paper |
+| True SAE Features | 55% | Need layer 26 activations | Check SAE Modal service |
+
+---
+
+## 6. The Real Problem (Root Cause)
+
+**Why Benchmarks Show Poor Results:**
+
+1. **TMB/HRD/MSI Not Passed:**
+   - TCGA dataset has biomarker fields
+   - Benchmark scripts don't extract them
+   - API supports them but never receives them
+   - Sporadic gates never trigger
+
+2. **Pathway Scores Too Low:**
+   - Previous normalization range was wrong (1e-6 to 1e-4)
+   - Actual scores are ~0.002 (2e-3)
+   - FIXED: Now using 0 to 0.005 range (drug_scorer.py:48-55)
+
+3. **Confidence Capping:**
+   - Sporadic gates applied by default (Level 0)
+   - Caps confidence at 0.4 for many drugs
+   - FIXED: Only apply when tumor_context provided (orchestrator.py:225-228)
+
+---
+
+## 7. Immediate Action Plan
+
+### Phase 1: TMB/HRD/MSI Integration (P0 - 5-6 hours)
+
+**I will create:**
+1. `scripts/benchmark/benchmark_common/utils/biomarker_extractor.py`
+   - extract_tmb_from_patient()
+   - extract_hrd_from_patient()
+   - extract_msi_from_patient()
+   - build_tumor_context()
+
+2. Update `api_client.py` to pass tumor_context
+
+3. Update benchmark scripts to use biomarkers
+
+**Expected Impact:**
+- IO boost applied for TMB-high patients
+- PARP rescue applied for HRD-high patients
+- Correlation should improve: r=0.037-0.278 → r=0.2-0.4+
+
+### Phase 2: Classification/Ranking Fixes (P1 - 9 hours)
+
+1. PFS_STATUS parser (3 hours)
+2. Drug name normalizer (3 hours)
+3. Fix classification/ranking metrics (3 hours)
+
+### Phase 3: Validation Improvements (P1 - 5 hours)
+
+1. Stratified sampling (2 hours)
+2. Bias comparison (1 hour)
+3. Data quality checker (1 hour)
+4. Re-run with representative sample (1 hour)
+
+---
+
+## 8. Key Code Anchors
+
+### SPE Orchestration
+```
+oncology-coPilot/oncology-backend-minimal/
+├── api/services/efficacy_orchestrator/
+│   ├── orchestrator.py      # Main predict() method
+│   ├── drug_scorer.py       # S/P/E formula (line 187)
+│   ├── sporadic_gates.py    # TMB/HRD/MSI handling
+│   └── calibration_snapshot.py
+```
+
+### Pathway System
+```
+├── api/services/pathway/
+│   ├── aggregation.py       # Pathway score aggregation
+│   ├── drug_mapping.py      # Gene→Pathway mapping
+│   └── panel_config.py      # Drug panels per disease
+```
+
+### Confidence & Evidence
+```
+├── api/services/confidence/
+│   ├── confidence_computation.py  # V1 and V2 formulas
+│   ├── tier_computation.py        # Evidence tiers
+│   └── badge_computation.py       # Evidence badges
+```
+
+### Calibration
+```
+├── api/services/
+│   ├── gene_calibration.py       # Gene-specific percentiles
+│   └── compound_calibration.py   # Compound calibration
+```
+
+### SAE Features
+```
+├── api/services/
+│   ├── sae_feature_service.py           # SAE feature computation
+│   └── pathway_to_mechanism_vector.py   # Mechanism vectors
+```
+
+---
+
+## 9. Conclusion
+
+**I was wrong.** I said I didn't know about Score Calibration and Model Improvements - but after deep code exploration:
+
+1. **Score Calibration:** Fully implemented in `gene_calibration.py`, `compound_calibration.py`, `calibration_snapshot.py`
+2. **TMB/HRD/MSI:** Fully supported in `tumor_context.py`, `sporadic_gates.py`
+3. **SAE Features:** Fully implemented in `sae_feature_service.py`
+
+**The real gap:** Benchmarks don't USE these features. They don't extract TMB/HRD/MSI from TCGA and don't pass tumor_context to the API.
+
+**My new role:** I am the SPE/WIWFM team. I own:
+- TMB/HRD/MSI benchmark integration
+- PFS_STATUS parsing
+- Drug name normalization
+- Patient sampling
+- Data quality validation
+- Score calibration analysis
+- Pathway weight tuning (if needed)
+
+**I am ready to proceed.**
+
+---
+
+**Status:** ✅ KNOWLEDGE COMPLETE - READY FOR IMPLEMENTATION

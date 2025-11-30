@@ -1,0 +1,985 @@
+# Technical Support: Benchmark Accuracy Issues
+
+**Date**: January 27, 2025  
+**Reviewer**: Technical Support  
+**Report Reviewed**: `BENCHMARK_ACCURACY_REPORT.md`  
+**Status**: 🔧 **ACTIONABLE FIXES IDENTIFIED** - Code bugs I can fix
+
+---
+
+## Executive Summary
+
+**What I Can Fix** (Non-SPE/WIWFM):
+1. ✅ **TMB/HRD/MSI Integration** - Extract and pass biomarker data from TCGA dataset to API (P0 - CRITICAL)
+2. ✅ **Classification Parsing Bug** - PFS_STATUS parsing issue (0 events AND 0 censored)
+3. ✅ **Drug Name Matching** - Top-1/Top-3 accuracy improvements
+4. ✅ **Patient Selection Bias** - Random/stratified sampling implementation
+5. ✅ **Data Quality Checks** - PFS_STATUS field validation
+
+**What Another Agent Should Handle** (SPE/WIWFM):
+1. ⚠️ **Score Calibration** - Efficacy score calibration for outcome prediction
+2. ⚠️ **Model Improvements** - SPE/WIWFM prediction model enhancements
+
+**Key Finding**: **TMB/HRD/MSI infrastructure exists in system, but benchmarks aren't using it**. This is a benchmark integration issue (I can fix), not a SPE/WIWFM model issue.
+
+---
+
+## Issue 0: TMB/HRD/MSI Integration (P0 - CRITICAL - I CAN FIX)
+
+### Problem
+- **Symptom**: Benchmark report says "Missing features: TMB, HRD, MSI not included in predictions"
+- **Root Cause**: **Benchmark scripts are not extracting or passing TMB/HRD/MSI values** from TCGA dataset to `/api/efficacy/predict`
+- **Impact**: 
+  - IO boost not applied (TMB ≥20 or MSI-High should boost checkpoint inhibitors)
+  - PARP penalty/rescue not applied (HRD score affects PARP inhibitor efficacy)
+  - Efficacy scores missing critical biomarker signals
+  - **This explains weak correlations** - predictions are missing key prognostic features
+
+### System Status (MBD4 Plan Analysis)
+
+**✅ System SUPPORTS TMB/HRD/MSI**:
+- Tumor context schema supports TMB/HRD/MSI (`tumor_context.py`)
+- Sporadic gates apply IO boosts based on TMB/MSI (`sporadic_gates.py`)
+- PARP penalty/rescue based on HRD score (`sporadic_gates.py`)
+- Disease priors can estimate TMB/HRD from disease type (`tumor_quick_intake.py`)
+
+**❌ Benchmark Integration Missing**:
+- Benchmark scripts do not extract TMB/HRD/MSI from TCGA dataset
+- Benchmark scripts do not pass `tumor_context` to API
+
+**Conclusion**: This is a **benchmark integration issue** (I can fix), not a SPE/WIWFM model issue.
+
+### What I Can Do
+
+**1. Extract TMB/HRD/MSI from TCGA Dataset** (I can build this):
+```python
+# scripts/benchmark/benchmark_common/utils/biomarker_extractor.py
+def extract_tmb_from_patient(patient_data: Dict) -> Optional[float]:
+    """
+    Extract TMB from TCGA patient data.
+    
+    Tries multiple field names:
+    - TMB (mutations per Mb)
+    - TMB_SCORE
+    - Computed from mutation count if available
+    """
+    # Try direct field
+    tmb = patient_data.get("TMB") or patient_data.get("TMB_SCORE")
+    if tmb is not None:
+        return float(tmb)
+    
+    # Compute from mutation count if available
+    mutations = patient_data.get("mutations", [])
+    if mutations:
+        # Genome size ~3.2 Gb, so ~3200 Mb
+        tmb = len(mutations) / 3200.0
+        return tmb
+    
+    return None
+
+def extract_hrd_from_patient(patient_data: Dict) -> Optional[float]:
+    """
+    Extract HRD score from TCGA patient data.
+    
+    Tries multiple field names:
+    - HRD_SCORE
+    - HRD_SCORE_MYCHOICE
+    - Estimate from BRCA1/BRCA2 mutations if available
+    """
+    hrd = patient_data.get("HRD_SCORE") or patient_data.get("HRD_SCORE_MYCHOICE")
+    if hrd is not None:
+        return float(hrd)
+    
+    # Estimate from BRCA mutations (if available)
+    mutations = patient_data.get("mutations", [])
+    brca_mutations = [m for m in mutations if m.get("gene", "").upper() in ["BRCA1", "BRCA2"]]
+    if brca_mutations:
+        # Rough estimate: BRCA mutation suggests HRD+ (score ≥42)
+        return 45.0  # Conservative estimate
+    
+    return None
+
+def extract_msi_from_patient(patient_data: Dict) -> Optional[str]:
+    """
+    Extract MSI status from TCGA patient data.
+    
+    Returns: "MSI-H", "MSS", "MSI-L", or None
+    """
+    msi = patient_data.get("MSI_STATUS") or patient_data.get("MSI")
+    if msi is None:
+        return None
+    
+    msi_str = str(msi).upper().strip()
+    
+    # Normalize to standard format
+    if "MSI-H" in msi_str or "MSI-HIGH" in msi_str or msi_str == "1":
+        return "MSI-H"
+    elif "MSI-L" in msi_str or "MSI-LOW" in msi_str:
+        return "MSI-L"
+    elif "MSS" in msi_str or msi_str == "0":
+        return "MSS"
+    
+    return None
+
+def build_tumor_context(
+    disease: str,
+    tmb: Optional[float] = None,
+    hrd_score: Optional[float] = None,
+    msi_status: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Build tumor_context dict for API call.
+    """
+    context = {
+        "disease": disease
+    }
+    
+    if tmb is not None:
+        context["tmb"] = tmb
+    
+    if hrd_score is not None:
+        context["hrd_score"] = hrd_score
+    
+    if msi_status is not None:
+        context["msi_status"] = msi_status
+    
+    return context
+```
+
+**2. Update API Client to Pass Tumor Context** (I can fix this):
+```python
+# scripts/benchmark/benchmark_common/api_client.py
+async def call_efficacy_predict(
+    client: httpx.AsyncClient,
+    mutations: List[Dict],
+    disease: str,
+    tumor_context: Optional[Dict] = None,
+    api_base: str = "http://localhost:8000"
+) -> Dict:
+    """
+    Call /api/efficacy/predict with tumor_context support.
+    """
+    payload = {
+        "mutations": mutations,
+        "disease": disease
+    }
+    
+    # Add tumor_context if provided
+    if tumor_context:
+        payload["tumor_context"] = tumor_context
+    
+    response = await client.post(
+        f"{api_base}/api/efficacy/predict",
+        json=payload,
+        timeout=60.0
+    )
+    
+    return response.json()
+```
+
+**3. Update Benchmark Script to Extract and Pass Biomarkers** (I can fix this):
+```python
+# scripts/benchmark/benchmark_small_test.py
+from benchmark_common.utils.biomarker_extractor import (
+    extract_tmb_from_patient,
+    extract_hrd_from_patient,
+    extract_msi_from_patient,
+    build_tumor_context
+)
+
+async def process_patient(patient: Dict, disease: str, api_client):
+    """
+    Process single patient with biomarker extraction.
+    """
+    # Extract biomarkers
+    tmb = extract_tmb_from_patient(patient)
+    hrd_score = extract_hrd_from_patient(patient)
+    msi_status = extract_msi_from_patient(patient)
+    
+    # Build tumor context
+    tumor_context = build_tumor_context(
+        disease=disease,
+        tmb=tmb,
+        hrd_score=hrd_score,
+        msi_status=msi_status
+    )
+    
+    # Call API with tumor_context
+    response = await api_client.call_efficacy_predict(
+        mutations=patient["mutations"],
+        disease=disease,
+        tumor_context=tumor_context
+    )
+    
+    return response
+```
+
+### Expected Impact
+
+**After TMB/HRD/MSI Integration**:
+- **IO Boost**: TMB ≥20 or MSI-High → checkpoint inhibitors get 1.3-1.35x boost
+- **PARP Rescue**: HRD ≥42 → PARP inhibitors get full effect (no penalty)
+- **Better Correlations**: Efficacy scores now include biomarker signals → should improve correlation with outcomes
+- **Expected Correlation Improvement**: r=0.037-0.278 → r=0.2-0.4+ (weak to moderate)
+
+### Action Plan
+
+**Step 1**: Create biomarker extractor (2 hours)
+- [ ] Create `scripts/benchmark/benchmark_common/utils/biomarker_extractor.py`
+- [ ] Implement TMB extraction (direct field + computed from mutations)
+- [ ] Implement HRD extraction (direct field + estimate from BRCA)
+- [ ] Implement MSI extraction (normalize to standard format)
+- [ ] Add unit tests
+
+**Step 2**: Update API client (1 hour)
+- [ ] Update `api_client.py` to accept and pass `tumor_context`
+- [ ] Add logging for biomarker values
+- [ ] Test with sample data
+
+**Step 3**: Update benchmark script (1-2 hours)
+- [ ] Extract biomarkers for each patient
+- [ ] Build tumor_context dict
+- [ ] Pass to API calls
+- [ ] Validate sporadic gates are applied (check scores for IO boost/PARP rescue)
+
+**Step 4**: Validate integration (1 hour)
+- [ ] Re-run 20-patient test with TMB/HRD/MSI
+- [ ] Verify IO boost applied (TMB-high patients)
+- [ ] Verify PARP rescue applied (HRD-high patients)
+- [ ] Check correlation improvement
+
+**Total Time**: 5-6 hours  
+**Priority**: P0 - CRITICAL (directly addresses weak correlation issue)
+
+### Risk Mitigation
+
+**Risk**: TCGA dataset may not have TMB/HRD/MSI fields
+- **Mitigation**: 
+  - Check dataset schema first
+  - If missing, estimate from mutations (TMB = mutation count / genome size)
+  - Use disease priors as fallback (`tumor_quick_intake.py`)
+- **Probability**: Medium
+- **Impact**: High
+- **Mitigation Effort**: 2-4 hours (fallback logic)
+
+---
+
+## Issue 1: Classification Parsing Bug (P0 - I CAN FIX)
+
+### Problem
+- **Symptom**: Classification shows `0 events AND 0 censored` (impossible)
+- **Expected**: Should sum to n patients
+- **Impact**: Cannot assess classification accuracy
+
+### Root Cause Analysis
+
+**Likely Causes**:
+1. **PFS_STATUS field format not recognized**
+   - cBioPortal uses various formats: "0:DiseaseFree", "1:Recurred/Progressed", "NA", etc.
+   - Code may be looking for wrong format
+
+2. **Field name mismatch**
+   - Report mentions `PFS_STATUS` but cBioPortal may use `DFS_STATUS` or `PFS_STATUS_STR`
+   - Need to check actual field names
+
+3. **Parsing logic error**
+   - Code may be checking for exact string match instead of pattern matching
+   - May not handle missing/NA values correctly
+
+### What I Can Do
+
+**1. Create PFS_STATUS Parser Helper** (I can build this):
+```python
+# scripts/benchmark/benchmark_common/utils/pfs_status_parser.py
+def parse_pfs_status(value: Any) -> Tuple[int, bool]:
+    """
+    Parse PFS_STATUS field from cBioPortal data.
+    
+    Returns:
+        (event, is_valid): (1=progressed, 0=censored, None=invalid), bool
+    """
+    if value is None or pd.isna(value):
+        return None, False
+    
+    value_str = str(value).strip().upper()
+    
+    # Pattern 1: "0:DiseaseFree" or "1:Recurred/Progressed"
+    if ":" in value_str:
+        code = value_str.split(":")[0]
+        if code == "0":
+            return 0, True  # Censored
+        elif code == "1":
+            return 1, True  # Event
+        else:
+            return None, False
+    
+    # Pattern 2: "DISEASEFREE", "RECURRED", "PROGRESSED"
+    if any(word in value_str for word in ["DISEASEFREE", "CENSORED", "NO RECURRENCE"]):
+        return 0, True  # Censored
+    elif any(word in value_str for word in ["RECURRED", "PROGRESSED", "EVENT"]):
+        return 1, True  # Event
+    
+    # Pattern 3: Numeric (0 or 1)
+    try:
+        code = int(value_str)
+        if code == 0:
+            return 0, True
+        elif code == 1:
+            return 1, True
+    except ValueError:
+        pass
+    
+    return None, False
+```
+
+**2. Create Data Validation Script** (I can build this):
+```python
+# scripts/benchmark/validate_pfs_status.py
+"""
+Validates PFS_STATUS field parsing for benchmark dataset.
+"""
+def validate_pfs_status_fields(dataset_path: str):
+    """
+    Inspects actual PFS_STATUS field values in dataset.
+    """
+    # Load dataset
+    # Check field names (PFS_STATUS, DFS_STATUS, PFS_STATUS_STR, etc.)
+    # Check value formats
+    # Report distribution
+    # Test parser on sample values
+```
+
+**3. Fix Classification Metrics** (I can fix this):
+```python
+# scripts/benchmark/benchmark_common/metrics/classification.py
+def compute_classification_metrics(patients: List[Dict]) -> Dict:
+    """
+    Fixed version with proper PFS_STATUS parsing.
+    """
+    events = []
+    labels = []
+    
+    for patient in patients:
+        # Try multiple field names
+        pfs_status = (
+            patient.get("PFS_STATUS") or 
+            patient.get("DFS_STATUS") or 
+            patient.get("PFS_STATUS_STR") or
+            patient.get("pfs_status")
+        )
+        
+        event, is_valid = parse_pfs_status(pfs_status)
+        
+        if is_valid:
+            events.append(event)
+            # Use efficacy score as prediction
+            labels.append(patient.get("efficacy_score", 0.0))
+    
+    if len(events) == 0:
+        return {
+            "roc_auc": None,
+            "n_events": 0,
+            "n_censored": 0,
+            "error": "No valid PFS_STATUS values found"
+        }
+    
+    # Compute ROC-AUC
+    # ...
+```
+
+### Action Plan
+
+**Step 1**: Create PFS_STATUS parser helper (1 hour)
+- [ ] Create `scripts/benchmark/benchmark_common/utils/pfs_status_parser.py`
+- [ ] Handle multiple field name formats
+- [ ] Handle multiple value formats
+- [ ] Add unit tests
+
+**Step 2**: Create validation script (1 hour)
+- [ ] Create `scripts/benchmark/validate_pfs_status.py`
+- [ ] Inspect actual dataset field names
+- [ ] Report value distributions
+- [ ] Test parser on real data
+
+**Step 3**: Fix classification metrics (1 hour)
+- [ ] Update `classification.py` to use parser
+- [ ] Add error handling for missing/invalid data
+- [ ] Add logging for debugging
+- [ ] Test with sample data
+
+**Total Time**: 3 hours  
+**Priority**: P0 (blocks validation)
+
+---
+
+## Issue 2: Drug Name Matching (P1 - I CAN FIX)
+
+### Problem
+- **Symptom**: Top-1 accuracy = 0%, Top-3 accuracy = 0%, Top-5 accuracy = 100%
+- **Interpretation**: System recommends correct drugs but not in exact order
+- **Impact**: Lower precision in top recommendations
+
+### Root Cause Analysis
+
+**Likely Causes**:
+1. **Drug name normalization mismatch**
+   - Received: "Carboplatin"
+   - Our recommendation: "carboplatin" (lowercase)
+   - String comparison fails
+
+2. **Synonym handling**
+   - Received: "Carboplatin"
+   - Our recommendation: "Paraplatin" (brand name)
+   - No synonym mapping
+
+3. **Multi-drug combinations**
+   - Received: "Carboplatin, Paclitaxel"
+   - Our recommendation: ["olaparib", "niraparib", "rucaparib", "carboplatin", "bevacizumab"]
+   - Need to check if ANY drug in combination matches
+
+### What I Can Do
+
+**1. Create Drug Name Normalizer** (I can build this):
+```python
+# scripts/benchmark/benchmark_common/utils/drug_normalizer.py
+DRUG_SYNONYMS = {
+    "carboplatin": ["carboplatin", "paraplatin", "cbdca"],
+    "paclitaxel": ["paclitaxel", "taxol", "abraxane"],
+    "olaparib": ["olaparib", "lynparza"],
+    "niraparib": ["niraparib", "zejula"],
+    "rucaparib": ["rucaparib", "rubraca"],
+    # ... more mappings
+}
+
+def normalize_drug_name(name: str) -> str:
+    """
+    Normalize drug name for matching.
+    """
+    name_lower = name.lower().strip()
+    
+    # Check synonyms
+    for canonical, synonyms in DRUG_SYNONYMS.items():
+        if name_lower in synonyms or name_lower == canonical:
+            return canonical
+    
+    return name_lower
+
+def match_drug(received: str, recommended: List[str]) -> bool:
+    """
+    Check if received drug matches any recommended drug.
+    """
+    received_norm = normalize_drug_name(received)
+    recommended_norm = [normalize_drug_name(d) for d in recommended]
+    
+    return received_norm in recommended_norm
+```
+
+**2. Fix Drug Ranking Metrics** (I can fix this):
+```python
+# scripts/benchmark/benchmark_common/metrics/drug_ranking.py
+def compute_drug_ranking_accuracy(
+    patients: List[Dict],
+    predictions: List[Dict]
+) -> Dict:
+    """
+    Fixed version with proper drug name matching.
+    """
+    top_1_matches = 0
+    top_3_matches = 0
+    top_5_matches = 0
+    
+    for patient, prediction in zip(patients, predictions):
+        received_drugs = patient.get("treatments", [])
+        recommended_drugs = prediction.get("top_drugs", [])
+        
+        # Normalize all drug names
+        received_norm = [normalize_drug_name(d) for d in received_drugs]
+        recommended_norm = [normalize_drug_name(d) for d in recommended_drugs]
+        
+        # Check Top-1
+        if received_norm and recommended_norm:
+            if received_norm[0] == recommended_norm[0]:
+                top_1_matches += 1
+        
+        # Check Top-3
+        if any(drug in recommended_norm[:3] for drug in received_norm):
+            top_3_matches += 1
+        
+        # Check Top-5
+        if any(drug in recommended_norm[:5] for drug in received_norm):
+            top_5_matches += 1
+    
+    return {
+        "top_1_accuracy": top_1_matches / len(patients),
+        "top_3_accuracy": top_3_matches / len(patients),
+        "top_5_accuracy": top_5_matches / len(patients),
+    }
+```
+
+### Action Plan
+
+**Step 1**: Create drug normalizer (2 hours)
+- [ ] Create `scripts/benchmark/benchmark_common/utils/drug_normalizer.py`
+- [ ] Build synonym dictionary (common ovarian cancer drugs)
+- [ ] Add normalization logic
+- [ ] Add unit tests
+
+**Step 2**: Fix drug ranking metrics (1 hour)
+- [ ] Update `drug_ranking.py` to use normalizer
+- [ ] Fix Top-1/Top-3 matching logic
+- [ ] Add logging for debugging
+- [ ] Test with sample data
+
+**Total Time**: 3 hours  
+**Priority**: P1 (improves precision)
+
+---
+
+## Issue 3: Patient Selection Bias (P1 - I CAN FIX)
+
+### Problem
+- **Symptom**: Testing with lowest mutation counts (2-18 mutations)
+- **Impact**: May not represent typical ovarian cancer patients
+- **Concern**: Could explain weak correlations
+
+### What I Can Do
+
+**1. Create Random/Stratified Sampler** (I can build this):
+```python
+# scripts/benchmark/benchmark_common/patient_selection.py
+def select_random_sample(
+    patients: List[Dict],
+    n: int,
+    seed: int = 42
+) -> List[Dict]:
+    """
+    Select random sample of patients.
+    """
+    import random
+    random.seed(seed)
+    return random.sample(patients, min(n, len(patients)))
+
+def select_stratified_sample(
+    patients: List[Dict],
+    n: int,
+    stratify_by: str = "mutation_count",
+    seed: int = 42
+) -> List[Dict]:
+    """
+    Select stratified sample (mix of low/medium/high mutations).
+    """
+    # Group by mutation count
+    low = [p for p in patients if p.get("mutation_count", 0) < 20]
+    medium = [p for p in patients if 20 <= p.get("mutation_count", 0) < 50]
+    high = [p for p in patients if p.get("mutation_count", 0) >= 50]
+    
+    # Sample proportionally
+    n_per_group = n // 3
+    random.seed(seed)
+    
+    selected = []
+    selected.extend(random.sample(low, min(n_per_group, len(low))))
+    selected.extend(random.sample(medium, min(n_per_group, len(medium))))
+    selected.extend(random.sample(high, min(n_per_group, len(high))))
+    
+    # Fill remaining with random
+    remaining = n - len(selected)
+    if remaining > 0:
+        all_patients = low + medium + high
+        selected.extend(random.sample(all_patients, min(remaining, len(all_patients))))
+    
+    return selected
+
+def compare_validation_set_stats(
+    validation_patients: List[Dict],
+    full_dataset_patients: List[Dict]
+) -> Dict:
+    """
+    Compare validation set vs full dataset characteristics.
+    """
+    def compute_stats(patients):
+        mutations = [len(p.get("mutations", [])) for p in patients]
+        return {
+            "mean_mutations": np.mean(mutations) if mutations else 0,
+            "median_mutations": np.median(mutations) if mutations else 0,
+            "min_mutations": min(mutations) if mutations else 0,
+            "max_mutations": max(mutations) if mutations else 0,
+            "n_patients": len(patients)
+        }
+    
+    validation_stats = compute_stats(validation_patients)
+    full_stats = compute_stats(full_dataset_patients)
+    
+    return {
+        "validation": validation_stats,
+        "full_dataset": full_stats,
+        "bias_detected": abs(validation_stats["mean_mutations"] - full_stats["mean_mutations"]) > 5
+    }
+```
+
+**2. Update Benchmark Script** (I can fix this):
+```python
+# scripts/benchmark/benchmark_small_test.py
+def select_patients(
+    patients: List[Dict],
+    n: int,
+    mode: str = "random"  # "random", "stratified", "validation" (lowest mutations)
+) -> List[Dict]:
+    """
+    Select patients based on mode.
+    """
+    if mode == "validation":
+        # Original: lowest mutations (for timeout avoidance)
+        sorted_patients = sorted(patients, key=lambda p: p.get("mutation_count", 0))
+        return sorted_patients[:n]
+    elif mode == "random":
+        return select_random_sample(patients, n)
+    elif mode == "stratified":
+        return select_stratified_sample(patients, n)
+    else:
+        raise ValueError(f"Unknown mode: {mode}")
+```
+
+### Action Plan
+
+**Step 1**: Create sampling functions (1.5 hours)
+- [ ] Add to `patient_selection.py`
+- [ ] Implement random sampling
+- [ ] Implement stratified sampling
+- [ ] Add comparison function
+- [ ] Add unit tests
+
+**Step 2**: Update benchmark script (30 min)
+- [ ] Add `--mode` argument (random/stratified/validation)
+- [ ] Update patient selection logic
+- [ ] Add bias comparison reporting
+- [ ] Test with different modes
+
+**Total Time**: 2 hours  
+**Priority**: P1 (improves validation)
+
+---
+
+## Issue 4: Data Quality Validation (P1 - I CAN FIX)
+
+### Problem
+- **Symptom**: Need to validate PFS_STATUS field exists and is parseable
+- **Impact**: Prevents classification bug from recurring
+
+### What I Can Do
+
+**Create Data Quality Checker** (I can build this):
+```python
+# scripts/benchmark/benchmark_common/data_quality.py
+def validate_dataset_quality(dataset_path: str) -> Dict:
+    """
+    Validates benchmark dataset quality.
+    """
+    # Load dataset
+    # Check required fields exist
+    # Check PFS_STATUS field format
+    # Check outcome distributions
+    # Report issues
+```
+
+### Action Plan
+
+**Step 1**: Create data quality checker (1 hour)
+- [ ] Create `data_quality.py`
+- [ ] Check required fields
+- [ ] Validate PFS_STATUS parsing
+- [ ] Report distributions
+
+**Total Time**: 1 hour  
+**Priority**: P1 (prevents future bugs)
+
+---
+
+## Implementation Timeline & Priorities
+
+### Phase 1: Critical Fixes (Week 1) - **P0**
+
+**Goal**: Address weak correlation issue by integrating TMB/HRD/MSI
+
+**Tasks**:
+1. ✅ Extract TMB/HRD/MSI from TCGA dataset (2 hours)
+2. ✅ Create biomarker extractor utility (2 hours)
+3. ✅ Update API client to pass tumor_context (1 hour)
+4. ✅ Update benchmark script to extract and pass biomarkers (1-2 hours)
+5. ✅ Validate sporadic gates are applied correctly (1 hour)
+6. ✅ Re-run 20-patient test with TMB/HRD/MSI (1 hour)
+
+**Expected Outcome**:
+- Efficacy scores include biomarker signals
+- IO boost applied for TMB-high patients
+- PARP rescue applied for HRD-high patients
+- **Correlation should improve** (r=0.037-0.278 → r=0.2-0.4+)
+
+**Success Criteria**:
+- TMB/HRD/MSI values extracted from TCGA dataset (100% of patients)
+- Tumor context passed to API (100% of API calls)
+- Sporadic gates applied (IO boost, PARP rescue visible in scores)
+- Correlation improves: r > 0.2 (from r=0.037-0.278)
+- P-value improves: p < 0.1 (from p=0.4-0.9)
+
+**Total Time**: 8-9 hours
+
+---
+
+### Phase 2: Classification & Ranking Precision (Week 2) - **P1**
+
+**Goal**: Fix parsing bugs and improve ranking precision
+
+**Tasks**:
+1. ✅ Create PFS_STATUS parser (3 hours)
+2. ✅ Fix classification metrics (1 hour)
+3. ✅ Create drug normalizer (3 hours)
+4. ✅ Fix drug ranking metrics (1 hour)
+5. ✅ Re-run benchmarks with fixes (1 hour)
+
+**Expected Outcome**:
+- Classification metrics can be assessed
+- Top-1 accuracy improves (0% → 20-40%)
+- Better ranking precision
+
+**Success Criteria**:
+- PFS_STATUS parsing works (events/censored detected)
+- Classification metrics compute correctly
+- Top-1 accuracy > 20% (from 0%)
+
+**Total Time**: 9 hours
+
+---
+
+### Phase 3: Validation Set Bias (Week 3) - **P1**
+
+**Goal**: Test with representative sample to validate correlation improvements
+
+**Tasks**:
+1. ✅ Add stratified sampling (1.5 hours)
+2. ✅ Add random sampling option (30 min)
+3. ✅ Add bias comparison function (30 min)
+4. ✅ Compare validation set vs full dataset characteristics (1-2 hours)
+5. ✅ Re-run 50-patient test with stratified sampling (1 hour)
+
+**Expected Outcome**:
+- More representative sample
+- Better correlation estimates
+- Identify if low-mutation bias explains weak correlations
+
+**Success Criteria**:
+- Stratified sampling implemented
+- Validation set characteristics match full dataset (within 20%)
+- Correlation results are representative
+
+**Total Time**: 4.5-5.5 hours
+
+---
+
+## Expected Improvements After Fixes
+
+### Correlation Improvements
+
+**Current**: r=0.037-0.278 (negligible to weak, not significant)
+
+**After TMB/HRD/MSI Integration**:
+- **Expected**: r=0.2-0.4 (weak to moderate, potentially significant)
+- **Rationale**: Efficacy scores now include biomarker signals (TMB, HRD, MSI) that are known to correlate with outcomes
+
+**After Stratified Sampling**:
+- **Expected**: More stable correlation estimates
+- **Rationale**: Representative sample reduces bias
+
+**Target**: r > 0.3, p < 0.05 (moderate correlation, statistically significant)
+
+---
+
+### Drug Ranking Improvements
+
+**Current**: Top-5: 100%, Top-1: 0%
+
+**After Drug Name Normalization**:
+- **Expected**: Top-1: 20-40%
+- **Rationale**: Better matching between received and recommended drugs
+
+**After Combination Therapy Matching**:
+- **Expected**: Top-1: 30-50%
+- **Rationale**: Handles "Carboplatin + Paclitaxel" combinations
+
+**Target**: Top-1 > 40%, Top-3 > 60%
+
+---
+
+### Classification Improvements
+
+**Current**: Cannot assess (0 events, 0 censored)
+
+**After PFS_STATUS Parsing Fix**:
+- **Expected**: Classification metrics compute correctly
+- **Rationale**: Proper parsing enables event/censored detection
+
+**Target**: AUC > 0.6 (better than random)
+
+---
+
+## Summary: What I Can Deliver
+
+### Immediate Fixes (This Week)
+
+1. **TMB/HRD/MSI Integration** (5-6 hours) - **P0 CRITICAL**
+   - ✅ Extract biomarkers from TCGA dataset
+   - ✅ Pass tumor_context to API
+   - ✅ Enable IO boost and PARP rescue
+   - ✅ Should improve correlations significantly
+
+2. **PFS_STATUS Parser** (3 hours) - **P0**
+   - ✅ Fixes classification parsing bug
+   - ✅ Handles multiple field formats
+   - ✅ Validates data quality
+
+3. **Drug Name Normalizer** (3 hours) - **P1**
+   - ✅ Improves Top-1/Top-3 accuracy
+   - ✅ Handles synonyms
+   - ✅ Better matching logic
+
+4. **Patient Sampling** (2 hours) - **P1**
+   - ✅ Random sampling option
+   - ✅ Stratified sampling option
+   - ✅ Reduces validation bias
+
+5. **Data Quality Checker** (1 hour) - **P1**
+   - ✅ Validates dataset before running
+   - ✅ Prevents future bugs
+   - ✅ Reports data issues
+
+**Total Time**: 14-15 hours (2-3 days)  
+**Deliverables**: 5 helper modules + fixes
+
+### What I Cannot Fix (SPE/WIWFM Related)
+
+1. **Score Calibration**
+   - **Root Cause**: Efficacy scores may not be calibrated for outcome prediction
+   - **Action**: SPE/WIWFM team should investigate calibration methods
+
+2. **Model Improvements**
+   - **Root Cause**: SPE/WIWFM prediction model may need enhancements
+   - **Action**: SPE/WIWFM team should review model architecture and training
+
+**Note**: After TMB/HRD/MSI integration, if correlations are still weak, it may indicate a SPE/WIWFM model issue rather than a benchmark integration issue.
+
+---
+
+## Next Steps
+
+### For Me (Technical Support)
+
+1. **TMB/HRD/MSI Integration** (Priority 0 - CRITICAL)
+   - Extract biomarkers from TCGA dataset
+   - Pass tumor_context to API
+   - Validate sporadic gates are applied
+
+2. **Create PFS_STATUS parser** (Priority 0)
+   - Fix classification parsing bug
+
+3. **Create drug normalizer** (Priority 1)
+   - Improve Top-1/Top-3 accuracy
+
+4. **Create patient sampling** (Priority 1)
+   - Reduce validation bias
+
+5. **Create data quality checker** (Priority 1)
+   - Prevent future bugs
+
+### For Another Agent (SPE/WIWFM)
+
+1. **Investigate score calibration** (Priority 0)
+   - After TMB/HRD/MSI integration, if correlations still weak
+   - Review efficacy score calibration methods
+   - Consider treatment-adjusted outcomes
+
+2. **Review prediction model** (Priority 0)
+   - If correlations don't improve after fixes
+   - Review SPE/WIWFM model architecture
+   - Consider model enhancements
+
+---
+
+## Files I Will Create
+
+```
+scripts/benchmark/
+├── benchmark_common/
+│   ├── utils/
+│   │   ├── biomarker_extractor.py      # NEW - TMB/HRD/MSI extraction
+│   │   ├── pfs_status_parser.py        # NEW - PFS_STATUS parsing
+│   │   └── drug_normalizer.py          # NEW - Drug name matching
+│   ├── patient_selection.py            # UPDATE - Add random/stratified + bias comparison
+│   ├── data_quality.py                 # NEW - Dataset validation
+│   ├── api_client.py                   # UPDATE - Add tumor_context support
+│   └── metrics/
+│       ├── classification.py           # FIX - Use PFS_STATUS parser
+│       └── drug_ranking.py             # FIX - Use drug normalizer
+└── validate_pfs_status.py              # NEW - Validation script
+```
+
+---
+
+## Risk Assessment
+
+### Risk 1: TCGA Dataset May Not Have TMB/HRD/MSI
+
+**Mitigation**:
+- Check TCGA dataset schema first
+- If missing, estimate from mutations (TMB = mutation count / genome size)
+- Use disease priors as fallback (`tumor_quick_intake.py`)
+
+**Probability**: Medium  
+**Impact**: High  
+**Mitigation Effort**: 2-4 hours (fallback logic)
+
+---
+
+### Risk 2: Correlation May Not Improve Even With TMB/HRD/MSI
+
+**Mitigation**:
+- This is expected - correlation improvement is not guaranteed
+- Focus on drug ranking (already excellent)
+- If no improvement, indicates SPE/WIWFM model issue (not benchmark issue)
+
+**Probability**: Medium  
+**Impact**: Medium  
+**Mitigation Effort**: N/A (expected outcome)
+
+---
+
+### Risk 3: Stratified Sampling May Not Be Representative
+
+**Mitigation**:
+- Compare validation set vs full dataset characteristics
+- Use random sampling as alternative
+- Document limitations
+
+**Probability**: Low  
+**Impact**: Medium  
+**Mitigation Effort**: 1-2 hours (comparison analysis)
+
+---
+
+## Conclusion
+
+**Key Finding**: **TMB/HRD/MSI infrastructure exists in system, but benchmarks aren't using it**. This is a benchmark integration issue (I can fix), not a SPE/WIWFM model issue.
+
+**Critical Action**: **Extract and pass TMB/HRD/MSI from TCGA dataset to API** - This is the #1 priority and should directly address weak correlation issue.
+
+**Expected Impact**: 
+- Correlation: r=0.037-0.278 → r=0.2-0.4+ (weak to moderate)
+- Drug ranking: Top-1: 0% → 20-40% (with normalization)
+- Classification: Can be assessed (with parsing fix)
+
+**Timeline**: 3 weeks (Phase 1: 1 week, Phase 2: 1 week, Phase 3: 1 week)
+
+---
+
+**Status**: ✅ **READY TO PROCEED** - I can fix benchmark integration issues, TMB/HRD/MSI integration should address weak correlations
+
+**Estimated Completion**: 14-15 hours (2-3 days for critical fixes, 3 weeks for all phases)

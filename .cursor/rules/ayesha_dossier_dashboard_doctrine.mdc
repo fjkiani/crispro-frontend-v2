@@ -1,0 +1,443 @@
+---
+description: Comprehensive doctrine for Ayesha's trial dossier dashboard - PDF export, Kanban organization, Co-Pilot integration, and filtering UI
+---
+
+# ⚔️ AYESHA DOSSIER DASHBOARD DOCTRINE
+
+
+
+
+ZO LOCKED IN, ALPHA. This Ayesha Dossier Dashboard is TACTICAL EXECUTION, but let me show you how to make it STRATEGIC + AGENTIC (not just a prettier UI).
+
+🧠 STRATEGIC ANALYSIS: DOSSIER DASHBOARD VALUE
+Current Plan (Good, But Incremental):
+✅ Format dossiers nicely
+✅ Add PDF export
+✅ Kanban organization
+✅ Co-Pilot can move trials
+
+The Gap:
+❌ This is workflow automation, not intelligence amplification
+❌ Oncologists still make decisions manually (Co-Pilot just organizes, doesn't guide)
+❌ No learning from past decisions (which trials worked? which didn't?)
+❌ No predictive matching (which trial is MOST likely to enroll successfully?)
+
+🎯 WHERE WE CAN BRING EXPONENTIAL VALUE
+VISION 1: INTELLIGENT TRIAL TRIAGE (Not Manual Kanban)
+Current Plan:
+Oncologist manually drags trials to "Interested" → "Contacted" → "Enrolled"
+
+BETTER: Auto-Triage Agent 🤖
+What It Does:
+
+Analyzes all 60 dossiers on load
+
+Auto-sorts into columns based on intelligent criteria:
+
+Interested: Top-Tier + High Match (>85%) + No Critical Gates + Location <50 miles
+
+Review Needed: Good-Tier + Medium Match (70-85%) + Minor Gates
+
+Low Priority: Acceptable + Low Match (<70%) + Major Gates
+
+Auto-Reject: Failed eligibility gates (e.g., prior therapy mismatch)
+
+Why This Matters:
+
+Oncologist doesn't waste time reviewing 60 trials
+
+Start with top 5-10 pre-triaged trials (already in "Interested")
+
+Agent explains WHY each trial is in that column (transparent reasoning)
+
+Implementation:
+javascript
+// NEW AGENT: TrialTriageAgent
+async function autoTriageTrials(dossiers, patientProfile) {
+  const triaged = {
+    interested: [],
+    review_needed: [],
+    low_priority: [],
+    auto_reject: []
+  };
+  
+  for (const dossier of dossiers) {
+    const analysis = await analyzeTrialFit(dossier, patientProfile);
+    
+    // Auto-triage logic
+    if (analysis.criticalGates.length === 0 && 
+        analysis.matchScore > 0.85 && 
+        analysis.locationMiles < 50 &&
+        dossier.tier === 'TOP_TIER') {
+      triaged.interested.push({
+        ...dossier,
+        triage_reason: 'High match + No critical gates + Close location'
+      });
+    } else if (analysis.criticalGates.some(g => g.severity === 'BLOCKER')) {
+      triaged.auto_reject.push({
+        ...dossier,
+        triage_reason: `Blocker: ${analysis.criticalGates[0].reason}`
+      });
+    } else {
+      triaged.review_needed.push({
+        ...dossier,
+        triage_reason: 'Requires manual review'
+      });
+    }
+  }
+  
+  return triaged;
+}
+VISION 2: PREDICTIVE ENROLLMENT SUCCESS (Not Just Match Score)
+Current Plan:
+Show match score (96.6%) based on eligibility criteria
+
+BETTER: Enrollment Probability Score 📊
+What It Includes:
+
+Eligibility Match: 96.6% (existing)
+
+Location Feasibility: 90% (14 miles → high likelihood of attendance)
+
+Trial Velocity: 75% (NCT enrolling slowly → lower urgency)
+
+Historical Success: 80% (similar trials enrolled 4/5 similar patients)
+
+Site Coordinator Responsiveness: 85% (MSK responds within 48 hours typically)
+
+Combined Enrollment Probability: 82% (weighted average)
+
+Why This Matters:
+
+Match score alone is misleading (96.6% eligible ≠ 96.6% chance to enroll)
+
+Enrollment probability accounts for real-world friction (slow trials, unresponsive coordinators, travel burden)
+
+Prioritize trials with high enrollment probability (not just high match)
+
+Implementation:
+javascript
+// ENHANCED SCORING
+function calculateEnrollmentProbability(dossier, patientProfile, historicalData) {
+  const weights = {
+    eligibility: 0.35,
+    location: 0.20,
+    trial_velocity: 0.15,
+    historical_success: 0.20,
+    site_responsiveness: 0.10
+  };
+  
+  const scores = {
+    eligibility: dossier.match_score,
+    location: calculateLocationFeasibility(dossier.location, patientProfile.zip),
+    trial_velocity: getTrialVelocity(dossier.nct_id), // from ClinicalTrials.gov
+    historical_success: getHistoricalSuccess(patientProfile, historicalData),
+    site_responsiveness: getSiteResponsiveness(dossier.site_name)
+  };
+  
+  const enrollmentProb = Object.keys(weights).reduce(
+    (sum, key) => sum + (scores[key] * weights[key]), 
+    0
+  );
+  
+  return {
+    probability: enrollmentProb,
+    breakdown: scores,
+    confidence: calculateConfidence(scores)
+  };
+}
+VISION 3: LEARNING FROM OUTCOMES (Not Static Dossiers)
+Current Plan:
+Dossiers are static (generated once, never updated)
+
+BETTER: Feedback Loop Agent 🔄
+What It Does:
+
+Track trial outcomes:
+
+"Contacted" → Did they respond? How long?
+
+"Screening" → Did patient pass? What failed?
+
+"Enrolled" → Success! Update success rate for similar trials
+
+"Rejected" → Why? Update rejection reasons
+
+Update future recommendations:
+
+"MSK never responds → Lower site_responsiveness score"
+
+"Trials requiring HER2 test → 3/3 patients failed pre-screening → Flag HER2 requirement"
+
+"Trials at Mount Sinai → 5/5 enrolled successfully → Boost Mount Sinai trials"
+
+Why This Matters:
+
+System gets smarter over time (learns what works for THIS patient)
+
+Future dossiers automatically adjust (no manual re-generation)
+
+Platform-wide learning (all users benefit from collective outcomes)
+
+Implementation:
+javascript
+// NEW TABLE: trial_outcomes
+CREATE TABLE trial_outcomes (
+  id UUID PRIMARY KEY,
+  user_id UUID REFERENCES users(id),
+  nct_id TEXT,
+  column_id TEXT, -- 'interested', 'contacted', 'enrolled', 'rejected'
+  outcome TEXT, -- 'success', 'failed', 'pending'
+  failure_reason TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ
+);
+
+// LEARNING AGENT
+async function updateTrialScoring(outcome) {
+  if (outcome.column_id === 'rejected' && outcome.failure_reason === 'HER2_TEST_FAILED') {
+    // Future dossiers: Flag HER2 requirement as high-risk
+    await updateGateWeight('HER2_TESTING', -0.15);
+  }
+  
+  if (outcome.column_id === 'enrolled' && outcome.outcome === 'success') {
+    // Boost similar trials (same site, same phase, same indication)
+    await boostSimilarTrials(outcome.nct_id, +0.10);
+  }
+}
+VISION 4: PROACTIVE TRIAL MONITORING (Not Static Snapshots)
+Current Plan:
+Dossiers generated once from December 2024 trials
+
+BETTER: Live Trial Monitoring Agent 🔴
+What It Does:
+
+Monitor trial status changes:
+
+"NCT06619236 stopped recruiting → Alert + Move to 'Rejected'"
+
+"New trial opened at MSK (HER2+ BC) → Auto-generate dossier + Add to 'Review'"
+
+"Trial amended eligibility (now allows prior PARP) → Re-score dossier + Alert"
+
+Monitor site changes:
+
+"MSK site added to trial → Location score improves"
+
+"PI changed → Update coordinator contact"
+
+Why This Matters:
+
+Trials change constantly (recruiting status, eligibility, sites)
+
+Static dossiers become stale within weeks
+
+Proactive monitoring ensures recommendations stay current
+
+Implementation:
+javascript
+// NEW AGENT: TrialMonitorAgent
+async function monitorTrialChanges(nct_ids) {
+  for (const nct_id of nct_ids) {
+    const latestData = await fetchClinicalTrialsGov(nct_id);
+    const currentDossier = await getDossier(nct_id);
+    
+    const changes = detectChanges(latestData, currentDossier);
+    
+    if (changes.recruiting_status === 'STOPPED') {
+      await moveTrial(nct_id, 'rejected', 'Trial stopped recruiting');
+      await sendAlert({
+        type: 'trial_stopped',
+        nct_id: nct_id,
+        message: 'Trial stopped recruiting - moved to Rejected'
+      });
+    }
+    
+    if (changes.eligibility_changed) {
+      await regenerateDossier(nct_id);
+      await sendAlert({
+        type: 'eligibility_updated',
+        nct_id: nct_id,
+        message: 'Eligibility criteria updated - dossier regenerated'
+      });
+    }
+  }
+}
+
+// Run every 24 hours
+schedule('0 0 * * *', monitorTrialChanges);
+VISION 5: AGENTIC DECISION SUPPORT (Not Manual Organization)
+Current Plan:
+Co-Pilot can move trials, but oncologist decides
+
+BETTER: Decision Advisor Agent 🧠
+What It Does:
+
+Analyzes oncologist's workflow:
+
+"You've been in 'Review' for 3 days → Suggest top 2 trials to contact"
+
+"You contacted MSK trial 5 days ago, no response → Suggest backup trial"
+
+"You enrolled patient in NCT06619236 → Predict next steps + monitoring schedule"
+
+Proactive recommendations:
+
+"Ayesha's CA-125 rising → Consider switching to salvage trial (NCT05123456)"
+
+"New trial matching 98% opened today → Alert + Auto-add to 'Interested'"
+
+Why This Matters:
+
+Oncologists are overwhelmed (too many trials, too little time)
+
+Agent acts as research coordinator (tracks progress, nudges action, suggests next steps)
+
+Reduces decision paralysis (clear recommendations, not 60 options)
+
+Implementation:
+javascript
+// DECISION ADVISOR
+async function provideDecisionSupport(userId, kanbanState) {
+  const recommendations = [];
+  
+  // Detect stalled workflows
+  const reviewTrials = kanbanState.review_needed.filter(t => 
+    t.moved_to_review_at < Date.now() - 3 * 24 * 60 * 60 * 1000 // 3 days ago
+  );
+  
+  if (reviewTrials.length > 0) {
+    recommendations.push({
+      type: 'action_needed',
+      message: `${reviewTrials.length} trials in Review for >3 days`,
+      suggestion: `Contact top 2: ${reviewTrials.slice(0,2).map(t => t.nct_id).join(', ')}`,
+      cta: 'Move to Contacted'
+    });
+  }
+  
+  // Detect unresponsive sites
+  const contactedTrials = kanbanState.contacted.filter(t =>
+    t.contacted_at < Date.now() - 5 * 24 * 60 * 60 * 1000 && !t.response_received
+  );
+  
+  if (contactedTrials.length > 0) {
+    recommendations.push({
+      type: 'unresponsive_site',
+      message: `${contactedTrials.length} sites unresponsive for >5 days`,
+      suggestion: 'Consider backup trials with more responsive sites',
+      cta: 'View Alternatives'
+    });
+  }
+  
+  return recommendations;
+}
+🎯 ENHANCED BUILD PLAN (WITH INTELLIGENCE)
+PHASE 1: Foundation (Your Original Plan) ✅
+Formatted dossier viewer
+
+PDF export
+
+Kanban board
+
+Basic filters
+
+PHASE 2: Intelligent Triage (NEW) 🆕
+Auto-triage agent (pre-sort trials on load)
+
+Enrollment probability score (not just match score)
+
+Triage reasoning (explain WHY each trial is where it is)
+
+PHASE 3: Learning & Feedback (NEW) 🆕
+Outcome tracking (contacted, enrolled, rejected)
+
+Feedback loop agent (update scoring based on outcomes)
+
+Historical success analysis
+
+PHASE 4: Proactive Monitoring (NEW) 🆕
+Live trial monitoring agent (status changes, eligibility updates)
+
+Alerts for critical changes
+
+Auto-regenerate dossiers when trials change
+
+PHASE 5: Decision Support (NEW) 🆕
+Decision advisor agent (detect stalled workflows, suggest actions)
+
+Proactive recommendations (not just reactive organization)
+
+Co-Pilot integration (agentic suggestions, not just commands)
+
+💎 PRIORITIZED FEATURES (WHAT TO BUILD FIRST)
+Priority	Feature	Value	Effort	Impact
+P0	Auto-Triage Agent	Pre-sort trials intelligently	MEDIUM	MASSIVE
+P0	Enrollment Probability	Predict real success rate	MEDIUM	MASSIVE
+P1	Outcome Tracking	Learn from past decisions	LOW	HIGH
+P1	Decision Advisor	Proactive recommendations	MEDIUM	HIGH
+P2	Live Monitoring	Keep dossiers current	HIGH	MEDIUM
+P2	Feedback Loop Learning	Platform-wide intelligence	HIGH	MEDIUM
+
+
+**Last Updated**: January 13, 2025  
+**Status**: ✅ **ACTIVE BUILD PLAN**  
+**Mission**: Transform Ayesha's trial dossiers from text dumps into intelligent, agentic dashboard
+
+---
+
+## 🎯 CORE PRINCIPLES
+
+### **1. Professional Clinical Reports**
+- Dossiers are **Commander-grade intelligence reports**, not text dumps
+- PDF export must be **professional clinical report format** (header, footer, page numbers, RUO disclaimer)
+- All markdown sections must render beautifully (tables, decision trees, scenarios)
+
+### **2. Intelligent Organization**
+- Use **Kanban board** to organize trials by workflow stage (Interested → Contacted → Screening → Enrolled → Rejected)
+- Persist organization state to **localStorage** (survives page refresh)
+- Auto-populate "Interested" column with **Top-Tier trials** on first load
+
+### **3. Agentic Management**
+- **Co-Pilot** can manage trials: "Move trial to Interested", "Export all Top-Tier", "Find trials with HER2 requirement"
+- Co-Pilot actions update Kanban state in real-time
+- Natural language queries route to appropriate actions
+
+### **4. Backend-Frontend Alignment**
+- Frontend filters must use **backend pipeline metadata** (tier, score, stage results)
+- Filter UI exposes all backend capabilities (tier, score, phase, location, LLM status)
+- Real-time filtering with debounced API calls
+
+---
+
+## 📁 FILE STRUCTURE
+
+### **Frontend Components**
+```
+oncology-coPilot/oncology-frontend/src/
+├── pages/
+│   ├── AyeshaDossierDetail.jsx          # Enhanced with DossierViewer
+│   ├── AyeshaDossierBrowser.jsx         # List view (keep for reference)
+│   └── AyeshaTrialDashboard.jsx         # NEW: Main dashboard with Kanban
+├── components/
+│   ├── ayesha/
+│   │   ├── DossierViewer.jsx            # NEW: Formatted markdown renderer
+│   │   ├── DossierPDFExporter.jsx       # NEW: PDF export component
+│   │   ├── DossierPDFTemplate.jsx      # NEW: PDF template (react-pdf)
+│   │   ├── TrialKanbanBoard.jsx         # NEW: Kanban board for trials
+│   │   ├── TrialKanbanCard.jsx          # NEW: Individual trial card
+│   │   ├── TrialFilterSidebar.jsx       # NEW: Filter sidebar
+│   │   └── TrialStatsCards.jsx         # NEW: Stats display
+│   └── CoPilot/
+│       ├── Actions/
+│       │   └── trialManagementActions.js  # NEW: Trial management actions
+│       └── context/
+│           └── TrialContext.jsx         # NEW: Trial state context
+```
+
+### **Backend API** (Already Exists)
+```
+oncology-coPilot/oncology-backend-minimal/api/routers/
+└── ayesha_dossiers.py                   # Serves dossiers (list, detail, export, stats)
+```
+
+---

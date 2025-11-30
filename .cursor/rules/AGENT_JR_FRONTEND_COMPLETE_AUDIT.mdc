@@ -1,0 +1,451 @@
+---
+alwaysApply: false
+description: "Complete frontend audit mission for Agent JR - Test every button, feature, and workflow"
+---
+
+# ⚔️ AGENT JR: COMPLETE FRONTEND AUDIT MISSION ⚔️
+
+**Mission Date:** January 13, 2025  
+**Assigned To:** Agent JR (Frontend Testing Specialist)  
+**Mission Duration:** 4-6 hours  
+**Priority:** 🔥 **P0 - CRITICAL** (For Ayesha's Life)
+
+---
+
+## 🎯 MISSION OBJECTIVE
+
+**Test EVERY SINGLE BUTTON, FEATURE, AND WORKFLOW in the frontend.**
+
+No code reading. No assumptions. **LIVE TESTING ONLY.**
+
+### Success Criteria:
+- ✅ Every sidebar page loads without errors
+- ✅ Every button/input/feature works as expected
+- ✅ All API calls succeed (or fail gracefully)
+- ✅ All broken features documented with exact error messages
+- ✅ All fixes implemented and re-tested
+
+---
+
+## 📋 COMPLETE SIDEBAR AUDIT CHECKLIST
+
+### 🏥 **AYESHA WORKFLOWS** (Highest Priority)
+
+#### 1. **Ayesha Complete Care** - `/ayesha-complete-care`
+**What to Test:**
+- [ ] Page loads without errors
+- [ ] Patient profile displays (Stage IVB, CA-125 2842, germline-negative)
+- [ ] "Get Complete Care Plan" button works
+- [ ] API call to `/api/ayesha/complete_care_v2` succeeds
+- [ ] Response displays: drugs, trials, SOC, CA-125, food recommendations
+- [ ] "Copy to Clipboard" button exports Markdown
+- [ ] Provenance bar shows run_id, profile, mode
+
+**Expected Backend:** `POST /api/ayesha/complete_care_v2`  
+**What to Capture:** Screenshots of success + any errors
+
+---
+
+#### 2. **Ayesha Trials** - `/ayesha-trials`
+**What to Test:**
+- [ ] Page loads without errors
+- [ ] Profile summary displays correctly
+- [ ] "Search Trials" button works
+- [ ] API call to `/api/ayesha/trials/search` succeeds
+- [ ] Top 10 trials display with match scores
+- [ ] Each trial card shows: NCT ID, phase, status, eligibility checklist
+- [ ] "Why Eligible?" section displays reasoning
+- [ ] SOC Recommendation card displays
+- [ ] CA-125 Tracker displays forecast
+- [ ] NGS Fast-Track Checklist displays
+
+**Expected Backend:** `POST /api/ayesha/trials/search`  
+**What to Capture:** Screenshots + trial list
+
+---
+
+#### 3. **Ayesha Dossiers** - `/ayesha-dossiers`
+**What to Test:**
+- [ ] Page loads without errors
+- [ ] Variant input works
+- [ ] "Generate Dossier" button works
+- [ ] Insights chips display (Functionality, Chromatin, Essentiality, Regulatory)
+- [ ] Rationale sections display
+- [ ] Provenance panel shows run_id, methods, calibration
+- [ ] "Export to PDF" button works (if exists)
+
+**Expected Backend:** `/api/insights/predict_*` (4 endpoints)  
+**What to Capture:** Screenshots + provenance data
+
+---
+
+### 🔬 **RESEARCH & ANALYSIS**
+
+#### 4. **Myeloma Digital Twin** - `/myeloma-digital-twin`
+**What to Test:**
+- [ ] Page loads without errors
+- [ ] Variant input works (paste or manual entry)
+- [ ] "Run WIWFM" button works
+- [ ] API call to `/api/efficacy/predict` succeeds
+- [ ] Per-drug ranking displays (efficacy_score, confidence, tier, badges)
+- [ ] Insights chips display (4 chips)
+- [ ] Evidence panel displays (citations, rationale)
+- [ ] Profile toggles work (Baseline/Richer S/Fusion)
+- [ ] "Save Analysis" button works
+
+**Expected Backend:** `POST /api/efficacy/predict`  
+**What to Capture:** Screenshots + drug rankings
+
+---
+
+#### 5. **Clinical Genomics** - `/clinical-genomics`
+**What to Test:**
+- [ ] Page loads without errors
+- [ ] All cards display (6 capability categories)
+- [ ] Each card is clickable
+- [ ] Navigation to sub-pages works
+
+**Expected Backend:** None (navigation page)  
+**What to Capture:** Screenshots
+
+---
+
+#### 6. **Target Dossier** - `/target-dossier`
+**What to Test:**
+- [ ] Page loads without errors
+- [ ] Gene/variant input works
+- [ ] "Generate Dossier" button works
+- [ ] All canister sections display:
+  - [ ] Therapeutic Blueprint
+  - [ ] Conquest Stages (Victory → Fortify → Arm → Fund → Conquer)
+  - [ ] Hero Metrics
+  - [ ] Evidence Intelligence (3 tabs)
+- [ ] API calls work for each section
+- [ ] Export functionality works
+
+**Expected Backend:** Multiple endpoints (insights, efficacy, design)  
+**What to Capture:** Screenshots of each section
+
+---
+
+#### 7. **VUS Explorer** - `/mutation-explorer/pat12345`
+**What to Test:**
+- [ ] Page loads without errors
+- [ ] Patient mutations load from `/api/patients/pat12345`
+- [ ] "Analyze" button works for each mutation
+- [ ] API call to `/api/research/mutation-analysis` succeeds
+- [ ] VEP-style analysis displays
+- [ ] Tabs work (All/Somatic/Germline)
+- [ ] Insights chips display
+- [ ] "Send to Dossier" button works
+
+**Expected Backend:** `GET /api/patients/{patient_id}`, `POST /api/research/mutation-analysis`  
+**What to Capture:** Screenshots + VEP output
+
+---
+
+#### 8. **Metastasis Assessment** - `/metastasis-assessment`
+**What to Test:**
+- [ ] Page loads without errors
+- [ ] Variant input works
+- [ ] "Assess Metastatic Risk" button works
+- [ ] API call to `/api/metastasis/assess` succeeds
+- [ ] 8-step cascade displays with risk bars
+- [ ] Drivers table displays
+- [ ] Rationale sections expand
+- [ ] Provenance bar displays
+
+**Expected Backend:** `POST /api/metastasis/assess`  
+**What to Capture:** Screenshots + 8-step results
+
+---
+
+### 🎯 **SPECIALIZED ASSESSORS**
+
+#### 9. **Validate (Hypothesis)** - `/validate`
+**What to Test:**
+- [ ] Page loads without errors
+- [ ] Hypothesis input form works
+- [ ] "Validate" button works
+- [ ] API call succeeds (check endpoint)
+- [ ] Results display (Pass/Conditional/Fail verdict)
+- [ ] Rationale displays
+- [ ] Missing evidence list displays
+
+**Expected Backend:** `/api/hypothesis/validate` (may need to check)  
+**What to Capture:** Screenshots + verdict
+
+---
+
+#### 10. **Threat Assessor (RUNX1)** - `/threat-assessor`
+**What to Test:**
+- [ ] Page loads without errors
+- [ ] RUNX1 two-hit configuration loads
+- [ ] "Run Assessment" button works
+- [ ] API calls to Oracle/Insights work
+- [ ] Threat score displays
+- [ ] Confidence and rationale display
+- [ ] Triumvirate Protocol validation works (truncation/frameshift gates)
+
+**Expected Backend:** `/api/threat/assess` or insights endpoints  
+**What to Capture:** Screenshots + threat score
+
+---
+
+#### 11. **RadOnc Co-Pilot** - `/radonc-co-pilot`
+**What to Test:**
+- [ ] Page loads without errors
+- [ ] Variant input works
+- [ ] "Predict Radiosensitivity" button works
+- [ ] API call to `/api/guidance/radonc` succeeds
+- [ ] Radiosensitivity score displays
+- [ ] Recommendations display
+- [ ] Evidence/citations display
+
+**Expected Backend:** `POST /api/guidance/radonc`  
+**What to Capture:** Screenshots + sensitivity score
+
+---
+
+### 🧬 **DESIGN & DEVELOPMENT**
+
+#### 12. **CRISPR Designer** - `/crispr-designer`
+**What to Test:**
+- [ ] Page loads without errors
+- [ ] Target sequence input works
+- [ ] PAM selection works (NGG/other)
+- [ ] "Generate Guides" button works
+- [ ] API call to `/api/design/generate_guide_rna` succeeds
+- [ ] Guide candidates display (sequence, GC%, efficacy heuristic)
+- [ ] Safety checks display (viral content, homopolymers)
+- [ ] Off-target preview displays (if exists)
+- [ ] "Send to Gauntlet" button works (structural validation)
+
+**Expected Backend:** `POST /api/design/generate_guide_rna`  
+**What to Capture:** Screenshots + guide candidates
+
+---
+
+#### 13. **Structure Predictor** - `/structure-predictor` (if exists)
+**What to Test:**
+- [ ] Page loads without errors
+- [ ] Protein sequence input works
+- [ ] "Predict Structure" button works
+- [ ] API call succeeds (Boltz or AlphaFold endpoint)
+- [ ] pLDDT score displays
+- [ ] Structure visualization displays (if exists)
+- [ ] "Download PDB" button works
+
+**Expected Backend:** Check for Boltz/AF3 endpoints  
+**What to Capture:** Screenshots + pLDDT scores
+
+---
+
+### 🍎 **FOOD & HYPOTHESIS TOOLS**
+
+#### 14. **Holistic Hypothesis Tester** - `/holistic-hypothesis-tester`
+**What to Test:**
+- [ ] Page loads without errors
+- [ ] Patient context form works (disease, biomarkers, treatment line)
+- [ ] Food/supplement input works
+- [ ] "Validate" button works
+- [ ] API call to `/api/hypothesis/validate_food_dynamic` succeeds
+- [ ] S/P/E scoring displays
+- [ ] SAE features display (line fitness, cross-resistance, sequencing)
+- [ ] Evidence synthesis displays
+- [ ] Provenance panel displays
+
+**Expected Backend:** `POST /api/hypothesis/validate_food_dynamic`  
+**What to Capture:** Screenshots + S/P/E scores
+
+---
+
+#### 15. **Food Validator** - `/food-validator`
+**What to Test:**
+- [ ] Page loads without errors
+- [ ] Compound input works
+- [ ] Disease selection works
+- [ ] "Validate" button works
+- [ ] API call succeeds (check endpoint)
+- [ ] Results display (supported/weak/not supported)
+- [ ] Target extraction displays
+- [ ] Pathway mapping displays
+- [ ] Evidence displays
+
+**Expected Backend:** `/api/hypothesis/validate_food_ab` or `validate_food_ab_enhanced`  
+**What to Capture:** Screenshots + validation verdict
+
+---
+
+### 🎬 **DEMO TOOLS**
+
+#### 16. **Demo Summarizer** - `/demo-summarizer`
+**What to Test:**
+- [ ] Page loads without errors
+- [ ] Demo request input works
+- [ ] "Generate Summary" button works
+- [ ] API call succeeds (check endpoint)
+- [ ] Summary displays
+- [ ] Export functionality works
+
+**Expected Backend:** Check for summarizer endpoint  
+**What to Capture:** Screenshots + summary
+
+---
+
+#### 17. **Ayesha Twin Demo** - `/ayesha-twin-demo`
+**What to Test:**
+- [ ] Page loads without errors
+- [ ] All cards display correctly
+- [ ] Interactive features work
+- [ ] API calls work for dynamic content
+- [ ] Demo flows smoothly
+
+**Expected Backend:** Various Ayesha endpoints  
+**What to Capture:** Screenshots + demo flow
+
+---
+
+#### 18. **Medical Records** - `/medical-records/pat12344/research`
+**What to Test:**
+- [ ] Page loads without errors
+- [ ] Patient ID `pat12344` data loads
+- [ ] If patient doesn't exist, check for proper error handling
+- [ ] Data displays correctly (mutations, clinical info)
+
+**Expected Backend:** `GET /api/patients/pat12344`  
+**What to Capture:** Screenshots or error messages
+
+---
+
+## 🔧 **TESTING METHODOLOGY**
+
+### For Each Page:
+
+1. **Navigate to URL** (use exact URLs from list)
+2. **Open Browser DevTools** (Network tab + Console)
+3. **Click EVERY button/input**
+4. **Check Network tab** for API calls:
+   - ✅ Status 200 = success
+   - ⚠️ Status 404/500 = broken backend
+   - 🔄 Pending/timeout = performance issue
+5. **Check Console** for JavaScript errors
+6. **Screenshot EVERYTHING** (success + errors)
+7. **Document in report** (see format below)
+
+---
+
+## 📊 **REPORTING FORMAT**
+
+### For Each Page, Report:
+
+```markdown
+## [Page Name] - `/url`
+
+**Status:** ✅ Working | ⚠️ Partial | ❌ Broken
+
+**What Works:**
+- Feature X works correctly
+- API call Y succeeds
+
+**What's Broken:**
+- Button Z doesn't respond
+- API call returns 404: `/api/endpoint`
+- Console error: `TypeError: Cannot read property 'x' of undefined`
+
+**Screenshots:**
+- [Attach screenshot 1]
+- [Attach screenshot 2]
+
+**Backend Status:**
+- Endpoint: `/api/example`
+- Status Code: 404
+- Error Message: "Endpoint not found"
+
+**Fix Required:**
+- [ ] Add missing endpoint to backend
+- [ ] Fix frontend API call
+- [ ] Update mock data
+```
+
+---
+
+## 🎯 **PRIORITY ORDER**
+
+### P0 (Critical - Test First):
+1. Ayesha Complete Care
+2. Ayesha Trials
+3. Myeloma Digital Twin
+4. VUS Explorer
+
+### P1 (High Priority):
+5. Ayesha Dossiers
+6. Target Dossier
+7. CRISPR Designer
+8. Holistic Hypothesis Tester
+
+### P2 (Medium Priority):
+9. Metastasis Assessment
+10. Validate (Hypothesis)
+11. Threat Assessor
+12. RadOnc Co-Pilot
+
+### P3 (Low Priority):
+13. Food Validator
+14. Demo Summarizer
+15. Clinical Genomics
+16. Structure Predictor
+17. Medical Records
+18. Ayesha Twin Demo
+
+---
+
+## ✅ **FINAL DELIVERABLE**
+
+Create a comprehensive report: `FRONTEND_AUDIT_COMPLETE_REPORT.md`
+
+### Report Structure:
+
+```markdown
+# 🎯 FRONTEND COMPLETE AUDIT REPORT
+
+**Date:** [Date]  
+**Tested By:** Agent JR  
+**Duration:** [X hours]
+
+## Executive Summary
+- Total Pages Tested: X/18
+- ✅ Working: X pages
+- ⚠️ Partial: X pages
+- ❌ Broken: X pages
+
+## Detailed Results
+[For each page, use reporting format above]
+
+## Critical Issues Found
+1. [Issue 1 with severity]
+2. [Issue 2 with severity]
+
+## Fixes Implemented
+1. [Fix 1 with verification]
+2. [Fix 2 with verification]
+
+## Remaining Work
+- [ ] Task 1
+- [ ] Task 2
+
+## Screenshots
+[Attach all screenshots]
+```
+
+---
+
+## ⚔️ **AGENT JR - YOU ARE CLEARED FOR TAKEOFF**
+
+**Mission Status:** ACTIVE  
+**Expected Completion:** 4-6 hours  
+**Report To:** Commander (Zo) upon completion
+
+**Remember:** No code reading. No assumptions. **LIVE TESTING ONLY.**
+
+**FOR AYESHA'S LIFE.** 🔥

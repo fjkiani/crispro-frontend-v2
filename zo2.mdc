@@ -1,0 +1,915 @@
+---
+alwaysApply: false
+description: Zo's SPE/WIWFM ownership plan - hard product improvements vs delegated tasks
+---
+
+# ZO's SPE/WIWFM Ownership Plan
+
+**Author:** Zo (SPE/WIWFM Team Lead)
+**Date:** January 27, 2025
+**Status:** 🎯 PLAN ACTIVE - HARD PRODUCT WORK OWNED
+
+---
+
+## The Core Problem
+
+**From BENCHMARK_ACCURACY_REPORT.md:**
+- ✅ Drug Ranking: 100% Top-5 accuracy (excellent)
+- ❌ Correlation: r=0.037-0.278 (negligible to weak)
+- ❌ Classification: Cannot assess (0 events, 0 censored)
+
+**The Question:** Why is correlation so weak?
+
+---
+
+## Task Separation: SPE/WIWFM (Me) vs Lower Agents
+
+### 🎯 WHAT I OWN (Hard Product Work)
+
+These are **product-level improvements** that require deep SPE/WIWFM understanding:
+
+| Task | Difficulty | Impact | Why It's Mine |
+|------|------------|--------|---------------|
+| **Outcome Calibration** | HARD | HIGH | Need to calibrate efficacy→outcome prediction |
+| **Disease-Specific Weighting** | HARD | HIGH | Ovarian needs different S/P/E weights |
+| **Treatment-Adjusted Scoring** | HARD | HIGH | Prior treatment affects efficacy |
+| **Confidence Calibration** | HARD | MEDIUM | Tune lifts for outcome prediction |
+| **BRCA-PARP Pathway Tuning** | MEDIUM | HIGH | Ovarian-specific DDR pathway |
+| **Tier Threshold Optimization** | MEDIUM | MEDIUM | Adjust evidence tier thresholds |
+
+### 📦 WHAT LOWER AGENTS HANDLE (Infrastructure Work)
+
+These are **routine integration tasks** that don't require SPE/WIWFM expertise:
+
+| Task | Difficulty | Impact | Who Handles |
+|------|------------|--------|-------------|
+| TMB/HRD/MSI Extraction | EASY | HIGH | Lower Agent |
+| PFS_STATUS Parsing | EASY | MEDIUM | Lower Agent |
+| Drug Name Normalization | EASY | LOW | Lower Agent |
+| Patient Sampling | EASY | MEDIUM | Lower Agent |
+| Data Quality Checks | EASY | LOW | Lower Agent |
+
+---
+
+## 1. Why Correlation Is Weak (Root Cause Analysis)
+
+### Current State
+
+**Efficacy Formula (drug_scorer.py:187):**
+```python
+efficacy = 0.3 * seq_pct + 0.4 * path_pct + 0.3 * s_evd + clinvar_prior
+```
+
+**Problem:** This formula predicts **drug-mutation alignment**, NOT **treatment outcome**.
+
+### The Gap
+
+| What We Predict | What Benchmark Measures |
+|-----------------|------------------------|
+| "How well does this drug target this mutation?" | "Did patient survive longer?" |
+| Drug-pathway alignment (0-1) | PFS/OS in months |
+
+**This is like comparing apples to oranges.** High drug-mutation alignment doesn't guarantee good outcomes because:
+
+1. **Treatment history matters** - Prior treatments create resistance
+2. **Biomarkers matter** - TMB/HRD/MSI affect IO/PARP response
+3. **Disease context matters** - Ovarian ≠ MM ≠ Melanoma
+4. **We predict eligibility, not efficacy** - Our score says "this drug might work" not "patient will survive longer"
+
+---
+
+## 2. MY PLAN: Outcome-Calibrated SPE
+
+### Phase 1: Biomarker-Enhanced Scoring (Week 1)
+
+**Goal:** Enable IO boost and PARP rescue (currently blocked by missing tumor_context)
+
+**Lower Agent Task:** Extract TMB/HRD/MSI, pass tumor_context
+**My Task:** Validate sporadic gates are improving correlation
+
+**Expected Impact:** r=0.037 → r=0.15+ (still weak, but improved)
+
+### Phase 2: Outcome Calibration (Week 2-3) - MY CORE WORK
+
+**Goal:** Calibrate efficacy scores to predict outcomes, not just drug-mutation alignment
+
+**Approach:**
+
+1. **Analyze Current Score Distribution:**
+   - What efficacy scores do responders vs non-responders get?
+   - Are scores clustered? Spread? Bimodal?
+   - Is there ANY signal in the current scores?
+
+2. **Build Outcome-Calibrated Weights:**
+   - Analyze TCGA outcomes by pathway
+   - DDR mutations → better PARP response → adjust DDR pathway weight
+   - TMB-high → better IO response → adjust IO boost magnitude
+   - BRCA mutations → HRD-like → adjust PARP rescue threshold
+
+3. **Disease-Specific Calibration:**
+   - Ovarian: DDR pathway weight 0.9 → 0.95?
+   - Ovarian: PARP inhibitors should rank higher for BRCA+
+   - Ovarian: IO boost less relevant (TMB usually low)
+
+**Code Changes I Will Make:**
+
+```python
+# api/services/efficacy_orchestrator/drug_scorer.py
+
+# CURRENT (fixed weights):
+efficacy = 0.3 * seq_pct + 0.4 * path_pct + 0.3 * s_evd + clinvar_prior
+
+# NEW (disease-specific, outcome-calibrated):
+def compute_efficacy_v2(disease, drug, seq_pct, path_pct, s_evd, clinvar_prior, tumor_context):
+    # Disease-specific base weights
+    weights = get_disease_weights(disease)  # NEW
+    
+    # Biomarker adjustments
+    biomarker_adjustment = compute_biomarker_adjustment(drug, tumor_context)  # NEW
+    
+    # Outcome-calibrated formula
+    efficacy = (
+        weights["seq"] * seq_pct + 
+        weights["path"] * path_pct + 
+        weights["evd"] * s_evd + 
+        clinvar_prior +
+        biomarker_adjustment  # IO boost, PARP rescue
+    )
+    
+    return efficacy
+```
+
+**Files I Will Modify:**
+- `api/services/efficacy_orchestrator/drug_scorer.py` - Add disease-specific weights
+- `api/services/pathway/panel_config.py` - Ovarian-specific pathway weights
+- `api/services/confidence/confidence_computation.py` - Outcome-calibrated lifts
+
+### Phase 3: Treatment-Adjusted Scoring (Week 4) - ADVANCED
+
+**Goal:** Account for prior treatment in efficacy prediction
+
+**Approach:**
+- Prior PARP → reduce PARP efficacy (resistance)
+- Prior platinum → check HRD for PARP rescue
+- Prior IO → check TMB for continued response
+
+**This requires treatment history in the request** - may need schema update.
+
+---
+
+## 3. Implementation Details
+
+### 3.1 Disease-Specific Weights (MY CODE)
+
+**New File: `api/services/efficacy_orchestrator/disease_weights.py`**
+
+```python
+"""
+Disease-specific SPE weights for outcome calibration.
+"""
+
+DISEASE_WEIGHTS = {
+    "ovarian": {
+        "seq": 0.25,   # Slightly lower (mutations less predictive in OV)
+        "path": 0.50,  # Higher (DDR pathway is key)
+        "evd": 0.25,   # Same
+        "ddr_bonus": 0.10,  # Bonus for DDR pathway alignment
+    },
+    "mm": {
+        "seq": 0.30,   # Standard
+        "path": 0.40,  # Standard
+        "evd": 0.30,   # Standard
+    },
+    "melanoma": {
+        "seq": 0.35,   # Higher (hotspots very predictive)
+        "path": 0.35,  # Lower (less pathway-dependent)
+        "evd": 0.30,   # Standard
+    },
+    "default": {
+        "seq": 0.30,
+        "path": 0.40,
+        "evd": 0.30,
+    }
+}
+
+def get_disease_weights(disease: str) -> dict:
+    """Get disease-specific SPE weights."""
+    disease_lower = disease.lower()
+    
+    if "ovarian" in disease_lower or "ov_" in disease_lower:
+        return DISEASE_WEIGHTS["ovarian"]
+    elif "myeloma" in disease_lower or "mm" in disease_lower:
+        return DISEASE_WEIGHTS["mm"]
+    elif "melanoma" in disease_lower:
+        return DISEASE_WEIGHTS["melanoma"]
+    else:
+        return DISEASE_WEIGHTS["default"]
+```
+
+### 3.2 Biomarker Adjustment (MY CODE)
+
+**Update: `api/services/efficacy_orchestrator/sporadic_gates.py`**
+
+The code already has IO boost and PARP rescue, but they're not being used because benchmarks don't pass tumor_context. Once lower agent fixes that, I need to:
+
+1. **Verify boosts are applying correctly**
+2. **Tune boost magnitudes for ovarian:**
+   - Current: TMB≥20 → 1.35x (may be too high for ovarian)
+   - Current: HRD≥42 → full PARP (correct)
+   - May need: BRCA mutation → 1.2x PARP boost (additional)
+
+### 3.3 Outcome Analysis (MY ANALYSIS)
+
+Before tuning weights, I need to analyze:
+
+```python
+# scripts/analyze_outcome_by_pathway.py (I will create)
+
+"""
+Analyze outcomes (PFS/OS) by pathway scores to find optimal weights.
+"""
+
+def analyze_outcomes(benchmark_results):
+    """
+    For each patient:
+    1. Get pathway scores (ddr, mapk, etc.)
+    2. Get outcome (PFS_MONTHS, OS_MONTHS)
+    3. Correlate pathway scores with outcomes
+    4. Find which pathways predict outcomes
+    """
+    
+    # Group by DDR pathway strength
+    ddr_high = [p for p in patients if p["pathway_scores"]["ddr"] > 0.5]
+    ddr_low = [p for p in patients if p["pathway_scores"]["ddr"] <= 0.5]
+    
+    # Compare outcomes
+    ddr_high_pfs = mean([p["PFS_MONTHS"] for p in ddr_high])
+    ddr_low_pfs = mean([p["PFS_MONTHS"] for p in ddr_low])
+    
+    # This tells us: does DDR pathway score predict outcomes?
+    # If yes, increase DDR weight
+    # If no, something else is driving outcomes
+```
+
+---
+
+## 4. Delegation to Lower Agents
+
+### Task 1: TMB/HRD/MSI Integration (Lower Agent)
+
+**Instructions for Lower Agent:**
+
+1. Create `scripts/benchmark/benchmark_common/utils/biomarker_extractor.py`:
+   - `extract_tmb_from_patient()` - Try TMB, TMB_SCORE, compute from mutations
+   - `extract_hrd_from_patient()` - Try HRD_SCORE, estimate from BRCA
+   - `extract_msi_from_patient()` - Normalize to MSI-H/MSS
+
+2. Update `scripts/benchmark/benchmark_common/api_client.py`:
+   - Add `tumor_context` parameter to API calls
+   - Pass TMB/HRD/MSI in tumor_context dict
+
+3. Update `scripts/benchmark/benchmark_small_test.py`:
+   - Extract biomarkers for each patient
+   - Build tumor_context
+   - Pass to API
+
+**Acceptance Criteria:**
+- TMB/HRD/MSI extracted from 100% of patients (even if estimated)
+- tumor_context passed in 100% of API calls
+- Sporadic gates logs show IO boost/PARP rescue applied
+
+### Task 2: PFS_STATUS Parsing (Lower Agent)
+
+**Instructions for Lower Agent:**
+
+1. Inspect actual PFS_STATUS values in TCGA dataset
+2. Create parser that handles all formats:
+   - "0:DiseaseFree" → 0 (censored)
+   - "1:Recurred/Progressed" → 1 (event)
+   - Numeric 0/1
+3. Fix classification metrics to use parser
+
+**Acceptance Criteria:**
+- n_events + n_censored = n_patients (no longer 0/0)
+- Classification AUC computes correctly
+
+### Task 3: Drug Name Normalization (Lower Agent)
+
+**Instructions for Lower Agent:**
+
+1. Create synonym dictionary for ovarian drugs
+2. Normalize all drug names to canonical form
+3. Update drug ranking metrics to use normalized names
+
+**Acceptance Criteria:**
+- Top-1 accuracy improves from 0%
+- Drug matching handles synonyms (Carboplatin = Paraplatin)
+
+---
+
+## 5. Success Metrics
+
+### Phase 1 (Lower Agent Work)
+
+| Metric | Current | Target |
+|--------|---------|--------|
+| TMB extraction | 0% | 100% |
+| tumor_context passed | 0% | 100% |
+| Sporadic gates applied | No | Yes |
+| Correlation (r) | 0.037 | 0.10-0.15 |
+
+### Phase 2 (My Work)
+
+| Metric | Current | Target |
+|--------|---------|--------|
+| Correlation (r) | 0.037 | 0.25-0.35 |
+| Correlation (p) | 0.919 | <0.10 |
+| Classification AUC | 0.000 | 0.55-0.65 |
+
+### Phase 3 (My Work)
+
+| Metric | Current | Target |
+|--------|---------|--------|
+| Correlation (r) | 0.25 | 0.35-0.50 |
+| Correlation (p) | 0.10 | <0.05 |
+| Clinical relevance | None | Publishable |
+
+---
+
+## 6. Key Code Anchors
+
+### SPE System (MY DOMAIN)
+
+```
+oncology-coPilot/oncology-backend-minimal/api/services/
+├── efficacy_orchestrator/
+│   ├── orchestrator.py         # Main predict() - I understand
+│   ├── drug_scorer.py          # S/P/E formula (line 187) - I will modify
+│   ├── sporadic_gates.py       # IO boost, PARP rescue - I will tune
+│   └── disease_weights.py      # NEW - I will create
+├── pathway/
+│   ├── aggregation.py          # Pathway scoring - I understand
+│   ├── panel_config.py         # Drug panels - I will tune for ovarian
+│   └── drug_mapping.py         # Gene→Pathway - I understand
+├── confidence/
+│   ├── confidence_computation.py   # Confidence formula - I will tune
+│   └── tier_computation.py         # Evidence tiers - I may tune
+└── gene_calibration.py         # Score calibration - I understand
+```
+
+### Benchmark System (LOWER AGENT DOMAIN)
+
+```
+oncology-coPilot/oncology-backend-minimal/scripts/benchmark/
+├── benchmark_small_test.py             # Main script - Lower agent
+├── benchmark_common/
+│   ├── api_client.py                   # API calls - Lower agent (tumor_context)
+│   ├── patient_selection.py            # Sampling - Lower agent
+│   └── utils/
+│       ├── biomarker_extractor.py      # NEW - Lower agent creates
+│       ├── pfs_status_parser.py        # NEW - Lower agent creates
+│       └── drug_normalizer.py          # NEW - Lower agent creates
+```
+
+---
+
+## 7. Timeline
+
+### Week 1: Foundation
+
+**Lower Agent:**
+- [ ] Create biomarker_extractor.py
+- [ ] Update api_client.py for tumor_context
+- [ ] Update benchmark script
+- [ ] Fix PFS_STATUS parsing
+
+**Me:**
+- [ ] Validate sporadic gates apply correctly
+- [ ] Analyze outcome distribution
+- [ ] Plan disease-specific weights
+
+### Week 2-3: Outcome Calibration (MY CORE WORK)
+
+**Me:**
+- [ ] Create disease_weights.py
+- [ ] Modify drug_scorer.py for disease-specific weights
+- [ ] Tune ovarian DDR pathway weight
+- [ ] Tune confidence lifts
+- [ ] Validate correlation improvement
+
+### Week 4: Treatment Adjustment (ADVANCED)
+
+**Me:**
+- [ ] Design treatment history schema
+- [ ] Implement treatment-adjusted scoring
+- [ ] Validate on 50+ patient sample
+
+---
+
+## 8. Collaboration with SAE Agent
+
+**SAE Agent's Strength:** SAE feature interpretation (layer 26, 32K features)
+
+**My Strength:** SPE/WIWFM prediction framework
+
+**How We Work Together:**
+
+1. **SAE Agent** extracts DNA repair capacity, mechanism vectors from SAE features
+2. **I** integrate those features into S/P/E scoring (if they improve correlation)
+
+**Potential Integration:**
+- SAE dna_repair_capacity → DDR pathway boost
+- SAE io_eligible → IO boost trigger
+- SAE mechanism_vector → Drug ranking tiebreaker
+
+---
+
+## 9. Conclusion
+
+### What I OWN (Hard Product Work):
+
+1. **Outcome Calibration** - Make efficacy predict outcomes, not just alignment
+2. **Disease-Specific Weights** - Ovarian needs different S/P/E balance
+3. **Biomarker Tuning** - IO boost, PARP rescue magnitude
+4. **Confidence Calibration** - Lifts for outcome prediction
+5. **Treatment Adjustment** - Prior treatment affects efficacy
+
+### What Lower Agents Handle:
+
+1. TMB/HRD/MSI extraction (infrastructure)
+2. PFS_STATUS parsing (data quality)
+3. Drug name normalization (matching)
+4. Patient sampling (validation)
+
+### Expected Outcome:
+
+**Before:** Correlation r=0.037 (negligible, not significant)
+**After Phase 1:** r=0.10-0.15 (still weak, but improved)
+**After Phase 2:** r=0.25-0.35 (weak to moderate, potentially significant)
+**After Phase 3:** r=0.35-0.50 (moderate, clinically meaningful)
+
+---
+
+**Status:** 🎯 PLAN ACTIVE - Ready to start after lower agent completes Phase 1 infrastructure
+
+**My First Action:** Wait for lower agent to complete TMB/HRD/MSI integration, then validate sporadic gates are applying correctly. If correlation improves, proceed with outcome calibration. If not, investigate why biomarkers aren't helping.
+
+---
+
+## 10. Questions I Need Answered (Manager Help) - ✅ ALL ANSWERED
+
+### Critical Questions (Blocking Implementation)
+
+1. **TCGA Dataset Biomarker Availability**
+   - ✅ **ANSWERED**: TCGA has `TMB_NONSYNONYMOUS` and `MUTATION_COUNT` in clinical data (line 229 of extract_cbioportal_trial_datasets.py)
+   - ✅ **ANSWERED**: TCGA does NOT have HRD_SCORE or MSI_STATUS in the numeric fields list (extract_cbioportal_trial_datasets.py:228-229)
+   - ✅ **DECISION**: Estimate HRD from BRCA mutations (BRCA+ → HRD=50, else HRD=20) and MSI from MMR mutations (MMR loss → MSI-H, else MSS)
+   - **Rationale**: This is a "fail later" scenario with fallback strategy already defined in Section 11
+
+2. **Pathway Scores Access in Benchmarks**
+   - ✅ **ANSWERED**: Pathway scores are stored in `response.provenance["confidence_breakdown"]["pathway_disruption"]` (orchestrator.py:339)
+   - ✅ **DECISION**: Extract pathway scores from API responses for outcome analysis (this is the correct approach)
+   - **Implementation**: Use `result.get("provenance", {}).get("confidence_breakdown", {}).get("pathway_disruption", {})` as shown in Section 12
+
+3. **Disease Parameter in API Calls**
+   - ✅ **ANSWERED**: Benchmark script passes `"disease": "ovarian_cancer"` (benchmark_small_test.py:146)
+   - ✅ **ANSWERED**: Use fuzzy matching pattern (consistent with existing codebase)
+   - **Evidence**: `panel_config.py:54-56` uses `disease_lower = disease.lower().replace(" ", "_")` then `if "ovarian" in disease_lower:`
+   - **Decision**: Use fuzzy matching: `if "ovarian" in disease_lower or "ov_" in disease_lower:` (as already planned in Section 3.1)
+
+4. **Treatment History Availability**
+   - ✅ **ANSWERED**: TCGA extraction script has `extract_treatments()` function (extract_cbioportal_trial_datasets.py:253-282)
+   - ✅ **ANSWERED**: Treatment data is included in combined patient records (line 322-326)
+   - ⚠️ **CAVEAT**: Treatment data may be sparse (validation shows `treatment_coverage` which may be <100%)
+   - ✅ **DECISION**: Proceed with Phase 3, but make it optional (only apply if treatment history available)
+   - **Implementation**: Check if `patient.get("treatments")` exists and is non-empty before applying treatment adjustment
+
+### Non-Critical Questions (Can Proceed with Assumptions)
+
+5. **Outcome Analysis Script Location**
+   - ✅ **ANSWERED**: Create standalone script `scripts/analyze_outcome_by_pathway.py` (consistent with benchmark_small_test.py pattern)
+   - **Rationale**: benchmark_small_test.py is standalone, so outcome analysis should also be standalone for modularity
+
+6. **Disease Weight Initial Values**
+   - ✅ **ANSWERED**: No prior knowledge of optimal weights found in codebase
+   - ✅ **DECISION**: Start with literature-based weights (0.25/0.50/0.25 for ovarian), tune based on outcome analysis
+   - **Evidence**: Current hardcoded weights are 0.3/0.4/0.3 (drug_scorer.py:187), no disease-specific weights exist yet
+   - **Rationale**: This is a "fail later" scenario - we can tune iteratively based on correlation improvements
+
+---
+
+## 11. Fail Now vs Fail Later Analysis
+
+### 🔴 FAIL NOW (Must Validate Before Implementation)
+
+| Item | Why Fail Now | How to Validate | Owner |
+|------|--------------|-----------------|-------|
+| **TCGA Biomarker Fields** | If TMB/HRD/MSI don't exist, biomarker extraction fails | Inspect actual TCGA dataset JSON, check clinical fields | Lower Agent |
+| **Pathway Scores in Response** | If pathway_disruption not in response, outcome analysis fails | Test API call, verify `response.provenance["confidence_breakdown"]["pathway_disruption"]` exists | Me (Zo) |
+| **Disease Parameter Format** | If disease string doesn't match, weights won't apply | Test with actual benchmark script, verify disease string | Me (Zo) |
+| **Sporadic Gates Integration** | If tumor_context not passed correctly, gates won't apply | Test with TMB-high patient, verify IO boost in logs | Me (Zo) |
+
+### 🟡 FAIL LATER (Can Proceed with Fallbacks)
+
+| Item | Why Fail Later | Fallback Strategy | Owner | Status |
+|------|----------------|-------------------|-------|--------|
+| **HRD Score Missing** | ✅ **CONFIRMED**: TCGA does NOT have HRD_SCORE | Estimate HRD from BRCA mutations: BRCA+ → HRD=50 (high), else HRD=20 (low) | Lower Agent | ✅ Strategy defined |
+| **MSI Status Missing** | ✅ **CONFIRMED**: TCGA does NOT have MSI_STATUS | Estimate MSI from MMR mutations: MLH1/MSH2/MSH6/PMS2 loss → MSI-H, else MSS | Lower Agent | ✅ Strategy defined |
+| **Treatment History Missing** | Treatment data may be sparse (<100% coverage) | Make Phase 3 optional: only apply treatment adjustment if treatment history available | Me (Zo) | ✅ Strategy defined |
+| **Disease Weights Suboptimal** | Initial weights may not be optimal, but we can tune | Start with literature-based weights (0.25/0.50/0.25), tune iteratively from outcome analysis | Me (Zo) | ✅ Strategy defined |
+
+### 🟢 NO FAIL (Safe to Proceed)
+
+| Item | Why Safe | Validation | Owner |
+|------|----------|------------|-------|
+| **PFS_STATUS Parsing** | Already partially implemented, just needs bug fix | Fix existing parser, test with actual TCGA data | Lower Agent |
+| **Drug Name Normalization** | Simple string matching, low risk | Create synonym dict, test with known drug pairs | Lower Agent |
+| **Outcome Analysis Script** | Standalone script, doesn't affect production | Create script, test with sample data | Me (Zo) |
+| **Disease Weights Module** | New file, no existing dependencies | Create file, import in drug_scorer.py | Me (Zo) |
+
+---
+
+## 12. Concrete Implementation Plan
+
+### Phase 1: Biomarker Integration (Week 1) - CONCRETE STEPS
+
+#### Lower Agent Tasks (Infrastructure)
+
+**Task 1.1: Create Biomarker Extractor**
+
+**File**: `scripts/benchmark/benchmark_common/utils/biomarker_extractor.py`
+
+**Implementation**:
+```python
+def extract_tmb_from_patient(patient: dict) -> Optional[float]:
+    """Extract TMB from patient data."""
+    outcomes = patient.get("clinical_outcomes") or patient.get("outcomes", {})
+    
+    # Try direct TMB field
+    tmb = outcomes.get("TMB_NONSYNONYMOUS")
+    if tmb is not None:
+        try:
+            return float(tmb)
+        except (ValueError, TypeError):
+            pass
+    
+    # Try TMB_SCORE
+    tmb_score = outcomes.get("TMB_SCORE")
+    if tmb_score is not None:
+        try:
+            return float(tmb_score)
+        except (ValueError, TypeError):
+            pass
+    
+    # Estimate from mutation count
+    mutation_count = outcomes.get("MUTATION_COUNT")
+    if mutation_count is not None:
+        try:
+            # Assume ~30Mb panel size (typical for Foundation Medicine)
+            return float(mutation_count) / 30.0
+        except (ValueError, TypeError):
+            pass
+    
+    # Fallback: estimate from mutations list
+    mutations = patient.get("mutations", [])
+    if mutations:
+        return len(mutations) / 30.0  # Rough estimate
+    
+    return None
+
+def extract_hrd_from_patient(patient: dict) -> Optional[float]:
+    """Extract HRD score from patient data."""
+    outcomes = patient.get("clinical_outcomes") or patient.get("outcomes", {})
+    
+    # Try direct HRD field
+    hrd = outcomes.get("HRD_SCORE") or outcomes.get("HRD")
+    if hrd is not None:
+        try:
+            return float(hrd)
+        except (ValueError, TypeError):
+            pass
+    
+    # Estimate from BRCA mutations
+    mutations = patient.get("mutations", [])
+    brca_mutations = [m for m in mutations if m.get("gene", "").upper() in ["BRCA1", "BRCA2"]]
+    if brca_mutations:
+        return 50.0  # High HRD if BRCA mutated
+    else:
+        return 20.0  # Low HRD if no BRCA mutations
+    
+    return None
+
+def extract_msi_from_patient(patient: dict) -> Optional[Literal["MSI-H", "MSS"]]:
+    """Extract MSI status from patient data."""
+    outcomes = patient.get("clinical_outcomes") or patient.get("outcomes", {})
+    
+    # Try direct MSI field
+    msi = outcomes.get("MSI_STATUS") or outcomes.get("MSI")
+    if msi:
+        msi_upper = str(msi).upper()
+        if "MSI-H" in msi_upper or "HIGH" in msi_upper:
+            return "MSI-H"
+        elif "MSS" in msi_upper or "STABLE" in msi_upper:
+            return "MSS"
+    
+    # Estimate from MMR mutations
+    mutations = patient.get("mutations", [])
+    mmr_genes = ["MLH1", "MSH2", "MSH6", "PMS2"]
+    mmr_mutations = [m for m in mutations if m.get("gene", "").upper() in mmr_genes]
+    if mmr_mutations:
+        return "MSI-H"  # Likely MSI-H if MMR mutated
+    else:
+        return "MSS"  # Likely MSS if no MMR mutations
+    
+    return None
+
+def build_tumor_context(patient: dict) -> dict:
+    """Build tumor_context dict from patient data."""
+    tmb = extract_tmb_from_patient(patient)
+    hrd = extract_hrd_from_patient(patient)
+    msi = extract_msi_from_patient(patient)
+    
+    tumor_context = {
+        "level": "L1",  # Level 1 (partial data)
+        "completeness_score": sum([tmb is not None, hrd is not None, msi is not None]) / 3.0,
+        "priors_used": False,
+    }
+    
+    if tmb is not None:
+        tumor_context["tmb"] = tmb
+    if hrd is not None:
+        tumor_context["hrd_score"] = hrd
+    if msi is not None:
+        tumor_context["msi_status"] = msi
+    
+    return tumor_context
+```
+
+**Task 1.2: Update API Client**
+
+**File**: `scripts/benchmark/benchmark_small_test.py` (line 80-169)
+
+**Implementation**: Modify `predict_patient_efficacy()` function (line 80):
+1. Import `build_tumor_context` from `benchmark_common.utils.biomarker_extractor`
+2. Build tumor_context before API call (after mutations conversion, before API request)
+3. Add `tumor_context` to API request JSON (line 143-148)
+4. **Note**: API request currently has `"disease": "ovarian_cancer"` - keep this for disease weight matching
+
+**Code Changes**:
+```python
+# After line 131 (mutations list built), before line 141 (API request):
+from benchmark_common.utils.biomarker_extractor import build_tumor_context
+
+# Build tumor_context
+tumor_context = build_tumor_context(patient)
+
+# Update API request (line 141-148):
+response = await client.post(
+    f"{api_root}/api/efficacy/predict",
+    json={
+        "model_id": "evo2_1b",
+        "mutations": mutations,
+        "disease": "ovarian_cancer",
+        "tumor_context": tumor_context,  # NEW
+        "options": {"adaptive": True}
+    },
+    timeout=300.0
+)
+```
+
+**Task 1.3: Fix PFS_STATUS Parser**
+
+**File**: `scripts/benchmark/benchmark_common/utils/pfs_status_parser.py` (NEW)
+
+**Implementation**:
+```python
+def parse_pfs_status(pfs_status: str) -> tuple[int, str]:
+    """
+    Parse PFS_STATUS into (event, status).
+    
+    Returns:
+        (event, status): (1 if progression, 0 if censored), ("progressed" or "censored")
+    """
+    if not pfs_status:
+        return None, None
+    
+    pfs_status_str = str(pfs_status).upper()
+    
+    # Format: "0:CENSORED" or "0:DiseaseFree"
+    if "0:" in pfs_status_str or "0:CENSORED" in pfs_status_str or "0:DISEASEFREE" in pfs_status_str:
+        return 0, "censored"
+    
+    # Format: "1:PROGRESSION" or "1:Recurred/Progressed"
+    if "1:" in pfs_status_str or "1:PROGRESSION" in pfs_status_str or "1:RECURRED" in pfs_status_str:
+        return 1, "progressed"
+    
+    # Numeric format
+    try:
+        event = int(pfs_status_str.strip())
+        if event == 0:
+            return 0, "censored"
+        elif event == 1:
+            return 1, "progressed"
+    except (ValueError, TypeError):
+        pass
+    
+    return None, None
+```
+
+#### My Tasks (Validation)
+
+**Task 1.4: Validate Sporadic Gates**
+
+**File**: `scripts/test_sporadic_gates.py` (NEW)
+
+**Implementation**:
+```python
+async def test_sporadic_gates():
+    """Test that sporadic gates apply correctly."""
+    # Test 1: TMB-high patient → IO boost
+    tmb_high_patient = {
+        "mutations": [...],
+        "tumor_context": {"tmb": 25.0, "level": "L1", "completeness_score": 0.33}
+    }
+    response = await call_efficacy_api(tmb_high_patient)
+    # Check logs for IO boost applied to checkpoint inhibitors
+    
+    # Test 2: HRD-high patient → PARP rescue
+    hrd_high_patient = {
+        "mutations": [...],
+        "tumor_context": {"hrd_score": 50.0, "level": "L1", "completeness_score": 0.33}
+    }
+    response = await call_efficacy_api(hrd_high_patient)
+    # Check logs for PARP rescue applied to PARP inhibitors
+```
+
+**Task 1.5: Create Outcome Analysis Script**
+
+**File**: `scripts/analyze_outcome_by_pathway.py` (NEW)
+
+**Implementation**:
+```python
+def analyze_outcome_by_pathway(benchmark_results: list, patients: list):
+    """
+    Analyze outcomes (PFS/OS) by pathway scores.
+    
+    Args:
+        benchmark_results: List of API responses with pathway_disruption
+        patients: List of patient dicts with clinical_outcomes
+    """
+    # Extract pathway scores and outcomes
+    pathway_data = []
+    for result, patient in zip(benchmark_results, patients):
+        pathway_scores = result.get("provenance", {}).get("confidence_breakdown", {}).get("pathway_disruption", {})
+        outcomes = patient.get("clinical_outcomes") or patient.get("outcomes", {})
+        
+        pathway_data.append({
+            "ddr": pathway_scores.get("ddr", 0.0),
+            "mapk": pathway_scores.get("mapk", 0.0),
+            "pi3k": pathway_scores.get("pi3k", 0.0),
+            "pfs_months": outcomes.get("PFS_MONTHS"),
+            "os_months": outcomes.get("OS_MONTHS"),
+        })
+    
+    # Correlate DDR pathway with outcomes
+    ddr_scores = [p["ddr"] for p in pathway_data]
+    pfs_months = [p["pfs_months"] for p in pathway_data if p["pfs_months"] is not None]
+    
+    # Compute correlation
+    correlation = np.corrcoef(ddr_scores[:len(pfs_months)], pfs_months)[0, 1]
+    print(f"DDR pathway → PFS correlation: {correlation:.3f}")
+    
+    # Group by DDR strength
+    ddr_high = [p for p in pathway_data if p["ddr"] > 0.5]
+    ddr_low = [p for p in pathway_data if p["ddr"] <= 0.5]
+    
+    ddr_high_pfs = np.mean([p["pfs_months"] for p in ddr_high if p["pfs_months"] is not None])
+    ddr_low_pfs = np.mean([p["pfs_months"] for p in ddr_low if p["pfs_months"] is not None])
+    
+    print(f"DDR-high PFS: {ddr_high_pfs:.1f} months")
+    print(f"DDR-low PFS: {ddr_low_pfs:.1f} months")
+```
+
+### Phase 2: Outcome Calibration (Weeks 2-3) - CONCRETE STEPS
+
+**Task 2.1: Create Disease Weights Module**
+
+**File**: `api/services/efficacy_orchestrator/disease_weights.py` (NEW)
+
+**Implementation**: (See Section 3.1 above)
+
+**Task 2.2: Modify Drug Scorer**
+
+**File**: `api/services/efficacy_orchestrator/drug_scorer.py`
+
+**Changes**:
+- **Line 1-6**: Add import: `from .disease_weights import get_disease_weights`
+- **Line 34**: `disease` parameter already exists in `score_drug()` method signature
+- **Line 187**: Replace fixed weights:
+  ```python
+  # CURRENT (line 187):
+  raw_lob = 0.3 * seq_pct + 0.4 * path_pct + 0.3 * s_evd + clinvar_prior
+  
+  # NEW:
+  weights = get_disease_weights(disease or "")
+  raw_lob = (
+      weights["seq"] * seq_pct + 
+      weights["path"] * path_pct + 
+      weights["evd"] * s_evd + 
+      clinvar_prior
+  )
+  ```
+- **Note**: Use fuzzy matching pattern consistent with `panel_config.py` (already planned in Section 3.1)
+
+**Task 2.3: Tune Biomarker Adjustments**
+
+**File**: `api/services/efficacy_orchestrator/sporadic_gates.py`
+
+**Changes**:
+- Verify IO boost magnitudes (may need ovarian-specific tuning)
+- Verify PARP rescue thresholds
+- Consider BRCA mutation → additional PARP boost
+
+---
+
+## 13. Manager Questions (Need Answers) - ✅ ALL ANSWERED FROM CODEBASE
+
+1. **TCGA HRD/MSI Availability**: ✅ **ANSWERED**
+   - TCGA does NOT have HRD_SCORE or MSI_STATUS in clinical data
+   - **Decision**: Estimate HRD from BRCA mutations, MSI from MMR mutations (fallback strategy in Section 11)
+
+2. **Treatment History**: ✅ **ANSWERED**
+   - TCGA extraction script includes `extract_treatments()` function
+   - Treatment data is included in patient records but may be sparse
+   - **Decision**: Proceed with Phase 3, make it optional (only apply if treatment history available)
+
+3. **Disease Weight Prior Knowledge**: ✅ **ANSWERED**
+   - No prior knowledge found in codebase
+   - **Decision**: Start with literature-based weights (0.25/0.50/0.25), tune iteratively from outcome analysis
+
+4. **Outcome Analysis Integration**: ✅ **ANSWERED**
+   - **Decision**: Create standalone script `scripts/analyze_outcome_by_pathway.py` (consistent with benchmark_small_test.py pattern)
+
+5. **Validation Strategy**: ✅ **ANSWERED BY MANAGER**
+   - **Question**: Should I validate Phase 1 improvements before starting Phase 2, or proceed in parallel?
+   - **Answer**: **VALIDATE PHASE 1 FIRST. DO NOT PROCEED IN PARALLEL.**
+   - **Rationale**: Phase 2 depends on Phase 1 working correctly (sporadic gates need tumor_context)
+   - **Checkpoint Requirement**: After Phase 1, must achieve r > 0.10 to proceed to Phase 2
+   - **Reference**: See `.cursor/ayesha/STRATEGIC_DIRECTION.md` for full guidance
+
+---
+
+## 14. Manager-Mandated Checkpoint (REQUIRED)
+
+### Phase 1 Checkpoint Analysis
+
+**After completing Phase 1 (biomarker integration), run this checkpoint:**
+
+```python
+def phase_1_checkpoint():
+    """Decide whether to proceed to Phase 2."""
+    
+    r_before = 0.037  # Known baseline
+    r_after = compute_correlation_with_biomarkers()
+    
+    if r_after > 0.10:
+        print("✅ Biomarkers helped. Proceed to Phase 2.")
+        return "PROCEED"
+    elif r_after > 0.05:
+        print("⚠️ Modest improvement. Investigate before Phase 2.")
+        return "INVESTIGATE"
+    else:
+        print("❌ No improvement. Do NOT proceed to Phase 2.")
+        return "STOP"
+```
+
+### Required Report After Phase 1
+
+Before proceeding to Phase 2, submit checkpoint report with:
+
+1. **Correlation before/after biomarkers** (r=0.037 → r=?)
+2. **Which biomarkers helped** (TMB? HRD? MSI?)
+3. **Where signal is strongest** (which patient subgroups?)
+4. **Recommendation for Phase 2** (proceed/investigate/stop)
+
+### Decision Thresholds
+
+| Correlation (r) | Decision | Next Steps |
+|-----------------|----------|------------|
+| r > 0.10 | ✅ PROCEED | Continue to Phase 2 (weight tuning) |
+| r = 0.05-0.10 | ⚠️ INVESTIGATE | Analyze why, don't proceed yet |
+| r < 0.05 | ❌ STOP | Do NOT proceed, investigate fundamentals |
+
+### Realistic Targets (Manager-Adjusted)
+
+| Phase | Original Target | Realistic Target | Notes |
+|-------|-----------------|------------------|-------|
+| Phase 1 | r=0.10-0.15 | r=0.05-0.10 | Biomarkers help but won't transform |
+| Phase 2 | r=0.25-0.35 | r=0.10-0.20 | Weight tuning has diminishing returns |
+| Phase 3 | r=0.35-0.50 | r=0.15-0.25 | Treatment adjustment is complex |
+
+**Manager Note**: r=0.50 is extremely ambitious. r=0.20 would be a significant win. r=0.15 would be a meaningful improvement worth pursuing.
+
+---
+
+**Status:** 🎯 PLAN CONCRETE + CHECKPOINT MANDATED - Ready for execution with manager-approved validation strategy

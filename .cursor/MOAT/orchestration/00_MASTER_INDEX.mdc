@@ -1,0 +1,426 @@
+# 🏆 ULTIMATE MOAT ORCHESTRATION - MASTER INDEX
+
+**Purpose:** Navigation hub for the modular agentic orchestration system  
+**Vision:** "Upload once. Track forever. Never miss a signal."  
+**Status:** IMPLEMENTATION READY
+
+---
+
+## 🆕 FOR NEW AGENTS - START HERE
+
+**Before building your module, read these guides:**
+
+| Guide | Purpose | When to Read |
+|-------|---------|--------------|
+| **[Quick Reference](../QUICK_REFERENCE_AGENT_QUESTIONS.md)** | Answers 3 common questions | ⭐ Read FIRST |
+| **[Agent Implementation Guide](./agent-implementation-guide.mdc)** | Detailed patterns & examples | Read before coding |
+| **[Agent Ownership Registry](../AGENT_OWNERSHIP_REGISTRY.md)** | Who owns what modules | Check your assignment |
+
+**TL;DR:**
+1. ✅ Build full orchestrator module (if you have `XX_MODULE.mdc`)
+2. ✅ Use services directly (no HTTP calls)
+3. ❌ Don't modify care plan (it auto-consumes your output)
+
+---
+
+## 🔑 CRITICAL IMPLEMENTATION PATTERNS
+
+### ⚠️ The Golden Rules
+
+**✅ DO: Import services directly**  
+**❌ DON'T: Make HTTP calls from orchestrator**
+
+**Why?**
+- Performance: Direct calls avoid HTTP overhead
+- Type Safety: Better IDE support  
+- Consistency: Matches established pattern
+- Simplicity: No serialization needed
+
+### The Exact Pattern Every Agent Follows
+
+```python
+async def _run_YOUR_agent(self, state: PatientState) -> Dict:
+    """Run the YOUR_NAME agent."""
+    execution = state.start_agent('your_agent_name')
+    
+    try:
+        # 1. Import service DIRECTLY (not HTTP)
+        from ..your_module import YourAgent
+        
+        # 2. Build request from PatientState
+        # 3. Call service method
+        # 4. Convert to dict if dataclass
+        # 5. execution.complete(result)
+        # 6. Return result
+    except Exception as e:
+        execution.fail(str(e))
+        raise
+```
+
+### Working Examples to Study
+
+- `_run_biomarker_agent` (orchestrator.py:450-483) - Inline logic pattern
+- `_run_resistance_agent` (orchestrator.py:485-565) - External service import pattern
+- `_run_trial_matching_agent` (orchestrator.py:625-691) - Agent class pattern
+
+**📖 Full Details:** See `agent-implementation-guide.mdc` for complete examples
+
+---
+
+## 📁 MODULE DIRECTORY
+
+| # | Module | Agent | Priority | Dependencies | Status |
+|---|--------|-------|----------|--------------|--------|
+| 01 | [Data Extraction](./01_DATA_EXTRACTION_AGENT.mdc) | DataExtractorAgent | 🔴 CRITICAL | None | ✅ **COMPLETE** |
+| 02 | [Biomarker Calculation](./02_BIOMARKER_AGENT.mdc) | BiomarkerAgent | 🔴 CRITICAL | 01 | ✅ **COMPLETE** |
+| 03 | [Resistance Prediction](./03_RESISTANCE_AGENT.mdc) | ResistanceAgent | 🔴 CRITICAL | 01, 02 | ✅ **VALIDATED** |
+| 04 | [Drug Efficacy (S/P/E)](./04_DRUG_EFFICACY_AGENT.mdc) | DrugEfficacyAgent | 🟡 HIGH | 01, 02, 03 | ✅ **COMPLETE** |
+| 05 | [Trial Matching](./05_TRIAL_MATCHING_AGENT.mdc) | TrialMatchingAgent | 🟡 HIGH | 01, 02, 04 | ✅ **COMPLETE** |
+| 06 | [Toxicity-Nutrition](./06_NUTRITION_AGENT.mdc) | NutritionAgent | 🟢 MEDIUM | 01 | ✅ **COMPLETE** |
+| 07 | [Care Plan Generation](./07_CARE_PLAN_AGENT.mdc) | CarePlanAgent | 🟡 HIGH | 01-06 | ✅ **COMPLETE** |
+| 08 | [Continuous Monitoring](./08_MONITORING_AGENT.mdc) | MonitoringAgent | 🟡 HIGH | 07 | ✅ **COMPLETE** |
+| 09 | [Event Trigger System](./09_TRIGGER_SYSTEM.mdc) | TriggerEngine | 🟡 HIGH | All | ✅ **COMPLETE** |
+| 10 | [State Management](./10_STATE_MANAGEMENT.mdc) | Orchestrator | 🔴 CRITICAL | None | ✅ **COMPLETE** |
+| 11 | [API Contracts](./11_API_CONTRACTS.mdc) | Backend | 🔴 CRITICAL | All | ✅ **COMPLETE** |
+| 12 | [UI Dashboard](./12_UI_DASHBOARD.mdc) | Frontend | 🟢 MEDIUM | 11 | ⬜ TODO |
+| 13 | [Security & Compliance](./13_SECURITY_COMPLIANCE.mdc) | Security | 🟡 HIGH | All | ⬜ TODO |
+| **14** | **[Synthetic Lethality & Essentiality](./14_SYNTHETIC_LETHALITY_ESSENTIALITY_AGENT.mdc)** | **SLEssentialityAgent** | **🟡 HIGH** | **01, 02, 04** | **✅ COMPLETE** |
+
+---
+
+## 🔄 EXECUTION ORDER
+
+```
+PHASE 1: FOUNDATION (Week 1)
+├── 10_STATE_MANAGEMENT.mdc    # ✅ COMPLETE - Orchestrator, PatientState, StateStore, MessageBus, API Router
+├── 01_DATA_EXTRACTION_AGENT.mdc  # ✅ COMPLETE - VCF/MAF/PDF/JSON/TXT parsers, LLM extraction, wired to orchestrator
+└── 11_API_CONTRACTS.mdc       # ✅ COMPLETE - All API schemas and endpoints defined
+
+PHASE 2: CORE INTELLIGENCE (Week 2)
+├── 02_BIOMARKER_AGENT.mdc     # TMB, MSI, HRD
+├── 03_RESISTANCE_AGENT.mdc    # MAPK, DDR pathways
+└── 06_NUTRITION_AGENT.mdc     # Can be parallel
+
+PHASE 3: ADVANCED INTELLIGENCE (Week 3-4)
+├── 04_DRUG_EFFICACY_AGENT.mdc # S/P/E framework
+├── 14_SYNTHETIC_LETHALITY_ESSENTIALITY_AGENT.mdc # ✅ MDC Complete
+├── 05_TRIAL_MATCHING_AGENT.mdc # Mechanism vector ✅ COMPLETE
+└── 07_CARE_PLAN_AGENT.mdc     # Unified output
+
+PHASE 4: AUTOMATION (Week 5-6)
+├── 08_MONITORING_AGENT.mdc    # Continuous tracking
+├── 09_TRIGGER_SYSTEM.mdc      # ✅ COMPLETE - 8 trigger types, 13 action handlers, wired to orchestrator
+└── 13_SECURITY_COMPLIANCE.mdc # Security hardening
+
+PHASE 5: UI (Week 7-8)
+└── 12_UI_DASHBOARD.mdc        # Frontend integration
+```
+
+---
+
+## 🎯 THE COMPLETE FLOW
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           USER UPLOADS DATA                                  │
+│                    (NGS PDF, VCF, MAF, Clinical Notes)                      │
+└───────────────────────────────────┬─────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  [01] DATA EXTRACTION AGENT                                                  │
+│  • Parse file → Extract mutations, clinical data, demographics              │
+│  • Output: PatientProfile                                                    │
+└───────────────────────────────────┬─────────────────────────────────────────┘
+                                    │
+                    ┌───────────────┼───────────────┐
+                    ▼               ▼               ▼
+┌───────────────────────┐  ┌───────────────────────┐  ┌───────────────────────┐
+│ [02] BIOMARKER AGENT  │  │ [03] RESISTANCE AGENT │  │ [06] NUTRITION AGENT  │
+│ • TMB (r=0.933)       │  │ • MAPK (RR=1.97)      │  │ • Drug→Food mapping   │
+│ • MSI/dMMR            │  │ • DDR pathway         │  │ • Timing rules        │
+│ • HRD inference       │  │ • Sensitivity/Risk    │  │ • Interactions        │
+└───────────┬───────────┘  └───────────┬───────────┘  └───────────┬───────────┘
+            │                          │                          │
+            └──────────────┬───────────┘                          │
+                           ▼                                      │
+┌─────────────────────────────────────────────────────────────────┼───────────┐
+│  [04] DRUG EFFICACY AGENT (S/P/E)                               │           │
+│  • S: Evo2 sequence scoring                                     │           │
+│  • P: Pathway burden alignment                                  │           │
+│  • E: Evidence synthesis (PubMed, ClinVar)                      │           │
+│  • Output: Ranked drug list with confidence                     │           │
+└───────────────────────────────────┬─────────────────────────────┼───────────┘
+                                    │                             │
+                                    ▼                             │
+┌─────────────────────────────────────────────────────────────────┼───────────┐
+│  [05] TRIAL MATCHING AGENT                                      │           │
+│  • 7D Mechanism Vector construction                             │           │
+│  • ClinicalTrials.gov API search                                │           │
+│  • Mechanism fit ranking                                        │           │
+│  • Output: Matched trials with eligibility scores               │           │
+└───────────────────────────────────┬─────────────────────────────┼───────────┘
+                                    │                             │
+                                    └──────────────┬──────────────┘
+                                                   ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  [07] CARE PLAN AGENT                                                        │
+│  • Aggregate all agent outputs                                               │
+│  • Generate unified care plan                                                │
+│  • Output: Complete patient care document                                    │
+└───────────────────────────────────┬─────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  [08] MONITORING AGENT                                                       │
+│  • CA-125 kinetics tracking                                                  │
+│  • ctDNA mutation monitoring                                                 │
+│  • Treatment response (RECIST)                                               │
+│  • New trial matching                                                        │
+└───────────────────────────────────┬─────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  [09] TRIGGER SYSTEM                                                         │
+│  • Event detection (resistance, TMB-H, PD, etc.)                            │
+│  • Automated actions (alerts, re-ranking, trial re-match)                   │
+│  • Escalation protocols                                                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🛠️ WHAT AGENTS NEED TO BUILD
+
+### Backend Components
+
+| Component | Location | Agent | Estimated LOC |
+|-----------|----------|-------|---------------|
+| Orchestrator Core | `api/services/orchestrator/` | 10_STATE_MANAGEMENT | ~500 ✅ |
+| Data Extraction Service | `api/services/extraction/` | 01_DATA_EXTRACTION | ~800 ✅ |
+| Biomarker Calculator | `api/services/biomarkers/` | 02_BIOMARKER | ~400 |
+| Resistance Prophet | `api/services/resistance/` | 03_RESISTANCE | ~600 |
+| S/P/E Engine | `api/services/efficacy/` | 04_DRUG_EFFICACY | ~1000 |
+| Trial Matcher | `api/services/trials/` | 05_TRIAL_MATCHING | ~700 ✅ |
+| Nutrition Engine | `api/services/nutrition/` | 06_NUTRITION | ~400 |
+| Care Plan Generator | `api/services/careplan/` | 07_CARE_PLAN | ~500 |
+| Monitoring Service | `api/services/monitoring/` | 08_MONITORING | ~600 |
+| Trigger Engine | `api/services/triggers/` | 09_TRIGGER_SYSTEM | ~800 ✅ |
+| API Routers | `api/routers/` | 11_API_CONTRACTS | ~1000 |
+
+### Frontend Components
+
+| Component | Location | Agent | Estimated LOC |
+|-----------|----------|-------|---------------|
+| Dashboard Layout | `src/pages/Dashboard/` | 12_UI_DASHBOARD | ~500 |
+| Patient Profile Card | `src/components/PatientProfile/` | 12_UI_DASHBOARD | ~300 |
+| Drug Ranking Card | `src/components/DrugRanking/` | 12_UI_DASHBOARD | ~300 |
+| Trial Matches Card | `src/components/TrialMatches/` | 12_UI_DASHBOARD | ~300 |
+| Alert System | `src/components/Alerts/` | 12_UI_DASHBOARD | ~400 |
+| CoPilot Integration | `src/components/CoPilot/` | Already exists | Update |
+
+---
+
+## 📊 VALIDATED CAPABILITIES (USE THESE)
+
+### Already Validated - Use Directly
+
+| Capability | Validation | Location | Use In |
+|------------|------------|----------|--------|
+| TMB Calculation | r=0.933 vs TCGA | `scripts/data_acquisition/utils/tmb_calculator.py` | 02_BIOMARKER |
+| MAPK Resistance | RR=1.97, p<0.05 | `api/services/resistance_prophet_service.py` | 03_RESISTANCE |
+| S/P/E Framework | Multiple Myeloma 100% | `api/routers/efficacy.py` | 04_DRUG_EFFICACY |
+| Trial Matching | Operational | `api/services/autonomous_trial_agent.py` | 05_TRIAL_MATCHING |
+| Mechanism Vector | 7D vector ready | `api/services/mechanism_fit_ranker.py` | 05_TRIAL_MATCHING |
+
+### Needs Building - New
+
+| Capability | Purpose | Priority |
+|------------|---------|----------|
+| PDF/VCF Parsing | Extract mutations from files | 🔴 CRITICAL ✅ |
+| Unified State Management | Track patient across agents | 🔴 CRITICAL ✅ |
+| Event Trigger Engine | Automated responses | 🟡 HIGH ✅ |
+| CA-125 Kinetics | Early resistance detection | 🟡 HIGH |
+| ctDNA Monitor | MRD tracking | 🟡 HIGH |
+
+---
+
+## 🔗 CROSS-MODULE DEPENDENCIES
+
+```yaml
+01_DATA_EXTRACTION:
+  depends_on: []
+  provides: PatientProfile
+  consumers: [02, 03, 04, 05, 06, 07]
+  status: ✅ COMPLETE  # VCF/MAF/PDF/JSON/TXT parsers, LLM extraction, wired to orchestrator (Jan 2025)
+
+02_BIOMARKER:
+  depends_on: [01]
+  provides: BiomarkerProfile
+  consumers: [03, 04, 05, 07]
+
+03_RESISTANCE:
+  depends_on: [01, 02]
+  provides: ResistancePrediction
+  consumers: [04, 07, 08]
+
+04_DRUG_EFFICACY:
+  depends_on: [01, 02, 03]
+  provides: DrugRanking[]
+  consumers: [05, 07]
+  status: ✅ COMPLETE  # S/P/E framework wired to orchestrator (Jan 2025)
+
+05_TRIAL_MATCHING:
+  depends_on: [01, 02, 04]
+  provides: TrialMatch[]
+  consumers: [07, 08]
+  status: ✅ COMPLETE  # Wired existing services to orchestrator (Jan 2025)
+
+06_NUTRITION:
+  depends_on: [01]
+  provides: NutritionPlan
+  consumers: [07]
+  status: ✅ COMPLETE  # NutritionAgent wired to orchestrator with LLM enhancement (Jan 2025)
+
+07_CARE_PLAN:
+  depends_on: [01, 02, 03, 04, 05, 06]
+  provides: UnifiedCarePlan
+  consumers: [08, 12]
+
+08_MONITORING:
+  depends_on: [07]
+  provides: MonitoringConfig, Alerts
+  consumers: [09]
+
+09_TRIGGER_SYSTEM:
+  depends_on: [All]
+  provides: AutomatedActions
+  consumers: [All]
+  status: ✅ COMPLETE  # 8 trigger types, 13 action handlers, wired to orchestrator (Jan 2025)
+
+10_STATE_MANAGEMENT:
+  depends_on: []
+  provides: Orchestrator, PatientState
+  consumers: [All]
+  status: ✅ COMPLETE  # PatientState, StateStore, Orchestrator, MessageBus, API Router (Jan 2025)
+
+11_API_CONTRACTS:
+  depends_on: [All]
+  provides: API Schemas, Endpoints
+  consumers: [12]
+  status: ✅ COMPLETE  # All API contracts defined and registered
+
+14_SYNTHETIC_LETHALITY_ESSENTIALITY:
+  depends_on: [01, 02, 04]
+  provides: SyntheticLethalityResult, GeneEssentialityScore, AIExplanation
+  consumers: [04, 05, 07]
+  status: ✅ COMPLETE  # Fully implemented, wired to orchestrator (Jan 2025)
+```
+
+---
+
+## ✅ SUCCESS CRITERIA
+
+### Per-Module
+
+Each module must:
+1. ✅ Have clear input/output schema
+2. ✅ Include unit tests (>80% coverage)
+3. ✅ Have API endpoint defined
+4. ✅ Include error handling
+5. ✅ Log to audit trail
+6. ✅ Document provenance
+
+### System-Wide
+
+| Metric | Target |
+|--------|--------|
+| Time to First Insight | <60 seconds |
+| Alert Lead Time | 3-6 weeks before clinical PD |
+| Trial Match Accuracy | >90% |
+| End-to-End Test Coverage | >75% |
+| API Response Time (P95) | <2 seconds |
+
+---
+
+## 📝 FOR AGENTS: HOW TO USE THIS
+
+1. **Pick a module** from the directory above
+2. **Read the full MDC** for that module
+3. **Check dependencies** - ensure they're built first
+4. **Follow the implementation checklist** in each MDC
+5. **Run tests** defined in the MDC
+6. **Update status** in this index when done
+
+---
+
+---
+
+## 📊 OVERALL STATUS SUMMARY
+
+### Foundation ✅ COMPLETE (~1,900 lines)
+
+| Component | Status | Location |
+|-----------|--------|----------|
+| Orchestrator Core | ✅ Complete | `api/services/orchestrator/orchestrator.py` (~774 lines) |
+| PatientState | ✅ Complete | `api/services/orchestrator/state.py` (~303 lines) |
+| StateStore | ✅ Complete | `api/services/orchestrator/state_store.py` (~250 lines) |
+| MessageBus | ✅ Complete | `api/services/orchestrator/message_bus.py` (~180 lines) |
+| API Router | ✅ Complete | `api/routers/orchestrate.py` (~300 lines) |
+
+### Agent Status
+
+**✅ INTEGRATED (Working):**
+- 01_DATA_EXTRACTION - VCF/MAF/PDF/JSON/TXT parsers, LLM extraction
+- 02_BIOMARKER - TMB, MSI, HRD calculation
+- 03_RESISTANCE - DIS3 RR=2.08, TP53 RR=1.90 (validated)
+- 04_DRUG_EFFICACY - S/P/E framework wired (100% accuracy on MM)
+- 05_TRIAL_MATCHING - Wired existing services
+- 06_NUTRITION - Toxicity-aware nutrition with LLM enhancement
+- 07_CARE_PLAN - Aggregates all outputs
+- 08_MONITORING - Risk-based frequency
+- 09_TRIGGER_SYSTEM - 8 trigger types, 13 action handlers
+- 14_SYNTHETIC_LETHALITY - Gene essentiality scoring, pathway mapping, drug recommendations
+
+**⏳ NEEDS BUILDING:**
+- None! All critical modules are complete ✅
+
+**🚧 IN PROGRESS:**
+- 12_UI_DASHBOARD - Architecture defined, core components started (25%)
+
+**⬜ NOT STARTED:**
+- 13_SECURITY_COMPLIANCE
+
+### Progress Metrics
+
+```
+Foundation:        ████████████████████ 100% ✅
+Core Agents:       ███████████████████░  90% ✅
+Advanced Features: ████████████░░░░░░░░  60% ✅
+UI/UX:             █████░░░░░░░░░░░░░░░  25% 🚧
+
+Overall:           ██████████████████░░  90% ✅
+```
+
+### Key Insights
+
+**What's Working:**
+- ✅ Solid foundation - orchestrator infrastructure complete and tested
+- ✅ Several agents integrated - Biomarker, Resistance, Trial Matching all working
+- ✅ Validated science - TMB (r=0.933), Resistance (RR=1.97), S/P/E framework proven
+
+**What Needs Work:**
+- ⏳ Frontend components - Complete remaining analysis cards and dashboards
+- ⏳ Testing needed - End-to-end tests and performance validation
+
+**Critical Path:**
+1. ✅ Wire Drug Efficacy to orchestrator (COMPLETE)
+2. ✅ Wire Nutrition to orchestrator (COMPLETE)
+3. ⏳ Complete frontend components (In Progress)
+4. ⏳ Build end-to-end tests
+
+---
+
+**Document Status:** ✅ MASTER INDEX COMPLETE  
+**Last Updated:** January 2025  
+**Reference Guides:** See `agent-implementation-guide.mdc` for implementation patterns

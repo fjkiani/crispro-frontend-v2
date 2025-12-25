@@ -1,0 +1,92 @@
+# 🚀 MISSION JR3: EXECUTION PLAN - COMPLETE PATHWAY VALIDATION
+
+**Agent:** Executing complete pathway resistance validation  
+**Date:** December 3, 2025  
+**Status:** 🔄 IN PROGRESS
+
+---
+
+## ✅ CURRENT DATA INVENTORY
+
+### What We Have:
+
+| File | Patients | Data | Status |
+|------|----------|------|--------|
+| `tcga_ov_platinum_response_labels.json` | 469 | Platinum response | ✅ Complete |
+| `tcga_ov_platinum_with_mutations.json` | 469 | Mutations + response | ✅ Complete |
+| `mutation-load_updated.txt` | 1,895 | TMB (validated) | ✅ Complete |
+| `io_validation_cohort.json` | 2,227 | Mutations, TMB | ✅ Complete |
+
+### What We Need:
+
+| Data Type | Source | Priority | Status |
+|-----------|--------|----------|--------|
+| **HRD Scores** | cBioPortal → Marquard 2015 | 🔴 CRITICAL | ⬜ TODO |
+| **ABCB1 Expression** | cBioPortal mRNA | 🟡 HIGH | ⬜ TODO |
+| **MSI Status** | mutation-load_updated.txt OR calculate | 🟡 MEDIUM | ⬜ TODO |
+
+---
+
+## 📋 EXECUTION PHASES
+
+### Phase 1: Build Complete Dataset (NOW)
+
+**Goal:** Create `tcga_ov_469_with_hrd.json` with all data
+
+**Steps:**
+1. ✅ Load existing mutations (469 patients) - DONE
+2. ⬜ Acquire HRD scores from cBioPortal
+3. ⬜ Merge: mutations + response + HRD
+4. ⬜ Save complete dataset
+
+**Output:** `data/validation/tcga_ov_469_with_hrd.json`
+
+---
+
+### Phase 2: Acquire Expression Data (NEXT)
+
+**Goal:** Get ABCB1 expression for efflux validation
+
+**Steps:**
+1. ⬜ Query cBioPortal mRNA expression profile
+2. ⬜ Extract ABCB1, ABCC1, ABCG2
+3. ⬜ Match to patient IDs
+4. ⬜ Save expression data
+
+**Output:** `data/validation/tcga_ov_expression.json`
+
+---
+
+### Phase 3: Calculate MSI Status (NEXT)
+
+**Goal:** Determine MSI status for all 469 patients
+
+**Steps:**
+1. ⬜ Check mutation-load_updated.txt for MSI (unlikely)
+2. ⬜ Calculate from dMMR gene mutations (MLH1, MSH2, MSH6, PMS2)
+3. ⬜ Classify MSI-H vs MSS
+4. ⬜ Save MSI data
+
+**Output:** `data/validation/tcga_ov_msi.json`
+
+---
+
+### Phase 4: Run Validation Tests (FINAL)
+
+**Goal:** Validate all pathways
+
+**Tests:**
+1. ✅ MAPK (already validated - RR=1.97)
+2. ⬜ DDR/HRD (needs HRD scores)
+3. ⬜ PI3K (can run immediately)
+4. ⬜ TP53 GOF (can run immediately)
+5. ⬜ ABCB1 (needs expression)
+6. ⬜ Combined pathway
+
+**Output:** `data/validation/reports/all_pathways_validation.json`
+
+---
+
+## 🎯 STARTING NOW: PHASE 1 - HRD SCORES
+
+**Action:** Query cBioPortal for HRD scores

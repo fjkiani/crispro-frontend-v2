@@ -1,0 +1,208 @@
+# 📋 MODULE 07: CARE PLAN GENERATION AGENT
+
+**Purpose:** Generate unified care plans from all agent outputs  
+**Priority:** 🟡 HIGH | **Dependencies:** 01-06 | **Consumers:** 08, 12
+
+---
+
+## 🎯 MISSION
+
+Build a care plan agent that can:
+1. Aggregate all agent outputs into a unified document
+2. Prioritize recommendations
+3. Generate human-readable summaries
+4. Include monitoring schedules
+5. Export in multiple formats
+
+---
+
+## 📥 INPUTS
+
+```python
+# From PatientState (all previous agent outputs)
+patient_profile: PatientProfile
+biomarker_profile: BiomarkerProfile
+resistance_prediction: ResistancePrediction
+drug_ranking: List[DrugRanking]
+trial_matches: List[TrialMatch]
+nutrition_plan: NutritionPlan
+```
+
+---
+
+## 📤 OUTPUTS
+
+### UnifiedCarePlan Schema
+
+```python
+@dataclass
+class UnifiedCarePlan:
+    patient_id: str
+    generated_at: datetime
+    confidence: str  # "high", "moderate", "low"
+    
+    # Summary section
+    executive_summary: str
+    molecular_profile_summary: str
+    
+    # Core recommendations
+    treatment_recommendations: List[TreatmentRecommendation]
+    top_drug: DrugRanking
+    maintenance_recommendation: Optional[str]
+    
+    # Resistance
+    resistance_summary: str
+    monitoring_priorities: List[str]
+    
+    # Trials
+    top_trials: List[TrialMatch]
+    trial_eligibility_notes: List[str]
+    
+    # Nutrition
+    nutrition_summary: str
+    key_supplements: List[Supplement]
+    foods_to_avoid: List[str]
+    
+    # Monitoring
+    monitoring_schedule: MonitoringSchedule
+    next_steps: List[str]
+    
+    # Gaps
+    missing_data: List[str]
+    pending_tests: List[str]
+    
+    # Provenance
+    agents_used: List[str]
+    validation_metrics: Dict[str, any]
+
+@dataclass
+class MonitoringSchedule:
+    ca125: Dict[str, str]  # frequency, threshold
+    imaging: Dict[str, str]
+    labs: List[Dict]
+    ctdna: Optional[Dict]
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+```python
+# api/services/careplan/care_plan_agent.py
+
+class CarePlanAgent:
+    """Generate unified care plans from agent outputs."""
+    
+    async def generate(self, state: PatientState) -> UnifiedCarePlan:
+        """Generate care plan from patient state."""
+        
+        # Generate executive summary
+        executive_summary = self._generate_executive_summary(state)
+        
+        # Prioritize treatment recommendations
+        treatment_recs = self._prioritize_treatments(
+            drug_ranking=state.drug_ranking,
+            resistance=state.resistance_prediction,
+            biomarkers=state.biomarker_profile
+        )
+        
+        # Build monitoring schedule
+        monitoring = self._build_monitoring_schedule(
+            disease=state.patient_profile.disease,
+            treatment=treatment_recs[0].drug_name if treatment_recs else None
+        )
+        
+        # Identify gaps
+        missing = self._identify_missing_data(state)
+        
+        return UnifiedCarePlan(
+            patient_id=state.patient_id,
+            generated_at=datetime.utcnow(),
+            confidence=self._assess_confidence(state),
+            executive_summary=executive_summary,
+            molecular_profile_summary=self._summarize_molecular(state),
+            treatment_recommendations=treatment_recs,
+            top_drug=state.drug_ranking[0] if state.drug_ranking else None,
+            resistance_summary=self._summarize_resistance(state.resistance_prediction),
+            monitoring_priorities=state.resistance_prediction.monitoring_priorities if state.resistance_prediction else [],
+            top_trials=state.trial_matches[:5] if state.trial_matches else [],
+            nutrition_summary=self._summarize_nutrition(state.nutrition_plan),
+            key_supplements=state.nutrition_plan.supplements[:5] if state.nutrition_plan else [],
+            foods_to_avoid=state.nutrition_plan.foods_to_avoid if state.nutrition_plan else [],
+            monitoring_schedule=monitoring,
+            next_steps=self._generate_next_steps(state),
+            missing_data=missing,
+            pending_tests=state.data_quality_flags,
+            agents_used=['extraction', 'biomarker', 'resistance', 'efficacy', 'trials', 'nutrition'],
+            validation_metrics={
+                'tmb_validation': 'r=0.933',
+                'mapk_validation': 'RR=1.97'
+            }
+        )
+    
+    def _generate_executive_summary(self, state: PatientState) -> str:
+        """Generate human-readable executive summary."""
+        parts = []
+        
+        # Patient context
+        disease = state.patient_profile.disease if state.patient_profile else "Unknown cancer"
+        parts.append(f"Patient with {disease}.")
+        
+        # Key mutations
+        if state.patient_profile and state.patient_profile.mutations:
+            genes = [m.gene for m in state.patient_profile.mutations[:3]]
+            parts.append(f"Key mutations: {', '.join(genes)}.")
+        
+        # Treatment recommendation
+        if state.drug_ranking and state.drug_ranking[0]:
+            top = state.drug_ranking[0]
+            parts.append(
+                f"Top recommendation: {top.drug_name} "
+                f"(Efficacy: {top.efficacy_score:.2f}, Tier {top.tier.value})."
+            )
+        
+        # IO eligibility
+        if state.biomarker_profile:
+            if state.biomarker_profile.io_eligible:
+                parts.append(f"IO eligible: {state.biomarker_profile.io_eligibility_reason}.")
+            if state.biomarker_profile.parp_eligible:
+                parts.append(f"PARP eligible: {state.biomarker_profile.parp_eligibility_reason}.")
+        
+        return " ".join(parts)
+    
+    def _build_monitoring_schedule(self, disease: str, treatment: str) -> MonitoringSchedule:
+        """Build monitoring schedule based on disease and treatment."""
+        
+        schedules = {
+            'ovarian_cancer': {
+                'ca125': {'frequency': 'every 3 weeks during chemo', 'threshold': '>35 U/mL'},
+                'imaging': {'frequency': 'after cycle 3, post-surgery, q3 months'},
+                'labs': [
+                    {'test': 'CBC', 'frequency': 'every cycle'},
+                    {'test': 'CMP', 'frequency': 'every cycle'}
+                ],
+                'ctdna': {'frequency': 'baseline + monthly during maintenance'}
+            }
+        }
+        
+        return MonitoringSchedule(
+            **schedules.get(disease.lower().replace(' ', '_'), schedules['ovarian_cancer'])
+        )
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+- [ ] Executive summary generation
+- [ ] Treatment prioritization
+- [ ] Monitoring schedule builder
+- [ ] Gap identification
+- [ ] Next steps generation
+- [ ] Export formats (PDF, JSON)
+- [ ] Unit tests
+
+---
+
+**Module Status:** ⬜ TODO  
+**Estimated Time:** 2 days

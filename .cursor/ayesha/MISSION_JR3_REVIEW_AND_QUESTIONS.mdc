@@ -1,0 +1,299 @@
+# 🔍 MISSION JR3: REVIEW, QUESTIONS & DATA ACQUISITION PLAN
+
+**Agent:** Reviewing MISSION_JR3_COMPLETE_PATHWAY_RESISTANCE.mdc  
+**Date:** December 3, 2025  
+**Status:** ⚠️ QUESTIONS → DATA ACQUISITION → VALIDATION
+
+---
+
+## ✅ WHAT WE ALREADY HAVE
+
+### Current Data Assets:
+
+| File | Patients | Data Included | Status |
+|------|----------|---------------|--------|
+| `data/validation/tcga_ov_platinum_response_labels.json` | 469 | Platinum response (sensitive/resistant/refractory) | ✅ Complete |
+| `data/validation/tcga_ov_full_validation_dataset.json` | 200 | Mutations (6,964), OS, Stage | ✅ Partial |
+| `data/validation/sae_cohort/tcga_ov_platinum_with_mutations.json` | ? | Mutations + platinum response | ⚠️ Need to verify |
+| `data/validation/io_validation_cohort.json` | 2,227 | Mutations, TMB (calculated) | ✅ Complete |
+
+### What Was Validated (MAPK):
+
+- ✅ **469 patients** with platinum response labels
+- ✅ **Mutations extracted** (need to verify for all 469)
+- ✅ **MAPK pathway validated** (RR=1.97, p<0.05)
+- ✅ **NF1 specific validated** (RR=2.10)
+
+---
+
+## ❓ CLARIFYING QUESTIONS
+
+### Question 1: Dataset Completeness
+
+**Current State:**
+- We have 469 patients with platinum response
+- We have mutations for 200 patients (from Zo's extraction)
+- The validation script expects `tcga_ov_469_with_hrd.json` which doesn't exist
+
+**Questions:**
+1. Do we need mutations for ALL 469 patients, or is 200 sufficient for validation?
+2. Should I merge the existing 200 mutations with the 469 platinum responses first?
+3. Or should I extract mutations for all 469 patients from scratch?
+
+**Recommendation:** Extract mutations for all 469 patients to maximize statistical power.
+
+---
+
+### Question 2: HRD Score Source Priority
+
+**The Plan Lists Multiple Sources:**
+1. Marquard 2015 supplementary (preferred)
+2. cBioPortal clinical data
+3. TCGA copy number (calculate from scratch)
+
+**Questions:**
+1. Should I try Marquard 2015 first, or go straight to cBioPortal?
+2. If Marquard not available, should I calculate HRD from copy number data (LOH, TAI, LST)?
+3. What's the minimum acceptable HRD coverage? (50%? 80%?)
+
+**Recommendation:** Try cBioPortal first (fastest), then Marquard, then calculate from CNV.
+
+---
+
+### Question 3: ABCB1 Expression Data
+
+**The Plan Mentions:**
+- UCSC Xena (pre-processed)
+- cBioPortal mRNA expression
+- GDC RNA-seq (raw)
+
+**Questions:**
+1. Which source is most reliable for TCGA-OV?
+2. What format do we need? (FPKM, TPM, log2?)
+3. Is ABCB1 expression critical for Ayesha, or can we defer?
+
+**Recommendation:** Start with cBioPortal mRNA expression (easiest), fallback to UCSC Xena.
+
+---
+
+### Question 4: MSI Status
+
+**The Plan Lists:**
+1. cBioPortal clinical data
+2. TCGA Pan-Immune (mutation-load_updated.txt)
+3. Calculate from dMMR mutations
+
+**Questions:**
+1. Should I check mutation-load_updated.txt first? (We already have this file)
+2. If not there, calculate from MLH1/MSH2/MSH6/PMS2 mutations?
+3. Is MSI critical for resistance, or just for IO eligibility?
+
+**Recommendation:** Check mutation-load_updated.txt first, then calculate from mutations.
+
+---
+
+### Question 5: Validation Scope
+
+**The Plan Lists 5 Tests:**
+1. DDR/HRD (needs HRD scores)
+2. PI3K (needs mutations - we have)
+3. TP53 GOF (needs mutations - we have)
+4. ABCB1 (needs expression)
+5. Combined pathway
+
+**Questions:**
+1. Should I run all 5 tests, or prioritize DDR/HRD + PI3K first?
+2. Can TP53 GOF wait? (96% of HGSOC have TP53 mutations anyway)
+3. Is combined pathway test critical, or nice-to-have?
+
+**Recommendation:** Prioritize DDR/HRD + PI3K (most actionable), defer TP53 GOF.
+
+---
+
+## 📋 REVISED DATA ACQUISITION PLAN
+
+### Phase 1: Build Complete Dataset (Priority 1)
+
+**Goal:** Create `data/validation/tcga_ov_469_with_hrd.json` with:
+- All 469 patients
+- Platinum response (already have)
+- Mutations (need to extract for all 469)
+- HRD scores (need to acquire)
+- Pathway status (calculate from mutations)
+
+**Steps:**
+1. **Extract mutations for all 469 patients**
+   - Use cBioPortal API: `ov_tcga_pan_can_atlas_2018`
+   - Extract via mutation profile
+   - Match by patient_id/sample_id
+
+2. **Acquire HRD scores**
+   - Try cBioPortal clinical data first
+   - Check for `HRD_SCORE` or `HOMOLOGOUS_RECOMBINATION_DEFICIENCY` field
+   - If not available, try Marquard 2015 supplementary
+   - If still not available, calculate from copy number (defer)
+
+3. **Merge everything**
+   - Platinum response (469) + Mutations (469) + HRD (as many as possible)
+   - Output: `tcga_ov_469_with_hrd.json`
+
+**Estimated Time:** 4-6 hours
+
+---
+
+### Phase 2: Acquire Additional Data (Priority 2)
+
+**Goal:** Get ABCB1 expression and MSI status
+
+**Steps:**
+1. **ABCB1 Expression**
+   - Query cBioPortal mRNA expression profile
+   - Extract ABCB1, ABCC1, ABCG2 for all 469 patients
+   - Save to `data/validation/tcga_ov_expression.json`
+
+2. **MSI Status**
+   - Check `mutation-load_updated.txt` (we already have this)
+   - If not there, calculate from dMMR gene mutations
+   - Save to `data/validation/tcga_ov_msi.json`
+
+**Estimated Time:** 2-3 hours
+
+---
+
+### Phase 3: Run Validation Tests (Priority 1)
+
+**Goal:** Validate all pathways
+
+**Tests to Run:**
+1. ✅ MAPK (already validated - RR=1.97)
+2. ⚠️ DDR/HRD (needs HRD scores from Phase 1)
+3. ✅ PI3K (can run immediately with mutations)
+4. ⚠️ TP53 GOF (can run with mutations, but low priority)
+5. ⚠️ ABCB1 (needs expression from Phase 2)
+6. ⚠️ Combined (needs all above)
+
+**Estimated Time:** 2-3 hours
+
+---
+
+## 🎯 EXECUTION PLAN
+
+### Step 1: Verify Current Data
+
+```python
+# Check what we have
+1. Load tcga_ov_platinum_response_labels.json → 469 patients ✅
+2. Check if mutations exist for all 469
+3. Check if tcga_ov_469_with_hrd.json exists (it doesn't)
+4. Check mutation-load_updated.txt for MSI
+```
+
+### Step 2: Extract Missing Mutations
+
+```python
+# If mutations missing for some patients
+1. Use cBioPortal API to extract mutations
+2. Match by patient_id to platinum response
+3. Merge into single dataset
+```
+
+### Step 3: Acquire HRD Scores
+
+```python
+# Priority order
+1. Query cBioPortal clinical data for HRD_SCORE
+2. If not found, search for Marquard 2015 supplementary
+3. If still not found, calculate from copy number (defer)
+```
+
+### Step 4: Acquire Expression Data (Optional)
+
+```python
+# For ABCB1 validation
+1. Query cBioPortal mRNA expression
+2. Extract ABCB1, ABCC1, ABCG2
+3. Match to patient IDs
+```
+
+### Step 5: Run Validation Tests
+
+```python
+# Run all tests
+1. DDR/HRD (if HRD scores available)
+2. PI3K (immediate)
+3. TP53 GOF (immediate, low priority)
+4. ABCB1 (if expression available)
+5. Combined pathway
+```
+
+---
+
+## 📊 EXPECTED OUTPUTS
+
+### Files to Create:
+
+| File | Description | Priority |
+|------|-------------|----------|
+| `data/validation/tcga_ov_469_with_hrd.json` | Complete dataset (mutations + response + HRD) | 🔴 CRITICAL |
+| `data/validation/tcga_ov_expression.json` | ABCB1 expression data | 🟡 HIGH |
+| `data/validation/tcga_ov_msi.json` | MSI status | 🟡 HIGH |
+| `data/validation/reports/all_pathways_validation.json` | All validation results | 🔴 CRITICAL |
+| `scripts/validation/validate_all_pathways_resistance.py` | Validation script | 🔴 CRITICAL |
+
+---
+
+## ⚠️ RISKS & BLOCKERS
+
+### Risk 1: HRD Scores Not Available
+- **Probability:** Medium
+- **Impact:** High (blocks DDR validation)
+- **Mitigation:** Calculate from copy number data (LOH, TAI, LST)
+
+### Risk 2: Mutations Extraction Slow
+- **Probability:** Low
+- **Impact:** Medium (delays validation)
+- **Mitigation:** Use existing 200 patients for initial validation, expand later
+
+### Risk 3: ABCB1 Expression Not Available
+- **Probability:** Low
+- **Impact:** Low (can defer efflux validation)
+- **Mitigation:** Skip ABCB1 test, focus on DDR/PI3K
+
+---
+
+## ✅ SUCCESS CRITERIA
+
+### Minimum Viable (Must Have):
+- [ ] Mutations extracted for all 469 patients
+- [ ] HRD scores acquired (≥50% coverage)
+- [ ] DDR/HRD validation completed
+- [ ] PI3K validation completed
+- [ ] Validation report generated
+
+### Full Success (Nice to Have):
+- [ ] HRD scores for ≥80% of patients
+- [ ] ABCB1 expression acquired
+- [ ] MSI status calculated
+- [ ] All 5 pathway tests completed
+- [ ] Combined pathway validation completed
+
+---
+
+## 🚀 READY TO EXECUTE
+
+**Pending Manager Approval on:**
+1. Dataset scope (469 vs 200 patients)
+2. HRD source priority
+3. Validation test priority
+4. ABCB1/MSI necessity
+
+**Once approved, I will:**
+1. Extract mutations for all 469 patients
+2. Acquire HRD scores (cBioPortal → Marquard → calculate)
+3. Run validation tests (DDR/HRD, PI3K, ABCB1 if available)
+4. Generate comprehensive report
+
+---
+
+**Status:** ⏸️ AWAITING MANAGER ANSWERS  
+**Estimated Time After Approval:** 6-8 hours

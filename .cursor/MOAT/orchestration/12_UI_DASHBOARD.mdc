@@ -1,0 +1,304 @@
+# 🖥️ MODULE 12: UI DASHBOARD
+
+**Purpose:** Frontend components for the orchestration system  
+**Priority:** 🟢 MEDIUM | **Dependencies:** 11 (API) | **Consumers:** End users
+
+---
+
+## 🎯 MISSION
+
+Build a dashboard that can:
+1. Display patient overview
+2. Show molecular profile
+3. Display drug rankings with S/P/E breakdown
+4. Show trial matches with mechanism fit
+5. Display alerts and notifications
+6. Integrate with CoPilot for Q&A
+
+---
+
+## 🎨 DASHBOARD LAYOUT
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  🧬 CrisPRO.ai                              [Ayesha Kiani] [⚙️] [👤]  │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │  🔔 ALERTS (2)                                            [▼]   │   │
+│  │  • ⚠️ CA-125 baseline still missing - ORDER IMMEDIATELY         │   │
+│  │  • ℹ️ New trial match: NCT05678901 (PARP + ATR) - 94% fit       │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│                                                                         │
+│  ┌──────────────────────┐  ┌──────────────────────────────────────┐   │
+│  │  📊 MOLECULAR        │  │  💊 TREATMENT RECOMMENDATIONS         │   │
+│  │  PROFILE             │  │                                      │   │
+│  │                      │  │  1. Olaparib (PARP)     [0.94] ⭐    │   │
+│  │  MBD4: c.1239delA ⭐ │  │     Tier I | High confidence        │   │
+│  │  TP53: Mutant (IHC)  │  │                                      │   │
+│  │  TMB: ⏳ Pending     │  │  2. Carboplatin         [0.88]       │   │
+│  │  HRD: Inferred       │  │     Tier I | Very high confidence   │   │
+│  │  IO: Not eligible    │  │                                      │   │
+│  │                      │  │  3. Niraparib (PARP)   [0.91]       │   │
+│  │  [View Full Profile] │  │     Tier I | High confidence        │   │
+│  └──────────────────────┘  └──────────────────────────────────────┘   │
+│                                                                         │
+│  ┌──────────────────────┐  ┌──────────────────────────────────────┐   │
+│  │  ⚔️ RESISTANCE       │  │  🔬 CLINICAL TRIALS                  │   │
+│  │                      │  │                                      │   │
+│  │  Platinum: HIGH      │  │  NCT05678901                        │   │
+│  │  sensitivity         │  │  PARP + ATR in DDR-Deficient OC     │   │
+│  │                      │  │  Mechanism Fit: 94% ⭐               │   │
+│  │  Risk: 14.5%         │  │  Status: RECRUITING                 │   │
+│  │  (baseline)          │  │  [View Details] [Check Eligibility] │   │
+│  │                      │  │                                      │   │
+│  │  MAPK: Wild-type ✅  │  │  NCT04729387                        │   │
+│  │  NF1: Not detected   │  │  Olaparib + Cediranib               │   │
+│  │                      │  │  Mechanism Fit: 88%                 │   │
+│  │  [View Full Analysis]│  │  [View All 5 Matches]               │   │
+│  └──────────────────────┘  └──────────────────────────────────────┘   │
+│                                                                         │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │  🥗 NUTRITION                              📅 MONITORING         │  │
+│  │                                                                  │  │
+│  │  During Carboplatin:                       Next Steps:           │  │
+│  │  • NAC 600mg post-infusion                ☐ CA-125 baseline     │  │
+│  │  • Vitamin D 2000 IU daily                ☐ NGS results         │  │
+│  │  • Avoid grapefruit                       ☐ HRD score           │  │
+│  │                                            ☐ CT post-C3          │  │
+│  │  [View Full Plan]                         [View Schedule]        │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                                                                         │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │  💬 CoPilot                                              [Chat]  │  │
+│  │  "Ask me anything about this patient's case..."                  │  │
+│  │  ┌────────────────────────────────────────────────────────────┐  │  │
+│  │  │ Quick: [Why PARP?] [Resistance risk?] [Trial eligibility?] │  │  │
+│  │  └────────────────────────────────────────────────────────────┘  │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🏗️ COMPONENT STRUCTURE
+
+```
+src/pages/Dashboard/
+├── Dashboard.jsx               # Main dashboard page
+├── DashboardLayout.jsx         # Layout container
+└── components/
+    ├── AlertBanner.jsx         # Alert notifications
+    ├── MolecularProfile.jsx    # Mutation and biomarker display
+    ├── DrugRankingCard.jsx     # Drug recommendations
+    ├── ResistanceCard.jsx      # Resistance prediction
+    ├── TrialMatchesCard.jsx    # Clinical trials
+    ├── NutritionCard.jsx       # Nutrition plan
+    ├── MonitoringCard.jsx      # Next steps and monitoring
+    ├── CoPilotPanel.jsx        # Integrated CoPilot
+    └── charts/
+        ├── EfficacyChart.jsx   # S/P/E breakdown
+        ├── MechanismVector.jsx # 7D vector visualization
+        └── TimelineChart.jsx   # Monitoring timeline
+```
+
+---
+
+## 🔧 KEY COMPONENTS
+
+### DrugRankingCard
+
+```jsx
+// src/pages/Dashboard/components/DrugRankingCard.jsx
+
+import React from 'react';
+import { Card, CardContent, Typography, Chip, LinearProgress, Tooltip } from '@mui/material';
+import { Star, CheckCircle, Info } from '@mui/icons-material';
+
+const TierChip = ({ tier }) => {
+  const colors = {
+    'I': 'success',
+    'II': 'info',
+    'III': 'warning',
+    'Research': 'default'
+  };
+  return <Chip label={`Tier ${tier}`} color={colors[tier]} size="small" />;
+};
+
+export default function DrugRankingCard({ drugs }) {
+  return (
+    <Card>
+      <CardContent>
+        <Typography variant="h6" gutterBottom>
+          💊 Treatment Recommendations
+        </Typography>
+        
+        {drugs.map((drug, index) => (
+          <div key={drug.drug_name} className="drug-row">
+            <div className="drug-header">
+              <Typography variant="subtitle1">
+                {index + 1}. {drug.drug_name}
+                {index === 0 && <Star color="primary" fontSize="small" />}
+              </Typography>
+              <Typography variant="h6" color="primary">
+                [{drug.efficacy_score.toFixed(2)}]
+              </Typography>
+            </div>
+            
+            <LinearProgress 
+              variant="determinate" 
+              value={drug.efficacy_score * 100} 
+              color={drug.efficacy_score >= 0.9 ? "success" : "primary"}
+            />
+            
+            <div className="drug-meta">
+              <TierChip tier={drug.tier} />
+              <Chip 
+                label={drug.confidence} 
+                size="small" 
+                variant="outlined"
+              />
+              {drug.on_label && (
+                <Chip 
+                  icon={<CheckCircle />} 
+                  label="On-label" 
+                  size="small" 
+                  color="success" 
+                  variant="outlined"
+                />
+              )}
+            </div>
+            
+            <Tooltip title={drug.mechanism}>
+              <Typography variant="caption" color="textSecondary">
+                {drug.rationale[0]}
+              </Typography>
+            </Tooltip>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+### MolecularProfile
+
+```jsx
+// src/pages/Dashboard/components/MolecularProfile.jsx
+
+export default function MolecularProfile({ profile, biomarkers }) {
+  return (
+    <Card>
+      <CardContent>
+        <Typography variant="h6">📊 Molecular Profile</Typography>
+        
+        {/* Key Mutations */}
+        <div className="mutations">
+          {profile.mutations.map(mut => (
+            <Chip
+              key={mut.gene}
+              label={`${mut.gene}: ${mut.variant}`}
+              color={mut.gene === 'MBD4' ? 'error' : 'default'}
+              icon={mut.gene === 'MBD4' ? <Star /> : null}
+            />
+          ))}
+        </div>
+        
+        {/* Biomarkers */}
+        <div className="biomarkers">
+          <BiomarkerRow 
+            label="TMB" 
+            value={biomarkers?.tmb?.value || 'Pending'}
+            status={biomarkers?.tmb?.classification}
+          />
+          <BiomarkerRow 
+            label="MSI" 
+            value={biomarkers?.msi?.status || 'Pending'}
+          />
+          <BiomarkerRow 
+            label="HRD" 
+            value={biomarkers?.hrd?.status || 'Pending'}
+          />
+          <BiomarkerRow 
+            label="IO" 
+            value={biomarkers?.io_eligible ? 'Eligible' : 'Not eligible'}
+            status={biomarkers?.io_eligible ? 'positive' : 'negative'}
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+- [ ] Dashboard layout
+- [ ] AlertBanner component
+- [ ] MolecularProfile component
+- [ ] DrugRankingCard with S/P/E breakdown
+- [ ] ResistanceCard with pathway visualization
+- [ ] TrialMatchesCard with mechanism fit
+- [ ] NutritionCard
+- [ ] MonitoringCard with checklist
+- [ ] CoPilot integration
+- [ ] Mobile responsive
+- [ ] Unit tests
+
+---
+
+## 🔗 API INTEGRATION
+
+```javascript
+// src/hooks/usePatientDashboard.js
+
+export function usePatientDashboard(patientId) {
+  const [state, setState] = useState(null);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const response = await fetch(`/api/patients/${patientId}`);
+        const data = await response.json();
+        setState(data.patient_state);
+      } catch (error) {
+        console.error('Failed to load patient data:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    fetchData();
+    
+    // Poll for updates every 30 seconds
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
+  }, [patientId]);
+  
+  return { state, loading };
+}
+```
+
+---
+
+**Module Status:** ⏳ IN PROGRESS - Universal pages audit complete, deliverables defined  
+**Estimated Time:** 9-13 days (4 phases)  
+**See:** `.cursor/MOAT/UNIVERSAL_PAGES_AUDIT_AND_DELIVERABLES.md` for complete audit and 4-phase deliverables plan
+
+**Current State:**
+- ✅ 4 Universal pages audited (UniversalCompleteCare, UniversalTrialIntelligence, UniversalDossierBrowser, UniversalDossierDetail)
+- ✅ Comprehensive deliverables plan created (4 phases, 9-13 days total)
+- ⚠️ Missing components identified (Resistance Playbook, SAE Features)
+- ⚠️ Orchestrator integration needed
+- ⚠️ Testing and validation needed
+
+**Deliverables Plan:**
+- **Phase 1:** Complete Missing Components (2-3 days)
+- **Phase 2:** Orchestrator Integration (3-4 days)
+- **Phase 3:** Testing & Validation (2-3 days)
+- **Phase 4:** Enhancements (2-3 days)

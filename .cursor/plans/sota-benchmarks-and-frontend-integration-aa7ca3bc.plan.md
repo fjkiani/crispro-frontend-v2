@@ -1,4 +1,27 @@
-<!-- aa7ca3bc-cd1c-4afb-ba3c-d20538cde224 418ccf2f-cacb-4421-b4bf-526f99b655eb -->
+---
+name: Comprehensive File Review and Root Cause Analysis Plan
+overview: ""
+todos:
+  - id: 4f1d5b66-ea3f-4a3f-8645-6c0c1a37c1b3
+    content: Find and update Evo2 config to use 1B model
+    status: completed
+  - id: 2c0efb5c-0a88-4d6b-a6e3-d1a236d961ed
+    content: Update DEFAULT_EVO_MODEL in api/config.py from evo2_7b to evo2_1b
+    status: completed
+  - id: 35296f1e-e945-4f99-a103-dbbda9c1d6ce
+    content: Verify Modal service EVO_MODEL_ID configuration
+    status: completed
+  - id: b9c62145-b1f1-40e6-919c-8c3136e29609
+    content: Create test script to verify 1B model works
+    status: completed
+  - id: 98a19b7b-f6f8-462c-8648-a22ba53ada2f
+    content: Run test and validate 1B model responses
+    status: completed
+  - id: 50e4a857-528b-4033-8341-9eba96badeb7
+    content: "Phase 0.1: Validate disease parameter flow - Check orchestrator.py:124 passes disease to literature()"
+    status: completed
+---
+
 # Comprehensive File Review and Root Cause Analysis Plan
 
 ## Objective
@@ -1350,12 +1373,3 @@ See `.cursor/plans/FAIL_NOW_VS_LATER_ASSESSMENT.md` for:
 - Risk assessment
 - Timeline estimates
 - Success criteria
-
-### To-dos
-
-- [x] Find and update Evo2 config to use 1B model
-- [x] Update DEFAULT_EVO_MODEL in api/config.py from evo2_7b to evo2_1b
-- [x] Verify Modal service EVO_MODEL_ID configuration
-- [x] Create test script to verify 1B model works
-- [x] Run test and validate 1B model responses
-- [x] Phase 0.1: Validate disease parameter flow - Check orchestrator.py:124 passes disease to literature()

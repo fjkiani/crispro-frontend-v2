@@ -1,0 +1,243 @@
+## VUS Identify (PDGFRA p.S755P) — Debug Handoff for Agent
+
+### Context (Mission)
+- **Goal**: “Knife the 40% VUS problem” by producing a single, audit-ready response for a VUS using real calls:
+  - Normalize to **GRCh38** (no guessing)
+  - Pull priors (**ClinVar**)
+  - Pull sequence signal (**Evo2 delta** via `/api/evo/score_variant_multi`)
+  - Pull insights (**functionality/chromatin/essentiality/regulatory**)
+  - Pull AlphaMissense **coverage** gate (coverage only; no fabricated AM score)
+  - Produce **triage verdict + next actions + provenance**
+
+### What I actually tested (and what failed)
+When running the backend and calling:
+`POST /api/vus/identify` with PDGFRA `c.2263T>C` / `p.S755P`, the endpoint returned:
+- **404 Not Found** initially
+- Then **500 Internal Server Error** after router registration
+
+### Root causes (real)
+
+#### 1) Router not registered → `/api/vus/identify` returns 404
+- **File**: `oncology-coPilot/oncology-backend-minimal/main.py`
+- **Symptom**:
+  - `POST /api/vus/identify` → `404`
+  - `GET /health` → `404` (this backend doesn’t expose `/health` by default)
+- **Fix**: Ensure VUS router is included:
+  - `from api.routers.vus import router as vus_router`
+  - `app.include_router(vus_router)`
+
+#### 1b) Dependent routers not registered → VUS returns 200 but signals are missing
+- **File**: `oncology-coPilot/oncology-backend-minimal/main.py`
+- **Symptom**: `POST /api/vus/identify` returns `200`, but internal calls return `404`, so:
+  - `coverage.clinvar` is empty/unavailable
+  - `coverage.alphamissense` is forced false
+  - `insights.*` are null
+- **Fix**: Register all routers used by VUS Identify:
+  - `api.routers.evo` (Evo2 scoring proxy)
+  - `api.routers.insights` (4 chips)
+  - `api.routers.fusion` (AlphaMissense coverage gate)
+  - `api.routers.evidence` (ClinVar prior)
+  - `api.routers.health` (optional)
+
+#### 2) `httpx.utils.quote` does not exist → Ensembl HGVS normalization crashes with 500
+- **File**: `oncology-coPilot/oncology-backend-minimal/api/routers/vus.py`
+- **Crash**:
+  - `AttributeError: module 'httpx' has no attribute 'utils'`
+- **Why**:
+  - The code attempted: `httpx.utils.quote(...)`
+  - `httpx` has no `utils.quote`. Use `urllib.parse.quote`.
+
+#### 3) Ensembl HGVS endpoint rejects bare `c.####` strings
+- **Symptom**: `HTTP 400` from Ensembl when using `hgvs_c: "c.2263T>C"`
+- **Fix**: Prefix gene if provided: `PDGFRA:c.2263T>C` (or provide full `chrom/pos/ref/alt`).
+
+#### 4) Hardcoded internal base URL (`127.0.0.1:8000`) breaks on non-8000 ports
+- **Symptom**: When running uvicorn on `--port 8134`, internal requests still hit `:8000` and return `404`.
+- **Fix**:
+  - In `api/routers/vus.py`, use `request.base_url` for internal calls.
+  - In `api/routers/insights.py`, do the same for internal `/api/evo/*` calls.
+
+### Minimal patch (must do)
+
+#### Fix HGVS URL quoting
+In `api/routers/vus.py`:
+
+1) Add import:
+```python
+from urllib.parse import quote as url_quote
+```
+
+2) Replace:
+```python
+httpx.utils.quote(hgvs, safe='')
+```
+
+with:
+```python
+url_quote(hgvs, safe="")
+```
+
+3) The Ensembl VEP HGVS URL should look like:
+```python
+url = f"https://rest.ensembl.org/vep/human/hgvs/{url_quote(hgvs, safe='')}?content-type=application/json"
+```
+
+### Smoke test commands (copy/paste)
+
+#### Start backend (local)
+```bash
+cd /Users/fahadkiani/.cursor/worktrees/crispr-assistant-main/apd/oncology-coPilot/oncology-backend-minimal
+/Users/fahadkiani/Desktop/development/crispr-assistant-main/venv/bin/python -m uvicorn main:app --host 127.0.0.1 --port 8128
+```
+
+#### Call VUS Identify (PDGFRA p.S755P)
+```bash
+curl -s -X POST "http://127.0.0.1:8128/api/vus/identify" \
+  -H "Content-Type: application/json" \
+  -d '{"variant":{"gene":"PDGFRA","hgvs_c":"c.2263T>C","hgvs_p":"p.S755P","assembly":"GRCh38"},"options":{}}' \
+  | python3 -m json.tool
+```
+
+#### Expected after fix
+- HTTP 200
+- Response contains:
+  - `normalized_variant` with `chrom,pos,ref,alt` (GRCh38)
+  - `coverage.clinvar` object (or `{status:"unavailable"}` in degraded mode)
+  - `coverage.alphamissense` coverage eligibility (true/false) — **coverage only**
+  - `sequence.min_delta` (Evo2) OR explicit degraded placeholder with provenance
+  - `insights.{functionality,chromatin,essentiality,regulatory}` (or degraded placeholders)
+  - `triage.verdict` + `triage.confidence` + `triage.rationale[]`
+  - `next_actions[]`
+  - `provenance.run_id`, `duration_s`, and `feature_flags`
+
+### Notes / guardrails (doctrine)
+- **No fabricated values**: if a dependency is down, return explicit degraded output + provenance flags.
+- **AlphaMissense**: use as **coverage gate only** unless a real scoring service is wired.
+- **Evo2 is mandatory for VUS “knifing”**: delta log-likelihood is the primary “S” signal in research mode.
+
+### If the agent sees “empty response / JSON parse error”
+That usually means the server crashed on startup. Run uvicorn without redirecting logs and check for:
+- missing router registration
+- `AttributeError: httpx.utils`
+- any import errors during `main.py` boot
+
+
+  - Normalize to **GRCh38** (no guessing)
+  - Pull priors (**ClinVar**)
+  - Pull sequence signal (**Evo2 delta** via `/api/evo/score_variant_multi`)
+  - Pull insights (**functionality/chromatin/essentiality/regulatory**)
+  - Pull AlphaMissense **coverage** gate (coverage only; no fabricated AM score)
+  - Produce **triage verdict + next actions + provenance**
+
+### What I actually tested (and what failed)
+When running the backend and calling:
+`POST /api/vus/identify` with PDGFRA `c.2263T>C` / `p.S755P`, the endpoint returned:
+- **404 Not Found** initially
+- Then **500 Internal Server Error** after router registration
+
+### Root causes (real)
+
+#### 1) Router not registered → `/api/vus/identify` returns 404
+- **File**: `oncology-coPilot/oncology-backend-minimal/main.py`
+- **Symptom**:
+  - `POST /api/vus/identify` → `404`
+  - `GET /health` → `404` (this backend doesn’t expose `/health` by default)
+- **Fix**: Ensure VUS router is included:
+  - `from api.routers.vus import router as vus_router`
+  - `app.include_router(vus_router)`
+
+#### 1b) Dependent routers not registered → VUS returns 200 but signals are missing
+- **File**: `oncology-coPilot/oncology-backend-minimal/main.py`
+- **Symptom**: `POST /api/vus/identify` returns `200`, but internal calls return `404`, so:
+  - `coverage.clinvar` is empty/unavailable
+  - `coverage.alphamissense` is forced false
+  - `insights.*` are null
+- **Fix**: Register all routers used by VUS Identify:
+  - `api.routers.evo` (Evo2 scoring proxy)
+  - `api.routers.insights` (4 chips)
+  - `api.routers.fusion` (AlphaMissense coverage gate)
+  - `api.routers.evidence` (ClinVar prior)
+  - `api.routers.health` (optional)
+
+#### 2) `httpx.utils.quote` does not exist → Ensembl HGVS normalization crashes with 500
+- **File**: `oncology-coPilot/oncology-backend-minimal/api/routers/vus.py`
+- **Crash**:
+  - `AttributeError: module 'httpx' has no attribute 'utils'`
+- **Why**:
+  - The code attempted: `httpx.utils.quote(...)`
+  - `httpx` has no `utils.quote`. Use `urllib.parse.quote`.
+
+#### 3) Ensembl HGVS endpoint rejects bare `c.####` strings
+- **Symptom**: `HTTP 400` from Ensembl when using `hgvs_c: "c.2263T>C"`
+- **Fix**: Prefix gene if provided: `PDGFRA:c.2263T>C` (or provide full `chrom/pos/ref/alt`).
+
+#### 4) Hardcoded internal base URL (`127.0.0.1:8000`) breaks on non-8000 ports
+- **Symptom**: When running uvicorn on `--port 8134`, internal requests still hit `:8000` and return `404`.
+- **Fix**:
+  - In `api/routers/vus.py`, use `request.base_url` for internal calls.
+  - In `api/routers/insights.py`, do the same for internal `/api/evo/*` calls.
+
+### Minimal patch (must do)
+
+#### Fix HGVS URL quoting
+In `api/routers/vus.py`:
+
+1) Add import:
+```python
+from urllib.parse import quote as url_quote
+```
+
+2) Replace:
+```python
+httpx.utils.quote(hgvs, safe='')
+```
+
+with:
+```python
+url_quote(hgvs, safe="")
+```
+
+3) The Ensembl VEP HGVS URL should look like:
+```python
+url = f"https://rest.ensembl.org/vep/human/hgvs/{url_quote(hgvs, safe='')}?content-type=application/json"
+```
+
+### Smoke test commands (copy/paste)
+
+#### Start backend (local)
+```bash
+cd /Users/fahadkiani/.cursor/worktrees/crispr-assistant-main/apd/oncology-coPilot/oncology-backend-minimal
+/Users/fahadkiani/Desktop/development/crispr-assistant-main/venv/bin/python -m uvicorn main:app --host 127.0.0.1 --port 8128
+```
+
+#### Call VUS Identify (PDGFRA p.S755P)
+```bash
+curl -s -X POST "http://127.0.0.1:8128/api/vus/identify" \
+  -H "Content-Type: application/json" \
+  -d '{"variant":{"gene":"PDGFRA","hgvs_c":"c.2263T>C","hgvs_p":"p.S755P","assembly":"GRCh38"},"options":{}}' \
+  | python3 -m json.tool
+```
+
+#### Expected after fix
+- HTTP 200
+- Response contains:
+  - `normalized_variant` with `chrom,pos,ref,alt` (GRCh38)
+  - `coverage.clinvar` object (or `{status:"unavailable"}` in degraded mode)
+  - `coverage.alphamissense` coverage eligibility (true/false) — **coverage only**
+  - `sequence.min_delta` (Evo2) OR explicit degraded placeholder with provenance
+  - `insights.{functionality,chromatin,essentiality,regulatory}` (or degraded placeholders)
+  - `triage.verdict` + `triage.confidence` + `triage.rationale[]`
+  - `next_actions[]`
+  - `provenance.run_id`, `duration_s`, and `feature_flags`
+
+### Notes / guardrails (doctrine)
+- **No fabricated values**: if a dependency is down, return explicit degraded output + provenance flags.
+- **AlphaMissense**: use as **coverage gate only** unless a real scoring service is wired.
+- **Evo2 is mandatory for VUS “knifing”**: delta log-likelihood is the primary “S” signal in research mode.
+
+### If the agent sees “empty response / JSON parse error”
+That usually means the server crashed on startup. Run uvicorn without redirecting logs and check for:
+- missing router registration
+- `AttributeError: httpx.utils`
+- any import errors during `main.py` boot
+

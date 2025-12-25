@@ -1,0 +1,185 @@
+## 🧬 CrisPRO.ai MOAT Contribution: VUS Resolution (ClinVar + Evo2 + Pathway Context)
+
+> **Note for Other Agents**: This section covers the VUS Resolution MOAT — turning “Variant of Uncertain Significance” into an auditable, pathway-aware disposition using a single endpoint (`/api/vus/identify`). Other agents should add their sections for: Drug Efficacy (WIWFM/S-P-E), Therapy Fit, SAE Intelligence, Trial Matching, Toxicity Risk, CRISPR Co‑Pilot, and the Integrated Platform. Each agent owns their capability section.
+
+---
+
+### Where VUS Resolution Fits in the Drug Development Pipeline
+
+**Mapping to FDA's 5-Step Process:**
+
+| FDA Step | Traditional Gap / Pain Point | VUS Resolution Contribution |
+|----------|------------------------------|-----------------------------|
+| **Step 1: Discovery & Development** | Target discovery and patient stratification depend on genomics, but ~40% of variants are VUS → uncertainty blocks mechanism hypotheses | **Pathway-aware VUS triage** — identify if a VUS is likely damaging and whether it’s relevant to the actionable axis (DDR/MAPK/PI3K/etc.) |
+| **Step 2: Preclinical Research** | Preclinical hypotheses get built on shaky variant interpretation; labs waste cycles chasing noise | **Noise neutralization** — rapidly downgrade/contain passenger variants and elevate likely-damaging candidates with provenance + “next actions” |
+| **Step 3: Clinical Research** | Trial enrollment suffers when molecular eligibility is ambiguous (VUS blocks biomarker cohorts) | **Structured, auditable disposition** — consistent outputs (verdict, confidence, resolution path) that can feed protocol stratification (RUO) |
+| **Step 4: FDA Drug Review** | Sponsors must justify biomarker logic; VUS interpretation is inconsistent and hard to audit | **Audit-ready VUS evidence packet** — local ClinVar prior + Evo2 min_delta + pathway relevance + run provenance; deterministic handling of failures |
+| **Step 5: Post-Marketing Monitoring** | Variant reinterpretation occurs over time; hard to reproduce what was believed at approval | **Provenance + reproducibility** — run IDs, input snapshots, and resolution_path allow longitudinal tracking of reinterpretations |
+
+---
+
+### What We Built (Core Capability)
+
+#### 1) One-Call VUS Endpoint
+
+- **Endpoint**: `POST /api/vus/identify`
+- **Inputs (flexible)**: HGVS (gene, hgvs_c/hgvs_p) or coordinates (chrom, pos, ref, alt) + assembly
+- **Outputs (structured)**:
+  - `coverage.clinvar` (prior; local index)
+  - `sequence.min_delta` (Evo2 delta-only scoring; with windows attempted)
+  - `triage` (verdict + confidence + reasons + resolution_path)
+  - `pathway_context` (variant axis, patient axis, pathway_relevance)
+  - `next_actions` (WIWFM, trials, dossier, cohort context)
+  - `provenance` (run_id + per-service call receipts)
+
+#### 2) Resolution Rubric (Prior vs ML)
+
+- **ClinVar prior**: if decisive → use as prior signal
+- **Evo2 ML scoring**: if prior is non-decisive/absent → score and resolve by magnitude of disruption (`min_delta`)
+- **Pathway context**: “is this variant relevant for *this* patient axis?” to prevent false urgency
+
+---
+
+### Concrete Receipt (Real Output)
+
+**Example output artifact (RAD51C chr17:58709872 T>C, GRCh38)**:
+- **File**: `oncology-coPilot/oncology-backend-minimal/results/vus_demo_blog/20251215-162249/case1_rad51c.res.json`
+
+Key fields (abridged):
+- `coverage.clinvar.status`: `"Uncertain significance"` (local index)
+- `sequence.min_delta`: `-0.087150...` (Evo2 called, success)
+- `triage.status`: `"resolved_by_evo2"`
+- `triage.verdict`: `"Likely damaging (ML)"`
+- `triage.resolution_path`: `"evo2"`
+- `pathway_context.patient_actionable_axis`: `"DDR"`
+- `pathway_context.pathway_relevance`: `"high"`
+- `provenance.run_id`: present; per-service call receipts included
+
+---
+
+### Validated / Grounded Metrics (What We Can Claim)
+
+#### Variant Foundation Metrics (Evo2)
+
+| Metric | Value | Significance |
+|--------|-------|--------------|
+| **ClinVar AUROC** | **0.957** (n=53,210) | Strong baseline for variant impact classification |
+| **SpliceVarDB AUROC** | **~0.825–0.826** (n=4,950) | Supports splice/regulatory risk signals |
+| **Evo2 context window** | **1M tokens** | Enables large-window sequence context for scoring |
+
+#### Operational Guarantees (System-Level)
+
+| Property | What We Do | Why It Matters |
+|---------|------------|----------------|
+| **Single-call triage** | One request returns priors + ML delta + pathway context + next actions | Low friction; consistent outputs |
+| **Auditability** | `provenance.run_id` + per-service call receipts | Reproducible evidence packet |
+| **Failure transparency** | Explicit `evo2_success`, insight stub warnings, and call receipts | Prevents silent hallucination |
+| **Assembly handling** | Carry `assembly`; avoid mixing GRCh37/38 when scoring | Reduces allele mismatch errors |
+
+---
+
+### How We Accelerate Each Phase
+
+#### Step 1: Discovery & Development → Convert “unknown” into mechanism hypotheses
+
+**Problem:** Genomic stratification is blocked by VUS ambiguity.
+
+**Our Solution:**
+```
+/api/vus/identify:
+├── ClinVar prior (local index) → decisive vs non-decisive
+├── Evo2 scoring → min_delta + windows attempted
+├── Triage rubric → verdict + confidence + resolution_path
+├── Pathway context → axis + relevance to patient axis
+└── Next actions → WIWFM / trials / dossier / cohort context
+```
+
+**Impact:** Programs stop treating VUS as “dead ends” and start treating them as auditable hypotheses, prioritized by pathway relevance.
+
+---
+
+#### Step 2: Preclinical Research → Reduce wasted wet-lab cycles
+
+**Problem:** Labs chase variants that are either benign noise or irrelevant to the actionable mechanism.
+
+**Our Solution:**
+- **Neutralize noise**: fast “benign/low relevance” disposition where priors and ML agree
+- **Escalate signal**: “likely damaging (ML)” when prior is non-decisive but Evo2 signal is strong
+- **Attach next steps**: immediate WIWFM, trial matching, dossier export
+
+**Impact:** Fewer junk experiments; clearer prioritization for functional assays.
+
+---
+
+#### Step 3: Clinical Research → Consistent patient stratification artifacts (RUO)
+
+**Problem:** Phase 2 is the bottleneck (28.9% success); stratification logic is often noisy.
+
+**Our Solution:**
+- Standardized, structured VUS disposition fields suitable for protocol support (RUO)
+- Pathway axis + relevance to avoid enrolling mechanistically irrelevant VUS
+
+**Impact:** Cleaner eligibility narratives and better mechanistic cohorting.
+
+---
+
+#### Step 4: FDA Drug Review → Evidence packet with provenance
+
+**Problem:** Regulators need consistent, auditable biomarker logic.
+
+**Our Solution:**
+- **Local ClinVar prior**: stable and reproducible
+- **ML disruption signal**: `min_delta` (with explicit success/failure)
+- **Pathway context**: “why this matters” mapped to actionable axis
+- **Provenance**: run_id + call receipts to show exactly what was queried
+
+**Impact:** “Show your work” biomarker justification becomes systematic instead of ad hoc.
+
+---
+
+#### Step 5: Post-Marketing Monitoring → Track reinterpretation over time
+
+**Problem:** Variant classifications change; without provenance you can’t reconstruct prior decisions.
+
+**Our Solution:**
+- Run manifests (`run_id`, `resolution_path`, service call receipts)
+- Same variant can be re-run later and compared deterministically
+
+**Impact:** Longitudinal audit trail for reinterpretation and learning loops.
+
+---
+
+### Novel Contributions (What’s Hard to Copy)
+
+#### 1) “Prior vs ML” resolution with explicit `resolution_path`
+Most tools either trust ClinVar blindly or output a generic ML score. We output *which* resolution route was used (`prior` vs `evo2`) with receipts.
+
+#### 2) Patient-axis gating
+We don’t just ask “is it damaging?” — we ask “is it damaging *and* relevant to the actionable axis?”
+
+#### 3) Receipts-first outputs
+Every call includes provenance and per-service call status, making it possible to debug and defend the output.
+
+---
+
+### Current Limitations (Transparent)
+
+| Limitation | Status | Resolution Path |
+|-----------|--------|-----------------|
+| Clinical outcome validation | Not claimed | Future: correlate resolved VUS with response/eligibility outcomes |
+| Insight chips availability | Some services can stub/fail | Improve robustness; ensure real Enformer/insights deployment |
+| Coverage beyond ClinVar + Evo2 | Limited | Add more priors (functional assays, curated datasets) |
+| Pathway mapping breadth | DDR-first focus | Expand to additional axes and refine weights |
+
+---
+
+### Instructions for Other Agents
+
+- Add your capability section in the same format: **Pipeline mapping → metrics → phase acceleration → limitations → instructions**.
+- Keep claims honest: separate “validated” metrics from “operational” guarantees.
+
+---
+
+*Section Author: VUS Resolution Agent (ClinVar + Evo2 + Pathway Context, `/api/vus/identify`)*  
+*Last Updated: December 19, 2025*  
+*Status: ✅ Operational (Research-Mode) with receipts; ⚠️ clinical outcome validation pending*

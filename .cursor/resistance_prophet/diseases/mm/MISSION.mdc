@@ -1,0 +1,1291 @@
+# Mission: Multiple Myeloma Resistance Prediction
+
+> **Priority**: HIGH | **Estimated Time**: 3-4 weeks | **Type**: Full-Stack Feature with Validation
+
+---
+
+## Mission Objective
+
+Build and validate **production-ready resistance prediction for Multiple Myeloma** across all major drug classes, with TRUE SAE integration and clinical validation.
+
+---
+
+## Current State Assessment
+
+### ✅ What We Have
+
+| Component | Status | Location |
+|-----------|--------|----------|
+| Basic resistance router | ✅ Exists | `api/routers/resistance.py` |
+| PSMB5 mutations (PI) | ✅ Defined | Known resistance mutations |
+| CRBN mutations (IMiDs) | ✅ Defined | Known resistance mutations |
+| MM doctrine | ✅ Exists | `.cursor/rules/MM/mm_drug_response_doctrine.mdc` |
+| Evo2 integration | ✅ Working | Delta scoring via `/api/evo/score_variant_multi` |
+| Frontend | ✅ Exists | `MyelomaDigitalTwin.jsx`, `MyelomaResponseDisplay.jsx` |
+
+### ❌ What's Missing
+
+| Gap | Impact | Priority |
+|-----|--------|----------|
+| **No MM patient cohort** | Can't validate | 🔴 Critical |
+| **Limited mechanisms** | Only PSMB5/CRBN | 🔴 Critical |
+| **No drug class coverage** | Only PI/IMiD basics | 🔴 Critical |
+| **No TRUE SAE features** | Using proxy | 🟡 High |
+| **No treatment line context** | Ignores prior therapy | 🟡 High |
+| **No high-risk cytogenetics** | Missing t(4;14), del(17p) | 🟡 High |
+
+---
+
+## Multiple Myeloma Resistance Biology
+
+### Drug Classes & Mechanisms
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    MULTIPLE MYELOMA DRUG CLASSES                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. PROTEASOME INHIBITORS (PI)                                              │
+│     ├── Bortezomib (1st gen)                                                │
+│     ├── Carfilzomib (2nd gen)                                               │
+│     └── Ixazomib (oral)                                                     │
+│                                                                             │
+│     Resistance Mechanisms:                                                  │
+│     • PSMB5 mutations (p.Ala49Thr, p.Ala20Thr) - Direct target             │
+│     • ABCB1/MDR1 upregulation - Drug efflux                                │
+│     • NFE2L2/NRF2 activation - Antioxidant response                        │
+│     • XBP1 mutations - UPR pathway                                          │
+│     • IRE1 pathway alterations                                              │
+│                                                                             │
+│  2. IMMUNOMODULATORY DRUGS (IMiDs)                                          │
+│     ├── Lenalidomide                                                        │
+│     └── Pomalidomide                                                        │
+│                                                                             │
+│     Resistance Mechanisms:                                                  │
+│     • CRBN mutations/loss - Direct target (Cereblon)                       │
+│     • IKZF1/3 mutations - Downstream effectors                             │
+│     • CUL4A/DDB1 alterations - Ubiquitin ligase complex                    │
+│     • GSPT1 mutations                                                       │
+│                                                                             │
+│  3. ANTI-CD38 ANTIBODIES                                                    │
+│     └── Daratumumab, Isatuximab                                             │
+│                                                                             │
+│     Resistance Mechanisms:                                                  │
+│     • CD38 downregulation/loss                                              │
+│     • CDC/ADCC escape (complement/NK cell resistance)                      │
+│     • Immune suppression markers                                            │
+│                                                                             │
+│  4. BCMA-TARGETED THERAPIES                                                 │
+│     ├── Belantamab mafodotin (ADC)                                          │
+│     ├── Teclistamab (bispecific)                                            │
+│     └── Idecabtagene vicleucel (CAR-T)                                      │
+│                                                                             │
+│     Resistance Mechanisms:                                                  │
+│     • BCMA/TNFRSF17 downregulation                                         │
+│     • Antigen escape                                                        │
+│     • T-cell exhaustion markers                                             │
+│                                                                             │
+│  5. HIGH-RISK CYTOGENETICS (Universal Resistance Markers)                   │
+│     • t(4;14) - FGFR3/WHSC1 (MMSET)                                         │
+│     • del(17p) - TP53 loss                                                  │
+│     • 1q gain - CKS1B amplification                                         │
+│     • t(14;16) - MAF                                                        │
+│     • t(14;20) - MAFB                                                       │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Implementation Plan
+
+### Phase 1: Data Acquisition (Week 1)
+
+#### 1.1 MM Patient Cohort Sources
+
+| Source | Data Available | Access |
+|--------|----------------|--------|
+| **MMRF CoMMpass** | 1,154 MM patients, WGS, treatment response | Public (controlled) |
+| **DepMap MM Lines** | Cell line drug response | Public |
+| **cBioPortal MM** | Somatic mutations, limited response | Public API |
+| **TCGA (DLBCL as proxy)** | Limited MM-like cases | Public |
+
+**Primary Target**: MMRF CoMMpass (gold standard for MM)
+
+#### 1.2 Data Extraction Tasks
+
+```python
+# scripts/data_acquisition/download_mmrf_commpass.py
+
+MMRF_TARGETS = {
+    "mutations": "somatic mutations (WGS/WES)",
+    "cytogenetics": "FISH for t(4;14), del(17p), 1q gain",
+    "treatment_response": "per-line response (CR, VGPR, PR, SD, PD)",
+    "drug_classes": ["PI", "IMiD", "CD38", "BCMA", "alkylator", "steroid"],
+    "survival": "PFS, OS"
+}
+
+REQUIRED_FIELDS = [
+    "patient_id",
+    "mutations",
+    "cytogenetics",
+    "treatment_line",
+    "drug_regimen",
+    "best_response",
+    "pfs_months",
+    "relapse_status"
+]
+```
+
+### Phase 2: Resistance Mechanism Expansion (Week 1-2)
+
+#### 2.1 Expand Known Resistance Mutations
+
+**File**: `oncology-coPilot/oncology-backend-minimal/api/routers/resistance.py`
+
+```python
+# Multiple Myeloma Resistance Mutations (Expanded)
+MM_RESISTANCE_MUTATIONS = {
+    "proteasome_inhibitor": {
+        "PSMB5": {
+            "mutations": ["p.Ala49Thr", "p.Ala20Thr", "p.Cys52Phe", "p.Met45Val"],
+            "mechanism": "Direct proteasome subunit mutation reduces drug binding",
+            "clinical_impact": "High",
+            "alternative": ["carfilzomib (2nd gen)", "IMiDs", "anti-CD38"]
+        },
+        "PSMB8": {
+            "mutations": ["any"],
+            "mechanism": "Immunoproteasome subunit - may affect PI sensitivity",
+            "clinical_impact": "Moderate",
+            "alternative": ["IMiDs", "anti-CD38"]
+        },
+        "NFE2L2": {
+            "mutations": ["gain-of-function", "amplification"],
+            "mechanism": "NRF2 activation increases antioxidant response, reduces PI efficacy",
+            "clinical_impact": "Moderate",
+            "alternative": ["IMiDs", "anti-CD38"]
+        },
+        "KEAP1": {
+            "mutations": ["loss-of-function"],
+            "mechanism": "KEAP1 loss activates NRF2 pathway",
+            "clinical_impact": "Moderate",
+            "alternative": ["IMiDs", "anti-CD38"]
+        },
+        "XBP1": {
+            "mutations": ["any"],
+            "mechanism": "XBP1 is critical for PI-induced ER stress response",
+            "clinical_impact": "Moderate",
+            "alternative": ["IMiDs", "anti-CD38"]
+        },
+        "IRE1": {
+            "mutations": ["any"],
+            "mechanism": "IRE1/XBP1 pathway alterations affect UPR",
+            "clinical_impact": "Moderate",
+            "alternative": ["IMiDs", "anti-CD38"]
+        }
+    },
+    
+    "imid": {
+        "CRBN": {
+            "mutations": ["p.Trp400*", "p.Arg419*", "del", "splice", "any"],
+            "mechanism": "Cereblon loss prevents IMiD-mediated degradation of IKZF1/3",
+            "clinical_impact": "High",
+            "alternative": ["PI", "anti-CD38", "BCMA-targeted"]
+        },
+        "IKZF1": {
+            "mutations": ["del", "any"],
+            "mechanism": "IKZF1 (Ikaros) alterations may reduce IMiD efficacy",
+            "clinical_impact": "Moderate",
+            "alternative": ["PI", "anti-CD38"]
+        },
+        "IKZF3": {
+            "mutations": ["del", "any"],
+            "mechanism": "IKZF3 (Aiolos) alterations may reduce IMiD efficacy",
+            "clinical_impact": "Moderate",
+            "alternative": ["PI", "anti-CD38"]
+        },
+        "CUL4A": {
+            "mutations": ["any"],
+            "mechanism": "Ubiquitin ligase complex component",
+            "clinical_impact": "Low",
+            "alternative": ["PI", "anti-CD38"]
+        },
+        "DDB1": {
+            "mutations": ["any"],
+            "mechanism": "CRBN complex partner",
+            "clinical_impact": "Low",
+            "alternative": ["PI", "anti-CD38"]
+        }
+    },
+    
+    "anti_cd38": {
+        "CD38": {
+            "mutations": ["del", "downregulation"],
+            "mechanism": "CD38 antigen loss/reduction prevents antibody binding",
+            "clinical_impact": "High",
+            "alternative": ["BCMA-targeted", "PI", "IMiDs"]
+        },
+        "CD55": {
+            "mutations": ["upregulation"],
+            "mechanism": "CD55 upregulation protects from CDC",
+            "clinical_impact": "Moderate",
+            "alternative": ["BCMA-targeted", "PI"]
+        },
+        "CD59": {
+            "mutations": ["upregulation"],
+            "mechanism": "CD59 upregulation protects from MAC formation",
+            "clinical_impact": "Moderate",
+            "alternative": ["BCMA-targeted", "PI"]
+        }
+    },
+    
+    "bcma_targeted": {
+        "TNFRSF17": {  # BCMA gene
+            "mutations": ["del", "downregulation", "splice"],
+            "mechanism": "BCMA loss/reduction prevents targeting",
+            "clinical_impact": "High",
+            "alternative": ["GPRC5D-targeted", "FcRH5-targeted", "CD38"]
+        }
+    }
+}
+
+# High-risk cytogenetics (universal resistance markers)
+MM_HIGH_RISK_CYTOGENETICS = {
+    "t_4_14": {
+        "genes": ["FGFR3", "WHSC1", "MMSET"],
+        "impact": "High-risk, early relapse",
+        "mechanism": "Aggressive biology, may benefit from PI-based regimens"
+    },
+    "del_17p": {
+        "genes": ["TP53"],
+        "impact": "Ultra high-risk",
+        "mechanism": "TP53 loss = genomic instability, treatment resistance"
+    },
+    "1q_gain": {
+        "genes": ["CKS1B", "MCL1"],
+        "impact": "High-risk, poor PFS",
+        "mechanism": "Proliferation advantage, MCL1 = anti-apoptotic"
+    },
+    "t_14_16": {
+        "genes": ["MAF"],
+        "impact": "High-risk",
+        "mechanism": "MAF overexpression"
+    },
+    "t_14_20": {
+        "genes": ["MAFB"],
+        "impact": "High-risk",
+        "mechanism": "MAFB overexpression"
+    }
+}
+```
+
+#### 2.2 Create MM Pathway Mapping
+
+**File**: `oncology-coPilot/oncology-backend-minimal/api/services/mm_pathway_service.py`
+
+```python
+"""
+Multiple Myeloma Pathway Service
+
+Maps MM-specific pathways for resistance prediction:
+- Proteasome/UPR pathway
+- Cereblon/IMiD pathway
+- Plasma cell survival (BCL2, MCL1)
+- Bone marrow microenvironment
+"""
+
+MM_PATHWAYS = {
+    "proteasome_upr": {
+        "genes": ["PSMB5", "PSMB8", "XBP1", "IRE1", "ATF6", "HSPA5", "DDIT3"],
+        "description": "Proteasome and Unfolded Protein Response",
+        "drugs_targeting": ["bortezomib", "carfilzomib", "ixazomib"]
+    },
+    "cereblon_pathway": {
+        "genes": ["CRBN", "IKZF1", "IKZF3", "CUL4A", "DDB1", "GSPT1"],
+        "description": "Cereblon-mediated degradation",
+        "drugs_targeting": ["lenalidomide", "pomalidomide"]
+    },
+    "ras_mapk": {
+        "genes": ["KRAS", "NRAS", "BRAF", "MEK1", "MEK2", "NF1"],
+        "description": "RAS/MAPK proliferation pathway",
+        "drugs_targeting": ["MEK inhibitors (selumetinib, trametinib)"]
+    },
+    "nrf2_antioxidant": {
+        "genes": ["NFE2L2", "KEAP1", "NQO1", "GCLC", "HMOX1"],
+        "description": "NRF2 antioxidant response",
+        "drugs_targeting": ["proteasome inhibitors (resistance)"]
+    },
+    "plasma_cell_survival": {
+        "genes": ["BCL2", "MCL1", "BCL2L1", "BAX", "BAK1", "BIM"],
+        "description": "Apoptosis regulation",
+        "drugs_targeting": ["venetoclax (BCL2)", "AZD5991 (MCL1)"]
+    },
+    "drug_efflux": {
+        "genes": ["ABCB1", "ABCC1", "ABCG2"],
+        "description": "Drug efflux pumps (MDR)",
+        "drugs_targeting": ["multiple - reduces intracellular drug"]
+    }
+}
+
+def compute_mm_pathway_burden(mutations: List[Dict]) -> Dict[str, float]:
+    """Compute pathway burden scores for MM pathways."""
+    burden = {}
+    genes = {m.get("gene", "").upper() for m in mutations}
+    
+    for pathway_name, pathway_data in MM_PATHWAYS.items():
+        hits = len(genes & set(pathway_data["genes"]))
+        burden[pathway_name] = min(1.0, hits / 2.0)  # Cap at 1.0
+    
+    return burden
+```
+
+### Phase 3: Validation Framework (Week 2-3)
+
+#### 3.1 MM Cohort Validation Script
+
+**File**: `scripts/validation/validate_mm_resistance.py`
+
+```python
+"""
+Multiple Myeloma Resistance Prediction Validation
+
+Validates:
+1. PSMB5 mutations → PI resistance
+2. CRBN mutations → IMiD resistance
+3. High-risk cytogenetics → Universal poor prognosis
+4. Drug efflux → Cross-resistance
+5. Evo2 delta scores → Treatment response correlation
+"""
+
+VALIDATION_TESTS = [
+    {
+        "name": "Test 1: PSMB5 → PI Resistance",
+        "hypothesis": "PSMB5 mutant patients have worse PFS on PI",
+        "metrics": ["RR", "p-value", "median_PFS_difference"]
+    },
+    {
+        "name": "Test 2: CRBN → IMiD Resistance",
+        "hypothesis": "CRBN mutant/lost patients have worse response to IMiDs",
+        "metrics": ["RR", "p-value", "response_rate_difference"]
+    },
+    {
+        "name": "Test 3: del(17p) → Universal Resistance",
+        "hypothesis": "del(17p) patients have worse outcomes across all drugs",
+        "metrics": ["HR", "p-value", "OS_difference"]
+    },
+    {
+        "name": "Test 4: RAS/MAPK → Treatment Line Impact",
+        "hypothesis": "RAS mutants have faster progression on later lines",
+        "metrics": ["PFS_by_line", "clone_evolution_rate"]
+    },
+    {
+        "name": "Test 5: Evo2 Delta → Response Correlation",
+        "hypothesis": "Higher Evo2 delta = more pathogenic = worse response",
+        "metrics": ["pearson_r", "spearman_rho", "AUROC"]
+    }
+]
+```
+
+#### 3.2 Validation Metrics
+
+| Test | Metric | Target | What It Proves |
+|------|--------|--------|----------------|
+| PSMB5→PI | RR ≥ 2.0 | ≥ 2.0 | PI resistance signal |
+| CRBN→IMiD | RR ≥ 2.5 | ≥ 2.5 | IMiD resistance signal |
+| del(17p) | HR ≥ 2.0 | ≥ 2.0 | High-risk cytogenetics |
+| RAS/MAPK | PFS↓ | <12mo | Pathway-based resistance |
+| Evo2 | r ≥ 0.3 | ≥ 0.3 | AI adds predictive value |
+
+### Phase 4: Production Integration (Week 3-4)
+
+#### 4.1 Backend Service Enhancement
+
+**File**: `oncology-coPilot/oncology-backend-minimal/api/services/mm_resistance_service.py`
+
+```python
+"""
+MM Resistance Service - Production Implementation
+
+Integrates:
+- Known resistance mutations (PSMB5, CRBN, etc.)
+- Evo2 variant scoring
+- Pathway burden computation
+- High-risk cytogenetics
+- Treatment line context
+"""
+
+class MMResistanceService:
+    
+    async def predict_resistance(
+        self,
+        mutations: List[Dict],
+        drug_class: str,
+        cytogenetics: Optional[Dict] = None,
+        treatment_line: int = 1,
+        prior_therapies: Optional[List[str]] = None
+    ) -> MMResistancePrediction:
+        """
+        Predict MM drug resistance with full context.
+        
+        Args:
+            mutations: Somatic mutations
+            drug_class: PI, IMiD, CD38, BCMA
+            cytogenetics: FISH results (t(4;14), del(17p), 1q)
+            treatment_line: Current line of therapy
+            prior_therapies: Previous drug classes
+        
+        Returns:
+            Comprehensive resistance prediction
+        """
+        signals = []
+        
+        # Signal 1: Known resistance mutations
+        known_resistance = self._check_known_mutations(mutations, drug_class)
+        if known_resistance:
+            signals.append(known_resistance)
+        
+        # Signal 2: Pathway burden
+        pathway_burden = self._compute_pathway_burden(mutations, drug_class)
+        signals.append(pathway_burden)
+        
+        # Signal 3: High-risk cytogenetics
+        if cytogenetics:
+            cyto_risk = self._assess_cytogenetics(cytogenetics)
+            signals.append(cyto_risk)
+        
+        # Signal 4: Prior therapy cross-resistance
+        if prior_therapies:
+            cross_resistance = self._check_cross_resistance(drug_class, prior_therapies)
+            signals.append(cross_resistance)
+        
+        # Signal 5: Evo2 variant scoring
+        evo2_signal = await self._score_with_evo2(mutations)
+        signals.append(evo2_signal)
+        
+        # Aggregate signals → risk level
+        risk_level = self._stratify_risk(signals)
+        
+        return MMResistancePrediction(
+            drug_class=drug_class,
+            risk_level=risk_level,
+            signals=signals,
+            recommended_alternatives=self._get_alternatives(drug_class, risk_level),
+            rationale=self._build_rationale(signals)
+        )
+```
+
+#### 4.2 Frontend Component
+
+**File**: `oncology-coPilot/oncology-frontend/src/components/myeloma/MMResistancePanel.jsx`
+
+```jsx
+/**
+ * MM Resistance Prediction Panel
+ * 
+ * Displays drug resistance predictions for Multiple Myeloma patients.
+ * Shows per-drug-class risk, mechanism breakdown, and alternatives.
+ */
+export default function MMResistancePanel({ 
+  mutations, 
+  cytogenetics, 
+  treatmentLine,
+  priorTherapies 
+}) {
+  const [predictions, setPredictions] = useState({});
+  const [loading, setLoading] = useState(false);
+  
+  const drugClasses = ['proteasome_inhibitor', 'imid', 'anti_cd38', 'bcma_targeted'];
+  
+  // Fetch predictions for all drug classes
+  useEffect(() => {
+    async function fetchPredictions() {
+      setLoading(true);
+      const results = {};
+      
+      for (const drugClass of drugClasses) {
+        const response = await fetch('/api/mm/resistance/predict', {
+          method: 'POST',
+          body: JSON.stringify({
+            mutations,
+            drug_class: drugClass,
+            cytogenetics,
+            treatment_line: treatmentLine,
+            prior_therapies: priorTherapies
+          })
+        });
+        results[drugClass] = await response.json();
+      }
+      
+      setPredictions(results);
+      setLoading(false);
+    }
+    
+    fetchPredictions();
+  }, [mutations, cytogenetics, treatmentLine, priorTherapies]);
+  
+  return (
+    <Card>
+      <CardHeader>
+        <Typography variant="h6">🩸 MM Drug Resistance</Typography>
+      </CardHeader>
+      <CardContent>
+        <Grid container spacing={2}>
+          {drugClasses.map(drugClass => (
+            <Grid item xs={3} key={drugClass}>
+              <DrugClassCard
+                drugClass={drugClass}
+                prediction={predictions[drugClass]}
+                loading={loading}
+              />
+            </Grid>
+          ))}
+        </Grid>
+        
+        {/* High-risk cytogenetics alert */}
+        {cytogenetics?.del_17p && (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            ⚠️ del(17p) detected - Ultra high-risk. Consider aggressive combination therapy.
+          </Alert>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+---
+
+## Deliverables Checklist
+
+### Phase 1: Data Acquisition
+- [ ] Download MMRF CoMMpass or alternative MM cohort
+- [ ] Extract mutations, cytogenetics, treatment response
+- [ ] Create `data/validation/mm_cohort/` with structured data
+- [ ] Document data sources and limitations
+
+### Phase 2: Mechanism Expansion
+- [ ] Expand `RESISTANCE_MUTATIONS` with all MM mechanisms
+- [ ] Create `mm_pathway_service.py`
+- [ ] Add high-risk cytogenetics logic
+- [ ] Add treatment line context
+
+### Phase 3: Validation
+- [ ] Create `validate_mm_resistance.py`
+- [ ] Run Test 1: PSMB5 → PI
+- [ ] Run Test 2: CRBN → IMiD
+- [ ] Run Test 3: del(17p) → Universal
+- [ ] Run Test 4: RAS/MAPK → Line
+- [ ] Run Test 5: Evo2 → Response
+- [ ] Document validation results in `.cursor/MOAT/`
+
+### Phase 4: Production
+- [ ] Create `mm_resistance_service.py`
+- [ ] Create API endpoint `/api/mm/resistance/predict`
+- [ ] Create `MMResistancePanel.jsx`
+- [ ] Integrate with existing MyelomaDigitalTwin
+- [ ] End-to-end test
+
+---
+
+## Success Criteria
+
+| Metric | Target | Validation |
+|--------|--------|------------|
+| **PSMB5 → PI RR** | ≥ 2.0 | MMRF cohort |
+| **CRBN → IMiD RR** | ≥ 2.5 | MMRF cohort |
+| **del(17p) HR** | ≥ 2.0 | MMRF cohort |
+| **Evo2 correlation** | r ≥ 0.3 | Delta vs response |
+| **Drug classes covered** | 4/4 | PI, IMiD, CD38, BCMA |
+| **API response time** | < 2s | Production SLA |
+
+---
+
+## Risk Assessment
+
+| Risk | Mitigation |
+|------|------------|
+| MMRF data access delay | Use cBioPortal MM as fallback |
+| Low PSMB5 mutation rate | Aggregate PI resistance markers |
+| CRBN loss = CNV (not SNV) | Add CNV detection logic |
+| Limited BCMA resistance data | Use cell line data + literature |
+| Evo2 correlation weak | Use as secondary signal only |
+
+---
+
+## Timeline
+
+| Week | Focus | Deliverable |
+|------|-------|-------------|
+| 1 | Data acquisition | MM cohort downloaded |
+| 1-2 | Mechanism expansion | All MM mutations in code |
+| 2-3 | Validation | 5 tests complete |
+| 3-4 | Production | Frontend + backend live |
+
+---
+
+## Files to Create
+
+| File | Type | Description |
+|------|------|-------------|
+| `scripts/data_acquisition/download_mmrf_commpass.py` | Script | Data extraction |
+| `api/services/mm_pathway_service.py` | Backend | MM pathway mapping |
+| `api/services/mm_resistance_service.py` | Backend | MM resistance logic |
+| `scripts/validation/validate_mm_resistance.py` | Script | Validation tests |
+| `components/myeloma/MMResistancePanel.jsx` | Frontend | UI component |
+| `data/validation/mm_cohort/` | Data | Patient cohort |
+| `.cursor/MOAT/MM_RESISTANCE_VALIDATION.md` | Docs | Validation results |
+
+---
+
+## Related Documents
+
+- `.cursor/rules/MM/mm_drug_response_doctrine.mdc`
+- `.cursor/rules/MM/mm_drug_efficacy_doctrine.mdc`
+- `oncology-coPilot/oncology-backend-minimal/api/routers/resistance.py`
+- `src/tools/myeloma_drug_response.py`
+
+---
+
+## 🧬 PHASE 0: TRUE SAE VALIDATION (PREREQUISITE)
+
+> **Question to Answer**: Do SAE features predict clinical outcomes better than gene-level Proxy SAE?  
+> **Method**: Incremental extraction with checkpoints  
+> **Cost Budget**: ~$20-30 Modal (~2-3 hours)
+
+### The Gap We're Solving
+
+```
+What we did:
+─────────────────────────────────────────────────────────
+  Step 1: Extract SAE features for 10 patients ✅ DONE (incomplete)
+  Step 2: Correlate with platinum response ❌ NEVER RAN (sample too small)
+  Step 3: Find features that predict resistance ❌ BLOCKED
+  Step 4: Map features to biological meaning ❌ BLOCKED
+  Step 5: Use in predictions ❌ BLOCKED
+
+What we need:
+─────────────────────────────────────────────────────────
+  • 100+ patients with TRUE SAE features
+  • Correlation analysis against known outcomes
+  • Definitive answer: Does SAE add value over gene-level?
+```
+
+### 0.1 Incremental Extraction Strategy
+
+```
+                    INCREMENTAL SAE EXTRACTION
+                    ==========================
+
+Tier 1: Proof of Concept (10 patients)
+├── Goal: Verify pipeline works end-to-end
+├── Time: ~15 minutes, ~$1 Modal
+├── Checkpoint: Tier1_SAE_10_patients.json
+├── Success: All 10 complete, no errors
+└── Decision: If fails → fix pipeline. If passes → proceed.
+
+Tier 2: Statistical Minimum (50 patients)
+├── Goal: Enough for basic correlation
+├── Time: ~45 minutes, ~$5 Modal
+├── Checkpoint: Tier2_SAE_50_patients.json
+├── Success: All 50 complete, preliminary r calculated
+└── Decision: If r < 0.1 → STOP (SAE adds no value)
+              If r > 0.1 → proceed to Tier 3
+
+Tier 3: Validation Cohort (150 patients)
+├── Goal: Statistically robust validation
+├── Time: ~90 minutes, ~$15 Modal
+├── Checkpoint: Tier3_SAE_150_patients.json
+├── Success: All 150 complete, FDR-corrected features
+└── Decision: If significant features → SAE validated ✅
+              If no features → Proxy SAE is sufficient ✅
+
+Total if all pass: ~2.5 hours, ~$21 Modal
+```
+
+### 0.2 Extraction Script with Checkpoints
+
+**File**: `scripts/sae/extract_sae_incremental.py`
+
+```python
+"""
+TRUE SAE Incremental Extraction with Checkpoints
+
+Extracts SAE features in tiers:
+- Tier 1: 10 patients (proof of concept)
+- Tier 2: 50 patients (statistical minimum)
+- Tier 3: 150 patients (validation cohort)
+
+Checkpoints saved after each tier to prevent data loss.
+"""
+
+import json
+import asyncio
+import httpx
+from pathlib import Path
+from datetime import datetime
+from typing import List, Dict, Optional
+import numpy as np
+
+# Configuration
+SAE_URL = "https://crispro--sae-service-saeservice-api.modal.run"
+CHECKPOINT_DIR = Path("data/validation/sae_cohort/checkpoints")
+CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
+
+# Tier configuration
+TIERS = {
+    1: {"patients": 10, "name": "Tier1_proof_of_concept"},
+    2: {"patients": 50, "name": "Tier2_statistical_minimum"},
+    3: {"patients": 150, "name": "Tier3_validation_cohort"}
+}
+
+class SAEIncrementalExtractor:
+    
+    def __init__(self, cohort_file: str):
+        self.cohort = self._load_cohort(cohort_file)
+        self.extracted = {}
+        self.errors = []
+        self.current_tier = 0
+        
+    def _load_cohort(self, file_path: str) -> List[Dict]:
+        """Load patient cohort with platinum response labels."""
+        with open(file_path) as f:
+            data = json.load(f)
+        
+        # Filter for patients with labeled outcomes
+        if isinstance(data, list):
+            return [p for p in data if p.get("platinum_response") in ["sensitive", "resistant", "refractory"]]
+        elif isinstance(data, dict) and "patients" in data:
+            return [p for p in data["patients"] if p.get("outcome") in ["sensitive", "resistant", "refractory"]]
+        return data
+    
+    def _save_checkpoint(self, tier: int):
+        """Save checkpoint after tier completion."""
+        checkpoint = {
+            "tier": tier,
+            "tier_name": TIERS[tier]["name"],
+            "timestamp": datetime.now().isoformat(),
+            "patients_extracted": len(self.extracted),
+            "errors": len(self.errors),
+            "data": self.extracted,
+            "error_log": self.errors
+        }
+        
+        checkpoint_file = CHECKPOINT_DIR / f"{TIERS[tier]['name']}.json"
+        with open(checkpoint_file, "w") as f:
+            json.dump(checkpoint, f, indent=2)
+        
+        print(f"✅ Checkpoint saved: {checkpoint_file}")
+        return checkpoint_file
+    
+    def _load_last_checkpoint(self) -> Optional[int]:
+        """Load last successful checkpoint."""
+        for tier in [3, 2, 1]:
+            checkpoint_file = CHECKPOINT_DIR / f"{TIERS[tier]['name']}.json"
+            if checkpoint_file.exists():
+                with open(checkpoint_file) as f:
+                    data = json.load(f)
+                self.extracted = data.get("data", {})
+                self.errors = data.get("error_log", [])
+                print(f"📥 Loaded checkpoint: Tier {tier} ({len(self.extracted)} patients)")
+                return tier
+        return 0
+    
+    async def extract_patient_sae(self, patient: Dict) -> Optional[Dict]:
+        """Extract SAE features for a single patient's variants."""
+        patient_id = patient.get("patient_id") or patient.get("tcga_patient_id")
+        mutations = patient.get("mutations", []) or patient.get("variants", [])
+        
+        if not mutations:
+            return None
+        
+        patient_features = {
+            "patient_id": patient_id,
+            "outcome": patient.get("platinum_response") or patient.get("outcome"),
+            "variants": []
+        }
+        
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            for mut in mutations[:50]:  # Limit 50 variants per patient
+                try:
+                    # Extract variant details
+                    chrom = str(mut.get("chrom") or mut.get("chromosome", ""))
+                    pos = int(mut.get("pos") or mut.get("position", 0))
+                    ref = str(mut.get("ref") or mut.get("reference", ""))
+                    alt = str(mut.get("alt") or mut.get("alternate", ""))
+                    
+                    if not all([chrom, pos, ref, alt]):
+                        continue
+                    
+                    # Call SAE service
+                    response = await client.post(
+                        f"{SAE_URL}/extract_features",
+                        json={
+                            "chrom": chrom,
+                            "pos": pos,
+                            "ref": ref,
+                            "alt": alt,
+                            "window": 8192
+                        }
+                    )
+                    
+                    if response.status_code == 200:
+                        sae_data = response.json()
+                        patient_features["variants"].append({
+                            "gene": mut.get("gene", ""),
+                            "variant": f"{chrom}:{pos}{ref}>{alt}",
+                            "top_features": sae_data.get("top_features", []),
+                            "stats": sae_data.get("stats", {})
+                        })
+                    
+                except Exception as e:
+                    self.errors.append({
+                        "patient_id": patient_id,
+                        "variant": str(mut),
+                        "error": str(e)
+                    })
+        
+        if patient_features["variants"]:
+            return patient_features
+        return None
+    
+    async def run_tier(self, tier: int) -> Dict:
+        """Run extraction for a specific tier."""
+        target_count = TIERS[tier]["patients"]
+        current_count = len(self.extracted)
+        patients_to_extract = target_count - current_count
+        
+        if patients_to_extract <= 0:
+            print(f"✅ Tier {tier} already complete ({current_count} patients)")
+            return {"status": "already_complete", "count": current_count}
+        
+        print(f"\n{'='*60}")
+        print(f"TIER {tier}: {TIERS[tier]['name']}")
+        print(f"Target: {target_count} patients | Current: {current_count} | To extract: {patients_to_extract}")
+        print(f"{'='*60}\n")
+        
+        # Get patients not yet extracted
+        extracted_ids = set(self.extracted.keys())
+        remaining_patients = [p for p in self.cohort if (p.get("patient_id") or p.get("tcga_patient_id")) not in extracted_ids]
+        
+        for i, patient in enumerate(remaining_patients[:patients_to_extract]):
+            patient_id = patient.get("patient_id") or patient.get("tcga_patient_id")
+            print(f"  [{i+1}/{patients_to_extract}] Extracting {patient_id}...", end=" ")
+            
+            result = await self.extract_patient_sae(patient)
+            
+            if result:
+                self.extracted[patient_id] = result
+                print(f"✅ ({len(result['variants'])} variants)")
+            else:
+                print("⚠️ No variants")
+        
+        # Save checkpoint
+        self._save_checkpoint(tier)
+        
+        return {
+            "status": "complete",
+            "tier": tier,
+            "patients": len(self.extracted),
+            "errors": len(self.errors)
+        }
+    
+    def run_correlation_check(self) -> Dict:
+        """Quick correlation check after each tier."""
+        if len(self.extracted) < 10:
+            return {"status": "insufficient_data", "n": len(self.extracted)}
+        
+        # Aggregate features per patient (mean of top feature values)
+        sensitive_scores = []
+        resistant_scores = []
+        
+        for patient_id, data in self.extracted.items():
+            outcome = data.get("outcome", "")
+            
+            # Mean of top feature activations
+            all_values = []
+            for v in data.get("variants", []):
+                for f in v.get("top_features", []):
+                    all_values.append(f.get("value", 0))
+            
+            if all_values:
+                mean_activation = np.mean(all_values)
+                if outcome == "sensitive":
+                    sensitive_scores.append(mean_activation)
+                elif outcome in ["resistant", "refractory"]:
+                    resistant_scores.append(mean_activation)
+        
+        if len(sensitive_scores) < 5 or len(resistant_scores) < 2:
+            return {"status": "imbalanced", "sensitive": len(sensitive_scores), "resistant": len(resistant_scores)}
+        
+        # T-test
+        from scipy import stats
+        t_stat, p_value = stats.ttest_ind(sensitive_scores, resistant_scores)
+        
+        # Effect size (Cohen's d)
+        pooled_std = np.sqrt((np.std(sensitive_scores)**2 + np.std(resistant_scores)**2) / 2)
+        cohens_d = (np.mean(resistant_scores) - np.mean(sensitive_scores)) / pooled_std if pooled_std > 0 else 0
+        
+        return {
+            "status": "complete",
+            "n_sensitive": len(sensitive_scores),
+            "n_resistant": len(resistant_scores),
+            "mean_sensitive": float(np.mean(sensitive_scores)),
+            "mean_resistant": float(np.mean(resistant_scores)),
+            "t_statistic": float(t_stat),
+            "p_value": float(p_value),
+            "cohens_d": float(cohens_d),
+            "signal_detected": p_value < 0.1 or abs(cohens_d) > 0.3
+        }
+    
+    async def run_full_pipeline(self, resume: bool = True):
+        """Run full incremental extraction pipeline."""
+        print("\n" + "="*60)
+        print("TRUE SAE INCREMENTAL EXTRACTION PIPELINE")
+        print("="*60)
+        
+        # Load checkpoint if resuming
+        last_tier = 0
+        if resume:
+            last_tier = self._load_last_checkpoint() or 0
+        
+        results = {}
+        
+        for tier in [1, 2, 3]:
+            if tier <= last_tier:
+                print(f"\n⏭️  Skipping Tier {tier} (already complete)")
+                continue
+            
+            # Run tier extraction
+            tier_result = await self.run_tier(tier)
+            results[f"tier_{tier}"] = tier_result
+            
+            # Run correlation check
+            print(f"\n📊 Running correlation check...")
+            corr_result = self.run_correlation_check()
+            results[f"tier_{tier}_correlation"] = corr_result
+            
+            print(f"   Signal detected: {corr_result.get('signal_detected', 'N/A')}")
+            print(f"   P-value: {corr_result.get('p_value', 'N/A')}")
+            print(f"   Cohen's d: {corr_result.get('cohens_d', 'N/A')}")
+            
+            # Decision point
+            if tier == 2 and not corr_result.get("signal_detected", False):
+                print("\n⚠️ DECISION POINT: No signal detected at Tier 2")
+                print("   Consider stopping - Proxy SAE may be sufficient")
+                # Continue anyway to get full picture
+        
+        # Final report
+        print("\n" + "="*60)
+        print("FINAL REPORT")
+        print("="*60)
+        print(f"Total patients extracted: {len(self.extracted)}")
+        print(f"Total errors: {len(self.errors)}")
+        print(f"Checkpoints saved: {list(CHECKPOINT_DIR.glob('*.json'))}")
+        
+        return results
+
+
+async def main():
+    """Main entry point."""
+    import sys
+    
+    # Default cohort file
+    cohort_file = "data/validation/sae_cohort/tcga_ov_platinum_with_mutations.json"
+    
+    if len(sys.argv) > 1:
+        cohort_file = sys.argv[1]
+    
+    extractor = SAEIncrementalExtractor(cohort_file)
+    results = await extractor.run_full_pipeline(resume=True)
+    
+    # Save final results
+    with open(CHECKPOINT_DIR / "final_results.json", "w") as f:
+        json.dump(results, f, indent=2)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### 0.3 Validation Script
+
+**File**: `scripts/sae/validate_sae_features.py`
+
+```python
+"""
+TRUE SAE Feature Validation
+
+After extraction, this script:
+1. Loads all checkpoint data
+2. Performs feature-by-feature correlation analysis
+3. Identifies significant features (FDR-corrected)
+4. Generates Feature→Outcome mapping
+5. Answers: Does TRUE SAE add value?
+"""
+
+import json
+import numpy as np
+from pathlib import Path
+from scipy import stats
+from typing import Dict, List
+
+CHECKPOINT_DIR = Path("data/validation/sae_cohort/checkpoints")
+
+def load_all_checkpoints() -> Dict:
+    """Load and merge all tier checkpoints."""
+    all_data = {}
+    
+    for checkpoint_file in sorted(CHECKPOINT_DIR.glob("Tier*.json")):
+        with open(checkpoint_file) as f:
+            tier_data = json.load(f)
+        
+        # Merge patient data
+        for patient_id, patient_data in tier_data.get("data", {}).items():
+            all_data[patient_id] = patient_data
+    
+    print(f"Loaded {len(all_data)} patients from checkpoints")
+    return all_data
+
+
+def build_feature_matrix(patients: Dict) -> tuple:
+    """Build feature matrix from patient data."""
+    # Group patients by outcome
+    sensitive = []
+    resistant = []
+    
+    for patient_id, data in patients.items():
+        outcome = data.get("outcome", "")
+        
+        # Aggregate top features across all variants
+        feature_dict = {}
+        for v in data.get("variants", []):
+            for f in v.get("top_features", []):
+                idx = f.get("index")
+                val = f.get("value", 0)
+                feature_dict[idx] = feature_dict.get(idx, 0) + val
+        
+        if feature_dict:
+            if outcome == "sensitive":
+                sensitive.append(feature_dict)
+            elif outcome in ["resistant", "refractory"]:
+                resistant.append(feature_dict)
+    
+    return sensitive, resistant
+
+
+def analyze_features(sensitive: List[Dict], resistant: List[Dict]) -> Dict:
+    """Analyze each feature for outcome correlation."""
+    # Get all unique feature indices
+    all_indices = set()
+    for p in sensitive + resistant:
+        all_indices.update(p.keys())
+    
+    results = []
+    
+    for idx in all_indices:
+        sens_vals = [p.get(idx, 0) for p in sensitive]
+        res_vals = [p.get(idx, 0) for p in resistant]
+        
+        # Skip if all zeros
+        if sum(sens_vals) == 0 and sum(res_vals) == 0:
+            continue
+        
+        # T-test
+        t_stat, p_value = stats.ttest_ind(sens_vals, res_vals)
+        
+        # Effect size
+        pooled_std = np.sqrt((np.std(sens_vals)**2 + np.std(res_vals)**2) / 2)
+        cohens_d = (np.mean(res_vals) - np.mean(sens_vals)) / pooled_std if pooled_std > 0 else 0
+        
+        results.append({
+            "feature_index": int(idx),
+            "mean_sensitive": float(np.mean(sens_vals)),
+            "mean_resistant": float(np.mean(res_vals)),
+            "t_statistic": float(t_stat),
+            "p_value": float(p_value),
+            "cohens_d": float(cohens_d),
+            "direction": "higher_in_resistant" if cohens_d > 0 else "higher_in_sensitive"
+        })
+    
+    # Sort by p-value
+    results.sort(key=lambda x: x["p_value"])
+    
+    # FDR correction (Benjamini-Hochberg)
+    n = len(results)
+    for i, r in enumerate(results):
+        r["fdr_threshold"] = (i + 1) / n * 0.05
+        r["significant_fdr"] = r["p_value"] <= r["fdr_threshold"]
+    
+    significant = [r for r in results if r["significant_fdr"]]
+    
+    return {
+        "total_features_analyzed": len(results),
+        "significant_features": len(significant),
+        "top_10": results[:10],
+        "significant_list": significant,
+        "conclusion": "SAE_ADDS_VALUE" if len(significant) >= 5 else "PROXY_SUFFICIENT"
+    }
+
+
+def main():
+    """Run validation analysis."""
+    print("\n" + "="*60)
+    print("TRUE SAE FEATURE VALIDATION")
+    print("="*60)
+    
+    # Load data
+    patients = load_all_checkpoints()
+    
+    if len(patients) < 20:
+        print("❌ Insufficient data for validation")
+        return
+    
+    # Build feature matrix
+    sensitive, resistant = build_feature_matrix(patients)
+    print(f"Sensitive patients: {len(sensitive)}")
+    print(f"Resistant patients: {len(resistant)}")
+    
+    # Analyze features
+    results = analyze_features(sensitive, resistant)
+    
+    # Print results
+    print(f"\n📊 RESULTS")
+    print(f"   Features analyzed: {results['total_features_analyzed']}")
+    print(f"   Significant features (FDR < 0.05): {results['significant_features']}")
+    print(f"\n   Top 10 features:")
+    for f in results["top_10"]:
+        sig = "✅" if f["significant_fdr"] else "  "
+        print(f"   {sig} Feature {f['feature_index']:5d}: p={f['p_value']:.4f}, d={f['cohens_d']:+.2f}, {f['direction']}")
+    
+    print(f"\n   CONCLUSION: {results['conclusion']}")
+    
+    # Save results
+    output_file = CHECKPOINT_DIR / "sae_validation_results.json"
+    with open(output_file, "w") as f:
+        json.dump(results, f, indent=2)
+    
+    print(f"\n   Results saved to: {output_file}")
+
+
+if __name__ == "__main__":
+    main()
+```
+
+### 0.4 Execution Checklist
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    TRUE SAE VALIDATION CHECKLIST                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  BEFORE STARTING                                                            │
+│  ─────────────────                                                          │
+│  [ ] SAE Modal service healthy (curl /health)                              │
+│  [ ] Cohort file exists: tcga_ov_platinum_with_mutations.json (469 pts)   │
+│  [ ] Checkpoint directory created: data/validation/sae_cohort/checkpoints/ │
+│  [ ] Cost budget approved (~$20-30 Modal)                                  │
+│                                                                             │
+│  TIER 1: PROOF OF CONCEPT (10 patients)                                    │
+│  ──────────────────────────────────────                                    │
+│  [ ] Run: python scripts/sae/extract_sae_incremental.py                    │
+│  [ ] Verify: Tier1_proof_of_concept.json created                           │
+│  [ ] Check: 10 patients extracted, no critical errors                      │
+│  [ ] Time: ~15 minutes                                                      │
+│  [ ] Cost: ~$1                                                              │
+│  [ ] Decision: If errors → fix pipeline. If OK → proceed.                  │
+│                                                                             │
+│  TIER 2: STATISTICAL MINIMUM (50 patients)                                 │
+│  ─────────────────────────────────────────                                 │
+│  [ ] Resume: python scripts/sae/extract_sae_incremental.py                 │
+│  [ ] Verify: Tier2_statistical_minimum.json created                        │
+│  [ ] Check: 50 patients extracted                                          │
+│  [ ] Check: Preliminary correlation (p-value, Cohen's d)                   │
+│  [ ] Time: ~45 minutes                                                      │
+│  [ ] Cost: ~$5 cumulative                                                   │
+│  [ ] Decision: If p > 0.5 AND |d| < 0.1 → STOP (Proxy sufficient)          │
+│                If any signal → proceed to Tier 3                           │
+│                                                                             │
+│  TIER 3: VALIDATION COHORT (150 patients)                                  │
+│  ────────────────────────────────────────                                  │
+│  [ ] Resume: python scripts/sae/extract_sae_incremental.py                 │
+│  [ ] Verify: Tier3_validation_cohort.json created                          │
+│  [ ] Check: 150 patients extracted                                         │
+│  [ ] Time: ~90 minutes                                                      │
+│  [ ] Cost: ~$21 cumulative                                                  │
+│                                                                             │
+│  VALIDATION                                                                 │
+│  ──────────                                                                 │
+│  [ ] Run: python scripts/sae/validate_sae_features.py                      │
+│  [ ] Check: sae_validation_results.json created                            │
+│  [ ] Assess: Significant features (FDR < 0.05)?                            │
+│  [ ] Conclusion: SAE_ADDS_VALUE or PROXY_SUFFICIENT                        │
+│                                                                             │
+│  POST-VALIDATION                                                            │
+│  ───────────────                                                            │
+│  [ ] Update .cursor/plans/SAE_READINESS_STATUS.md with results             │
+│  [ ] If SAE_ADDS_VALUE: Create Feature→Pathway mapping                     │
+│  [ ] If PROXY_SUFFICIENT: Document and close SAE effort                    │
+│  [ ] Update MOAT documentation accordingly                                  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 0.5 Decision Matrix
+
+| Tier | N | Signal? | Action |
+|------|---|---------|--------|
+| 1 | 10 | N/A | Proceed (too small to judge) |
+| 1 | 10 | Errors | FIX pipeline before proceeding |
+| 2 | 50 | p > 0.5, \|d\| < 0.1 | **STOP** - Proxy SAE sufficient |
+| 2 | 50 | p < 0.5 OR \|d\| > 0.1 | Proceed to Tier 3 |
+| 3 | 150 | 0 significant features | **Proxy SAE sufficient** ✅ |
+| 3 | 150 | ≥5 significant features | **SAE adds value** ✅ |
+
+### 0.6 Success Criteria
+
+| Metric | Target | What It Proves |
+|--------|--------|----------------|
+| Extraction rate | >95% patients complete | Pipeline works |
+| Error rate | <5% variants | Robust extraction |
+| Significant features | ≥5 (FDR < 0.05) | SAE adds predictive value |
+| Effect size | \|d\| ≥ 0.3 | Clinically meaningful signal |
+| Correlation | r ≥ 0.3 | SAE predicts outcome |
+
+### 0.7 Cost/Benefit Analysis
+
+```
+IF SAE_ADDS_VALUE:
+  ├── Benefit: Novel biomarker discovery
+  ├── Benefit: Better resistance prediction
+  ├── Benefit: Interpretable AI (show which features fired)
+  ├── Cost: ~$21 extraction
+  ├── Cost: Ongoing SAE calls per patient
+  └── ROI: HIGH (competitive advantage)
+
+IF PROXY_SUFFICIENT:
+  ├── Benefit: No additional cost
+  ├── Benefit: Simpler pipeline
+  ├── Benefit: Gene-level validated (MAPK RR=1.97, DIS3 RR=2.08)
+  ├── Lesson: SAE not needed for resistance prediction
+  └── ROI: N/A (but we now KNOW definitively)
+
+EITHER WAY: We gain CERTAINTY about SAE value.
+```
+
+---
+
+## Key Differentiator
+
+**What makes this better than existing MM tools:**
+
+1. **Multi-modal**: Mutations + Cytogenetics + Prior therapy + Evo2
+2. **Drug-class specific**: Not generic "high risk" - specific PI vs IMiD vs CD38
+3. **Treatment line aware**: Resistance evolves with lines
+4. **Validated**: Against real MM patient cohort
+5. **Actionable**: Specific alternative recommendations
+
+**Expected Impact:**
+- Earlier detection of resistance (before clinical progression)
+- Informed drug class switching
+- Personalized combination strategies
+- Clinical trial eligibility identification

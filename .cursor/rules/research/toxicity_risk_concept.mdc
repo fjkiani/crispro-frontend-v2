@@ -1,6 +1,6 @@
 ---
 alwaysApply: false
-description: Toxicity Risk (Germline) – Execution Doctrine (Aug 2025). Plain-language website copy + execution plan for in‑silico toxicity risk hints using insights/evidence (research‑mode).
+description: Toxicity Risk (Germline) – Execution Doctrine (Jan 2025). Plain-language website copy + execution plan for in‑silico toxicity risk hints with research intelligence (research‑mode). Focus: Pure toxicity risk assessment chips and risk levels.
 globs: 
 ---
 
@@ -9,8 +9,8 @@ export const coPilotDetailsData: Record<string, CoPilotDetailContent> = {
   "toxicity-risk": {
     slug: "toxicity-risk",
     pageTitle: "Toxicity Risk (Germline): In‑Silico Side‑Effect Hints",
-    heroSubtitle: "See simple, genetics‑aware side‑effect hints to plan conservatively—before treatment (research‑mode).",
-    vision: "Turn germline context into a plain, shareable caution signal with confidence, sources, and provenance—so care teams can plan safer.",
+    heroSubtitle: "See simple, genetics‑aware side‑effect hints—plan conservatively before treatment (research‑mode).",
+    vision: "Turn germline context into a plain, shareable caution signal with confidence, sources, and risk levels—so care teams can plan safer.",
 
     // Website value props (plain)
     valueProps: [
@@ -19,8 +19,8 @@ export const coPilotDetailsData: Record<string, CoPilotDetailContent> = {
         icon: 'Shield',
         points: [
           'A simple caution hint when genetics suggest higher risk.',
-          'Short text, confidence, and sources (RUO).',
-          'A one‑page summary to align the team.'
+          'Short text, confidence, sources, and clear risk levels (HIGH/MODERATE/LOW) (RUO).',
+          'A one‑page summary with risk factors and provenance to align the team.'
         ]
       },
       {
@@ -36,45 +36,61 @@ export const coPilotDetailsData: Record<string, CoPilotDetailContent> = {
 
     buildsOn: "What this runs on (today vs roadmap)",
     buildsOnStackPoints: [
-      "**Today:** Insights + evidence cues mapped to toxicity risk hints.",
+      "**Today:** Pharmacogene variants + MoA pathway overlap → risk score (0-1) → risk level (HIGH/MODERATE/LOW).",
+      "**Today:** Research intelligence framework for enhanced evidence gathering (pubmearch + pubmed_parser + LLM).",
       "**Optional today:** Cohort snippets (when available) to add context.",
       "**Roadmap:** Disease/regimen‑specific toxicity models and interaction checks."
     ],
 
-    genomicInsightsOverview: "Our live stack (research‑mode) produces a compact ‘Toxicity Risk’ chip with a short helper, confidence, and sources—plus run ID and profile.",
-    coreProblemIntro: "Toxicities are hard to foresee. We surface a simple, genetics‑aware caution to inform planning—without slowing care.",
+    genomicInsightsOverview: "Our live stack (research‑mode) produces a compact 'Toxicity Risk' chip with risk level (HIGH/MODERATE/LOW), short helper text, confidence, sources, and contributing factors—plus run ID and profile.",
+    coreProblemIntro: "Toxicities are hard to foresee. We surface a simple, genetics‑aware caution with clear risk levels to inform planning—without slowing care.",
     coreProblemPoints: [
       "Risk is unclear at baseline.",
       "Signals are scattered across sources.",
-      "Hard to share a concise, trusted summary."
+      "Hard to share a concise, trusted summary.",
+      "Risk levels (HIGH/MODERATE/LOW) need clear interpretation."
     ],
 
     genomicUseCasesGrid: [
-      { label: "Caution chip (simple)", iconName: "AlertTriangle", color: "text-red-400" },
+      { label: "Risk level chip (HIGH/MODERATE/LOW)", iconName: "AlertTriangle", color: "text-red-400" },
       { label: "Short helper text", iconName: "MessageSquare", color: "text-green-400" },
       { label: "Confidence + sources", iconName: "ShieldCheck", color: "text-purple-400" },
+      { label: "Contributing factors", iconName: "List", color: "text-blue-400" },
       { label: "Cohort overlay (optional)", iconName: "Users", color: "text-orange-400" }
     ],
 
     keyCapabilities: [
       {
-        title: "Caution Signal (live)",
-        technical: "We map germline context and evidence to a plain caution chip with a short helper. Output includes confidence, sources, and provenance (run ID, profile).",
-        scientific: "Signals summarize potential sensitivity based on repair/inflammation and related pathways; RUO and transparent.",
+        title: "Risk Level Signal (live)",
+        technical: "We map germline context and evidence to a plain caution chip with risk level (HIGH/MODERATE/LOW), short helper text, confidence, sources, and contributing factors. Output includes provenance (run ID, profile).",
+        scientific: "Risk score (0-1) computed from: (1) Pharmacogene variants (affects drug metabolism), (2) MoA → toxicity pathway overlap (DNA repair, inflammation, cardiometabolic), (3) Tissue context (optional). Risk levels: HIGH (≥0.5), MODERATE (≥0.3), LOW (<0.3). RUO and transparent.",
         business: `
-- **Plan safer:** A simple hint that’s easy to act on.
-- **Trustable:** Confidence + sources in a one‑pager.
+- **Plan safer:** Clear risk level (HIGH/MODERATE/LOW) that's easy to interpret.
+- **Transparent:** Contributing factors shown (pharmacogene, pathway overlap, tissue).
+- **Trustable:** Confidence + sources + provenance in a one‑pager.
 `,
-        genomicUseCasesParagraph: "Today: \n1. **Caution chip** with helper and confidence. \n2. **Provenance** visible on the card."
+        genomicUseCasesParagraph: "Today: \n1. **Risk level chip** (HIGH/MODERATE/LOW) with color coding. \n2. **Helper text** explains why risk appears. \n3. **Contributing factors** list (pharmacogene variants, pathway overlaps). \n4. **Provenance** visible on the card."
       },
       {
-        title: "Context & Evidence (live; optional)",
-        technical: "When extracted, we show a small cohort snippet and citations/badges to anchor the signal.",
-        scientific: "Grounds the hint without overclaiming; still RUO.",
+        title: "Context & Evidence (live; enhanced)",
+        technical: "When extracted, we show a small cohort snippet and citations/badges to anchor the signal. Research intelligence framework (pubmearch + pubmed_parser + LLM) enhances evidence gathering for complex questions.",
+        scientific: "Grounds the hint without overclaiming; still RUO. Research intelligence enables full-text parsing, keyword hotspot analysis, and LLM synthesis for better evidence quality.",
         business: `
 - **Context:** Helps teams calibrate decisions.
+- **Enhanced Evidence:** Research intelligence provides deeper literature analysis.
 `,
-        genomicUseCasesParagraph: "Today (when present): \n1. **Cohort snippet** and **key refs** alongside the chip."
+        genomicUseCasesParagraph: "Today (when present): \n1. **Cohort snippet** and **key refs** alongside the chip. \n2. **Research intelligence** for enhanced evidence gathering (optional)."
+      },
+      {
+        title: "Risk Score Calculation (live)",
+        technical: "Risk score computed as sum of: (1) Pharmacogene weight (0.2-0.4), (2) Pathway overlap weight (sum of pathway scores), (3) Tissue weight (0.05, optional). Score capped at 1.0. Confidence computed as weighted average of factor confidences, adjusted downward for high-risk assessments (conservative).",
+        scientific: "Three-factor model: S (gene essentiality - optional), P (pathway overlap - primary), E (pharmacogene evidence - primary). Pathway overlap detects when patient's germline variants intersect with drug MoA's toxic pathways (DNA repair, inflammation, cardiometabolic).",
+        business: `
+- **Conservative:** Better to flag potential risk than miss it (RUO).
+- **Transparent:** Each factor shown with weight and confidence.
+- **Calibrated:** High-risk assessments have lower confidence (need more validation).
+`,
+        genomicUseCasesParagraph: "Today: \n1. **Risk score** (0-1) computed from factors. \n2. **Risk level** derived: HIGH (≥0.5), MODERATE (≥0.3), LOW (<0.3). \n3. **Confidence** adjusted for high-risk cases."
       },
       {
         title: "Regimen‑Specific Models (roadmap)",
@@ -92,54 +108,195 @@ export const coPilotDetailsData: Record<string, CoPilotDetailContent> = {
         audience: "For the Care Team",
         points: [
           "A quick, genetics‑aware caution to guide planning.",
-          "Short, shareable text with confidence and sources (RUO).",
+          "Clear risk levels (HIGH/MODERATE/LOW) with confidence and sources (RUO).",
+          "Contributing factors shown (pharmacogene variants, pathway overlaps, tissue context).",
           "Reusable one‑pager with run ID and profile."
+        ]
+      },
+      {
+        audience: "For Clinical Decision Support",
+        points: [
+          "Risk score (0-1) computed from germline variants + drug MoA.",
+          "Risk level classification: HIGH (≥0.5), MODERATE (≥0.3), LOW (<0.3).",
+          "Each factor includes weight and confidence for transparency."
         ]
       }
     ],
 
-    conclusion: "In‑silico toxicity risk that’s simple to read and easy to share. A plain caution chip. Clear confidence. Sources included. Research‑mode by design."
+    conclusion: "In‑silico toxicity risk that's simple to read and easy to share. A plain risk level chip (HIGH/MODERATE/LOW). Clear confidence. Sources included. Contributing factors transparent. Research‑mode by design."
   },
 };
 
 
-# Toxicity Risk (Germline) – Execution Doctrine (Aug 2025)
+# Toxicity Risk (Germline) – Execution Doctrine (Jan 2025)
 
-This rule describes how to deliver the toxicity caution signal now using insights and evidence with transparent provenance.
+This rule describes how to deliver the toxicity caution signal now using insights and evidence with transparent provenance. Focus: Pure toxicity risk assessment chips and risk levels.
 
 ## What we can deliver today (research‑grade)
-- A ‘Toxicity Risk’ chip with:
-  - **Helper text:** one sentence in plain language.
-  - **Evidence (core):** Confidence · Evidence Tier (if enabled) · Sources (count + key refs) · Provenance (run_id, profile).
+- A 'Toxicity Risk' chip with:
+  - **Risk level:** HIGH (≥0.5), MODERATE (≥0.3), LOW (<0.3) with color coding.
+  - **Risk score:** 0-1 continuous score (higher = more risk).
+  - **Helper text:** one sentence in plain language explaining why risk appears.
+  - **Confidence:** 0-1 score (adjusted downward for high-risk assessments).
+  - **Contributing factors:** List of individual factors (pharmacogene variants, pathway overlaps, tissue context) with weights and confidences.
+  - **Evidence (core):** Sources (count + key refs) · Provenance (run_id, profile, methods, timestamp).
 
 ## Where the code lives (reused components)
+- Safety router: `[safety.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/safety.py)` - `/api/safety/toxicity_risk` endpoint
+- Toxicity pathway mappings: `[toxicity_pathway_mappings.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/toxicity_pathway_mappings.py)` - Gene sets, MoA mappings, pathway overlap computation
+- Safety service: `[safety_service.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/safety_service.py)` - `compute_toxicity_risk()` method (risk score, confidence, factors)
+- Safety schemas: `[safety.py](mdc:oncology-coPilot/oncology-backend-minimal/api/schemas/safety.py)` - `ToxicityRiskRequest`, `ToxicityRiskResponse`, `ToxicityFactor`
+- Frontend chip: `[ToxicityChip.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/vus/ToxicityChip.jsx)` - Simple chip component (placeholder, needs wiring)
+- Frontend card: `[ToxicityRiskCard.jsx](mdc:oncology-coPilot/oncology-frontend/src/components/ClinicalGenomicsCommandCenter/cards/ToxicityRiskCard.jsx)` - Full card with risk score, confidence, factors
+- Research intelligence: `[research_intelligence/orchestrator.py](mdc:oncology-coPilot/oncology-backend-minimal/api/services/research_intelligence/orchestrator.py)` - Enhanced evidence gathering (optional)
 - Insights router: `[insights.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/insights.py)`
 - Evidence + ClinVar proxy: `[evidence.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/evidence.py)`
-- Efficacy (for shared mapping/logging): `[efficacy.py](mdc:oncology-coPilot/oncology-backend-minimal/api/routers/efficacy.py)`
 
 ## How to run toxicity hint now
-Embed toxicity as a small card in VUS/Radiation/Chemo flows when germline context is present. Sources and provenance included.
+Embed toxicity as a small chip or card in VUS/Radiation/Chemo flows when germline context is present. Sources, provenance, and risk levels included.
 
-Example (ClinVar prior):
+Example (Toxicity Risk Assessment):
 ```bash
-curl -sS "http://127.0.0.1:8000/api/evidence/clinvar?chrom=7&pos=140453136&ref=T&alt=A"
+curl -X POST "http://127.0.0.1:8000/api/safety/toxicity_risk" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "patient": {
+      "germlineVariants": [
+        {"chrom": "17", "pos": 41276045, "ref": "A", "alt": "G", "gene": "BRCA1"}
+      ]
+    },
+    "candidate": {
+      "type": "drug",
+      "moa": "platinum_agent"
+    },
+    "context": {
+      "disease": "ovarian_cancer"
+    }
+  }'
 ```
 
+Example Response:
+```json
+{
+  "risk_score": 0.9,
+  "confidence": 0.56,
+  "reason": "Germline pharmacogene variants + MoA pathway overlap (risk score: 0.90)",
+  "factors": [
+    {
+      "type": "pathway",
+      "detail": "MoA overlaps dna repair pathway (germline variants present)",
+      "weight": 0.9,
+      "confidence": 0.6
+    }
+  ],
+  "evidence": {
+    "citations": [],
+    "badges": [],
+    "note": "Evidence integration in development (P2)"
+  },
+  "provenance": {
+    "run_id": "uuid-here",
+    "profile": "baseline",
+    "timestamp": "2025-01-15T12:00:00Z",
+    "methods": ["toxicity_v1", "pgx_static_list", "pathway_overlap"],
+    "germline_genes_analyzed": 1,
+    "factors_detected": 1
+  }
+}
+```
+
+**Risk Level Derivation:**
+- `risk_score >= 0.5` → **HIGH** risk (red chip)
+- `risk_score >= 0.3` → **MODERATE** risk (yellow chip)
+- `risk_score < 0.3` → **LOW** risk (green chip)
+
 ## Methodology (simple, transparent)
-- **Signals:** Map germline context to a conservative caution (repair/inflammation and related pathways).
-- **Text:** One‑line helper explains why the hint appears.
-- **Evidence:** Citations/badges when enabled; always include provenance.
+- **Risk Score Calculation:**
+  1. **Pharmacogene variants (E signal):** Check if patient has variants in pharmacogenes (CYP2D6, DPYD, TPMT, UGT1A1, etc.). Weight: 0.2-0.4 (high-impact genes get 0.4).
+  2. **MoA → Toxicity pathway overlap (P signal):** Compute overlap between patient's germline variants and drug MoA's toxic pathways:
+     - DNA repair pathway (BRCA1, BRCA2, ATM, TP53, etc.)
+     - Inflammation pathway (TNF, IL6, NFKB1, STAT3, etc.)
+     - Cardiometabolic pathway (KCNQ1, RYR2, MTOR, etc.)
+  3. **Tissue context (optional):** Small weight (0.05) for tissue-specific risk.
+  4. **Final score:** Sum of factors, capped at 1.0.
+- **Risk Level Classification:**
+  - HIGH: risk_score ≥ 0.5 (red chip, warning icon)
+  - MODERATE: risk_score ≥ 0.3 (yellow chip, warning icon)
+  - LOW: risk_score < 0.3 (green chip, check icon)
+- **Confidence Calculation:**
+  - Weighted average of factor confidences.
+  - Adjusted downward for high-risk assessments (×0.8) - conservative approach.
+- **Helper Text:** One‑line plain-English explanation of why risk appears.
+- **Evidence:** Citations/badges when enabled (P2); always include provenance.
 
 ## Frontend integration (no schema change required)
-- Render a small “Toxicity Risk” chip with helper, confidence, sources, and provenance.
-- Optional: cohort snippet when available.
+- **ToxicityChip (simple):** Small chip component showing risk level (HIGH/MODERATE/LOW) with color coding. Tooltip shows helper text, confidence, and key factors. Only renders when germline variants present.
+- **ToxicityRiskCard (detailed):** Full card component showing:
+  - Risk score visualization (linear progress bar, 0-100%)
+  - Risk level chip (HIGH/MODERATE/LOW) with icon
+  - Confidence chip
+  - Helper text (Alert component)
+  - Contributing factors list (each factor shows type, detail, weight, confidence)
+  - RUO disclaimer
+- **Chip Types:**
+  1. **Risk Level Chip:** Color-coded chip (red/yellow/green) with risk level text and icon.
+  2. **Confidence Chip:** Outlined chip showing confidence percentage.
+  3. **Factor Chips:** Individual chips for each contributing factor (optional, in detailed view).
+- Optional: Cohort snippet when available.
 
 ## Current limitations (transparent)
 - Not a diagnostic; research‑mode only. Signals are conservative and generic.
 - Literature cues may be sparse in dev; keep text short and sourced when enabled.
+- Risk levels are heuristic (based on pathway overlap, not patient outcomes).
+- Pharmacogene list is static (PharmGKB VIP genes); variant-level interpretation not included.
+- Pathway overlap uses gene sets, not variant-specific effects.
+- Research intelligence requires NCBI API keys and may have rate limits.
+- Confidence adjusted downward for high-risk assessments (conservative approach).
 
 ## Success criteria
-- Clear chip with helper and confidence.
+- Clear risk level chip (HIGH/MODERATE/LOW) with color coding.
+- Helper text explains why risk appears.
+- Confidence score displayed (adjusted for high-risk cases).
+- Contributing factors shown with weights and confidences.
 - Sources and run ID present; easy to export.
 - Optional cohort snippet visible when available.
+
+## Chip Components (Implementation Status)
+
+### 1. ToxicityChip (Simple Chip)
+**File:** `oncology-frontend/src/components/vus/ToxicityChip.jsx`
+**Status:** Placeholder (needs wiring to `/api/safety/toxicity_risk`)
+**Props:** `patient`, `candidate`, `context`, `options`
+**Display:** Small chip with warning icon, "Toxicity Risk (RUO)" label, tooltip with details.
+
+### 2. ToxicityRiskCard (Detailed Card)
+**File:** `oncology-frontend/src/components/ClinicalGenomicsCommandCenter/cards/ToxicityRiskCard.jsx`
+**Status:** Complete (wired to API)
+**Props:** `result`, `loading`, `error`
+**Display:**
+- Risk score visualization (linear progress bar)
+- Risk level chip (HIGH/MODERATE/LOW) with color and icon
+- Confidence chip
+- Helper text (Alert component)
+- Contributing factors list
+- RUO disclaimer
+
+### 3. Risk Level Classification
+**Implementation:** Frontend derives risk level from `risk_score`:
+- `risk_score >= 0.5` → HIGH (red, error color)
+- `risk_score >= 0.3` → MODERATE (yellow, warning color)
+- `risk_score < 0.3` → LOW (green, success color)
+
+## Example Flow
+1. Patient with BRCA1 variant + carboplatin (platinum_agent) → `/api/safety/toxicity_risk` called.
+2. Backend computes:
+   - Pathway overlap: DNA repair pathway (BRCA1 in DNA_REPAIR_GENES) → overlap_score = 0.9
+   - Risk score: 0.9 (HIGH)
+   - Confidence: 0.6 × 0.8 = 0.48 (adjusted downward for high risk)
+   - Factors: [{"type": "pathway", "detail": "MoA overlaps dna repair pathway", "weight": 0.9, "confidence": 0.6}]
+3. Frontend displays:
+   - Risk level chip: "HIGH RISK" (red, warning icon)
+   - Helper text: "MoA overlaps toxicity pathways with germline variants"
+   - Confidence: 48%
+   - Contributing factors: DNA repair pathway overlap (weight: 90%, confidence: 60%)
 

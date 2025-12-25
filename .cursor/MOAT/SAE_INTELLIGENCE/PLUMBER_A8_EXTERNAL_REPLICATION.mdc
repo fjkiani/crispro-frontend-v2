@@ -1,0 +1,187 @@
+## Purpose
+
+Enable **A8 external replication** for DDR_bin by producing a **Tier3-style cohort JSON** for an external dataset (preferred: **ICGC-OV**) and (optionally) a matching clinical/mutation dataset in the same “cBioPortal study JSON” structure used by our validators.
+
+This is “dirty work” because it is mostly **data plumbing + schema alignment**.
+
+---
+
+## What GPT already shipped (so you can plug into it)
+
+### Canonical output directory (main repo)
+
+`oncology-coPilot/oncology-backend-minimal/scripts/validation/out/ddr_bin_tcga_ov/`
+
+### External replication harness (new)
+
+`oncology-coPilot/oncology-backend-minimal/scripts/validation/validate_ddr_bin_generic_cohort.py`
+
+It expects:
+- `--cohort_json` (Tier3-style cohort schema)
+- `--cbioportal_dataset` (list of studies with `study_id`, `patients`, `clinical_outcomes`, `mutations`)
+- `--study_id`
+- `--diamond_mapping`
+
+---
+
+## Deliverable A (required): External cohort JSON (Tier3 schema)
+
+### File you must produce
+
+`oncology-coPilot/oncology-backend-minimal/data/validation/sae_cohort/checkpoints/ICGC_OV_validation_cohort.json`
+
+### Required schema
+
+```json
+{
+  "data": {
+    "ICGC-OV-XXXX": {
+      "variants": [
+        {
+          "top_features": [
+            { "index": 9738, "value": 0.12 },
+            { "index": 12893, "value": 0.03 }
+          ]
+        }
+      ],
+      "outcome": "sensitive"   // optional; only if you have platinum response labels
+    }
+  }
+}
+```
+
+### How to generate `variants.top_features`
+
+You must run the **TRUE SAE extraction** (same pipeline used for Tier3) for each external patient’s variants.
+
+Constraints:
+- Must produce **exactly** the same `top_features` shape (list of `{index,value}`).
+- Must ensure the feature `index` refers to the same 32k feature space used by `sae_feature_mapping.true_sae_diamonds.v1.json`.
+
+Acceptance:
+- At least **100** patients with non-empty `variants` list.
+- `outcome` may be omitted if not available.
+
+---
+
+## Deliverable B (required): External clinical+mutation dataset (cBioPortal-style study)
+
+### Option 1 (preferred): Add ICGC-OV as a new `study_id` into the existing dataset file
+
+File:
+- `data/benchmarks/cbioportal_trial_datasets_latest.json`
+
+Add:
+- a new entry with `study_id: "icgc_ov"` and a `patients` list.
+
+Patient schema must match existing entries:
+
+```json
+{
+  "study_id": "icgc_ov",
+  "patients": [
+    {
+      "patient_id": "ICGC-OV-XXXX",
+      "clinical_outcomes": {
+        "PFS_MONTHS": 12.3,
+        "PFS_STATUS": "1:Recurred",
+        "OS_MONTHS": 20.1,
+        "OS_STATUS": "0:Censored",
+        "CLINICAL_STAGE": "Stage IIIC",
+        "AGE": 58,
+        "RESIDUAL_TUMOR": "R1"
+      },
+      "mutations": [
+        { "gene": "TP53" },
+        { "gene": "BRCA1" }
+      ]
+    }
+  ]
+}
+```
+
+### Option 2: Produce a new standalone dataset file
+
+File:
+- `data/benchmarks/icgc_ov_trial_dataset.json`
+
+Same list-of-studies schema; only contains `"icgc_ov"`.
+
+Acceptance:
+- Patient IDs must match the cohort JSON patient IDs exactly.
+- PFS/OS fields should be present where possible; missing values are allowed but reduce power.
+
+---
+
+## Deliverable C (optional but very valuable): Platinum response labels
+
+If ICGC provides platinum response (sensitive/resistant/refractory), add it to the cohort JSON `outcome` field.
+
+If not available, skip (A3 won’t replicate on ICGC anyway).
+
+---
+
+## How to run external replication once you deliver A+B
+
+Example command:
+
+```bash
+python3 oncology-coPilot/oncology-backend-minimal/scripts/validation/validate_ddr_bin_generic_cohort.py \
+  --cohort_json oncology-coPilot/oncology-backend-minimal/data/validation/sae_cohort/checkpoints/ICGC_OV_validation_cohort.json \
+  --cbioportal_dataset data/benchmarks/cbioportal_trial_datasets_latest.json \
+  --study_id icgc_ov \
+  --diamond_mapping oncology-coPilot/oncology-backend-minimal/api/resources/sae_feature_mapping.true_sae_diamonds.v1.json \
+  --out_dir oncology-coPilot/oncology-backend-minimal/scripts/validation/out/ddr_bin_icgc_ov
+```
+
+Expected outputs:
+- `.../out/ddr_bin_icgc_ov/report.json`
+- `.../out/ddr_bin_icgc_ov/linked_patients.csv`
+
+---
+
+## Gotchas / non-negotiables
+
+- **ID matching:** `patient_id` must match across cohort JSON + dataset file.
+- **Feature space:** diamond indices are fixed; don’t re-index.
+- **Determinism:** cohort export must be stable; do not rely on non-versioned remote calls without pinning.
+
+
+---
+
+## Fastest external replication we can do NOW: TCGA-BRCA (already in dataset)
+
+We already have `study_id="brca_tcga_pan_can_atlas_2018"` inside:
+- `data/benchmarks/cbioportal_trial_datasets_latest.json`
+
+### Step 1: Extract TRUE-SAE cohort for BRCA (requires SAE_SERVICE_URL)
+
+```bash
+export SAE_SERVICE_URL="<modal_sae_service_url>"
+
+python3 oncology-coPilot/oncology-backend-minimal/scripts/validation/extract_true_sae_cohort_from_cbioportal.py \
+  --cbioportal_dataset data/benchmarks/cbioportal_trial_datasets_latest.json \
+  --study_id brca_tcga_pan_can_atlas_2018 \
+  --out_cohort oncology-coPilot/oncology-backend-minimal/data/validation/sae_cohort/checkpoints/BRCA_TCGA_TRUE_SAE_cohort.json \
+  --max_patients 200 \
+  --max_variants_per_patient 50 \
+  --concurrency 4
+```
+
+### Step 2: Run generic validator on BRCA cohort
+
+```bash
+python3 oncology-coPilot/oncology-backend-minimal/scripts/validation/validate_ddr_bin_generic_cohort.py \
+  --cohort_json oncology-coPilot/oncology-backend-minimal/data/validation/sae_cohort/checkpoints/BRCA_TCGA_TRUE_SAE_cohort.json \
+  --cbioportal_dataset data/benchmarks/cbioportal_trial_datasets_latest.json \
+  --study_id brca_tcga_pan_can_atlas_2018 \
+  --diamond_mapping oncology-coPilot/oncology-backend-minimal/api/resources/sae_feature_mapping.true_sae_diamonds.v1.json \
+  --out_dir oncology-coPilot/oncology-backend-minimal/scripts/validation/out/ddr_bin_brca_tcga
+```
+
+### Expected limitation
+BRCA cohort likely will **not** have platinum response labels, so A3 AUROC won’t run there. This replication mainly tests:
+- linkage
+- DDR_bin distribution
+- survival association patterns (exploratory)
+

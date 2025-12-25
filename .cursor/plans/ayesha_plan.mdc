@@ -2112,3 +2112,79 @@ Backend:
 
 **AUDIT STATUS**: ✅ **CORE CLINICAL VALUE DELIVERED** - Focus on Ayesha's immediate needs met
 
+---
+
+# 🧬 IMMUNOTHERAPY VALIDATION PLAN (Added Jan 28, 2025)
+
+## Objective
+Test our IO prediction capabilities on OTHER patients while waiting for Ayesha's TMB/MSI data.
+
+## The Questions We're Answering
+
+| Question | Test | Target Metric |
+|----------|------|---------------|
+| Can we classify TMB-H from mutations? | TMB Classification | Accuracy ≥80% |
+| Can we infer MSI status? | MSI Prediction | Sensitivity ≥75% |
+| Can we identify IO-eligible patients? | IO Eligibility | F1 ≥0.75 |
+| Do we predict IO response? | IO Response | AUC ≥0.65 |
+| Does mechanism vector correlate? | IO Correlation | r > 0.25 |
+
+## Data Required
+
+```
+200+ patients with:
+├── Known TMB (numeric)
+├── Known MSI status (MSI-H/MSS)
+├── Somatic mutations (MAF)
+└── [Ideal] IO treatment response
+```
+
+## Data Sources (Priority)
+
+1. **cBioPortal MSK-IMPACT** - TMB, MSI, clinical data
+2. **TCGA-UCEC (Endometrial)** - 20-30% MSI-H rate
+3. **TCGA-COAD (Colorectal)** - 15-20% MSI-H rate
+4. **TCGA-SKCM (Melanoma)** - High TMB, IO-responsive
+
+## How This Validates Ayesha's Case
+
+```
+If validation shows:
+├── MBD4-mutant → elevated TMB  →  Ayesha likely TMB-H
+├── BER-deficient → MSI features →  Ayesha may be MSI-H
+└── IO Eligibility F1 ≥0.75     →  Confident IO recommendation
+```
+
+## Execution Plan
+
+| Day | Task | Deliverable |
+|-----|------|-------------|
+| 1 | Extract IO cohort from cBioPortal | `io_validation_cohort.json` |
+| 2 | Run 5 validation tests | `io_validation_report.json` |
+| 3 | Analyze & apply to Ayesha | Updated care plan |
+
+## Full Plan Document
+📄 See: `.cursor/ayesha/IO_VALIDATION_PLAN.md`
+
+---
+
+## Agent Questions to Answer
+
+Before proceeding, agent needs to confirm:
+
+1. **Data Source:** cBioPortal (MSK-IMPACT) or TCGA first?
+   - ✅ **MANAGER ANSWER:** Start with TCGA-UCEC (endometrial) - highest MSI rate, public access
+
+2. **Sample Size:** 200 minimum or 500+?
+   - ✅ **MANAGER ANSWER:** Target 200 minimum, scale to 500+ if available
+
+3. **IO Response Data:** Required or proceed without?
+   - ✅ **MANAGER ANSWER:** Proceed without - TMB/MSI validation is primary goal
+
+4. **Integration:** Standalone or existing scripts?
+   - ✅ **MANAGER ANSWER:** Standalone scripts in `scripts/validation/`
+
+---
+
+**Status:** ⏳ **READY FOR AGENT EXECUTION**
+

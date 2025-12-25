@@ -1,0 +1,484 @@
+# 🎯 MISSION JR3: COMPLETE PATHWAY RESISTANCE VALIDATION
+
+**Assigned To:** Agent JR  
+**Priority:** 🔴 CRITICAL - Before MM  
+**Deadline:** Before proceeding to Multiple Myeloma  
+**Status:** ⬜ NOT STARTED
+
+---
+
+## 🎯 THE GAP
+
+We validated **MAPK only** (RR=1.97). But resistance comes from MULTIPLE pathways:
+
+| Pathway | Status | Data Source Needed |
+|---------|--------|-------------------|
+| **MAPK/RAS** | ✅ VALIDATED (RR=1.97) | Done |
+| **DDR/HRD** | ⚠️ INCONCLUSIVE | Marquard 2015 HRD scores |
+| **PI3K/AKT** | ❌ NOT VALIDATED | TCGA mutations + response |
+| **TP53** | ❌ NOT VALIDATED | TCGA mutations + response |
+| **Drug Efflux** | ❌ NOT VALIDATED | ABCB1 expression data |
+| **Immune/IO** | ❌ NOT VALIDATED | TMB, MSI, PD-L1 |
+
+**For Ayesha:** She has MBD4 (BER) + TP53. We MUST validate DDR pathway.
+
+---
+
+## 📋 PHASE 1: IDENTIFY ALL RESISTANCE PATHWAYS
+
+### Ovarian Cancer Resistance Mechanisms (Literature-Backed)
+
+```yaml
+1. MAPK/RAS Pathway (✅ VALIDATED):
+   genes: [KRAS, NRAS, BRAF, NF1, MAP2K1, MAP2K2, MAPK1]
+   mechanism: Bypass signaling, survival
+   validated_rr: 1.97
+   data_source: TCGA-OV mutations
+
+2. DDR/HRD Pathway (⚠️ NEEDS REAL HRD):
+   genes: [BRCA1, BRCA2, ATM, ATR, PALB2, RAD51C, RAD51D, CHEK1, CHEK2]
+   ber_genes: [MBD4, MUTYH, OGG1, NTHL1]  # CRITICAL FOR AYESHA
+   mechanism: DNA repair restoration → platinum resistance
+   required_data: 
+     - Real HRD scores (LOH, TAI, LST)
+     - Source: Marquard et al. 2015 or TCGA copy number
+   
+3. PI3K/AKT Pathway (❌ NOT VALIDATED):
+   genes: [PIK3CA, PIK3R1, PTEN, AKT1, AKT2, MTOR]
+   mechanism: Survival signaling, apoptosis evasion
+   required_data:
+     - TCGA-OV mutations
+     - Already have in TCGA cohort
+   
+4. TP53 Pathway (❌ NOT VALIDATED):
+   genes: [TP53, MDM2, MDM4, CDKN2A]
+   mechanism: Checkpoint bypass, genomic instability
+   note: TP53 mutated in 96% of HGSOC - may not discriminate
+   required_data:
+     - TCGA-OV mutations (already have)
+     - May need to look at specific variants
+
+5. Drug Efflux (❌ NOT VALIDATED):
+   genes: [ABCB1, ABCC1, ABCG2]
+   mechanism: Platinum efflux from cells
+   required_data:
+     - Gene expression data (RNA-seq)
+     - Source: TCGA-OV RNA-seq or GDC
+
+6. Immune/IO Pathway (❌ NOT VALIDATED):
+   biomarkers: [TMB, MSI, PD-L1, CD8_infiltration]
+   mechanism: Immune evasion → checkpoint resistance
+   required_data:
+     - TMB: Already calculated (r=0.933 validated)
+     - MSI: Need from TCGA
+     - PD-L1: May not be available
+```
+
+---
+
+## 📋 PHASE 2: DATA ACQUISITION PLAN
+
+### What We Already Have (TCGA-OV, n=469):
+
+```
+✅ Platinum response labels (sensitive/resistant/refractory)
+✅ Somatic mutations (all genes)
+✅ MAPK pathway status
+✅ TMB calculation
+❌ Real HRD scores (only placeholder)
+❌ RNA expression (for ABCB1)
+❌ MSI status
+```
+
+### What We Need to Acquire:
+
+#### 2.1 Real HRD Scores
+
+**Source Options:**
+
+| Source | URL | Data |
+|--------|-----|------|
+| Marquard 2015 | Supplementary tables | HRD-LOH, HRD-TAI, HRD-LST |
+| TCGA Copy Number | GDC Portal | Raw CN data → calculate |
+| cBioPortal | Ovarian PanCancer | May have HRD calls |
+
+**Action Plan:**
+```bash
+# Option A: Marquard 2015 supplementary
+# Paper: "Pan-cancer analysis of genomic scar signatures..."
+# Look for supplementary Table S2 with per-patient HRD scores
+
+# Option B: cBioPortal clinical data
+# Study: ov_tcga_pan_can_atlas_2018
+# Check clinical attributes for HRD-related fields
+```
+
+#### 2.2 ABCB1 Expression
+
+**Source:** TCGA RNA-seq (GDC)
+
+**Action Plan:**
+```python
+# Option A: Use UCSC Xena for pre-processed RNA-seq
+# Dataset: TCGA-OV gene expression (FPKM)
+# Extract ABCB1, ABCC1, ABCG2
+
+# Option B: cBioPortal mRNA expression
+# Study: ov_tcga_pan_can_atlas_2018
+# Query mRNA expression for efflux genes
+```
+
+#### 2.3 MSI Status
+
+**Source Options:**
+1. cBioPortal clinical data (may have MSI calls)
+2. TCGA Pan-Immune (mutation-load_updated.txt - may include MSI)
+3. Calculate from dMMR gene mutations (MLH1, MSH2, MSH6, PMS2)
+
+---
+
+## 📋 PHASE 3: VALIDATION TESTS
+
+### Test 1: DDR/HRD Pathway Validation
+
+**Hypothesis:** HRD-high patients are MORE sensitive to platinum (lower resistance)
+
+**Expected Result:**
+```
+HRD-high (score ≥ 42):
+  - Sensitivity rate: ~85-90%
+  - Resistance rate: ~10-15%
+
+HRD-low (score < 42):
+  - Sensitivity rate: ~70-75%
+  - Resistance rate: ~25-30%
+
+Relative Risk (HRD-low vs HRD-high): ~2.0
+```
+
+**Test Code:**
+```python
+def test_hrd_resistance(patients):
+    """Validate HRD predicts platinum sensitivity."""
+    hrd_high = [p for p in patients if p['hrd_score'] >= 42]
+    hrd_low = [p for p in patients if p['hrd_score'] < 42]
+    
+    # Calculate resistance rates
+    high_resistant = sum(1 for p in hrd_high if p['response'] == 'resistant') / len(hrd_high)
+    low_resistant = sum(1 for p in hrd_low if p['response'] == 'resistant') / len(hrd_low)
+    
+    # Calculate relative risk
+    rr = low_resistant / high_resistant
+    
+    # Expected: RR ~2.0 (HRD-low is 2x more likely to be resistant)
+    return {
+        'hrd_high_n': len(hrd_high),
+        'hrd_low_n': len(hrd_low),
+        'high_resistance_rate': high_resistant,
+        'low_resistance_rate': low_resistant,
+        'relative_risk': rr,
+        'passed': rr >= 1.5
+    }
+```
+
+### Test 2: PI3K Pathway Validation
+
+**Hypothesis:** PI3K pathway mutations → increased resistance (survival signaling)
+
+**Expected Result:**
+```
+PI3K mutated:
+  - Resistance rate: ~20-30%
+  
+PI3K wildtype:
+  - Resistance rate: ~14-15%
+
+Relative Risk: ~1.5-2.0
+```
+
+**Test Code:**
+```python
+PI3K_GENES = {'PIK3CA', 'PIK3R1', 'PTEN', 'AKT1', 'AKT2', 'MTOR'}
+
+def test_pi3k_resistance(patients, mutations):
+    """Validate PI3K pathway predicts resistance."""
+    pi3k_mutated = set()
+    for m in mutations:
+        if m['gene'] in PI3K_GENES:
+            pi3k_mutated.add(m['patient_id'])
+    
+    mutated = [p for p in patients if p['patient_id'] in pi3k_mutated]
+    wildtype = [p for p in patients if p['patient_id'] not in pi3k_mutated]
+    
+    mut_resistant = sum(1 for p in mutated if p['response'] == 'resistant') / len(mutated)
+    wt_resistant = sum(1 for p in wildtype if p['response'] == 'resistant') / len(wildtype)
+    
+    rr = mut_resistant / wt_resistant if wt_resistant > 0 else 0
+    
+    return {
+        'pi3k_mutated_n': len(mutated),
+        'wildtype_n': len(wildtype),
+        'mutated_resistance_rate': mut_resistant,
+        'wildtype_resistance_rate': wt_resistant,
+        'relative_risk': rr,
+        'passed': rr >= 1.3  # Lower threshold since PI3K is less strong
+    }
+```
+
+### Test 3: TP53 Variant-Specific Resistance
+
+**Hypothesis:** TP53 GOF (gain-of-function) mutations → worse than TP53 LOF
+
+**Note:** TP53 is mutated in ~96% of HGSOC, so presence/absence won't discriminate. We need to look at:
+- Specific hotspots (R175H, R248Q, R273H = GOF)
+- Truncating vs missense
+- Zygosity
+
+**Test Code:**
+```python
+TP53_GOF_HOTSPOTS = {'R175H', 'R248Q', 'R248W', 'R273H', 'R273C', 'R282W'}
+
+def test_tp53_gof_resistance(patients, mutations):
+    """Test if TP53 GOF hotspots predict worse outcomes."""
+    gof_patients = set()
+    for m in mutations:
+        if m['gene'] == 'TP53':
+            variant = m.get('hgvs_p', '')
+            for hotspot in TP53_GOF_HOTSPOTS:
+                if hotspot in variant:
+                    gof_patients.add(m['patient_id'])
+    
+    gof = [p for p in patients if p['patient_id'] in gof_patients]
+    non_gof = [p for p in patients if p['patient_id'] not in gof_patients]
+    
+    # ... calculate resistance rates and RR
+```
+
+### Test 4: Drug Efflux (ABCB1 Expression)
+
+**Hypothesis:** High ABCB1 expression → increased platinum resistance
+
+**Required:** RNA-seq expression data
+
+**Test Code:**
+```python
+def test_abcb1_resistance(patients, expression):
+    """Test if ABCB1 expression predicts resistance."""
+    # Get ABCB1 expression for each patient
+    abcb1_expr = {p: expression.get(p, {}).get('ABCB1', None) for p in patients}
+    
+    # Divide into high/low by median
+    median_expr = np.median([v for v in abcb1_expr.values() if v is not None])
+    
+    high_expr = [p for p in patients if abcb1_expr.get(p['patient_id'], 0) >= median_expr]
+    low_expr = [p for p in patients if abcb1_expr.get(p['patient_id'], 0) < median_expr]
+    
+    # ... calculate resistance rates and RR
+```
+
+### Test 5: Combined Pathway Score
+
+**Hypothesis:** Multiple pathway hits → additive resistance risk
+
+**Test Code:**
+```python
+def test_combined_pathway_resistance(patients, pathway_status):
+    """Test if multiple pathway hits compound resistance."""
+    # Count pathway hits per patient
+    for p in patients:
+        p['pathway_hits'] = sum([
+            pathway_status[p['patient_id']].get('MAPK', 0),
+            pathway_status[p['patient_id']].get('PI3K', 0),
+            pathway_status[p['patient_id']].get('DDR_restored', 0),
+            pathway_status[p['patient_id']].get('ABCB1_high', 0)
+        ])
+    
+    # Group by hit count
+    zero_hits = [p for p in patients if p['pathway_hits'] == 0]
+    one_hit = [p for p in patients if p['pathway_hits'] == 1]
+    two_plus = [p for p in patients if p['pathway_hits'] >= 2]
+    
+    # Calculate resistance rates
+    # Expected: 0 hits ~10%, 1 hit ~20%, 2+ hits ~40%
+```
+
+---
+
+## 📋 PHASE 4: IMPLEMENTATION
+
+### 4.1 Create Validation Script
+
+```
+scripts/validation/validate_all_pathways_resistance.py
+
+Functions:
+- load_tcga_ov_patients()
+- load_hrd_scores()  # From new data source
+- load_expression_data()  # For ABCB1
+- test_mapk_resistance()  # Already validated
+- test_hrd_resistance()
+- test_pi3k_resistance()
+- test_tp53_gof_resistance()
+- test_abcb1_resistance()
+- test_combined_pathway()
+- generate_comprehensive_report()
+```
+
+### 4.2 Update Resistance Prophet Service
+
+```python
+# api/services/resistance_prophet_service.py
+
+class ResistanceProphetService:
+    """
+    Comprehensive resistance prediction using ALL validated pathways.
+    """
+    
+    PATHWAY_WEIGHTS = {
+        'MAPK': {'rr': 1.97, 'validated': True},
+        'HRD': {'rr': 2.0, 'validated': False},  # Update after validation
+        'PI3K': {'rr': 1.5, 'validated': False},
+        'TP53_GOF': {'rr': 1.3, 'validated': False},
+        'ABCB1': {'rr': 1.8, 'validated': False}
+    }
+    
+    def predict_resistance(self, patient):
+        """
+        Predict platinum resistance using all pathways.
+        
+        Returns:
+            {
+                'overall_risk': 'HIGH' | 'MODERATE' | 'LOW',
+                'risk_score': 0.0-1.0,
+                'pathway_contributions': {
+                    'MAPK': {'present': True, 'rr': 1.97, 'contribution': 0.3},
+                    ...
+                },
+                'recommendations': [...]
+            }
+        """
+```
+
+### 4.3 Integrate with Mechanism Vector
+
+Update the 7D mechanism vector to include all validated pathways:
+
+```python
+# Current: [DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux]
+# After validation: Each dimension has validated resistance contribution
+
+mechanism_vector = [
+    ddr_burden,      # [0] DDR - validated for sensitivity
+    mapk_burden,     # [1] MAPK - validated RR=1.97
+    pi3k_burden,     # [2] PI3K - to be validated
+    vegf_burden,     # [3] VEGF - for bevacizumab
+    her2_burden,     # [4] HER2 - for HER2 inhibitors
+    io_burden,       # [5] IO - TMB/MSI validated
+    efflux_burden    # [6] Efflux - ABCB1 to be validated
+]
+```
+
+---
+
+## 📋 EXECUTION CHECKLIST
+
+### Phase 1: Data Acquisition
+
+- [ ] **1.1** Find Marquard 2015 supplementary data for HRD scores
+  - Paper DOI: 10.1158/1078-0432.CCR-14-3316
+  - Look for Table S2 or S3 with per-patient HRD-LOH, HRD-TAI, HRD-LST
+  
+- [ ] **1.2** If Marquard not available, query cBioPortal for HRD
+  - Study: `ov_tcga_pan_can_atlas_2018`
+  - Check clinical attributes: `HRD_SCORE`, `HOMOLOGOUS_RECOMBINATION_DEFICIENCY`
+
+- [ ] **1.3** Download TCGA-OV RNA-seq for ABCB1
+  - Use UCSC Xena or GDC
+  - Extract: ABCB1, ABCC1, ABCG2 expression (FPKM or TPM)
+
+- [ ] **1.4** Check for MSI status in TCGA-OV
+  - cBioPortal clinical data
+  - Or calculate from dMMR gene mutations
+
+### Phase 2: Validation Tests
+
+- [ ] **2.1** Run DDR/HRD validation (once data acquired)
+  - Target: RR ≥ 1.5 for HRD-low predicting resistance
+  
+- [ ] **2.2** Run PI3K pathway validation
+  - Genes: PIK3CA, PIK3R1, PTEN, AKT1, AKT2, MTOR
+  - Target: RR ≥ 1.3
+
+- [ ] **2.3** Run TP53 GOF variant validation
+  - Hotspots: R175H, R248Q, R248W, R273H, R273C, R282W
+  - Target: Any signal (exploratory)
+
+- [ ] **2.4** Run ABCB1 expression validation (once data acquired)
+  - Target: RR ≥ 1.3 for high expression
+
+- [ ] **2.5** Run combined pathway validation
+  - Target: Additive risk with multiple hits
+
+### Phase 3: Documentation & Integration
+
+- [ ] **3.1** Update `ADVANCED_CARE_PLAN_RESISTANCE_PREDICTION.md` with all results
+- [ ] **3.2** Update `resistance_prophet_service.py` with validated pathways
+- [ ] **3.3** Update mechanism vector calculation
+- [ ] **3.4** Create comprehensive validation report
+
+---
+
+## 📊 SUCCESS CRITERIA
+
+| Pathway | Metric | Target | Notes |
+|---------|--------|--------|-------|
+| MAPK | Relative Risk | ≥1.5 | ✅ Already 1.97 |
+| DDR/HRD | Relative Risk | ≥1.5 | HRD-low predicts resistance |
+| PI3K | Relative Risk | ≥1.3 | Survival signaling |
+| TP53 GOF | Relative Risk | ≥1.2 | Exploratory |
+| ABCB1 | Relative Risk | ≥1.3 | Drug efflux |
+| Combined | Additive | Yes | Multiple hits = higher risk |
+
+---
+
+## 🎯 FOR AYESHA SPECIFICALLY
+
+After this validation, for Ayesha we can say:
+
+```
+Ayesha's Resistance Profile:
+├── MBD4 homozygous loss → BER deficiency → DDR pathway score
+├── TP53 mutant → Check if GOF hotspot
+├── MAPK status → Check all MAPK genes
+├── PI3K status → Check PI3K pathway
+├── ABCB1 expression → If available
+└── Combined → Overall risk score
+
+Current Assessment:
+- MAPK: Need to check from her mutations
+- DDR: MBD4 loss = DDR compromised = SENSITIVE (good!)
+- TP53: Need specific variant to assess GOF
+- PI3K: Need to check from her mutations
+- ABCB1: Need expression data (if available)
+```
+
+---
+
+## 📁 OUTPUT FILES
+
+| File | Description |
+|------|-------------|
+| `data/validation/hrd_scores_tcga_ov.json` | Real HRD scores |
+| `data/validation/expression_tcga_ov.json` | ABCB1 expression |
+| `data/validation/reports/all_pathways_validation.json` | All results |
+| `scripts/validation/validate_all_pathways_resistance.py` | Validation script |
+
+---
+
+**Mission Status:** ⬜ NOT STARTED  
+**Assigned:** Agent JR  
+**Blocking:** MM resistance work (need to complete OV first as proof of concept)
+
+---
+
+**"One pathway validated. Five more to go. Then we're ready for ANY cancer."**

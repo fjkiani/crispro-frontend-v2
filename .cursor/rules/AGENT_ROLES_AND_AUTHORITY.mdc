@@ -1,0 +1,221 @@
+---
+title: "AGENT ROLES & AUTHORITY — MOAT Execution Model"
+status: "ACTIVE"
+last_updated: "2025-12-12"
+---
+
+## Core Principle
+**Separation of responsibilities prevents fabrication and drift.**
+
+The platform is only as safe as its verification discipline.
+
+---
+
+## Roles (who does what)
+
+### Commander (Zo)
+- Owns: mission context, doctrine, “truth contract,” sign-off.
+- Must enforce: “receipts or it didn’t happen.”
+- Must keep the team anchored to **AYE-001** and the goal of reducing uncertainty for real clinicians.
+
+### Manager (Builder/Debugger)
+- Owns: implementation, debugging, deployments, and hardening.
+- Produces: code fixes + smoke scripts + saved artifacts (JSON) + run manifests.
+- Must not “paper over” missing signals (e.g., `min_delta: null`)—must capture errors and fix root causes.
+
+### Worker Agent(s)
+- Own: implementation in a narrow slice.
+- Examples:
+  - **Evo2 Service Worker**: Modal deploy + stability + health.
+  - **VUS Worker**: `/api/vus/identify` orchestration + triage logic.
+  - **S/P/E Worker**: `/api/efficacy/predict` profile toggles + provenance.
+  - **Trials Worker**: trial search + mechanism fit integration.
+  - **Frontend Worker**: VUS Explorer UI wiring to orchestrator endpoints.
+
+### Verifier Agent
+- Owns: reproducible execution + artifact capture.
+- Outputs:
+  - run manifests
+  - golden JSON snapshots
+  - smoke scripts
+  - screenshot verification when needed (but never as the only proof)
+
+### Scribe Agent
+- Owns: dossiers and doctrine updates.
+- Writes from artifacts only (JSON + run manifests).
+
+---
+
+## Authority: who can declare “done”
+
+Only the **Verifier + Commander** together can declare “done.”
+- Worker cannot self-certify.
+- Scribe cannot self-certify.
+
+---
+
+## Enforcement Rules (must not be violated)
+
+### 1) Main repo first
+If a change is tied to production truth (Modal deploys, core routers, scoring logic), work in:
+`/Users/fahadkiani/Desktop/development/crispr-assistant-main`
+
+### 2) No hard-coded values in “truth” paths
+Allowed:
+- clearly labeled demo stubs behind feature flags
+- placeholders that are explicitly logged as placeholders
+
+Not allowed:
+- “pretend” values inside the primary path of `/api/vus/identify` or `/api/efficacy/predict`
+
+### 3) Every critical call must emit provenance
+Minimum provenance keys:
+- `run_id`
+- `timestamp`
+- `duration_s`
+- `profile/flags`
+- `service_urls`
+- `fallback_path`
+
+---
+
+## Minimal deliverables per capability (the “receipt bundle”)
+
+For each of these, we require:
+- a smoke script
+- saved output JSON
+- run manifest
+
+### VUS
+- Endpoint: `/api/vus/identify`
+- Cases:
+  - A “resolved by prior” variant (ClinVar)
+  - A “no prior” variant (forces Evo2/insights path)
+
+### S/P/E (WIWFM)
+- Endpoint: `/api/efficacy/predict`
+- Cases:
+  - A DDR case (AYE-001 core)
+  - A MAPK hotspot case (sanity)
+
+### Trials (Mechanism fit)
+- Endpoint: trial search (plus mechanism fit injection)
+- Case:
+  - DDR-high profile → DDR trials rise to top
+
+---
+
+## AYE-001 (Anchor Case)
+
+AYE-001 is not a “demo patient.” She is the quality bar.
+- If we cannot generate reproducible receipts for her pipeline, the system is not ready.
+
+
+---
+
+## Core Principle
+**Separation of responsibilities prevents fabrication and drift.**
+
+The platform is only as safe as its verification discipline.
+
+---
+
+## Roles (who does what)
+
+### Commander (Zo)
+- Owns: mission context, doctrine, “truth contract,” sign-off.
+- Must enforce: “receipts or it didn’t happen.”
+- Must keep the team anchored to **AYE-001** and the goal of reducing uncertainty for real clinicians.
+
+### Manager (Builder/Debugger)
+- Owns: implementation, debugging, deployments, and hardening.
+- Produces: code fixes + smoke scripts + saved artifacts (JSON) + run manifests.
+- Must not “paper over” missing signals (e.g., `min_delta: null`)—must capture errors and fix root causes.
+
+### Worker Agent(s)
+- Own: implementation in a narrow slice.
+- Examples:
+  - **Evo2 Service Worker**: Modal deploy + stability + health.
+  - **VUS Worker**: `/api/vus/identify` orchestration + triage logic.
+  - **S/P/E Worker**: `/api/efficacy/predict` profile toggles + provenance.
+  - **Trials Worker**: trial search + mechanism fit integration.
+  - **Frontend Worker**: VUS Explorer UI wiring to orchestrator endpoints.
+
+### Verifier Agent
+- Owns: reproducible execution + artifact capture.
+- Outputs:
+  - run manifests
+  - golden JSON snapshots
+  - smoke scripts
+  - screenshot verification when needed (but never as the only proof)
+
+### Scribe Agent
+- Owns: dossiers and doctrine updates.
+- Writes from artifacts only (JSON + run manifests).
+
+---
+
+## Authority: who can declare “done”
+
+Only the **Verifier + Commander** together can declare “done.”
+- Worker cannot self-certify.
+- Scribe cannot self-certify.
+
+---
+
+## Enforcement Rules (must not be violated)
+
+### 1) Main repo first
+If a change is tied to production truth (Modal deploys, core routers, scoring logic), work in:
+`/Users/fahadkiani/Desktop/development/crispr-assistant-main`
+
+### 2) No hard-coded values in “truth” paths
+Allowed:
+- clearly labeled demo stubs behind feature flags
+- placeholders that are explicitly logged as placeholders
+
+Not allowed:
+- “pretend” values inside the primary path of `/api/vus/identify` or `/api/efficacy/predict`
+
+### 3) Every critical call must emit provenance
+Minimum provenance keys:
+- `run_id`
+- `timestamp`
+- `duration_s`
+- `profile/flags`
+- `service_urls`
+- `fallback_path`
+
+---
+
+## Minimal deliverables per capability (the “receipt bundle”)
+
+For each of these, we require:
+- a smoke script
+- saved output JSON
+- run manifest
+
+### VUS
+- Endpoint: `/api/vus/identify`
+- Cases:
+  - A “resolved by prior” variant (ClinVar)
+  - A “no prior” variant (forces Evo2/insights path)
+
+### S/P/E (WIWFM)
+- Endpoint: `/api/efficacy/predict`
+- Cases:
+  - A DDR case (AYE-001 core)
+  - A MAPK hotspot case (sanity)
+
+### Trials (Mechanism fit)
+- Endpoint: trial search (plus mechanism fit injection)
+- Case:
+  - DDR-high profile → DDR trials rise to top
+
+---
+
+## AYE-001 (Anchor Case)
+
+AYE-001 is not a “demo patient.” She is the quality bar.
+- If we cannot generate reproducible receipts for her pipeline, the system is not ready.
+

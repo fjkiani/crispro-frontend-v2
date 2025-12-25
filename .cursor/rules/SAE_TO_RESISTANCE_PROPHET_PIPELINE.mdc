@@ -872,7 +872,7 @@ def compute_pathway_scores_from_sae(
     - Will sum SAE activations for pathway-mapped features
     - Will normalize by pathway weights
     """
-    pathway_scores = {}
+pathway_scores = {}
     
     # Extract top features
     top_features = patient_sae_features.get("top_features", [])
@@ -885,7 +885,7 @@ def compute_pathway_scores_from_sae(
         pathway_indices = set(config["feature_indices"])
         
         # Sum activations for features in this pathway
-        pathway_activation = sum(
+    pathway_activation = sum(
             f["value"] for f in top_features 
             if f["index"] in pathway_indices
         )

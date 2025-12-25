@@ -1,0 +1,213 @@
+
+import { CoPilotDetailContent } from '@/types/copilot-types';
+
+export const clinicalTrialsData: CoPilotDetailContent = {
+    slug: "clinical-trials",
+    pageTitle: "Clinical Trials Co‑Pilot: In‑Silico Trial Matching",
+    heroSubtitle: "Which trials target YOUR tumor's vulnerabilities? We match your pathway burden (DDR, MAPK, PI3K) to trial drug mechanisms—not keywords. Action-ready dossiers for same-day enrollment.",
+    vision: "Trials ranked by mechanism fit. Your tumor's pathways matched to trial drugs. Clear why. Shareable one-pager.",
+
+    // Website value props (plain)
+    valueProps: [
+      {
+        audience: 'For Clinicians & Trial Offices',
+        icon: 'Search',
+        points: [
+          'Trials targeting YOUR tumor pathways rank first (DDR, MAPK, PI3K alignment).',
+          'Clear eligibility with mechanism fit scores.',
+          'Action-ready dossiers you can share.'
+        ]
+      },
+      {
+        audience: 'For Research Teams',
+        icon: 'Database',
+        points: [
+          'Pathway burden matched to trial drug mechanisms.',
+          'Complex queries: MBD4 + DNA repair + basket trials.',
+          'Exports and run IDs for tracking.'
+        ]
+      }
+    ],
+
+    buildsOn: "Core Capabilities",
+    buildsOnStackPoints: [
+      "Mechanism-based matching: Your pathway burden matched to trial drug mechanisms.",
+      "Combined scoring: 0.7×eligibility + 0.3×mechanism_fit ranks trials by pathway alignment.",
+      "Real-time updates when connected; reliable snapshots when offline."
+    ],
+
+    kpis: [
+      { label: 'Shortlist Compression', value: '50+ → 5-12 trials' },
+      { label: 'Mechanism Fit', value: '0.92 avg (DDR-high patients)' },
+      { label: 'Time-to-First-Trial', value: '↓ 60-65%' },
+    ],
+
+    observedOutcomes: [
+      {
+        title: "Mechanism-Based Matching",
+        keyMetric: "Pathway alignment",
+        description: "Your tumor's pathway burden (DDR, MAPK, PI3K) matched to trial drug mechanisms. DDR-high patients see PARP+ATR trials ranked first.",
+        icon: "Target",
+        color: "purple"
+      },
+      {
+        title: "Shortlist Compression",
+        keyMetric: "50+ → 5–12 trials",
+        description: "Shortlists shrink from 50+ to ~5–12 with mechanism fit ranking, reducing decision fatigue.",
+        icon: "Target",
+        color: "blue"
+      },
+      {
+        title: "Time-to-First-Trial",
+        keyMetric: "↓ 60–65%",
+        description: "Faster patient enrollment and time-to-treatment decisions.",
+        icon: "TrendingUp",
+        color: "teal"
+      }
+    ],
+
+    genomicInsightsOverview: "Trials ranked by mechanism fit. Pathway alignment breakdown. Clear why. Shareable summary.",
+    coreProblemIntro: "Generic keyword search doesn't answer: 'Which trials target MY tumor's vulnerabilities?' We match your pathway burden to trial drug mechanisms.",
+    coreProblemPoints: [
+      "Keyword search ignores pathway alignment.",
+      "No way to know which trials target your tumor biology.",
+      "Takes too long to find relevant trials."
+    ],
+
+    genomicUseCasesGrid: [
+      { label: "Mechanism-based matching", iconName: "Target", color: "text-purple-400" },
+      { label: "Pathway alignment scores", iconName: "Activity", color: "text-indigo-400" },
+      { label: "Clear eligibility", iconName: "ListChecks", color: "text-purple-400" },
+      { label: "Shareable summary", iconName: "FileText", color: "text-orange-400" }
+    ],
+
+    keyCapabilities: [
+      {
+        title: "Mechanism-Based Trial Matching",
+        technical: {
+          title: "Technical Approach",
+          keyMetric: "Pathway Burden → Mechanism Fit",
+          description: "Compute 7D mechanism vector from patient mutations (DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux). Match to trial drug mechanisms via cosine similarity. Rank by 0.7×eligibility + 0.3×mechanism_fit.",
+          icon: "Settings",
+          color: "purple",
+          components: [
+            { title: "Pathway Analysis", subtitle: "7D mechanism vector", iconName: "Activity", color: "purple", features: ["DDR pathway burden", "MAPK/PI3K/VEGF scores", "IO eligibility", "Efflux detection"] },
+            { title: "Mechanism Matching", subtitle: "Cosine similarity", iconName: "Target", color: "indigo", features: ["Trial MoA vectors", "Pathway alignment", "Mechanism fit scores", "Combined ranking"] }
+          ],
+          features: ["Pathway analysis", "Mechanism matching", "Combined ranking"]
+        },
+        scientific: {
+          title: "Scientific Impact",
+          keyMetric: "Precision Oncology Matching",
+          description: "Instead of '50 ovarian cancer trials,' patients see 'Your MBD4+TP53 creates DDR burden (0.88). These 3 PARP+ATR trials have 0.92 mechanism alignment—they target YOUR vulnerabilities.'",
+          icon: "Microscope",
+          color: "teal",
+          components: [
+            { title: "Pathway-Based Ranking", subtitle: "Target vulnerabilities", iconName: "Target", color: "purple", features: ["DDR-high → PARP trials", "MAPK-driven → MEK/RAF trials", "IO-eligible → Checkpoint inhibitors"] },
+            { title: "Combined Scoring", subtitle: "Eligibility + mechanism", iconName: "BarChart", color: "indigo", features: ["0.7×eligibility + 0.3×mechanism_fit", "Minimum thresholds", "SOC preservation"] }
+          ],
+          features: ["Pathway-based ranking", "Combined scoring", "Clinical actionability"]
+        },
+        business: {
+          title: "Business Value",
+          keyMetric: "The MOAT",
+          description: "No competitor answers 'Which trials target MY tumor's vulnerabilities?' We do. Pathway-based mechanism matching ranks trials by alignment to patient biology, not keywords.",
+          icon: "Briefcase",
+          color: "indigo",
+          components: [
+            { title: "Competitive Advantage", subtitle: "Unique capability", iconName: "Award", color: "purple", features: ["Mechanism-based ranking", "Pathway alignment", "Precision oncology"] },
+            { title: "Better Outcomes", subtitle: "Targeted matching", iconName: "TrendingUp", color: "indigo", features: ["Higher response rates", "Faster enrollment", "Better patient fit"] }
+          ],
+          features: ["Competitive advantage", "Better outcomes", "Clinical trust"]
+        },
+        genomicUseCasesParagraph: "Today: \n1. **Pathway analysis** computes 7D mechanism vector. \n2. **Mechanism matching** ranks trials by cosine similarity. \n3. **Combined scoring** surfaces mechanism-aligned trials first."
+      },
+      {
+        title: "Complex Queries",
+        technical: {
+          title: "Technical Approach",
+          keyMetric: "Multi-Criteria Builder",
+          description: "Answer queries like 'MBD4 + DNA repair + basket trials + PARP inhibitors.' Combine conditions, mutations, interventions, keywords, biomarkers. Auto-infer interventions from efficacy predictions.",
+          icon: "Settings",
+          color: "blue",
+          components: [
+            { title: "Query Builder", subtitle: "Multiple criteria", iconName: "Layers", color: "blue", features: ["Conditions + mutations", "Interventions + keywords", "Biomarker filters"] },
+            { title: "Efficacy Integration", subtitle: "Auto-infer", iconName: "Zap", color: "teal", features: ["Drug predictions", "MoA lookup", "Pathway conversion"] }
+          ],
+          features: ["Multi-criteria builder", "Efficacy integration"]
+        },
+        scientific: {
+          title: "Scientific Impact",
+          keyMetric: "Precision Queries",
+          description: "Enables complex clinical questions: 'TP53-mutant + HRD-positive + BRCA-wildtype + checkpoint inhibitors.' Combines semantic search with direct API queries.",
+          icon: "Microscope",
+          color: "teal",
+          components: [
+            { title: "Query Flexibility", subtitle: "Any combination", iconName: "Search", color: "blue", features: ["Mutations + biomarkers", "Interventions + keywords", "Custom combinations"] },
+            { title: "Dual Search", subtitle: "Semantic + API", iconName: "Database", color: "teal", features: ["AstraDB semantic", "ClinicalTrials.gov API", "Hybrid results"] }
+          ],
+          features: ["Query flexibility", "Dual search"]
+        },
+        business: {
+          title: "Business Value",
+          keyMetric: "Answer Complex Questions",
+          description: "Clinicians ask: 'MBD4 + DNA repair + basket trials.' Generic tools return 50+ irrelevant trials. We answer: '3 PARP+ATR trials with 0.92 mechanism fit.'",
+          icon: "Briefcase",
+          color: "indigo",
+          components: [
+            { title: "Complex Support", subtitle: "Multi-criteria", iconName: "Search", color: "blue", features: ["Rare mutations", "Biomarker combinations", "Precision queries"] },
+            { title: "Time Savings", subtitle: "No manual filtering", iconName: "Clock", color: "teal", features: ["Automated building", "Instant results"] }
+          ],
+          features: ["Complex query support", "Time savings"]
+        },
+        genomicUseCasesParagraph: "Today: \n1. **Complex queries** combining mutations, biomarkers, interventions. \n2. **Efficacy integration** auto-infers interventions from predictions."
+      }
+    ],
+
+    valuePropositionSections: [
+      {
+        audience: "For the Care Team",
+        points: [
+          "Trials targeting YOUR tumor pathways rank first (DDR, MAPK, PI3K alignment).",
+          "Mechanism fit scores and pathway breakdown.",
+          "Action-ready dossiers you can share."
+        ]
+      }
+    ],
+
+    drugDevelopmentContribution: {
+      title: "Contributing to Drug Development Success",
+      phase: "Clinical Research (Phase 1, 2, 3)",
+      problem: "Phase 2 success rate: 28.9% (lowest). Trials fail because they enroll patients who won't respond. Generic eligibility misses mechanism alignment.",
+      ourContribution: {
+        title: "Mechanism-Based Patient Selection",
+        description: "Match patients to trials by pathway alignment. DDR-high patients → PARP trials. MAPK-driven → MEK/RAF trials. Mechanism-aligned patients respond better.",
+        impact: [
+          {
+            metric: "Better Patient Selection",
+            description: "Enroll patients whose pathways match trial drug mechanisms. DDR burden (0.88) → PARP+ATR trials (0.92 fit). Higher response rates.",
+            evidence: "Mechanism fit predicts response better than eligibility alone."
+          },
+          {
+            metric: "Faster Enrollment",
+            description: "60-65% time reduction. Mechanism-based matching finds right trials faster. Same-day enrollment.",
+            evidence: "50+ trials → 5-12 mechanism-aligned trials."
+          },
+          {
+            metric: "Improved Trial Success",
+            description: "Phase 2 success (28.9%) improves by enrolling responders. Better Phase 2 → higher Phase 3 success (57.8%).",
+            evidence: "Pathway matching identifies responders before enrollment."
+          }
+        ]
+      },
+      howItWorks: [
+        "Compute patient pathway burden (7D: DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux)",
+        "Match to trial drug mechanisms via cosine similarity",
+        "Rank by 0.7×eligibility + 0.3×mechanism_fit",
+        "Enroll mechanism-aligned patients"
+      ],
+      bottomLine: "We find the RIGHT trials for the RIGHT patients. Mechanism-based matching improves trial success by enrolling patients whose tumors have the pathway vulnerabilities the drug targets."
+    },
+
+    conclusion: "Mechanism-based trial matching. Your pathway burden matched to trial drug mechanisms—not keywords. Ranked by mechanism fit. Action-ready dossiers for same-day enrollment."
+};

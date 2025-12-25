@@ -1,0 +1,431 @@
+# 🔧 MM RESISTANCE PREDICTION: MISSION & IMPLEMENTATION GUIDE
+
+**Date:** January 28, 2025  
+**Status:** 🚧 **IN DEVELOPMENT** (40% Complete)  
+**Priority:** HIGH  
+**Estimated Time:** 3-4 weeks
+
+---
+
+## 📌 EXECUTIVE SUMMARY
+
+**Mission:** Build and validate **production-ready resistance prediction for Multiple Myeloma** across all major drug classes, with TRUE SAE integration and clinical validation.
+
+**Current State:** ~40% complete
+- ✅ Backend API: 60% complete
+- ✅ Gene markers: DIS3 (RR=2.08), TP53 (RR=1.90) - validated
+- ❌ PSMB5/CRBN mutations: Not implemented
+- ❌ Validation framework: Not created
+- ❌ Frontend panel: Not created
+
+**See:** [01_AUDIT.md](01_AUDIT.md) for detailed current state assessment
+
+---
+
+## 🎯 MISSION OBJECTIVE
+
+Build and validate **production-ready resistance prediction for Multiple Myeloma** across all major drug classes, with TRUE SAE integration and clinical validation.
+
+### **Success Criteria:**
+1. ✅ PSMB5/CRBN resistance mutations detected (P0)
+2. ✅ MMRF cohort data downloaded (P0)
+3. ✅ Validation framework running (P0)
+4. ✅ MM pathway service integrated (P1)
+5. ✅ Expanded gene markers (P1)
+6. ✅ Frontend resistance panel (P2)
+7. ✅ Evo2 integration (P2)
+
+---
+
+## 📊 CURRENT STATE ASSESSMENT
+
+### ✅ What We Have
+
+| Component | Status | Location |
+|-----------|--------|----------|
+| Basic resistance router | ✅ Exists | `api/routers/resistance.py` |
+| PSMB5 mutations (PI) | ✅ Defined | Known resistance mutations |
+| CRBN mutations (IMiDs) | ✅ Defined | Known resistance mutations |
+| MM doctrine | ✅ Exists | `.cursor/rules/MM/mm_drug_response_doctrine.mdc` |
+| Evo2 integration | ✅ Working | Delta scoring via `/api/evo/score_variant_multi` |
+| Frontend | ✅ Exists | `MyelomaDigitalTwin.jsx`, `MyelomaResponseDisplay.jsx` |
+
+### ❌ What's Missing
+
+| Gap | Impact | Priority |
+|-----|--------|----------|
+| **No MM patient cohort** | Can't validate | 🔴 Critical |
+| **Limited mechanisms** | Only PSMB5/CRBN | 🔴 Critical |
+| **No drug class coverage** | Only PI/IMiD basics | 🔴 Critical |
+| **No TRUE SAE features** | Using proxy | 🟡 High |
+| **No treatment line context** | Ignores prior therapy | 🟡 High |
+| **No high-risk cytogenetics** | Missing t(4;14), del(17p) | 🟡 High |
+
+**See:** [01_AUDIT.md](01_AUDIT.md) for detailed code-validated assessment
+
+---
+
+## 🔥 IMPLEMENTATION ROADMAP
+
+### **WEEK 1: P0 BLOCKERS (Critical Path)**
+
+#### **Day 1-2: PSMB5/CRBN Resistance Mutations**
+
+**The Problem:**
+- Only checking DIS3/TP53 (gene-level, not drug-class specific)
+- No PSMB5 mutations → Can't predict PI resistance
+- No CRBN mutations → Can't predict IMiD resistance
+
+**Implementation:**
+1. Add `MM_RESISTANCE_MUTATIONS` dictionary to `resistance_prophet_service.py`
+2. Add `_detect_mm_resistance_mutations()` method
+3. Integrate into `predict_mm_resistance()`
+4. Create test cases
+
+**See:** [03_DELIVERY_PLAN.md](03_DELIVERY_PLAN.md) for detailed code examples
+
+---
+
+#### **Day 3-4: MMRF Cohort Data Acquisition**
+
+**The Problem:**
+- No MMRF cohort data downloaded
+- Cannot validate predictions
+- Cannot run validation tests
+
+**Implementation:**
+1. Create `scripts/data_acquisition/download_mm_cohort_cbioportal.py`
+2. Use cBioPortal API (public, no auth required)
+3. Download: mutations, cytogenetics, treatment_response, survival
+4. Save to `data/validation/mm_cohort/mm_cohort_cbioportal.json`
+
+**See:** [03_DELIVERY_PLAN.md](03_DELIVERY_PLAN.md) for complete script
+
+---
+
+#### **Day 5: Validation Framework Setup**
+
+**The Problem:**
+- No validation scripts
+- Cannot verify predictions against cohort
+- Cannot measure success criteria
+
+**Implementation:**
+1. Create `scripts/validation/validate_mm_resistance.py`
+2. Implement 3 tests: PSMB5, CRBN, DIS3/TP53
+3. Run validation, document results
+4. Accept "INSUFFICIENT_DATA" if needed (PSMB5/CRBN are rare)
+
+**See:** [03_DELIVERY_PLAN.md](03_DELIVERY_PLAN.md) for validation script
+
+---
+
+### **WEEK 2: P1 ENHANCEMENTS**
+
+#### **Day 1-2: MM Pathway Service**
+
+**Implementation:**
+1. Create `api/services/mm_pathway_service.py`
+2. Add pathway burden computation (6 pathways)
+3. Integrate into resistance prediction
+
+**Pathways:**
+- proteasome_upr
+- cereblon_pathway
+- ras_mapk
+- nrf2_antioxidant
+- plasma_cell_survival
+- drug_efflux
+
+---
+
+#### **Day 3-4: Expanded Gene Markers**
+
+**Implementation:**
+1. Add IKZF1, IKZF3, CUL4A to `MM_HIGH_RISK_GENES`
+2. Run validation attempt
+3. Document results (likely INSUFFICIENT_DATA)
+
+---
+
+#### **Day 5: TRUE SAE Validation (Zo Leads)**
+
+**Note:** Zo handles SAE extraction and analysis
+
+**Plumber Tasks:**
+- Review Zo's SAE extraction scripts
+- Review Zo's analysis results
+- Document decision: SAE_ADDS_VALUE or PROXY_SUFFICIENT
+
+---
+
+### **WEEK 3: P2 POLISH**
+
+#### **Day 1-2: Frontend Resistance Panel**
+
+**Implementation:**
+1. Create `components/myeloma/MMResistancePanel.jsx`
+2. Integrate with resistance API
+3. Add to MyelomaDigitalTwin page
+4. Test UI display
+
+---
+
+#### **Day 3-4: Evo2 Integration**
+
+**Implementation:**
+1. Add Evo2 scoring to `predict_mm_resistance()`
+2. Correlate Evo2 delta with response
+3. Use as secondary signal
+
+---
+
+#### **Day 5: End-to-End Testing**
+
+**Tasks:**
+1. Test full pipeline: mutations → prediction → UI
+2. Verify all components working
+3. Document any issues
+
+---
+
+## 📋 DETAILED IMPLEMENTATION GUIDE
+
+### **P0 BLOCKER 1: PSMB5/CRBN RESISTANCE MUTATIONS**
+
+**File:** `oncology-coPilot/oncology-backend-minimal/api/services/resistance_prophet_service.py`
+
+**Step 1: Add MM_RESISTANCE_MUTATIONS Dictionary**
+
+Location: After `MM_HIGH_RISK_GENES` (around line 238)
+
+```python
+# MM drug-class specific resistance mutations
+MM_RESISTANCE_MUTATIONS = {
+    "proteasome_inhibitor": {
+        "PSMB5": {
+            "resistance_mutations": [
+                "p.Ala49Thr", "p.Ala20Thr", "p.Cys52Phe", 
+                "p.Met45Ile", "p.Gly23Ser"
+            ],
+            "mechanism": "Proteasome beta-5 subunit mutations reduce bortezomib binding",
+            "relative_risk": 2.5,
+            "confidence": 0.70,
+            "validation_source": "Literature (Chapman 2011, Ri 2016)",
+            "drugs_affected": ["bortezomib", "carfilzomib", "ixazomib"]
+        },
+        # ... more mutations
+    },
+    "imid": {
+        "CRBN": {
+            "resistance_mutations": [
+                "p.Trp400*", "p.Arg419*", "p.Gln99*",
+                "p.Ile391Thr", "p.Tyr384Cys"
+            ],
+            "mechanism": "Cereblon loss-of-function → IMiD target loss",
+            "relative_risk": 3.0,
+            "confidence": 0.75,
+            "validation_source": "Literature (Kortüm 2016, Sievers 2013)",
+            "drugs_affected": ["lenalidomide", "pomalidomide", "thalidomide"]
+        },
+        # ... more mutations
+    }
+}
+```
+
+**Step 2: Add Detection Method**
+
+Location: After `_detect_mm_high_risk_genes()` (around line 880)
+
+```python
+def _detect_mm_resistance_mutations(
+    self,
+    mutations: List[Dict[str, Any]],
+    drug_class: str
+) -> List[Dict[str, Any]]:
+    """
+    Detect drug-class specific resistance mutations.
+    """
+    signals = []
+    
+    if drug_class not in MM_RESISTANCE_MUTATIONS:
+        return signals
+    
+    drug_class_mutations = MM_RESISTANCE_MUTATIONS[drug_class]
+    
+    for mutation in mutations:
+        gene = mutation.get("gene", "")
+        hgvs_p = mutation.get("hgvs_p", "")
+        
+        if gene not in drug_class_mutations:
+            continue
+        
+        gene_config = drug_class_mutations[gene]
+        resistance_mutations = gene_config["resistance_mutations"]
+        
+        # Check if this specific mutation is a resistance mutation
+        is_resistance = False
+        if hgvs_p in resistance_mutations:
+            is_resistance = True
+        elif "loss_of_function" in resistance_mutations and self._is_lof(mutation):
+            is_resistance = True
+        elif "deletion" in resistance_mutations and "del" in hgvs_p.lower():
+            is_resistance = True
+        elif "truncation" in resistance_mutations and "*" in hgvs_p:
+            is_resistance = True
+        
+        if is_resistance:
+            signals.append({
+                "type": "DRUG_CLASS_RESISTANCE",
+                "gene": gene,
+                "mutation": hgvs_p,
+                "drug_class": drug_class,
+                "mechanism": gene_config["mechanism"],
+                "relative_risk": gene_config["relative_risk"],
+                "confidence": gene_config["confidence"],
+                "drugs_affected": gene_config["drugs_affected"],
+                "validation_source": gene_config["validation_source"],
+                "action": "CONSIDER_ALTERNATIVE_CLASS"
+            })
+    
+    return signals
+```
+
+**Step 3: Integrate into predict_mm_resistance()**
+
+Location: After `mm_gene_signal` detection (around line 1069)
+
+```python
+# Detect drug-class specific resistance mutations
+drug_class_signals = []
+if drug_class:
+    drug_class_signals = self._detect_mm_resistance_mutations(mutations, drug_class)
+    signals.extend(drug_class_signals)
+```
+
+**See:** [03_DELIVERY_PLAN.md](03_DELIVERY_PLAN.md) for complete code examples
+
+---
+
+### **P0 BLOCKER 2: MMRF COHORT DATA ACQUISITION**
+
+**File:** `scripts/data_acquisition/download_mm_cohort_cbioportal.py`
+
+**Approach:** Use cBioPortal API (public, no auth required)
+
+**Key Functions:**
+1. `get_mm_studies()` - Find MM studies
+2. `get_patients()` - Get all patients
+3. `get_mutations()` - Get mutations for patients
+4. `get_clinical_data()` - Get treatment response, survival
+
+**See:** [03_DELIVERY_PLAN.md](03_DELIVERY_PLAN.md) for complete script (lines 432-658)
+
+---
+
+### **P0 BLOCKER 3: VALIDATION FRAMEWORK**
+
+**File:** `scripts/validation/validate_mm_resistance.py`
+
+**Tests:**
+1. PSMB5 → PI Resistance (RR ≥ 2.0)
+2. CRBN → IMiD Resistance (RR ≥ 2.5)
+3. DIS3/TP53 → Mortality (already validated)
+
+**Note:** PSMB5/CRBN mutations are rare (n=2-3), so "INSUFFICIENT_DATA" is acceptable
+
+**See:** [03_DELIVERY_PLAN.md](03_DELIVERY_PLAN.md) for complete validation script (lines 774-1039)
+
+---
+
+## 🚨 CRITICAL WARNINGS
+
+### **Warning 1: Don't Block on Validation**
+
+**Problem:** PSMB5/CRBN mutations are rare (n=2-3)
+
+**Solution:**
+- Accept "INSUFFICIENT_DATA" as valid result
+- Use literature-based RR values
+- Document: "Validation pending larger cohort"
+- **DO NOT** wait for more data - ship with literature values
+
+---
+
+### **Warning 2: cBioPortal Rate Limiting**
+
+**Problem:** cBioPortal may rate-limit large requests
+
+**Solution:**
+- Add `time.sleep(0.5)` between batch requests
+- Use batch_size=500 (not 1000)
+- If rate-limited → wait 60 seconds and retry
+
+---
+
+### **Warning 3: Missing Cytogenetics Data**
+
+**Problem:** cBioPortal may not have cytogenetics (del(17p), t(4;14))
+
+**Solution:**
+- Check if `clinical_data` has cytogenetics fields
+- If missing → skip Test 3 (del(17p) validation)
+- Document: "Cytogenetics validation skipped (data unavailable)"
+
+---
+
+## 📊 SUCCESS METRICS
+
+### **Week 1 Success:**
+
+✅ PSMB5 p.Ala49Thr detected → PI resistance  
+✅ CRBN p.Trp400* detected → IMiD resistance  
+✅ Cohort downloaded (≥500 patients)  
+✅ Validation script runs (1-2 tests PASS, INSUFFICIENT_DATA acceptable)
+
+### **Week 2 Success:**
+
+✅ Pathway service computes 6 pathways  
+✅ Gene markers expanded (IKZF1, IKZF3, CUL4A)  
+✅ SAE decision documented (Zo)
+
+### **Week 3 Success:**
+
+✅ Frontend shows resistance predictions  
+✅ Evo2 integrated as secondary signal  
+✅ End-to-end pipeline working
+
+---
+
+## 🔗 RELATED DOCUMENTATION
+
+**Supporting Documents:**
+- [01_AUDIT.md](01_AUDIT.md) - Current state assessment
+- [02_VALIDATION.md](02_VALIDATION.md) - Validation results
+- [03_DELIVERY_PLAN.md](03_DELIVERY_PLAN.md) - Detailed implementation plan
+- [04_REVIEW.md](04_REVIEW.md) - Implementation guide review
+
+**Doctrine Files:**
+- `.cursor/rules/MM/mm_doctrine.mdc` - Core MM doctrine
+- `.cursor/rules/MM/mm_drug_response_doctrine.mdc` - Drug response logic
+
+**Ayesha Integration:**
+- `.cursor/ayesha/MISSION_MM_NEXT_ITERATION.mdc` - Next iteration plan
+
+---
+
+## 📝 NOTES
+
+**This is the SOURCE OF TRUTH for MM Resistance Prediction.**
+
+**For detailed code examples, see:** [03_DELIVERY_PLAN.md](03_DELIVERY_PLAN.md)
+
+**For current state assessment, see:** [01_AUDIT.md](01_AUDIT.md)
+
+**For validation results, see:** [02_VALIDATION.md](02_VALIDATION.md)
+
+---
+
+**Last Updated:** January 28, 2025  
+**Status:** 🚧 In Development (40% Complete)  
+**Next Step:** Implement P0 Blockers (Week 1)

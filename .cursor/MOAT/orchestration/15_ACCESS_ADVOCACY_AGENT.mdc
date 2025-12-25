@@ -1,0 +1,501 @@
+---
+description: Module 15: Access & Advocacy Agent (Prior Auth & Financial Defense)
+globs: 
+---
+
+# 🛡️ MODULE 15: ACCESS & ADVOCACY AGENT
+
+> **Identity**: "The Shield" | "The Barrier Breaker"  
+> **MOAT Vision**: *"Upload once. Track forever. Never miss a signal."*  
+> **Purpose**: Remove the administrative violence between precision medicine and patient access. Automate prior authorization, generate weaponized documentation, and eliminate financial toxicity.  
+> **Philosophy**: Cancer doesn't wait for "5-7 business days." Neither should we.
+
+---
+
+## 🎯 WHY THIS MATTERS: THE MOAT PERSPECTIVE
+
+### The Problem We're Solving
+
+**The MOAT Promise**: "Upload once. Track forever. Never miss a signal."
+
+**The Reality**: Even when MOAT identifies the perfect drug (Module 04), matches the perfect trial (Module 05), and generates the perfect care plan (Module 07), **the patient still can't access it** because:
+
+1. **The Clock vs. The Cancer**: 96% of oncologists report treatment delays due to PA. Cancer doesn't wait for "5-7 business days."
+2. **The Evidence Gap**: Insurers deny because they "didn't see" the evidence. MOAT has the evidence (Module 04). We weaponize it.
+3. **The Step Therapy Trap**: Patients forced to "fail" cheaper drugs before accessing precision medicine. MOAT knows the mutation (Module 01). We fight it.
+4. **Financial Toxicity**: Even if approved, $3,000/month copays make treatment impossible. MOAT finds the assistance (Module 15). We eliminate it.
+
+### The MOAT Integration
+
+**Module 15 is the final barrier removal layer** in the MOAT stack:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  MOAT LAYER 1: VALIDATED SCIENCE                            │
+│  Module 01-02: Extract mutations, calculate biomarkers     │
+│  Module 03: Predict resistance (RR=1.97 validated)         │
+│  Module 04: Rank drugs (S/P/E framework)                   │
+│  → Result: "Olaparib efficacy = 0.94 for this patient"     │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│  MOAT LAYER 2: INTEGRATED WORKFLOW                          │
+│  Module 05: Match trials (mechanism fit = 0.94)           │
+│  Module 06: Generate nutrition plan                        │
+│  Module 07: Unified care plan                              │
+│  → Result: "Complete precision oncology plan"              │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│  MOAT LAYER 3: BARRIER REMOVAL ⭐                          │
+│  Module 15: ACCESS & ADVOCACY AGENT                        │
+│  • Auto-generate LMN citing Module 04 evidence             │
+│  • Predict denial risk using Module 01 mutations            │
+│  • Find financial aid to eliminate copay barriers          │
+│  • Submit PA request with "The Brick" (complete packet)    │
+│  → Result: "Patient gets the drug. Today. Not in 2 weeks." │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**The MOAT Advantage**: While competitors stop at "here's the drug recommendation," MOAT continues to **"here's the insurance packet, here's the financial aid, here's the tracking number."**
+
+---
+
+## 📥 INTERFACE
+
+### Inputs
+- `PatientProfile` (from Module 01/02): Diagnosis, Stage, Mutations, ICD-10 codes.
+- `UnifiedCarePlan` (from Module 07): Prescribed drugs, regimens, dosing.
+- `DrugRanking` (from Module 04): Supporting evidence (PubMed IDs, Trials, Mechanism).
+- `BiomarkerProfile` (from Module 02): TMB, MSI, HRD status (for eligibility justification).
+
+### Outputs
+```python
+class InsurancePacket:
+    lmn_text: str                    # Letter of Medical Necessity (weaponized)
+    icd10_codes: List[str]           # Optimized justification codes
+    nccn_status: str                 # "Category 1", "2A", "2B", "Off-label"
+    coverage_risk: str               # "LOW", "MEDIUM", "HIGH"
+    mitigation_strategy: str         # "Add peer-to-peer", "Cite specific trial", etc.
+    evidence_attachments: List[str]  # PDF paths (papers, lab reports, pathology)
+    prior_auth_form: Dict            # Pre-filled PA form (payer-specific)
+    financial_assist: List[Dict]     # Eligible copay cards/foundations with links
+    submission_method: str           # "electronic", "fax", "portal"
+    tracking_id: Optional[str]       # PA request tracking number
+    urgency_score: str               # "STAT", "URGENT", "ROUTINE"
+    appeal_letter_template: Optional[str]  # Pre-drafted appeal (if high risk)
+```
+
+### The Complete Flow (MOAT Integration)
+
+```
+Module 07 (Care Plan) generates:
+  → Drug: "Olaparib"
+  → Rationale: "MBD4 homozygous loss, HRD-inferred"
+  → Evidence: Module 04 citations (SOLO1, PRIMA trials)
+
+Module 15 (Access & Advocacy) receives:
+  → Drug: "Olaparib"
+  → Mutation: "MBD4 c.1239delA (homozygous)"
+  → Disease: "Ovarian cancer, Stage IVB"
+  → Evidence: Module 04's PubMed IDs
+
+Module 15 generates:
+  → LMN: "Patient has MBD4 homozygous loss, a BER deficiency that creates
+          synthetic lethality with PARP inhibitors. NCCN Category 1 for
+          HRD+ maintenance. SOLO1 trial (PMID:...) showed 70% PFS benefit."
+  → Risk: "LOW" (NCCN Category 1)
+  → Financial Aid: "Merck Co-pay Card: $25,000/year max benefit"
+  → Packet: Complete PDF with pathology, NGS report, 3 key papers
+
+Result: Insurance packet ready in <30 seconds. No 2-week delay.
+```
+
+---
+
+## 🛠️ CORE FUNCTIONS (The Weaponized Documentation Engine)
+
+### 1. `generate_lmn(patient, drug, evidence, biomarkers)`
+**Purpose**: Generate a Letter of Medical Necessity that insurers cannot ignore.
+
+**MOAT Integration**:
+- Pulls mutations from `PatientProfile` (Module 01): "Patient has MBD4 c.1239delA (homozygous)..."
+- Pulls evidence from `DrugRanking` (Module 04): "SOLO1 trial (PMID:...) demonstrated 70% PFS benefit..."
+- Pulls biomarkers from `BiomarkerProfile` (Module 02): "HRD-inferred from MBD4 loss, TMB pending..."
+- Pulls NCCN status from internal compendium: "NCCN Category 1 for HRD+ maintenance therapy"
+
+**Logic**:
+1. **Template Selection**: 
+   - On-label (NCCN Cat 1/2A) → Standard template (authoritative, confident)
+   - Off-label (NCCN Cat 2B/None) → Aggressive template (cites specific trials, mechanism)
+   - Appeal → Rebuttal template (addresses specific denial reason)
+2. **Data Injection**:
+   - Patient demographics (Name, DOB, ID, Insurance ID)
+   - Clinical hook: "Patient has [MUTATION] which creates [MECHANISM] requiring [DRUG]"
+   - Evidence synthesis: "The [TRIAL] study (Citation: [PMID]) demonstrated [OUTCOME] for patients with this specific biomarker profile"
+   - NCCN justification: "NCCN Guidelines Version [X] list this as Category [Y]"
+3. **Tone Engineering**: 
+   - LLM prompt: "Write as a stern, authoritative oncologist. Use 'standard of care', 'medically necessary', and 'life-threatening condition' frequently. Do not apologize. State facts with confidence."
+4. **Legal Language**: 
+   - "Denial of this evidence-based therapy would be inconsistent with current standards of oncological care"
+   - "No alternative therapies exist that address this patient's specific molecular profile"
+   - "Delay in treatment would cause irreversible harm"
+
+**Output**: Complete LMN text ready for oncologist signature.
+
+### 2. `check_coverage_risk(drug, disease, mutation, payer)`
+**Purpose**: Predict denial probability and generate mitigation strategy **before** submission.
+
+**MOAT Integration**:
+- Uses `DrugRanking.tier` (Module 04): "Tier I" = LOW risk, "Tier III" = HIGH risk
+- Uses `BiomarkerProfile` (Module 02): HRD+ status affects PARP eligibility
+- Uses payer-specific rules database: UnitedHealthcare vs Medicare vs Medicaid
+
+**Logic**:
+```python
+def check_coverage_risk(drug, disease, mutation, payer):
+    # Layer 1: NCCN Status Check
+    nccn_status = nccn_compendium.get(disease, {}).get(drug, "Off-label")
+    if nccn_status == "Category 1":
+        base_risk = "LOW"
+    elif nccn_status == "Category 2A":
+        base_risk = "LOW"
+    elif nccn_status == "Category 2B":
+        base_risk = "MEDIUM"
+    else:  # Off-label
+        base_risk = "HIGH"
+    
+    # Layer 2: Evidence Strength (from Module 04)
+    evidence_count = len(drug_ranking.citations)
+    if evidence_count >= 3 and drug_ranking.tier == "I":
+        evidence_boost = -0.2  # Reduce risk
+    elif evidence_count < 2:
+        evidence_boost = +0.3  # Increase risk
+    
+    # Layer 3: Payer-Specific Rules
+    payer_rules = payer_rules_db.get(payer, {})
+    if payer_rules.get("off_label_requires") == "peer_to_peer":
+        if base_risk == "HIGH":
+            mitigation = "Request peer-to-peer review upfront"
+    
+    # Layer 4: Mutation-Specific Logic
+    if mutation == "BRCA1" and drug == "Olaparib":
+        risk = "LOW"  # FDA-approved, no question
+    elif mutation == "ATM" and drug == "Olaparib":
+        risk = "MEDIUM"  # Category 2B, needs strong LMN
+    elif mutation == "MBD4" and drug == "Olaparib":
+        risk = "MEDIUM"  # Off-label but strong mechanism (BER deficiency)
+        mitigation = "Cite PROfound trial + mechanism rationale"
+    
+    return {
+        "risk": risk,
+        "nccn_status": nccn_status,
+        "mitigation_strategy": mitigation,
+        "payer_specific_requirements": payer_rules
+    }
+```
+
+**Output**: Risk score + actionable mitigation strategy.
+
+### 3. `find_financial_aid(drug, patient_income, insurance_type)`
+**Purpose**: Eliminate financial toxicity by finding every available assistance program.
+
+**MOAT Integration**:
+- Uses `PatientProfile.insurance` (Module 01): Medicare vs Commercial vs Medicaid
+- Uses `PatientProfile.demographics` (Module 01): Income level for foundation eligibility
+
+**Logic**:
+```python
+def find_financial_aid(drug, patient_income, insurance_type):
+    aid_programs = []
+    
+    # Layer 1: Manufacturer Co-pay Cards
+    copay_cards = copay_card_db.get(drug, [])
+    for card in copay_cards:
+        if insurance_type in card["eligible_insurance"]:
+            if patient_income < card.get("income_limit", float("inf")):
+                aid_programs.append({
+                    "type": "copay_card",
+                    "name": card["name"],
+                    "url": card["application_url"],
+                    "max_benefit": card["max_benefit"],
+                    "eligibility": card["eligibility_criteria"]
+                })
+    
+    # Layer 2: Patient Assistance Foundations
+    foundations = foundation_db.get(drug, [])
+    for foundation in foundations:
+        if foundation["disease"] == patient_disease:
+            if patient_income < foundation["income_limit"]:
+                aid_programs.append({
+                    "type": "foundation",
+                    "name": foundation["name"],
+                    "url": foundation["application_url"],
+                    "eligibility": foundation["criteria"]
+                })
+    
+    # Layer 3: State-Specific Programs (Medicaid)
+    if insurance_type == "Medicaid":
+        state_programs = state_program_db.get(patient_state, [])
+        aid_programs.extend(state_programs)
+    
+    return aid_programs
+```
+
+**Output**: List of eligible programs with direct application links.
+
+### 4. `assemble_insurance_packet(patient, drug, lmn, evidence)`
+**Purpose**: Compile "The Brick" - the complete PDF packet that leaves no room for "missing information" denials.
+
+**MOAT Integration**:
+- Uses `PatientProfile` (Module 01): Pathology report, NGS report paths
+- Uses `DrugRanking.citations` (Module 04): PubMed IDs to download abstracts
+- Uses `BiomarkerProfile` (Module 02): TMB, MSI, HRD reports
+
+**Logic**:
+1. **Clinical Note**: Extract from patient record, highlight "Plan" section
+2. **Pathology Report**: Attach from Module 01 extraction
+3. **NGS Report**: Attach from Module 01 extraction, highlight relevant mutations
+4. **Biomarker Report**: Generate from Module 02 (TMB, MSI, HRD summary)
+5. **Evidence Papers**: Download 2-3 key abstracts from Module 04 citations
+6. **NCCN Compendium Page**: Screenshot or PDF of relevant NCCN page
+7. **LMN**: The generated letter
+8. **PA Form**: Pre-filled with patient/drug data
+
+**Output**: Single PDF packet ready for submission.
+
+### 5. `submit_pa_request(packet, payer, method)`
+**Purpose**: Actually submit the PA request (not just generate it).
+
+**Logic**:
+- **Electronic**: If payer supports (CoverMyMeds, Surescripts), auto-submit via API
+- **Portal**: If payer has portal, auto-fill form and submit
+- **Fax**: If required, use fax service (Twilio, etc.)
+- **Tracking**: Store tracking ID for status monitoring
+
+**Output**: Submission confirmation + tracking ID.
+
+### 6. `generate_appeal_letter(denial_reason, original_lmn, patient, drug)`
+**Purpose**: If denied, generate a targeted appeal that addresses the specific denial reason.
+
+**Logic**:
+- Parse denial reason: "Not Medically Necessary" vs "Experimental" vs "Off-label"
+- Generate rebuttal:
+  - "Not Medically Necessary" → Cite NCCN Category + specific patient mutation
+  - "Experimental" → Cite FDA approval or Phase III trial data
+  - "Off-label" → Cite mechanism rationale + basket trial data
+- Reference original LMN and add new evidence if available
+
+**Output**: Appeal letter template ready for oncologist review.
+
+---
+
+## 📝 IMPLEMENTATION CHECKLIST
+
+### Phase 1: Foundation (Week 1)
+- [ ] **Step 1: Data Models**
+    - Define `InsurancePacket` schema (Pydantic model)
+    - Define `PayerRules` database schema
+    - Define `FinancialAidDB` structure
+    - Define `NCCNCompendium` local database (JSON/SQLite)
+
+- [ ] **Step 2: Template Engine**
+    - Create `templates/lmn_standard.md` (On-label, authoritative tone)
+    - Create `templates/lmn_offlabel.md` (Off-label, aggressive tone)
+    - Create `templates/lmn_appeal.md` (Appeal, rebuttal tone)
+    - Create `templates/step_therapy_override.md` (Step therapy fight)
+    - Template variables: `{patient_name}`, `{drug}`, `{mutation}`, `{trial_citation}`, etc.
+
+- [ ] **Step 3: Evidence Aggregator**
+    - Connect to Module 04: Extract `DrugRanking.citations`, `DrugRanking.tier`
+    - Connect to Module 01: Extract `PatientProfile.mutations`, `PatientProfile.disease`
+    - Connect to Module 02: Extract `BiomarkerProfile.hrd_status`, `BiomarkerProfile.tmb`
+    - Create `EvidenceAggregator` class to pull from all modules
+
+### Phase 2: Core Agent (Week 2)
+- [ ] **Step 4: Risk Assessment Engine**
+    - Build `CoverageRiskAssessor` class
+    - Implement `check_coverage_risk()` with payer-specific logic
+    - Implement `calculate_urgency_score()` (STAT vs ROUTINE)
+    - Create `payer_rules_db.json` with major payers (UnitedHealthcare, Medicare, etc.)
+
+- [ ] **Step 5: LMN Generator**
+    - Build `LMNGenerator` class
+    - Implement `generate_lmn()` with LLM integration (Gemini/Claude)
+    - Implement template selection logic (on-label vs off-label)
+    - Add "Insurance-Speak" keyword injection ("standard of care", "medically necessary")
+
+- [ ] **Step 6: Financial Aid Finder**
+    - Build `FinancialAidFinder` class
+    - Create `copay_card_db.json` (Keytruda → Key+You, Olaparib → Merck Access, etc.)
+    - Create `foundation_db.json` (PAN Foundation, CancerCare, etc.)
+    - Implement eligibility checking logic
+
+### Phase 3: Packet Assembly (Week 3)
+- [ ] **Step 7: Packet Assembler**
+    - Build `InsurancePacketAssembler` class
+    - Implement PDF compilation (pathology + NGS + biomarker + papers + LMN)
+    - Implement PubMed abstract downloader (for evidence papers)
+    - Create "The Brick" - single comprehensive PDF
+
+- [ ] **Step 8: PA Form Filler**
+    - Build `PAFormFiller` class
+    - Create payer-specific form templates (JSON schemas)
+    - Implement auto-fill logic (patient data → form fields)
+    - Output: Pre-filled PA form (PDF or JSON)
+
+### Phase 4: Submission & Tracking (Week 4)
+- [ ] **Step 9: Submission Engine**
+    - Build `PASubmissionEngine` class
+    - Integrate with CoverMyMeds API (if available)
+    - Integrate with Surescripts API (if available)
+    - Implement fax fallback (Twilio or similar)
+    - Store tracking IDs in database
+
+- [ ] **Step 10: Appeal Generator**
+    - Build `AppealLetterGenerator` class
+    - Implement denial reason parsing ("Not Medically Necessary", "Experimental", etc.)
+    - Generate targeted rebuttals based on denial type
+    - Reference original LMN + add new evidence
+
+### Phase 5: Integration (Week 5)
+- [ ] **Step 11: Orchestrator Integration**
+    - Hook into `_run_care_plan_agent()` in `orchestrator.py`
+    - After care plan generated, run `AccessAdvocacyAgent.process()`
+    - Append `InsurancePacket` to `PatientState.access_advocacy`
+    - Add to `PatientState` schema
+
+- [ ] **Step 12: Frontend Integration**
+    - Create "Download Insurance Packet" button in dashboard
+    - Display coverage risk score (LOW/MEDIUM/HIGH badge)
+    - Display financial aid links
+    - Show PA submission status (if tracking available)
+
+---
+
+## 🔗 DEPENDENCIES
+
+### Upstream (Required Inputs)
+- **Module 01 (Data Extraction)**: Patient mutations, demographics, ICD-10 codes
+- **Module 02 (Biomarker)**: HRD status, TMB, MSI (for eligibility justification)
+- **Module 04 (Drug Efficacy)**: Drug rankings, citations, evidence tier
+- **Module 07 (Care Plan)**: Final drug list, dosing, treatment plan
+
+### Downstream (Outputs Used By)
+- **Frontend Dashboard**: "Download Insurance Packet" button, risk badges, financial aid links
+- **Module 08 (Monitoring)**: Track PA approval status, financial aid enrollment
+- **Module 09 (Trigger System)**: Alert if PA denied, trigger appeal generation
+
+### External Dependencies
+- **NCCN Compendium**: Local database (scraped/manually curated, no public API)
+- **Payer Rules Database**: Payer-specific requirements (UnitedHealthcare, Medicare, etc.)
+- **Financial Aid Database**: Copay cards, foundations, state programs
+- **LLM Service**: Gemini/Claude for LMN generation (tone engineering)
+- **PDF Library**: For packet assembly (reportlab, pypdf)
+- **PubMed API**: For abstract download (optional, can link instead)
+
+---
+
+## 🧪 TEST CASES
+
+### Test 1: Happy Path (NCCN Category 1)
+**Input**:
+- Drug: "Olaparib"
+- Disease: "Ovarian cancer, Stage IVB"
+- Mutation: "BRCA1 c.5266dupC (pathogenic)"
+- Biomarker: HRD-positive (Myriad score 52)
+- Payer: "UnitedHealthcare"
+
+**Expected Output**:
+- `nccn_status`: "Category 1"
+- `coverage_risk`: "LOW"
+- `lmn_text`: Contains "NCCN Category 1", "FDA-approved", "Standard of care"
+- `financial_assist`: [{"name": "Merck Access Program", "url": "...", "max_benefit": "$25,000/year"}]
+- `mitigation_strategy`: "None required - standard approval expected"
+- `urgency_score`: "ROUTINE"
+
+### Test 2: The Fight (Off-Label, High Risk)
+**Input**:
+- Drug: "Trametinib" (MEK inhibitor)
+- Disease: "Ovarian cancer, Stage IVB"
+- Mutation: "KRAS G12C"
+- Biomarker: TMB-L, MSS
+- Payer: "Medicare Part B"
+- Evidence: 2 Phase I/II trials (Module 04)
+
+**Expected Output**:
+- `nccn_status`: "Off-label"
+- `coverage_risk`: "HIGH"
+- `lmn_text`: Contains "KRAS G12C mutation", "CodeBreaK 100 trial", "mechanism rationale", "no alternative therapies"
+- `mitigation_strategy`: "Request peer-to-peer review upfront. Cite basket trial data."
+- `appeal_letter_template`: Pre-generated (expecting denial)
+- `urgency_score`: "URGENT" (off-label requires faster action)
+
+### Test 3: Financial Toxicity Elimination
+**Input**:
+- Drug: "Pembrolizumab" (Keytruda)
+- Insurance: "Commercial (Anthem)"
+- Patient Income: "$45,000/year"
+
+**Expected Output**:
+- `financial_assist`: [
+      {"type": "copay_card", "name": "Key+You", "url": "...", "max_benefit": "$25,000/year"},
+      {"type": "foundation", "name": "PAN Foundation", "url": "...", "eligibility": "Income <$75k"}
+  ]
+- `lmn_text`: Includes note: "Patient eligible for financial assistance programs to eliminate copay burden"
+
+### Test 4: Step Therapy Override
+**Input**:
+- Drug: "Olaparib"
+- Disease: "Ovarian cancer"
+- Mutation: "BRCA1 pathogenic"
+- Payer: "Aetna" (requires "fail-first" on standard chemo)
+- Treatment Line: 1 (first-line, hasn't "failed" chemo yet)
+
+**Expected Output**:
+- `coverage_risk`: "MEDIUM" (step therapy barrier)
+- `lmn_text`: Contains "Step therapy override requested" section
+- `lmn_text`: Contains "BRCA1 mutation makes standard chemotherapy ineffective due to synthetic lethality mechanism"
+- `mitigation_strategy`: "Cite NCCN Category 1 + mechanism rationale. Request expedited review."
+
+### Test 5: Appeal Generation (Post-Denial)
+**Input**:
+- Original LMN: Generated for Olaparib + ATM mutation
+- Denial Reason: "Not Medically Necessary - ATM mutation not FDA-approved indication"
+- Original Evidence: PROfound trial data
+
+**Expected Output**:
+- `appeal_letter_template`: Contains:
+  - Rebuttal: "ATM is a DNA repair gene, similar mechanism to BRCA. PROfound trial (PMID:...) included ATM patients."
+  - New Evidence: "NCCN Category 2B explicitly lists ATM as PARP-eligible"
+  - Legal Language: "Your denial contradicts NCCN Guidelines and current standard of care"
+
+---
+
+## 🎯 SUCCESS METRICS (MOAT-Aligned)
+
+| Metric | Target | Measurement |
+|--------|--------|-------------|
+| **Time to Insurance Packet** | <30 seconds | Care plan → Complete packet generated |
+| **PA Approval Rate** | >85% (Category 1), >60% (Off-label) | First submission approval rate |
+| **Financial Aid Match Rate** | >90% | Patients with eligible drugs get aid links |
+| **Appeal Success Rate** | >70% | Denied → Appealed → Approved |
+| **Time Saved per PA** | 2-4 hours | Manual LMN writing vs automated |
+
+---
+
+## 🏆 THE MOAT ADVANTAGE
+
+**What Competitors Do**:
+- "Here's the drug recommendation. Good luck with insurance."
+
+**What MOAT Does**:
+- "Here's the drug recommendation. Here's the insurance packet. Here's the financial aid. Here's the tracking number. Here's the appeal letter if they deny. **We don't stop until the patient gets the drug.**"
+
+**The Defensible Position**:
+- **Layer 1**: Validated science (Module 04) → Evidence for LMN
+- **Layer 2**: Integrated workflow (Module 07) → Care plan → Insurance packet (automatic)
+- **Layer 3**: Agentic intelligence (Module 15) → Predicts denials, pre-generates appeals
+- **Layer 4**: Continuous monitoring (Module 08) → Tracks PA status, alerts on delays
+
+**Result**: Precision oncology that **actually reaches the patient**, not just the recommendation.

@@ -1,0 +1,4620 @@
+# ⚔️ MODULE 03: RESISTANCE PREDICTION AGENT
+
+**Purpose:** Predict drug resistance/sensitivity from pathway mutations  
+**Priority:** 🔴 CRITICAL | **Dependencies:** 01, 02 | **Consumers:** 04, 07, 08
+
+---
+
+## 🎯 MISSION
+
+Build a resistance prediction agent that can:
+1. Detect MAPK pathway mutations (validated RR=1.97 for platinum resistance)
+2. Analyze DDR pathway status for platinum/PARP sensitivity
+3. Calculate resistance risk scores with confidence
+4. Provide mechanism-based explanations
+5. Identify monitoring priorities
+
+---
+
+## 📊 VALIDATED CAPABILITIES (USE THESE)
+
+### MAPK Resistance - ALREADY VALIDATED ✅
+
+**Location:** `api/services/resistance_prophet_service.py`
+
+**Validation Metrics (TCGA-OV, n=469):**
+| Pathway | Mutated | Resistant Rate | Relative Risk |
+|---------|---------|----------------|---------------|
+| MAPK (any) | 35 pts | 28.6% | **1.97** |
+| NF1 specific | 26 pts | 30.8% | **2.10** |
+| Wildtype | 434 pts | 14.5% | 1.0 (baseline) |
+
+**Statistical Significance:** p < 0.05
+
+---
+
+## 📥 INPUTS
+
+### From PatientProfile (Module 01) & BiomarkerProfile (Module 02)
+
+```python
+# Required inputs
+patient_id: str
+mutations: List[Mutation]      # From Module 01
+disease: str                   # e.g., "ovarian_cancer"
+current_treatment: str         # e.g., "carboplatin"
+
+# Optional inputs (from Module 02)
+hrd_status: str               # "HRD+", "HRD-", "HRD-INFERRED"
+tmb_classification: str       # "TMB-H", "TMB-L"
+```
+
+---
+
+## 📤 OUTPUTS
+
+### ResistancePrediction Schema
+
+```python
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from enum import Enum
+
+class SensitivityLevel(Enum):
+    VERY_HIGH = "very_high"
+    HIGH = "high"
+    MODERATE = "moderate"
+    LOW = "low"
+    RESISTANT = "resistant"
+
+class RiskLevel(Enum):
+    HIGH = "high"
+    MODERATE = "moderate"
+    LOW = "low"
+    BASELINE = "baseline"
+
+@dataclass
+class PathwayAnalysis:
+    pathway: str                    # "MAPK", "DDR", "PI3K", etc.
+    status: str                     # "mutated", "wildtype", "compromised"
+    genes_mutated: List[str]        # ["KRAS", "NF1"]
+    genes_checked: List[str]        # All genes in pathway
+    burden_score: float             # 0.0 - 1.0
+
+@dataclass
+class DrugSensitivity:
+    drug_class: str                 # "platinum", "parp", "checkpoint"
+    sensitivity: SensitivityLevel
+    mechanism: str                  # "BER_DEFICIENCY", "DDR_INTACT"
+    confidence: float               # 0.0 - 1.0
+
+@dataclass
+class ResistancePrediction:
+    patient_id: str
+    
+    # Pathway analyses
+    pathways: List[PathwayAnalysis]
+    
+    # Per-drug-class predictions
+    drug_sensitivities: Dict[str, DrugSensitivity]
+    
+    # Platinum-specific (most validated)
+    platinum_sensitivity: SensitivityLevel
+    platinum_resistance_risk: float         # 0.0 - 1.0
+    platinum_mechanism: str
+    
+    # PARP-specific
+    parp_sensitivity: SensitivityLevel
+    parp_resistance_risk: float
+    parp_mechanism: str
+    
+    # Overall
+    signals_detected: int                   # Count of resistance signals
+    monitoring_priorities: List[str]        # ["MAPK_mutations", "ABCB1"]
+    
+    # Validation
+    validation: Dict[str, any]              # TCGA validation metrics
+    confidence: float
+    provenance: Dict[str, any]
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### File Structure
+
+```
+api/services/resistance/
+├── __init__.py
+├── resistance_agent.py         # Main agent
+├── pathway_analyzer.py         # Pathway mutation analysis
+├── mapk_predictor.py           # MAPK resistance (validated)
+├── ddr_predictor.py            # DDR sensitivity
+├── sensitivity_calculator.py   # Overall sensitivity
+├── constants.py                # Pathway gene lists
+└── tests/
+    ├── test_mapk.py
+    ├── test_ddr.py
+    └── test_integration.py
+```
+
+### Core Agent Implementation
+
+```python
+# api/services/resistance/resistance_agent.py
+
+from typing import List, Dict, Optional
+from datetime import datetime
+import logging
+
+from .pathway_analyzer import PathwayAnalyzer
+from .mapk_predictor import MAPKResistancePredictor
+from .ddr_predictor import DDRSensitivityPredictor
+from .sensitivity_calculator import SensitivityCalculator
+from ..models import PatientProfile, BiomarkerProfile, ResistancePrediction
+
+logger = logging.getLogger(__name__)
+
+class ResistanceAgent:
+    """
+    Predict drug resistance/sensitivity from pathway mutations.
+    
+    Validated:
+    - MAPK pathway: RR=1.97 for platinum resistance (TCGA-OV, n=469)
+    - DDR pathway: MBD4/TP53 synthetic lethality
+    """
+    
+    def __init__(self):
+        self.pathway_analyzer = PathwayAnalyzer()
+        self.mapk_predictor = MAPKResistancePredictor()
+        self.ddr_predictor = DDRSensitivityPredictor()
+        self.sensitivity_calc = SensitivityCalculator()
+    
+    async def predict(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile] = None,
+        current_treatment: str = None
+    ) -> ResistancePrediction:
+        """
+        Predict resistance/sensitivity for a patient.
+        
+        Args:
+            patient_profile: Patient with mutations
+            biomarker_profile: Optional biomarker data
+            current_treatment: Current drug (for context)
+        
+        Returns:
+            ResistancePrediction with pathway analysis and predictions
+        """
+        logger.info(f"Predicting resistance for {patient_profile.patient_id}")
+        
+        mutations = self._mutations_to_dicts(patient_profile.mutations)
+        
+        # Step 1: Analyze all pathways
+        pathways = self.pathway_analyzer.analyze(mutations)
+        
+        # Step 2: MAPK resistance prediction (validated)
+        mapk_result = self.mapk_predictor.predict(mutations)
+        
+        # Step 3: DDR sensitivity prediction
+        ddr_result = self.ddr_predictor.predict(
+            mutations=mutations,
+            hrd_status=biomarker_profile.hrd.status if biomarker_profile else None
+        )
+        
+        # Step 4: Calculate per-drug sensitivities
+        drug_sensitivities = self.sensitivity_calc.calculate_all(
+            pathways=pathways,
+            mapk_result=mapk_result,
+            ddr_result=ddr_result
+        )
+        
+        # Step 5: Count signals and determine monitoring priorities
+        signals = self._count_signals(mapk_result, ddr_result, pathways)
+        monitoring = self._determine_monitoring(pathways, current_treatment)
+        
+        return ResistancePrediction(
+            patient_id=patient_profile.patient_id,
+            pathways=pathways,
+            drug_sensitivities=drug_sensitivities,
+            platinum_sensitivity=ddr_result.platinum_sensitivity,
+            platinum_resistance_risk=mapk_result.resistance_risk,
+            platinum_mechanism=ddr_result.mechanism,
+            parp_sensitivity=ddr_result.parp_sensitivity,
+            parp_resistance_risk=ddr_result.parp_resistance_risk,
+            parp_mechanism=ddr_result.parp_mechanism,
+            signals_detected=signals,
+            monitoring_priorities=monitoring,
+            validation={
+                'mapk_validation': 'TCGA-OV n=469, MAPK RR=1.97, p<0.05',
+                'baseline_resistance': 0.145
+            },
+            confidence=self._calculate_confidence(pathways),
+            provenance={
+                'method': 'pathway_mutation_analysis',
+                'timestamp': datetime.utcnow().isoformat()
+            }
+        )
+```
+
+### MAPK Resistance Predictor (Validated)
+
+```python
+# api/services/resistance/mapk_predictor.py
+
+from typing import List, Dict
+from dataclasses import dataclass
+from .constants import MAPK_GENES
+
+@dataclass
+class MAPKResult:
+    has_mutation: bool
+    genes_mutated: List[str]
+    resistance_risk: float      # 0.0 - 1.0
+    relative_risk: float        # vs baseline
+    mechanism: str
+    confidence: float
+
+class MAPKResistancePredictor:
+    """
+    Predict platinum resistance from MAPK pathway mutations.
+    
+    Validated on TCGA-OV (n=469):
+    - MAPK mutated: 28.6% resistant (RR=1.97)
+    - NF1 specifically: 30.8% resistant (RR=2.10)
+    - Wildtype: 14.5% resistant (baseline)
+    """
+    
+    BASELINE_RESISTANCE = 0.145  # 14.5% for wildtype
+    MAPK_RELATIVE_RISK = 1.97
+    NF1_RELATIVE_RISK = 2.10
+    
+    def predict(self, mutations: List[Dict]) -> MAPKResult:
+        """
+        Predict MAPK-mediated platinum resistance.
+        
+        Args:
+            mutations: Patient mutations
+        
+        Returns:
+            MAPKResult with resistance prediction
+        """
+        # Find MAPK pathway mutations
+        mutated_genes = {m.get('gene', '').upper() for m in mutations}
+        mapk_mutated = [g for g in MAPK_GENES if g in mutated_genes]
+        
+        if not mapk_mutated:
+            return MAPKResult(
+                has_mutation=False,
+                genes_mutated=[],
+                resistance_risk=self.BASELINE_RESISTANCE,
+                relative_risk=1.0,
+                mechanism="MAPK_WILDTYPE",
+                confidence=0.85
+            )
+        
+        # Determine risk based on specific genes
+        if 'NF1' in mapk_mutated:
+            relative_risk = self.NF1_RELATIVE_RISK
+            mechanism = "NF1_LOSS_RAS_ACTIVATION"
+        else:
+            relative_risk = self.MAPK_RELATIVE_RISK
+            mechanism = f"MAPK_ACTIVATION_{mapk_mutated[0]}"
+        
+        # Calculate absolute resistance risk
+        resistance_risk = min(self.BASELINE_RESISTANCE * relative_risk, 1.0)
+        
+        return MAPKResult(
+            has_mutation=True,
+            genes_mutated=mapk_mutated,
+            resistance_risk=round(resistance_risk, 3),
+            relative_risk=relative_risk,
+            mechanism=mechanism,
+            confidence=0.80
+        )
+```
+
+### DDR Sensitivity Predictor
+
+```python
+# api/services/resistance/ddr_predictor.py
+
+from typing import List, Dict, Optional
+from dataclasses import dataclass
+from .constants import DDR_GENES, BER_GENES, HRR_GENES
+
+@dataclass
+class DDRResult:
+    ddr_status: str             # "compromised", "intact"
+    platinum_sensitivity: str   # "very_high", "high", "moderate", "low"
+    parp_sensitivity: str
+    parp_resistance_risk: float
+    mechanism: str
+    parp_mechanism: str
+    genes_mutated: List[str]
+    confidence: float
+
+class DDRSensitivityPredictor:
+    """
+    Predict DDR pathway status and drug sensitivity.
+    
+    Key insight: DDR deficiency → platinum/PARP sensitivity
+    - BRCA1/2 loss → HRR deficiency → PARP synthetic lethality
+    - MBD4 loss → BER deficiency → Platinum sensitivity + PARP
+    - TP53 loss + DDR loss → Checkpoint bypass → Enhanced sensitivity
+    """
+    
+    def predict(
+        self,
+        mutations: List[Dict],
+        hrd_status: Optional[str] = None
+    ) -> DDRResult:
+        """
+        Predict DDR-based drug sensitivity.
+        
+        Args:
+            mutations: Patient mutations
+            hrd_status: Optional HRD status from biomarker agent
+        
+        Returns:
+            DDRResult with sensitivity predictions
+        """
+        mutated_genes = {m.get('gene', '').upper() for m in mutations}
+        
+        # Find DDR mutations
+        ddr_mutated = [g for g in DDR_GENES if g in mutated_genes]
+        ber_mutated = [g for g in BER_GENES if g in mutated_genes]
+        hrr_mutated = [g for g in HRR_GENES if g in mutated_genes]
+        
+        tp53_mutant = 'TP53' in mutated_genes
+        
+        # Determine DDR status and sensitivities
+        if ber_mutated:
+            # BER deficiency (e.g., MBD4)
+            ddr_status = "compromised"
+            platinum_sensitivity = "very_high" if tp53_mutant else "high"
+            parp_sensitivity = "very_high"
+            parp_resistance_risk = 0.10
+            mechanism = f"BER_DEFICIENCY_{ber_mutated[0]}"
+            parp_mechanism = f"SYNTHETIC_LETHALITY_{ber_mutated[0]}"
+            confidence = 0.85
+            
+        elif hrr_mutated or hrd_status in ["HRD+", "HRD-INFERRED"]:
+            # HRR deficiency (BRCA, etc.)
+            ddr_status = "compromised"
+            platinum_sensitivity = "high"
+            parp_sensitivity = "very_high"
+            parp_resistance_risk = 0.15
+            mechanism = f"HRR_DEFICIENCY_{hrr_mutated[0] if hrr_mutated else 'HRD'}"
+            parp_mechanism = "SYNTHETIC_LETHALITY_HRD"
+            confidence = 0.90
+            
+        elif ddr_mutated:
+            # Other DDR mutations
+            ddr_status = "compromised"
+            platinum_sensitivity = "moderate"
+            parp_sensitivity = "moderate"
+            parp_resistance_risk = 0.30
+            mechanism = f"DDR_MUTATION_{ddr_mutated[0]}"
+            parp_mechanism = f"DDR_DISRUPTION_{ddr_mutated[0]}"
+            confidence = 0.70
+            
+        else:
+            # DDR intact
+            ddr_status = "intact"
+            platinum_sensitivity = "moderate"
+            parp_sensitivity = "low"
+            parp_resistance_risk = 0.50
+            mechanism = "DDR_INTACT"
+            parp_mechanism = "NO_SYNTHETIC_LETHALITY"
+            confidence = 0.75
+        
+        all_mutated = list(set(ddr_mutated + ber_mutated + hrr_mutated))
+        
+        return DDRResult(
+            ddr_status=ddr_status,
+            platinum_sensitivity=platinum_sensitivity,
+            parp_sensitivity=parp_sensitivity,
+            parp_resistance_risk=parp_resistance_risk,
+            mechanism=mechanism,
+            parp_mechanism=parp_mechanism,
+            genes_mutated=all_mutated,
+            confidence=confidence
+        )
+```
+
+### Constants
+
+```python
+# api/services/resistance/constants.py
+
+# MAPK pathway genes (validated for platinum resistance)
+MAPK_GENES = {
+    'KRAS', 'NRAS', 'HRAS',     # RAS family
+    'BRAF', 'ARAF', 'RAF1',     # RAF family
+    'MAP2K1', 'MAP2K2',         # MEK1/2
+    'MAPK1', 'MAPK3',           # ERK1/2
+    'NF1',                      # RAS regulator (RR=2.10)
+    'PTPN11',                   # SHP2
+    'SOS1', 'SOS2',             # RAS activators
+    'CBL'                       # E3 ligase
+}
+
+# All DDR genes
+DDR_GENES = {
+    'ATM', 'ATR', 'CHEK1', 'CHEK2',
+    'TP53', 'MDM2', 'CDKN2A',
+    'BRCA1', 'BRCA2', 'PALB2',
+    'RAD51C', 'RAD51D', 'BARD1',
+    'MBD4', 'MUTYH', 'OGG1',
+    'MLH1', 'MSH2', 'MSH6', 'PMS2'
+}
+
+# Base Excision Repair genes
+BER_GENES = {
+    'MBD4', 'MUTYH', 'OGG1', 'NTHL1',
+    'NEIL1', 'NEIL2', 'NEIL3',
+    'APEX1', 'XRCC1',
+    'PARP1', 'PARP2', 'PARP3'
+}
+
+# Homologous Recombination Repair genes
+HRR_GENES = {
+    'BRCA1', 'BRCA2', 'PALB2',
+    'RAD51', 'RAD51B', 'RAD51C', 'RAD51D',
+    'BRIP1', 'BARD1', 'NBN',
+    'MRE11', 'RAD50', 'ATM', 'ATR',
+    'FANCA', 'FANCD2', 'FANCL'
+}
+
+# Drug efflux genes (for resistance monitoring)
+EFFLUX_GENES = {
+    'ABCB1', 'ABCC1', 'ABCG2'
+}
+```
+
+---
+
+## 🧪 TESTING
+
+### MAPK Validation Test
+
+```python
+# api/services/resistance/tests/test_mapk.py
+
+import pytest
+from ..mapk_predictor import MAPKResistancePredictor
+
+@pytest.fixture
+def predictor():
+    return MAPKResistancePredictor()
+
+def test_mapk_wildtype(predictor):
+    mutations = [{'gene': 'TP53'}]  # Not MAPK
+    result = predictor.predict(mutations)
+    
+    assert result.has_mutation == False
+    assert result.resistance_risk == 0.145  # Baseline
+    assert result.relative_risk == 1.0
+
+def test_mapk_kras_mutation(predictor):
+    mutations = [{'gene': 'KRAS'}]
+    result = predictor.predict(mutations)
+    
+    assert result.has_mutation == True
+    assert 'KRAS' in result.genes_mutated
+    assert result.relative_risk == 1.97
+    assert result.resistance_risk == pytest.approx(0.145 * 1.97, rel=0.01)
+
+def test_mapk_nf1_mutation(predictor):
+    mutations = [{'gene': 'NF1'}]
+    result = predictor.predict(mutations)
+    
+    assert result.has_mutation == True
+    assert result.relative_risk == 2.10  # Higher risk for NF1
+    assert 'NF1_LOSS' in result.mechanism
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+### Phase 1: MAPK Predictor (Validated)
+- [ ] Port MAPK logic from `resistance_prophet_service.py`
+- [ ] Validate against TCGA-OV metrics (RR=1.97)
+- [ ] Add NF1-specific prediction (RR=2.10)
+- [ ] Unit tests matching validation
+
+### Phase 2: DDR Predictor
+- [ ] Implement BER deficiency detection
+- [ ] Implement HRR deficiency detection
+- [ ] Add TP53 synergy logic
+- [ ] Calculate platinum/PARP sensitivity
+- [ ] Unit tests
+
+### Phase 3: Pathway Analyzer
+- [ ] Generic pathway analysis
+- [ ] Pathway burden scoring
+- [ ] Multiple pathway support
+- [ ] Unit tests
+
+### Phase 4: Integration
+- [ ] Create ResistanceAgent class
+- [ ] Wire all predictors
+- [ ] Add monitoring priority logic
+- [ ] Integration tests
+
+---
+
+## 📡 API ENDPOINT
+
+```yaml
+POST /api/agents/resistance
+Content-Type: application/json
+
+Request:
+  patient_id: string
+  mutations: Mutation[]
+  current_treatment: string  # optional
+  hrd_status: string         # optional (from biomarker agent)
+
+Response:
+  resistance_prediction: ResistancePrediction
+  calculation_time_ms: number
+```
+
+---
+
+## ✅ ACCEPTANCE CRITERIA
+
+1. ✅ MAPK resistance matches validated RR=1.97
+2. ✅ NF1-specific prediction at RR=2.10
+3. ✅ Baseline resistance = 14.5% for wildtype
+4. ✅ DDR deficiency → high platinum sensitivity
+5. ✅ BER deficiency → very high PARP sensitivity
+6. ✅ All predictions include mechanism explanation
+7. ✅ Monitoring priorities generated
+8. ✅ Unit test coverage >80%
+
+---
+
+---
+
+## 🎯 MISSION
+
+Build a resistance prediction agent that can:
+1. Detect MAPK pathway mutations (validated RR=1.97 for platinum resistance)
+2. Analyze DDR pathway status for platinum/PARP sensitivity
+3. Calculate resistance risk scores with confidence
+4. Provide mechanism-based explanations
+5. Identify monitoring priorities
+
+---
+
+## 📊 VALIDATED CAPABILITIES (USE THESE)
+
+### MAPK Resistance - ALREADY VALIDATED ✅
+
+**Location:** `api/services/resistance_prophet_service.py`
+
+**Validation Metrics (TCGA-OV, n=469):**
+| Pathway | Mutated | Resistant Rate | Relative Risk |
+|---------|---------|----------------|---------------|
+| MAPK (any) | 35 pts | 28.6% | **1.97** |
+| NF1 specific | 26 pts | 30.8% | **2.10** |
+| Wildtype | 434 pts | 14.5% | 1.0 (baseline) |
+
+**Statistical Significance:** p < 0.05
+
+---
+
+## 📥 INPUTS
+
+### From PatientProfile (Module 01) & BiomarkerProfile (Module 02)
+
+```python
+# Required inputs
+patient_id: str
+mutations: List[Mutation]      # From Module 01
+disease: str                   # e.g., "ovarian_cancer"
+current_treatment: str         # e.g., "carboplatin"
+
+# Optional inputs (from Module 02)
+hrd_status: str               # "HRD+", "HRD-", "HRD-INFERRED"
+tmb_classification: str       # "TMB-H", "TMB-L"
+```
+
+---
+
+## 📤 OUTPUTS
+
+### ResistancePrediction Schema
+
+```python
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from enum import Enum
+
+class SensitivityLevel(Enum):
+    VERY_HIGH = "very_high"
+    HIGH = "high"
+    MODERATE = "moderate"
+    LOW = "low"
+    RESISTANT = "resistant"
+
+class RiskLevel(Enum):
+    HIGH = "high"
+    MODERATE = "moderate"
+    LOW = "low"
+    BASELINE = "baseline"
+
+@dataclass
+class PathwayAnalysis:
+    pathway: str                    # "MAPK", "DDR", "PI3K", etc.
+    status: str                     # "mutated", "wildtype", "compromised"
+    genes_mutated: List[str]        # ["KRAS", "NF1"]
+    genes_checked: List[str]        # All genes in pathway
+    burden_score: float             # 0.0 - 1.0
+
+@dataclass
+class DrugSensitivity:
+    drug_class: str                 # "platinum", "parp", "checkpoint"
+    sensitivity: SensitivityLevel
+    mechanism: str                  # "BER_DEFICIENCY", "DDR_INTACT"
+    confidence: float               # 0.0 - 1.0
+
+@dataclass
+class ResistancePrediction:
+    patient_id: str
+    
+    # Pathway analyses
+    pathways: List[PathwayAnalysis]
+    
+    # Per-drug-class predictions
+    drug_sensitivities: Dict[str, DrugSensitivity]
+    
+    # Platinum-specific (most validated)
+    platinum_sensitivity: SensitivityLevel
+    platinum_resistance_risk: float         # 0.0 - 1.0
+    platinum_mechanism: str
+    
+    # PARP-specific
+    parp_sensitivity: SensitivityLevel
+    parp_resistance_risk: float
+    parp_mechanism: str
+    
+    # Overall
+    signals_detected: int                   # Count of resistance signals
+    monitoring_priorities: List[str]        # ["MAPK_mutations", "ABCB1"]
+    
+    # Validation
+    validation: Dict[str, any]              # TCGA validation metrics
+    confidence: float
+    provenance: Dict[str, any]
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### File Structure
+
+```
+api/services/resistance/
+├── __init__.py
+├── resistance_agent.py         # Main agent
+├── pathway_analyzer.py         # Pathway mutation analysis
+├── mapk_predictor.py           # MAPK resistance (validated)
+├── ddr_predictor.py            # DDR sensitivity
+├── sensitivity_calculator.py   # Overall sensitivity
+├── constants.py                # Pathway gene lists
+└── tests/
+    ├── test_mapk.py
+    ├── test_ddr.py
+    └── test_integration.py
+```
+
+### Core Agent Implementation
+
+```python
+# api/services/resistance/resistance_agent.py
+
+from typing import List, Dict, Optional
+from datetime import datetime
+import logging
+
+from .pathway_analyzer import PathwayAnalyzer
+from .mapk_predictor import MAPKResistancePredictor
+from .ddr_predictor import DDRSensitivityPredictor
+from .sensitivity_calculator import SensitivityCalculator
+from ..models import PatientProfile, BiomarkerProfile, ResistancePrediction
+
+logger = logging.getLogger(__name__)
+
+class ResistanceAgent:
+    """
+    Predict drug resistance/sensitivity from pathway mutations.
+    
+    Validated:
+    - MAPK pathway: RR=1.97 for platinum resistance (TCGA-OV, n=469)
+    - DDR pathway: MBD4/TP53 synthetic lethality
+    """
+    
+    def __init__(self):
+        self.pathway_analyzer = PathwayAnalyzer()
+        self.mapk_predictor = MAPKResistancePredictor()
+        self.ddr_predictor = DDRSensitivityPredictor()
+        self.sensitivity_calc = SensitivityCalculator()
+    
+    async def predict(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile] = None,
+        current_treatment: str = None
+    ) -> ResistancePrediction:
+        """
+        Predict resistance/sensitivity for a patient.
+        
+        Args:
+            patient_profile: Patient with mutations
+            biomarker_profile: Optional biomarker data
+            current_treatment: Current drug (for context)
+        
+        Returns:
+            ResistancePrediction with pathway analysis and predictions
+        """
+        logger.info(f"Predicting resistance for {patient_profile.patient_id}")
+        
+        mutations = self._mutations_to_dicts(patient_profile.mutations)
+        
+        # Step 1: Analyze all pathways
+        pathways = self.pathway_analyzer.analyze(mutations)
+        
+        # Step 2: MAPK resistance prediction (validated)
+        mapk_result = self.mapk_predictor.predict(mutations)
+        
+        # Step 3: DDR sensitivity prediction
+        ddr_result = self.ddr_predictor.predict(
+            mutations=mutations,
+            hrd_status=biomarker_profile.hrd.status if biomarker_profile else None
+        )
+        
+        # Step 4: Calculate per-drug sensitivities
+        drug_sensitivities = self.sensitivity_calc.calculate_all(
+            pathways=pathways,
+            mapk_result=mapk_result,
+            ddr_result=ddr_result
+        )
+        
+        # Step 5: Count signals and determine monitoring priorities
+        signals = self._count_signals(mapk_result, ddr_result, pathways)
+        monitoring = self._determine_monitoring(pathways, current_treatment)
+        
+        return ResistancePrediction(
+            patient_id=patient_profile.patient_id,
+            pathways=pathways,
+            drug_sensitivities=drug_sensitivities,
+            platinum_sensitivity=ddr_result.platinum_sensitivity,
+            platinum_resistance_risk=mapk_result.resistance_risk,
+            platinum_mechanism=ddr_result.mechanism,
+            parp_sensitivity=ddr_result.parp_sensitivity,
+            parp_resistance_risk=ddr_result.parp_resistance_risk,
+            parp_mechanism=ddr_result.parp_mechanism,
+            signals_detected=signals,
+            monitoring_priorities=monitoring,
+            validation={
+                'mapk_validation': 'TCGA-OV n=469, MAPK RR=1.97, p<0.05',
+                'baseline_resistance': 0.145
+            },
+            confidence=self._calculate_confidence(pathways),
+            provenance={
+                'method': 'pathway_mutation_analysis',
+                'timestamp': datetime.utcnow().isoformat()
+            }
+        )
+```
+
+### MAPK Resistance Predictor (Validated)
+
+```python
+# api/services/resistance/mapk_predictor.py
+
+from typing import List, Dict
+from dataclasses import dataclass
+from .constants import MAPK_GENES
+
+@dataclass
+class MAPKResult:
+    has_mutation: bool
+    genes_mutated: List[str]
+    resistance_risk: float      # 0.0 - 1.0
+    relative_risk: float        # vs baseline
+    mechanism: str
+    confidence: float
+
+class MAPKResistancePredictor:
+    """
+    Predict platinum resistance from MAPK pathway mutations.
+    
+    Validated on TCGA-OV (n=469):
+    - MAPK mutated: 28.6% resistant (RR=1.97)
+    - NF1 specifically: 30.8% resistant (RR=2.10)
+    - Wildtype: 14.5% resistant (baseline)
+    """
+    
+    BASELINE_RESISTANCE = 0.145  # 14.5% for wildtype
+    MAPK_RELATIVE_RISK = 1.97
+    NF1_RELATIVE_RISK = 2.10
+    
+    def predict(self, mutations: List[Dict]) -> MAPKResult:
+        """
+        Predict MAPK-mediated platinum resistance.
+        
+        Args:
+            mutations: Patient mutations
+        
+        Returns:
+            MAPKResult with resistance prediction
+        """
+        # Find MAPK pathway mutations
+        mutated_genes = {m.get('gene', '').upper() for m in mutations}
+        mapk_mutated = [g for g in MAPK_GENES if g in mutated_genes]
+        
+        if not mapk_mutated:
+            return MAPKResult(
+                has_mutation=False,
+                genes_mutated=[],
+                resistance_risk=self.BASELINE_RESISTANCE,
+                relative_risk=1.0,
+                mechanism="MAPK_WILDTYPE",
+                confidence=0.85
+            )
+        
+        # Determine risk based on specific genes
+        if 'NF1' in mapk_mutated:
+            relative_risk = self.NF1_RELATIVE_RISK
+            mechanism = "NF1_LOSS_RAS_ACTIVATION"
+        else:
+            relative_risk = self.MAPK_RELATIVE_RISK
+            mechanism = f"MAPK_ACTIVATION_{mapk_mutated[0]}"
+        
+        # Calculate absolute resistance risk
+        resistance_risk = min(self.BASELINE_RESISTANCE * relative_risk, 1.0)
+        
+        return MAPKResult(
+            has_mutation=True,
+            genes_mutated=mapk_mutated,
+            resistance_risk=round(resistance_risk, 3),
+            relative_risk=relative_risk,
+            mechanism=mechanism,
+            confidence=0.80
+        )
+```
+
+### DDR Sensitivity Predictor
+
+```python
+# api/services/resistance/ddr_predictor.py
+
+from typing import List, Dict, Optional
+from dataclasses import dataclass
+from .constants import DDR_GENES, BER_GENES, HRR_GENES
+
+@dataclass
+class DDRResult:
+    ddr_status: str             # "compromised", "intact"
+    platinum_sensitivity: str   # "very_high", "high", "moderate", "low"
+    parp_sensitivity: str
+    parp_resistance_risk: float
+    mechanism: str
+    parp_mechanism: str
+    genes_mutated: List[str]
+    confidence: float
+
+class DDRSensitivityPredictor:
+    """
+    Predict DDR pathway status and drug sensitivity.
+    
+    Key insight: DDR deficiency → platinum/PARP sensitivity
+    - BRCA1/2 loss → HRR deficiency → PARP synthetic lethality
+    - MBD4 loss → BER deficiency → Platinum sensitivity + PARP
+    - TP53 loss + DDR loss → Checkpoint bypass → Enhanced sensitivity
+    """
+    
+    def predict(
+        self,
+        mutations: List[Dict],
+        hrd_status: Optional[str] = None
+    ) -> DDRResult:
+        """
+        Predict DDR-based drug sensitivity.
+        
+        Args:
+            mutations: Patient mutations
+            hrd_status: Optional HRD status from biomarker agent
+        
+        Returns:
+            DDRResult with sensitivity predictions
+        """
+        mutated_genes = {m.get('gene', '').upper() for m in mutations}
+        
+        # Find DDR mutations
+        ddr_mutated = [g for g in DDR_GENES if g in mutated_genes]
+        ber_mutated = [g for g in BER_GENES if g in mutated_genes]
+        hrr_mutated = [g for g in HRR_GENES if g in mutated_genes]
+        
+        tp53_mutant = 'TP53' in mutated_genes
+        
+        # Determine DDR status and sensitivities
+        if ber_mutated:
+            # BER deficiency (e.g., MBD4)
+            ddr_status = "compromised"
+            platinum_sensitivity = "very_high" if tp53_mutant else "high"
+            parp_sensitivity = "very_high"
+            parp_resistance_risk = 0.10
+            mechanism = f"BER_DEFICIENCY_{ber_mutated[0]}"
+            parp_mechanism = f"SYNTHETIC_LETHALITY_{ber_mutated[0]}"
+            confidence = 0.85
+            
+        elif hrr_mutated or hrd_status in ["HRD+", "HRD-INFERRED"]:
+            # HRR deficiency (BRCA, etc.)
+            ddr_status = "compromised"
+            platinum_sensitivity = "high"
+            parp_sensitivity = "very_high"
+            parp_resistance_risk = 0.15
+            mechanism = f"HRR_DEFICIENCY_{hrr_mutated[0] if hrr_mutated else 'HRD'}"
+            parp_mechanism = "SYNTHETIC_LETHALITY_HRD"
+            confidence = 0.90
+            
+        elif ddr_mutated:
+            # Other DDR mutations
+            ddr_status = "compromised"
+            platinum_sensitivity = "moderate"
+            parp_sensitivity = "moderate"
+            parp_resistance_risk = 0.30
+            mechanism = f"DDR_MUTATION_{ddr_mutated[0]}"
+            parp_mechanism = f"DDR_DISRUPTION_{ddr_mutated[0]}"
+            confidence = 0.70
+            
+        else:
+            # DDR intact
+            ddr_status = "intact"
+            platinum_sensitivity = "moderate"
+            parp_sensitivity = "low"
+            parp_resistance_risk = 0.50
+            mechanism = "DDR_INTACT"
+            parp_mechanism = "NO_SYNTHETIC_LETHALITY"
+            confidence = 0.75
+        
+        all_mutated = list(set(ddr_mutated + ber_mutated + hrr_mutated))
+        
+        return DDRResult(
+            ddr_status=ddr_status,
+            platinum_sensitivity=platinum_sensitivity,
+            parp_sensitivity=parp_sensitivity,
+            parp_resistance_risk=parp_resistance_risk,
+            mechanism=mechanism,
+            parp_mechanism=parp_mechanism,
+            genes_mutated=all_mutated,
+            confidence=confidence
+        )
+```
+
+### Constants
+
+```python
+# api/services/resistance/constants.py
+
+# MAPK pathway genes (validated for platinum resistance)
+MAPK_GENES = {
+    'KRAS', 'NRAS', 'HRAS',     # RAS family
+    'BRAF', 'ARAF', 'RAF1',     # RAF family
+    'MAP2K1', 'MAP2K2',         # MEK1/2
+    'MAPK1', 'MAPK3',           # ERK1/2
+    'NF1',                      # RAS regulator (RR=2.10)
+    'PTPN11',                   # SHP2
+    'SOS1', 'SOS2',             # RAS activators
+    'CBL'                       # E3 ligase
+}
+
+# All DDR genes
+DDR_GENES = {
+    'ATM', 'ATR', 'CHEK1', 'CHEK2',
+    'TP53', 'MDM2', 'CDKN2A',
+    'BRCA1', 'BRCA2', 'PALB2',
+    'RAD51C', 'RAD51D', 'BARD1',
+    'MBD4', 'MUTYH', 'OGG1',
+    'MLH1', 'MSH2', 'MSH6', 'PMS2'
+}
+
+# Base Excision Repair genes
+BER_GENES = {
+    'MBD4', 'MUTYH', 'OGG1', 'NTHL1',
+    'NEIL1', 'NEIL2', 'NEIL3',
+    'APEX1', 'XRCC1',
+    'PARP1', 'PARP2', 'PARP3'
+}
+
+# Homologous Recombination Repair genes
+HRR_GENES = {
+    'BRCA1', 'BRCA2', 'PALB2',
+    'RAD51', 'RAD51B', 'RAD51C', 'RAD51D',
+    'BRIP1', 'BARD1', 'NBN',
+    'MRE11', 'RAD50', 'ATM', 'ATR',
+    'FANCA', 'FANCD2', 'FANCL'
+}
+
+# Drug efflux genes (for resistance monitoring)
+EFFLUX_GENES = {
+    'ABCB1', 'ABCC1', 'ABCG2'
+}
+```
+
+---
+
+## 🧪 TESTING
+
+### MAPK Validation Test
+
+```python
+# api/services/resistance/tests/test_mapk.py
+
+import pytest
+from ..mapk_predictor import MAPKResistancePredictor
+
+@pytest.fixture
+def predictor():
+    return MAPKResistancePredictor()
+
+def test_mapk_wildtype(predictor):
+    mutations = [{'gene': 'TP53'}]  # Not MAPK
+    result = predictor.predict(mutations)
+    
+    assert result.has_mutation == False
+    assert result.resistance_risk == 0.145  # Baseline
+    assert result.relative_risk == 1.0
+
+def test_mapk_kras_mutation(predictor):
+    mutations = [{'gene': 'KRAS'}]
+    result = predictor.predict(mutations)
+    
+    assert result.has_mutation == True
+    assert 'KRAS' in result.genes_mutated
+    assert result.relative_risk == 1.97
+    assert result.resistance_risk == pytest.approx(0.145 * 1.97, rel=0.01)
+
+def test_mapk_nf1_mutation(predictor):
+    mutations = [{'gene': 'NF1'}]
+    result = predictor.predict(mutations)
+    
+    assert result.has_mutation == True
+    assert result.relative_risk == 2.10  # Higher risk for NF1
+    assert 'NF1_LOSS' in result.mechanism
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+### Phase 1: MAPK Predictor (Validated)
+- [ ] Port MAPK logic from `resistance_prophet_service.py`
+- [ ] Validate against TCGA-OV metrics (RR=1.97)
+- [ ] Add NF1-specific prediction (RR=2.10)
+- [ ] Unit tests matching validation
+
+### Phase 2: DDR Predictor
+- [ ] Implement BER deficiency detection
+- [ ] Implement HRR deficiency detection
+- [ ] Add TP53 synergy logic
+- [ ] Calculate platinum/PARP sensitivity
+- [ ] Unit tests
+
+### Phase 3: Pathway Analyzer
+- [ ] Generic pathway analysis
+- [ ] Pathway burden scoring
+- [ ] Multiple pathway support
+- [ ] Unit tests
+
+### Phase 4: Integration
+- [ ] Create ResistanceAgent class
+- [ ] Wire all predictors
+- [ ] Add monitoring priority logic
+- [ ] Integration tests
+
+---
+
+## 📡 API ENDPOINT
+
+```yaml
+POST /api/agents/resistance
+Content-Type: application/json
+
+Request:
+  patient_id: string
+  mutations: Mutation[]
+  current_treatment: string  # optional
+  hrd_status: string         # optional (from biomarker agent)
+
+Response:
+  resistance_prediction: ResistancePrediction
+  calculation_time_ms: number
+```
+
+---
+
+## ✅ ACCEPTANCE CRITERIA
+
+1. ✅ MAPK resistance matches validated RR=1.97
+2. ✅ NF1-specific prediction at RR=2.10
+3. ✅ Baseline resistance = 14.5% for wildtype
+4. ✅ DDR deficiency → high platinum sensitivity
+5. ✅ BER deficiency → very high PARP sensitivity
+6. ✅ All predictions include mechanism explanation
+7. ✅ Monitoring priorities generated
+8. ✅ Unit test coverage >80%
+
+---
+
+---
+
+## 🎯 MISSION
+
+Build a resistance prediction agent that can:
+1. Detect MAPK pathway mutations (validated RR=1.97 for platinum resistance)
+2. Analyze DDR pathway status for platinum/PARP sensitivity
+3. Calculate resistance risk scores with confidence
+4. Provide mechanism-based explanations
+5. Identify monitoring priorities
+
+---
+
+## 📊 VALIDATED CAPABILITIES (USE THESE)
+
+### MAPK Resistance - ALREADY VALIDATED ✅
+
+**Location:** `api/services/resistance_prophet_service.py`
+
+**Validation Metrics (TCGA-OV, n=469):**
+| Pathway | Mutated | Resistant Rate | Relative Risk |
+|---------|---------|----------------|---------------|
+| MAPK (any) | 35 pts | 28.6% | **1.97** |
+| NF1 specific | 26 pts | 30.8% | **2.10** |
+| Wildtype | 434 pts | 14.5% | 1.0 (baseline) |
+
+**Statistical Significance:** p < 0.05
+
+---
+
+## 📥 INPUTS
+
+### From PatientProfile (Module 01) & BiomarkerProfile (Module 02)
+
+```python
+# Required inputs
+patient_id: str
+mutations: List[Mutation]      # From Module 01
+disease: str                   # e.g., "ovarian_cancer"
+current_treatment: str         # e.g., "carboplatin"
+
+# Optional inputs (from Module 02)
+hrd_status: str               # "HRD+", "HRD-", "HRD-INFERRED"
+tmb_classification: str       # "TMB-H", "TMB-L"
+```
+
+---
+
+## 📤 OUTPUTS
+
+### ResistancePrediction Schema
+
+```python
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from enum import Enum
+
+class SensitivityLevel(Enum):
+    VERY_HIGH = "very_high"
+    HIGH = "high"
+    MODERATE = "moderate"
+    LOW = "low"
+    RESISTANT = "resistant"
+
+class RiskLevel(Enum):
+    HIGH = "high"
+    MODERATE = "moderate"
+    LOW = "low"
+    BASELINE = "baseline"
+
+@dataclass
+class PathwayAnalysis:
+    pathway: str                    # "MAPK", "DDR", "PI3K", etc.
+    status: str                     # "mutated", "wildtype", "compromised"
+    genes_mutated: List[str]        # ["KRAS", "NF1"]
+    genes_checked: List[str]        # All genes in pathway
+    burden_score: float             # 0.0 - 1.0
+
+@dataclass
+class DrugSensitivity:
+    drug_class: str                 # "platinum", "parp", "checkpoint"
+    sensitivity: SensitivityLevel
+    mechanism: str                  # "BER_DEFICIENCY", "DDR_INTACT"
+    confidence: float               # 0.0 - 1.0
+
+@dataclass
+class ResistancePrediction:
+    patient_id: str
+    
+    # Pathway analyses
+    pathways: List[PathwayAnalysis]
+    
+    # Per-drug-class predictions
+    drug_sensitivities: Dict[str, DrugSensitivity]
+    
+    # Platinum-specific (most validated)
+    platinum_sensitivity: SensitivityLevel
+    platinum_resistance_risk: float         # 0.0 - 1.0
+    platinum_mechanism: str
+    
+    # PARP-specific
+    parp_sensitivity: SensitivityLevel
+    parp_resistance_risk: float
+    parp_mechanism: str
+    
+    # Overall
+    signals_detected: int                   # Count of resistance signals
+    monitoring_priorities: List[str]        # ["MAPK_mutations", "ABCB1"]
+    
+    # Validation
+    validation: Dict[str, any]              # TCGA validation metrics
+    confidence: float
+    provenance: Dict[str, any]
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### File Structure
+
+```
+api/services/resistance/
+├── __init__.py
+├── resistance_agent.py         # Main agent
+├── pathway_analyzer.py         # Pathway mutation analysis
+├── mapk_predictor.py           # MAPK resistance (validated)
+├── ddr_predictor.py            # DDR sensitivity
+├── sensitivity_calculator.py   # Overall sensitivity
+├── constants.py                # Pathway gene lists
+└── tests/
+    ├── test_mapk.py
+    ├── test_ddr.py
+    └── test_integration.py
+```
+
+### Core Agent Implementation
+
+```python
+# api/services/resistance/resistance_agent.py
+
+from typing import List, Dict, Optional
+from datetime import datetime
+import logging
+
+from .pathway_analyzer import PathwayAnalyzer
+from .mapk_predictor import MAPKResistancePredictor
+from .ddr_predictor import DDRSensitivityPredictor
+from .sensitivity_calculator import SensitivityCalculator
+from ..models import PatientProfile, BiomarkerProfile, ResistancePrediction
+
+logger = logging.getLogger(__name__)
+
+class ResistanceAgent:
+    """
+    Predict drug resistance/sensitivity from pathway mutations.
+    
+    Validated:
+    - MAPK pathway: RR=1.97 for platinum resistance (TCGA-OV, n=469)
+    - DDR pathway: MBD4/TP53 synthetic lethality
+    """
+    
+    def __init__(self):
+        self.pathway_analyzer = PathwayAnalyzer()
+        self.mapk_predictor = MAPKResistancePredictor()
+        self.ddr_predictor = DDRSensitivityPredictor()
+        self.sensitivity_calc = SensitivityCalculator()
+    
+    async def predict(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile] = None,
+        current_treatment: str = None
+    ) -> ResistancePrediction:
+        """
+        Predict resistance/sensitivity for a patient.
+        
+        Args:
+            patient_profile: Patient with mutations
+            biomarker_profile: Optional biomarker data
+            current_treatment: Current drug (for context)
+        
+        Returns:
+            ResistancePrediction with pathway analysis and predictions
+        """
+        logger.info(f"Predicting resistance for {patient_profile.patient_id}")
+        
+        mutations = self._mutations_to_dicts(patient_profile.mutations)
+        
+        # Step 1: Analyze all pathways
+        pathways = self.pathway_analyzer.analyze(mutations)
+        
+        # Step 2: MAPK resistance prediction (validated)
+        mapk_result = self.mapk_predictor.predict(mutations)
+        
+        # Step 3: DDR sensitivity prediction
+        ddr_result = self.ddr_predictor.predict(
+            mutations=mutations,
+            hrd_status=biomarker_profile.hrd.status if biomarker_profile else None
+        )
+        
+        # Step 4: Calculate per-drug sensitivities
+        drug_sensitivities = self.sensitivity_calc.calculate_all(
+            pathways=pathways,
+            mapk_result=mapk_result,
+            ddr_result=ddr_result
+        )
+        
+        # Step 5: Count signals and determine monitoring priorities
+        signals = self._count_signals(mapk_result, ddr_result, pathways)
+        monitoring = self._determine_monitoring(pathways, current_treatment)
+        
+        return ResistancePrediction(
+            patient_id=patient_profile.patient_id,
+            pathways=pathways,
+            drug_sensitivities=drug_sensitivities,
+            platinum_sensitivity=ddr_result.platinum_sensitivity,
+            platinum_resistance_risk=mapk_result.resistance_risk,
+            platinum_mechanism=ddr_result.mechanism,
+            parp_sensitivity=ddr_result.parp_sensitivity,
+            parp_resistance_risk=ddr_result.parp_resistance_risk,
+            parp_mechanism=ddr_result.parp_mechanism,
+            signals_detected=signals,
+            monitoring_priorities=monitoring,
+            validation={
+                'mapk_validation': 'TCGA-OV n=469, MAPK RR=1.97, p<0.05',
+                'baseline_resistance': 0.145
+            },
+            confidence=self._calculate_confidence(pathways),
+            provenance={
+                'method': 'pathway_mutation_analysis',
+                'timestamp': datetime.utcnow().isoformat()
+            }
+        )
+```
+
+### MAPK Resistance Predictor (Validated)
+
+```python
+# api/services/resistance/mapk_predictor.py
+
+from typing import List, Dict
+from dataclasses import dataclass
+from .constants import MAPK_GENES
+
+@dataclass
+class MAPKResult:
+    has_mutation: bool
+    genes_mutated: List[str]
+    resistance_risk: float      # 0.0 - 1.0
+    relative_risk: float        # vs baseline
+    mechanism: str
+    confidence: float
+
+class MAPKResistancePredictor:
+    """
+    Predict platinum resistance from MAPK pathway mutations.
+    
+    Validated on TCGA-OV (n=469):
+    - MAPK mutated: 28.6% resistant (RR=1.97)
+    - NF1 specifically: 30.8% resistant (RR=2.10)
+    - Wildtype: 14.5% resistant (baseline)
+    """
+    
+    BASELINE_RESISTANCE = 0.145  # 14.5% for wildtype
+    MAPK_RELATIVE_RISK = 1.97
+    NF1_RELATIVE_RISK = 2.10
+    
+    def predict(self, mutations: List[Dict]) -> MAPKResult:
+        """
+        Predict MAPK-mediated platinum resistance.
+        
+        Args:
+            mutations: Patient mutations
+        
+        Returns:
+            MAPKResult with resistance prediction
+        """
+        # Find MAPK pathway mutations
+        mutated_genes = {m.get('gene', '').upper() for m in mutations}
+        mapk_mutated = [g for g in MAPK_GENES if g in mutated_genes]
+        
+        if not mapk_mutated:
+            return MAPKResult(
+                has_mutation=False,
+                genes_mutated=[],
+                resistance_risk=self.BASELINE_RESISTANCE,
+                relative_risk=1.0,
+                mechanism="MAPK_WILDTYPE",
+                confidence=0.85
+            )
+        
+        # Determine risk based on specific genes
+        if 'NF1' in mapk_mutated:
+            relative_risk = self.NF1_RELATIVE_RISK
+            mechanism = "NF1_LOSS_RAS_ACTIVATION"
+        else:
+            relative_risk = self.MAPK_RELATIVE_RISK
+            mechanism = f"MAPK_ACTIVATION_{mapk_mutated[0]}"
+        
+        # Calculate absolute resistance risk
+        resistance_risk = min(self.BASELINE_RESISTANCE * relative_risk, 1.0)
+        
+        return MAPKResult(
+            has_mutation=True,
+            genes_mutated=mapk_mutated,
+            resistance_risk=round(resistance_risk, 3),
+            relative_risk=relative_risk,
+            mechanism=mechanism,
+            confidence=0.80
+        )
+```
+
+### DDR Sensitivity Predictor
+
+```python
+# api/services/resistance/ddr_predictor.py
+
+from typing import List, Dict, Optional
+from dataclasses import dataclass
+from .constants import DDR_GENES, BER_GENES, HRR_GENES
+
+@dataclass
+class DDRResult:
+    ddr_status: str             # "compromised", "intact"
+    platinum_sensitivity: str   # "very_high", "high", "moderate", "low"
+    parp_sensitivity: str
+    parp_resistance_risk: float
+    mechanism: str
+    parp_mechanism: str
+    genes_mutated: List[str]
+    confidence: float
+
+class DDRSensitivityPredictor:
+    """
+    Predict DDR pathway status and drug sensitivity.
+    
+    Key insight: DDR deficiency → platinum/PARP sensitivity
+    - BRCA1/2 loss → HRR deficiency → PARP synthetic lethality
+    - MBD4 loss → BER deficiency → Platinum sensitivity + PARP
+    - TP53 loss + DDR loss → Checkpoint bypass → Enhanced sensitivity
+    """
+    
+    def predict(
+        self,
+        mutations: List[Dict],
+        hrd_status: Optional[str] = None
+    ) -> DDRResult:
+        """
+        Predict DDR-based drug sensitivity.
+        
+        Args:
+            mutations: Patient mutations
+            hrd_status: Optional HRD status from biomarker agent
+        
+        Returns:
+            DDRResult with sensitivity predictions
+        """
+        mutated_genes = {m.get('gene', '').upper() for m in mutations}
+        
+        # Find DDR mutations
+        ddr_mutated = [g for g in DDR_GENES if g in mutated_genes]
+        ber_mutated = [g for g in BER_GENES if g in mutated_genes]
+        hrr_mutated = [g for g in HRR_GENES if g in mutated_genes]
+        
+        tp53_mutant = 'TP53' in mutated_genes
+        
+        # Determine DDR status and sensitivities
+        if ber_mutated:
+            # BER deficiency (e.g., MBD4)
+            ddr_status = "compromised"
+            platinum_sensitivity = "very_high" if tp53_mutant else "high"
+            parp_sensitivity = "very_high"
+            parp_resistance_risk = 0.10
+            mechanism = f"BER_DEFICIENCY_{ber_mutated[0]}"
+            parp_mechanism = f"SYNTHETIC_LETHALITY_{ber_mutated[0]}"
+            confidence = 0.85
+            
+        elif hrr_mutated or hrd_status in ["HRD+", "HRD-INFERRED"]:
+            # HRR deficiency (BRCA, etc.)
+            ddr_status = "compromised"
+            platinum_sensitivity = "high"
+            parp_sensitivity = "very_high"
+            parp_resistance_risk = 0.15
+            mechanism = f"HRR_DEFICIENCY_{hrr_mutated[0] if hrr_mutated else 'HRD'}"
+            parp_mechanism = "SYNTHETIC_LETHALITY_HRD"
+            confidence = 0.90
+            
+        elif ddr_mutated:
+            # Other DDR mutations
+            ddr_status = "compromised"
+            platinum_sensitivity = "moderate"
+            parp_sensitivity = "moderate"
+            parp_resistance_risk = 0.30
+            mechanism = f"DDR_MUTATION_{ddr_mutated[0]}"
+            parp_mechanism = f"DDR_DISRUPTION_{ddr_mutated[0]}"
+            confidence = 0.70
+            
+        else:
+            # DDR intact
+            ddr_status = "intact"
+            platinum_sensitivity = "moderate"
+            parp_sensitivity = "low"
+            parp_resistance_risk = 0.50
+            mechanism = "DDR_INTACT"
+            parp_mechanism = "NO_SYNTHETIC_LETHALITY"
+            confidence = 0.75
+        
+        all_mutated = list(set(ddr_mutated + ber_mutated + hrr_mutated))
+        
+        return DDRResult(
+            ddr_status=ddr_status,
+            platinum_sensitivity=platinum_sensitivity,
+            parp_sensitivity=parp_sensitivity,
+            parp_resistance_risk=parp_resistance_risk,
+            mechanism=mechanism,
+            parp_mechanism=parp_mechanism,
+            genes_mutated=all_mutated,
+            confidence=confidence
+        )
+```
+
+### Constants
+
+```python
+# api/services/resistance/constants.py
+
+# MAPK pathway genes (validated for platinum resistance)
+MAPK_GENES = {
+    'KRAS', 'NRAS', 'HRAS',     # RAS family
+    'BRAF', 'ARAF', 'RAF1',     # RAF family
+    'MAP2K1', 'MAP2K2',         # MEK1/2
+    'MAPK1', 'MAPK3',           # ERK1/2
+    'NF1',                      # RAS regulator (RR=2.10)
+    'PTPN11',                   # SHP2
+    'SOS1', 'SOS2',             # RAS activators
+    'CBL'                       # E3 ligase
+}
+
+# All DDR genes
+DDR_GENES = {
+    'ATM', 'ATR', 'CHEK1', 'CHEK2',
+    'TP53', 'MDM2', 'CDKN2A',
+    'BRCA1', 'BRCA2', 'PALB2',
+    'RAD51C', 'RAD51D', 'BARD1',
+    'MBD4', 'MUTYH', 'OGG1',
+    'MLH1', 'MSH2', 'MSH6', 'PMS2'
+}
+
+# Base Excision Repair genes
+BER_GENES = {
+    'MBD4', 'MUTYH', 'OGG1', 'NTHL1',
+    'NEIL1', 'NEIL2', 'NEIL3',
+    'APEX1', 'XRCC1',
+    'PARP1', 'PARP2', 'PARP3'
+}
+
+# Homologous Recombination Repair genes
+HRR_GENES = {
+    'BRCA1', 'BRCA2', 'PALB2',
+    'RAD51', 'RAD51B', 'RAD51C', 'RAD51D',
+    'BRIP1', 'BARD1', 'NBN',
+    'MRE11', 'RAD50', 'ATM', 'ATR',
+    'FANCA', 'FANCD2', 'FANCL'
+}
+
+# Drug efflux genes (for resistance monitoring)
+EFFLUX_GENES = {
+    'ABCB1', 'ABCC1', 'ABCG2'
+}
+```
+
+---
+
+## 🧪 TESTING
+
+### MAPK Validation Test
+
+```python
+# api/services/resistance/tests/test_mapk.py
+
+import pytest
+from ..mapk_predictor import MAPKResistancePredictor
+
+@pytest.fixture
+def predictor():
+    return MAPKResistancePredictor()
+
+def test_mapk_wildtype(predictor):
+    mutations = [{'gene': 'TP53'}]  # Not MAPK
+    result = predictor.predict(mutations)
+    
+    assert result.has_mutation == False
+    assert result.resistance_risk == 0.145  # Baseline
+    assert result.relative_risk == 1.0
+
+def test_mapk_kras_mutation(predictor):
+    mutations = [{'gene': 'KRAS'}]
+    result = predictor.predict(mutations)
+    
+    assert result.has_mutation == True
+    assert 'KRAS' in result.genes_mutated
+    assert result.relative_risk == 1.97
+    assert result.resistance_risk == pytest.approx(0.145 * 1.97, rel=0.01)
+
+def test_mapk_nf1_mutation(predictor):
+    mutations = [{'gene': 'NF1'}]
+    result = predictor.predict(mutations)
+    
+    assert result.has_mutation == True
+    assert result.relative_risk == 2.10  # Higher risk for NF1
+    assert 'NF1_LOSS' in result.mechanism
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+### Phase 1: MAPK Predictor (Validated)
+- [ ] Port MAPK logic from `resistance_prophet_service.py`
+- [ ] Validate against TCGA-OV metrics (RR=1.97)
+- [ ] Add NF1-specific prediction (RR=2.10)
+- [ ] Unit tests matching validation
+
+### Phase 2: DDR Predictor
+- [ ] Implement BER deficiency detection
+- [ ] Implement HRR deficiency detection
+- [ ] Add TP53 synergy logic
+- [ ] Calculate platinum/PARP sensitivity
+- [ ] Unit tests
+
+### Phase 3: Pathway Analyzer
+- [ ] Generic pathway analysis
+- [ ] Pathway burden scoring
+- [ ] Multiple pathway support
+- [ ] Unit tests
+
+### Phase 4: Integration
+- [ ] Create ResistanceAgent class
+- [ ] Wire all predictors
+- [ ] Add monitoring priority logic
+- [ ] Integration tests
+
+---
+
+## 📡 API ENDPOINT
+
+```yaml
+POST /api/agents/resistance
+Content-Type: application/json
+
+Request:
+  patient_id: string
+  mutations: Mutation[]
+  current_treatment: string  # optional
+  hrd_status: string         # optional (from biomarker agent)
+
+Response:
+  resistance_prediction: ResistancePrediction
+  calculation_time_ms: number
+```
+
+---
+
+## ✅ ACCEPTANCE CRITERIA
+
+1. ✅ MAPK resistance matches validated RR=1.97
+2. ✅ NF1-specific prediction at RR=2.10
+3. ✅ Baseline resistance = 14.5% for wildtype
+4. ✅ DDR deficiency → high platinum sensitivity
+5. ✅ BER deficiency → very high PARP sensitivity
+6. ✅ All predictions include mechanism explanation
+7. ✅ Monitoring priorities generated
+8. ✅ Unit test coverage >80%
+
+---
+
+---
+
+## 🎯 MISSION
+
+Build a resistance prediction agent that can:
+1. Detect MAPK pathway mutations (validated RR=1.97 for platinum resistance)
+2. Analyze DDR pathway status for platinum/PARP sensitivity
+3. Calculate resistance risk scores with confidence
+4. Provide mechanism-based explanations
+5. Identify monitoring priorities
+
+---
+
+## 📊 VALIDATED CAPABILITIES (USE THESE)
+
+### MAPK Resistance - ALREADY VALIDATED ✅
+
+**Location:** `api/services/resistance_prophet_service.py`
+
+**Validation Metrics (TCGA-OV, n=469):**
+| Pathway | Mutated | Resistant Rate | Relative Risk |
+|---------|---------|----------------|---------------|
+| MAPK (any) | 35 pts | 28.6% | **1.97** |
+| NF1 specific | 26 pts | 30.8% | **2.10** |
+| Wildtype | 434 pts | 14.5% | 1.0 (baseline) |
+
+**Statistical Significance:** p < 0.05
+
+---
+
+## 📥 INPUTS
+
+### From PatientProfile (Module 01) & BiomarkerProfile (Module 02)
+
+```python
+# Required inputs
+patient_id: str
+mutations: List[Mutation]      # From Module 01
+disease: str                   # e.g., "ovarian_cancer"
+current_treatment: str         # e.g., "carboplatin"
+
+# Optional inputs (from Module 02)
+hrd_status: str               # "HRD+", "HRD-", "HRD-INFERRED"
+tmb_classification: str       # "TMB-H", "TMB-L"
+```
+
+---
+
+## 📤 OUTPUTS
+
+### ResistancePrediction Schema
+
+```python
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from enum import Enum
+
+class SensitivityLevel(Enum):
+    VERY_HIGH = "very_high"
+    HIGH = "high"
+    MODERATE = "moderate"
+    LOW = "low"
+    RESISTANT = "resistant"
+
+class RiskLevel(Enum):
+    HIGH = "high"
+    MODERATE = "moderate"
+    LOW = "low"
+    BASELINE = "baseline"
+
+@dataclass
+class PathwayAnalysis:
+    pathway: str                    # "MAPK", "DDR", "PI3K", etc.
+    status: str                     # "mutated", "wildtype", "compromised"
+    genes_mutated: List[str]        # ["KRAS", "NF1"]
+    genes_checked: List[str]        # All genes in pathway
+    burden_score: float             # 0.0 - 1.0
+
+@dataclass
+class DrugSensitivity:
+    drug_class: str                 # "platinum", "parp", "checkpoint"
+    sensitivity: SensitivityLevel
+    mechanism: str                  # "BER_DEFICIENCY", "DDR_INTACT"
+    confidence: float               # 0.0 - 1.0
+
+@dataclass
+class ResistancePrediction:
+    patient_id: str
+    
+    # Pathway analyses
+    pathways: List[PathwayAnalysis]
+    
+    # Per-drug-class predictions
+    drug_sensitivities: Dict[str, DrugSensitivity]
+    
+    # Platinum-specific (most validated)
+    platinum_sensitivity: SensitivityLevel
+    platinum_resistance_risk: float         # 0.0 - 1.0
+    platinum_mechanism: str
+    
+    # PARP-specific
+    parp_sensitivity: SensitivityLevel
+    parp_resistance_risk: float
+    parp_mechanism: str
+    
+    # Overall
+    signals_detected: int                   # Count of resistance signals
+    monitoring_priorities: List[str]        # ["MAPK_mutations", "ABCB1"]
+    
+    # Validation
+    validation: Dict[str, any]              # TCGA validation metrics
+    confidence: float
+    provenance: Dict[str, any]
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### File Structure
+
+```
+api/services/resistance/
+├── __init__.py
+├── resistance_agent.py         # Main agent
+├── pathway_analyzer.py         # Pathway mutation analysis
+├── mapk_predictor.py           # MAPK resistance (validated)
+├── ddr_predictor.py            # DDR sensitivity
+├── sensitivity_calculator.py   # Overall sensitivity
+├── constants.py                # Pathway gene lists
+└── tests/
+    ├── test_mapk.py
+    ├── test_ddr.py
+    └── test_integration.py
+```
+
+### Core Agent Implementation
+
+```python
+# api/services/resistance/resistance_agent.py
+
+from typing import List, Dict, Optional
+from datetime import datetime
+import logging
+
+from .pathway_analyzer import PathwayAnalyzer
+from .mapk_predictor import MAPKResistancePredictor
+from .ddr_predictor import DDRSensitivityPredictor
+from .sensitivity_calculator import SensitivityCalculator
+from ..models import PatientProfile, BiomarkerProfile, ResistancePrediction
+
+logger = logging.getLogger(__name__)
+
+class ResistanceAgent:
+    """
+    Predict drug resistance/sensitivity from pathway mutations.
+    
+    Validated:
+    - MAPK pathway: RR=1.97 for platinum resistance (TCGA-OV, n=469)
+    - DDR pathway: MBD4/TP53 synthetic lethality
+    """
+    
+    def __init__(self):
+        self.pathway_analyzer = PathwayAnalyzer()
+        self.mapk_predictor = MAPKResistancePredictor()
+        self.ddr_predictor = DDRSensitivityPredictor()
+        self.sensitivity_calc = SensitivityCalculator()
+    
+    async def predict(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile] = None,
+        current_treatment: str = None
+    ) -> ResistancePrediction:
+        """
+        Predict resistance/sensitivity for a patient.
+        
+        Args:
+            patient_profile: Patient with mutations
+            biomarker_profile: Optional biomarker data
+            current_treatment: Current drug (for context)
+        
+        Returns:
+            ResistancePrediction with pathway analysis and predictions
+        """
+        logger.info(f"Predicting resistance for {patient_profile.patient_id}")
+        
+        mutations = self._mutations_to_dicts(patient_profile.mutations)
+        
+        # Step 1: Analyze all pathways
+        pathways = self.pathway_analyzer.analyze(mutations)
+        
+        # Step 2: MAPK resistance prediction (validated)
+        mapk_result = self.mapk_predictor.predict(mutations)
+        
+        # Step 3: DDR sensitivity prediction
+        ddr_result = self.ddr_predictor.predict(
+            mutations=mutations,
+            hrd_status=biomarker_profile.hrd.status if biomarker_profile else None
+        )
+        
+        # Step 4: Calculate per-drug sensitivities
+        drug_sensitivities = self.sensitivity_calc.calculate_all(
+            pathways=pathways,
+            mapk_result=mapk_result,
+            ddr_result=ddr_result
+        )
+        
+        # Step 5: Count signals and determine monitoring priorities
+        signals = self._count_signals(mapk_result, ddr_result, pathways)
+        monitoring = self._determine_monitoring(pathways, current_treatment)
+        
+        return ResistancePrediction(
+            patient_id=patient_profile.patient_id,
+            pathways=pathways,
+            drug_sensitivities=drug_sensitivities,
+            platinum_sensitivity=ddr_result.platinum_sensitivity,
+            platinum_resistance_risk=mapk_result.resistance_risk,
+            platinum_mechanism=ddr_result.mechanism,
+            parp_sensitivity=ddr_result.parp_sensitivity,
+            parp_resistance_risk=ddr_result.parp_resistance_risk,
+            parp_mechanism=ddr_result.parp_mechanism,
+            signals_detected=signals,
+            monitoring_priorities=monitoring,
+            validation={
+                'mapk_validation': 'TCGA-OV n=469, MAPK RR=1.97, p<0.05',
+                'baseline_resistance': 0.145
+            },
+            confidence=self._calculate_confidence(pathways),
+            provenance={
+                'method': 'pathway_mutation_analysis',
+                'timestamp': datetime.utcnow().isoformat()
+            }
+        )
+```
+
+### MAPK Resistance Predictor (Validated)
+
+```python
+# api/services/resistance/mapk_predictor.py
+
+from typing import List, Dict
+from dataclasses import dataclass
+from .constants import MAPK_GENES
+
+@dataclass
+class MAPKResult:
+    has_mutation: bool
+    genes_mutated: List[str]
+    resistance_risk: float      # 0.0 - 1.0
+    relative_risk: float        # vs baseline
+    mechanism: str
+    confidence: float
+
+class MAPKResistancePredictor:
+    """
+    Predict platinum resistance from MAPK pathway mutations.
+    
+    Validated on TCGA-OV (n=469):
+    - MAPK mutated: 28.6% resistant (RR=1.97)
+    - NF1 specifically: 30.8% resistant (RR=2.10)
+    - Wildtype: 14.5% resistant (baseline)
+    """
+    
+    BASELINE_RESISTANCE = 0.145  # 14.5% for wildtype
+    MAPK_RELATIVE_RISK = 1.97
+    NF1_RELATIVE_RISK = 2.10
+    
+    def predict(self, mutations: List[Dict]) -> MAPKResult:
+        """
+        Predict MAPK-mediated platinum resistance.
+        
+        Args:
+            mutations: Patient mutations
+        
+        Returns:
+            MAPKResult with resistance prediction
+        """
+        # Find MAPK pathway mutations
+        mutated_genes = {m.get('gene', '').upper() for m in mutations}
+        mapk_mutated = [g for g in MAPK_GENES if g in mutated_genes]
+        
+        if not mapk_mutated:
+            return MAPKResult(
+                has_mutation=False,
+                genes_mutated=[],
+                resistance_risk=self.BASELINE_RESISTANCE,
+                relative_risk=1.0,
+                mechanism="MAPK_WILDTYPE",
+                confidence=0.85
+            )
+        
+        # Determine risk based on specific genes
+        if 'NF1' in mapk_mutated:
+            relative_risk = self.NF1_RELATIVE_RISK
+            mechanism = "NF1_LOSS_RAS_ACTIVATION"
+        else:
+            relative_risk = self.MAPK_RELATIVE_RISK
+            mechanism = f"MAPK_ACTIVATION_{mapk_mutated[0]}"
+        
+        # Calculate absolute resistance risk
+        resistance_risk = min(self.BASELINE_RESISTANCE * relative_risk, 1.0)
+        
+        return MAPKResult(
+            has_mutation=True,
+            genes_mutated=mapk_mutated,
+            resistance_risk=round(resistance_risk, 3),
+            relative_risk=relative_risk,
+            mechanism=mechanism,
+            confidence=0.80
+        )
+```
+
+### DDR Sensitivity Predictor
+
+```python
+# api/services/resistance/ddr_predictor.py
+
+from typing import List, Dict, Optional
+from dataclasses import dataclass
+from .constants import DDR_GENES, BER_GENES, HRR_GENES
+
+@dataclass
+class DDRResult:
+    ddr_status: str             # "compromised", "intact"
+    platinum_sensitivity: str   # "very_high", "high", "moderate", "low"
+    parp_sensitivity: str
+    parp_resistance_risk: float
+    mechanism: str
+    parp_mechanism: str
+    genes_mutated: List[str]
+    confidence: float
+
+class DDRSensitivityPredictor:
+    """
+    Predict DDR pathway status and drug sensitivity.
+    
+    Key insight: DDR deficiency → platinum/PARP sensitivity
+    - BRCA1/2 loss → HRR deficiency → PARP synthetic lethality
+    - MBD4 loss → BER deficiency → Platinum sensitivity + PARP
+    - TP53 loss + DDR loss → Checkpoint bypass → Enhanced sensitivity
+    """
+    
+    def predict(
+        self,
+        mutations: List[Dict],
+        hrd_status: Optional[str] = None
+    ) -> DDRResult:
+        """
+        Predict DDR-based drug sensitivity.
+        
+        Args:
+            mutations: Patient mutations
+            hrd_status: Optional HRD status from biomarker agent
+        
+        Returns:
+            DDRResult with sensitivity predictions
+        """
+        mutated_genes = {m.get('gene', '').upper() for m in mutations}
+        
+        # Find DDR mutations
+        ddr_mutated = [g for g in DDR_GENES if g in mutated_genes]
+        ber_mutated = [g for g in BER_GENES if g in mutated_genes]
+        hrr_mutated = [g for g in HRR_GENES if g in mutated_genes]
+        
+        tp53_mutant = 'TP53' in mutated_genes
+        
+        # Determine DDR status and sensitivities
+        if ber_mutated:
+            # BER deficiency (e.g., MBD4)
+            ddr_status = "compromised"
+            platinum_sensitivity = "very_high" if tp53_mutant else "high"
+            parp_sensitivity = "very_high"
+            parp_resistance_risk = 0.10
+            mechanism = f"BER_DEFICIENCY_{ber_mutated[0]}"
+            parp_mechanism = f"SYNTHETIC_LETHALITY_{ber_mutated[0]}"
+            confidence = 0.85
+            
+        elif hrr_mutated or hrd_status in ["HRD+", "HRD-INFERRED"]:
+            # HRR deficiency (BRCA, etc.)
+            ddr_status = "compromised"
+            platinum_sensitivity = "high"
+            parp_sensitivity = "very_high"
+            parp_resistance_risk = 0.15
+            mechanism = f"HRR_DEFICIENCY_{hrr_mutated[0] if hrr_mutated else 'HRD'}"
+            parp_mechanism = "SYNTHETIC_LETHALITY_HRD"
+            confidence = 0.90
+            
+        elif ddr_mutated:
+            # Other DDR mutations
+            ddr_status = "compromised"
+            platinum_sensitivity = "moderate"
+            parp_sensitivity = "moderate"
+            parp_resistance_risk = 0.30
+            mechanism = f"DDR_MUTATION_{ddr_mutated[0]}"
+            parp_mechanism = f"DDR_DISRUPTION_{ddr_mutated[0]}"
+            confidence = 0.70
+            
+        else:
+            # DDR intact
+            ddr_status = "intact"
+            platinum_sensitivity = "moderate"
+            parp_sensitivity = "low"
+            parp_resistance_risk = 0.50
+            mechanism = "DDR_INTACT"
+            parp_mechanism = "NO_SYNTHETIC_LETHALITY"
+            confidence = 0.75
+        
+        all_mutated = list(set(ddr_mutated + ber_mutated + hrr_mutated))
+        
+        return DDRResult(
+            ddr_status=ddr_status,
+            platinum_sensitivity=platinum_sensitivity,
+            parp_sensitivity=parp_sensitivity,
+            parp_resistance_risk=parp_resistance_risk,
+            mechanism=mechanism,
+            parp_mechanism=parp_mechanism,
+            genes_mutated=all_mutated,
+            confidence=confidence
+        )
+```
+
+### Constants
+
+```python
+# api/services/resistance/constants.py
+
+# MAPK pathway genes (validated for platinum resistance)
+MAPK_GENES = {
+    'KRAS', 'NRAS', 'HRAS',     # RAS family
+    'BRAF', 'ARAF', 'RAF1',     # RAF family
+    'MAP2K1', 'MAP2K2',         # MEK1/2
+    'MAPK1', 'MAPK3',           # ERK1/2
+    'NF1',                      # RAS regulator (RR=2.10)
+    'PTPN11',                   # SHP2
+    'SOS1', 'SOS2',             # RAS activators
+    'CBL'                       # E3 ligase
+}
+
+# All DDR genes
+DDR_GENES = {
+    'ATM', 'ATR', 'CHEK1', 'CHEK2',
+    'TP53', 'MDM2', 'CDKN2A',
+    'BRCA1', 'BRCA2', 'PALB2',
+    'RAD51C', 'RAD51D', 'BARD1',
+    'MBD4', 'MUTYH', 'OGG1',
+    'MLH1', 'MSH2', 'MSH6', 'PMS2'
+}
+
+# Base Excision Repair genes
+BER_GENES = {
+    'MBD4', 'MUTYH', 'OGG1', 'NTHL1',
+    'NEIL1', 'NEIL2', 'NEIL3',
+    'APEX1', 'XRCC1',
+    'PARP1', 'PARP2', 'PARP3'
+}
+
+# Homologous Recombination Repair genes
+HRR_GENES = {
+    'BRCA1', 'BRCA2', 'PALB2',
+    'RAD51', 'RAD51B', 'RAD51C', 'RAD51D',
+    'BRIP1', 'BARD1', 'NBN',
+    'MRE11', 'RAD50', 'ATM', 'ATR',
+    'FANCA', 'FANCD2', 'FANCL'
+}
+
+# Drug efflux genes (for resistance monitoring)
+EFFLUX_GENES = {
+    'ABCB1', 'ABCC1', 'ABCG2'
+}
+```
+
+---
+
+## 🧪 TESTING
+
+### MAPK Validation Test
+
+```python
+# api/services/resistance/tests/test_mapk.py
+
+import pytest
+from ..mapk_predictor import MAPKResistancePredictor
+
+@pytest.fixture
+def predictor():
+    return MAPKResistancePredictor()
+
+def test_mapk_wildtype(predictor):
+    mutations = [{'gene': 'TP53'}]  # Not MAPK
+    result = predictor.predict(mutations)
+    
+    assert result.has_mutation == False
+    assert result.resistance_risk == 0.145  # Baseline
+    assert result.relative_risk == 1.0
+
+def test_mapk_kras_mutation(predictor):
+    mutations = [{'gene': 'KRAS'}]
+    result = predictor.predict(mutations)
+    
+    assert result.has_mutation == True
+    assert 'KRAS' in result.genes_mutated
+    assert result.relative_risk == 1.97
+    assert result.resistance_risk == pytest.approx(0.145 * 1.97, rel=0.01)
+
+def test_mapk_nf1_mutation(predictor):
+    mutations = [{'gene': 'NF1'}]
+    result = predictor.predict(mutations)
+    
+    assert result.has_mutation == True
+    assert result.relative_risk == 2.10  # Higher risk for NF1
+    assert 'NF1_LOSS' in result.mechanism
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+### Phase 1: MAPK Predictor (Validated)
+- [ ] Port MAPK logic from `resistance_prophet_service.py`
+- [ ] Validate against TCGA-OV metrics (RR=1.97)
+- [ ] Add NF1-specific prediction (RR=2.10)
+- [ ] Unit tests matching validation
+
+### Phase 2: DDR Predictor
+- [ ] Implement BER deficiency detection
+- [ ] Implement HRR deficiency detection
+- [ ] Add TP53 synergy logic
+- [ ] Calculate platinum/PARP sensitivity
+- [ ] Unit tests
+
+### Phase 3: Pathway Analyzer
+- [ ] Generic pathway analysis
+- [ ] Pathway burden scoring
+- [ ] Multiple pathway support
+- [ ] Unit tests
+
+### Phase 4: Integration
+- [ ] Create ResistanceAgent class
+- [ ] Wire all predictors
+- [ ] Add monitoring priority logic
+- [ ] Integration tests
+
+---
+
+## 📡 API ENDPOINT
+
+```yaml
+POST /api/agents/resistance
+Content-Type: application/json
+
+Request:
+  patient_id: string
+  mutations: Mutation[]
+  current_treatment: string  # optional
+  hrd_status: string         # optional (from biomarker agent)
+
+Response:
+  resistance_prediction: ResistancePrediction
+  calculation_time_ms: number
+```
+
+---
+
+## ✅ ACCEPTANCE CRITERIA
+
+1. ✅ MAPK resistance matches validated RR=1.97
+2. ✅ NF1-specific prediction at RR=2.10
+3. ✅ Baseline resistance = 14.5% for wildtype
+4. ✅ DDR deficiency → high platinum sensitivity
+5. ✅ BER deficiency → very high PARP sensitivity
+6. ✅ All predictions include mechanism explanation
+7. ✅ Monitoring priorities generated
+8. ✅ Unit test coverage >80%
+
+---
+
+---
+
+## 🎯 MISSION
+
+Build a resistance prediction agent that can:
+1. Detect MAPK pathway mutations (validated RR=1.97 for platinum resistance)
+2. Analyze DDR pathway status for platinum/PARP sensitivity
+3. Calculate resistance risk scores with confidence
+4. Provide mechanism-based explanations
+5. Identify monitoring priorities
+
+---
+
+## 📊 VALIDATED CAPABILITIES (USE THESE)
+
+### MAPK Resistance - ALREADY VALIDATED ✅
+
+**Location:** `api/services/resistance_prophet_service.py`
+
+**Validation Metrics (TCGA-OV, n=469):**
+| Pathway | Mutated | Resistant Rate | Relative Risk |
+|---------|---------|----------------|---------------|
+| MAPK (any) | 35 pts | 28.6% | **1.97** |
+| NF1 specific | 26 pts | 30.8% | **2.10** |
+| Wildtype | 434 pts | 14.5% | 1.0 (baseline) |
+
+**Statistical Significance:** p < 0.05
+
+---
+
+## 📥 INPUTS
+
+### From PatientProfile (Module 01) & BiomarkerProfile (Module 02)
+
+```python
+# Required inputs
+patient_id: str
+mutations: List[Mutation]      # From Module 01
+disease: str                   # e.g., "ovarian_cancer"
+current_treatment: str         # e.g., "carboplatin"
+
+# Optional inputs (from Module 02)
+hrd_status: str               # "HRD+", "HRD-", "HRD-INFERRED"
+tmb_classification: str       # "TMB-H", "TMB-L"
+```
+
+---
+
+## 📤 OUTPUTS
+
+### ResistancePrediction Schema
+
+```python
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from enum import Enum
+
+class SensitivityLevel(Enum):
+    VERY_HIGH = "very_high"
+    HIGH = "high"
+    MODERATE = "moderate"
+    LOW = "low"
+    RESISTANT = "resistant"
+
+class RiskLevel(Enum):
+    HIGH = "high"
+    MODERATE = "moderate"
+    LOW = "low"
+    BASELINE = "baseline"
+
+@dataclass
+class PathwayAnalysis:
+    pathway: str                    # "MAPK", "DDR", "PI3K", etc.
+    status: str                     # "mutated", "wildtype", "compromised"
+    genes_mutated: List[str]        # ["KRAS", "NF1"]
+    genes_checked: List[str]        # All genes in pathway
+    burden_score: float             # 0.0 - 1.0
+
+@dataclass
+class DrugSensitivity:
+    drug_class: str                 # "platinum", "parp", "checkpoint"
+    sensitivity: SensitivityLevel
+    mechanism: str                  # "BER_DEFICIENCY", "DDR_INTACT"
+    confidence: float               # 0.0 - 1.0
+
+@dataclass
+class ResistancePrediction:
+    patient_id: str
+    
+    # Pathway analyses
+    pathways: List[PathwayAnalysis]
+    
+    # Per-drug-class predictions
+    drug_sensitivities: Dict[str, DrugSensitivity]
+    
+    # Platinum-specific (most validated)
+    platinum_sensitivity: SensitivityLevel
+    platinum_resistance_risk: float         # 0.0 - 1.0
+    platinum_mechanism: str
+    
+    # PARP-specific
+    parp_sensitivity: SensitivityLevel
+    parp_resistance_risk: float
+    parp_mechanism: str
+    
+    # Overall
+    signals_detected: int                   # Count of resistance signals
+    monitoring_priorities: List[str]        # ["MAPK_mutations", "ABCB1"]
+    
+    # Validation
+    validation: Dict[str, any]              # TCGA validation metrics
+    confidence: float
+    provenance: Dict[str, any]
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### File Structure
+
+```
+api/services/resistance/
+├── __init__.py
+├── resistance_agent.py         # Main agent
+├── pathway_analyzer.py         # Pathway mutation analysis
+├── mapk_predictor.py           # MAPK resistance (validated)
+├── ddr_predictor.py            # DDR sensitivity
+├── sensitivity_calculator.py   # Overall sensitivity
+├── constants.py                # Pathway gene lists
+└── tests/
+    ├── test_mapk.py
+    ├── test_ddr.py
+    └── test_integration.py
+```
+
+### Core Agent Implementation
+
+```python
+# api/services/resistance/resistance_agent.py
+
+from typing import List, Dict, Optional
+from datetime import datetime
+import logging
+
+from .pathway_analyzer import PathwayAnalyzer
+from .mapk_predictor import MAPKResistancePredictor
+from .ddr_predictor import DDRSensitivityPredictor
+from .sensitivity_calculator import SensitivityCalculator
+from ..models import PatientProfile, BiomarkerProfile, ResistancePrediction
+
+logger = logging.getLogger(__name__)
+
+class ResistanceAgent:
+    """
+    Predict drug resistance/sensitivity from pathway mutations.
+    
+    Validated:
+    - MAPK pathway: RR=1.97 for platinum resistance (TCGA-OV, n=469)
+    - DDR pathway: MBD4/TP53 synthetic lethality
+    """
+    
+    def __init__(self):
+        self.pathway_analyzer = PathwayAnalyzer()
+        self.mapk_predictor = MAPKResistancePredictor()
+        self.ddr_predictor = DDRSensitivityPredictor()
+        self.sensitivity_calc = SensitivityCalculator()
+    
+    async def predict(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile] = None,
+        current_treatment: str = None
+    ) -> ResistancePrediction:
+        """
+        Predict resistance/sensitivity for a patient.
+        
+        Args:
+            patient_profile: Patient with mutations
+            biomarker_profile: Optional biomarker data
+            current_treatment: Current drug (for context)
+        
+        Returns:
+            ResistancePrediction with pathway analysis and predictions
+        """
+        logger.info(f"Predicting resistance for {patient_profile.patient_id}")
+        
+        mutations = self._mutations_to_dicts(patient_profile.mutations)
+        
+        # Step 1: Analyze all pathways
+        pathways = self.pathway_analyzer.analyze(mutations)
+        
+        # Step 2: MAPK resistance prediction (validated)
+        mapk_result = self.mapk_predictor.predict(mutations)
+        
+        # Step 3: DDR sensitivity prediction
+        ddr_result = self.ddr_predictor.predict(
+            mutations=mutations,
+            hrd_status=biomarker_profile.hrd.status if biomarker_profile else None
+        )
+        
+        # Step 4: Calculate per-drug sensitivities
+        drug_sensitivities = self.sensitivity_calc.calculate_all(
+            pathways=pathways,
+            mapk_result=mapk_result,
+            ddr_result=ddr_result
+        )
+        
+        # Step 5: Count signals and determine monitoring priorities
+        signals = self._count_signals(mapk_result, ddr_result, pathways)
+        monitoring = self._determine_monitoring(pathways, current_treatment)
+        
+        return ResistancePrediction(
+            patient_id=patient_profile.patient_id,
+            pathways=pathways,
+            drug_sensitivities=drug_sensitivities,
+            platinum_sensitivity=ddr_result.platinum_sensitivity,
+            platinum_resistance_risk=mapk_result.resistance_risk,
+            platinum_mechanism=ddr_result.mechanism,
+            parp_sensitivity=ddr_result.parp_sensitivity,
+            parp_resistance_risk=ddr_result.parp_resistance_risk,
+            parp_mechanism=ddr_result.parp_mechanism,
+            signals_detected=signals,
+            monitoring_priorities=monitoring,
+            validation={
+                'mapk_validation': 'TCGA-OV n=469, MAPK RR=1.97, p<0.05',
+                'baseline_resistance': 0.145
+            },
+            confidence=self._calculate_confidence(pathways),
+            provenance={
+                'method': 'pathway_mutation_analysis',
+                'timestamp': datetime.utcnow().isoformat()
+            }
+        )
+```
+
+### MAPK Resistance Predictor (Validated)
+
+```python
+# api/services/resistance/mapk_predictor.py
+
+from typing import List, Dict
+from dataclasses import dataclass
+from .constants import MAPK_GENES
+
+@dataclass
+class MAPKResult:
+    has_mutation: bool
+    genes_mutated: List[str]
+    resistance_risk: float      # 0.0 - 1.0
+    relative_risk: float        # vs baseline
+    mechanism: str
+    confidence: float
+
+class MAPKResistancePredictor:
+    """
+    Predict platinum resistance from MAPK pathway mutations.
+    
+    Validated on TCGA-OV (n=469):
+    - MAPK mutated: 28.6% resistant (RR=1.97)
+    - NF1 specifically: 30.8% resistant (RR=2.10)
+    - Wildtype: 14.5% resistant (baseline)
+    """
+    
+    BASELINE_RESISTANCE = 0.145  # 14.5% for wildtype
+    MAPK_RELATIVE_RISK = 1.97
+    NF1_RELATIVE_RISK = 2.10
+    
+    def predict(self, mutations: List[Dict]) -> MAPKResult:
+        """
+        Predict MAPK-mediated platinum resistance.
+        
+        Args:
+            mutations: Patient mutations
+        
+        Returns:
+            MAPKResult with resistance prediction
+        """
+        # Find MAPK pathway mutations
+        mutated_genes = {m.get('gene', '').upper() for m in mutations}
+        mapk_mutated = [g for g in MAPK_GENES if g in mutated_genes]
+        
+        if not mapk_mutated:
+            return MAPKResult(
+                has_mutation=False,
+                genes_mutated=[],
+                resistance_risk=self.BASELINE_RESISTANCE,
+                relative_risk=1.0,
+                mechanism="MAPK_WILDTYPE",
+                confidence=0.85
+            )
+        
+        # Determine risk based on specific genes
+        if 'NF1' in mapk_mutated:
+            relative_risk = self.NF1_RELATIVE_RISK
+            mechanism = "NF1_LOSS_RAS_ACTIVATION"
+        else:
+            relative_risk = self.MAPK_RELATIVE_RISK
+            mechanism = f"MAPK_ACTIVATION_{mapk_mutated[0]}"
+        
+        # Calculate absolute resistance risk
+        resistance_risk = min(self.BASELINE_RESISTANCE * relative_risk, 1.0)
+        
+        return MAPKResult(
+            has_mutation=True,
+            genes_mutated=mapk_mutated,
+            resistance_risk=round(resistance_risk, 3),
+            relative_risk=relative_risk,
+            mechanism=mechanism,
+            confidence=0.80
+        )
+```
+
+### DDR Sensitivity Predictor
+
+```python
+# api/services/resistance/ddr_predictor.py
+
+from typing import List, Dict, Optional
+from dataclasses import dataclass
+from .constants import DDR_GENES, BER_GENES, HRR_GENES
+
+@dataclass
+class DDRResult:
+    ddr_status: str             # "compromised", "intact"
+    platinum_sensitivity: str   # "very_high", "high", "moderate", "low"
+    parp_sensitivity: str
+    parp_resistance_risk: float
+    mechanism: str
+    parp_mechanism: str
+    genes_mutated: List[str]
+    confidence: float
+
+class DDRSensitivityPredictor:
+    """
+    Predict DDR pathway status and drug sensitivity.
+    
+    Key insight: DDR deficiency → platinum/PARP sensitivity
+    - BRCA1/2 loss → HRR deficiency → PARP synthetic lethality
+    - MBD4 loss → BER deficiency → Platinum sensitivity + PARP
+    - TP53 loss + DDR loss → Checkpoint bypass → Enhanced sensitivity
+    """
+    
+    def predict(
+        self,
+        mutations: List[Dict],
+        hrd_status: Optional[str] = None
+    ) -> DDRResult:
+        """
+        Predict DDR-based drug sensitivity.
+        
+        Args:
+            mutations: Patient mutations
+            hrd_status: Optional HRD status from biomarker agent
+        
+        Returns:
+            DDRResult with sensitivity predictions
+        """
+        mutated_genes = {m.get('gene', '').upper() for m in mutations}
+        
+        # Find DDR mutations
+        ddr_mutated = [g for g in DDR_GENES if g in mutated_genes]
+        ber_mutated = [g for g in BER_GENES if g in mutated_genes]
+        hrr_mutated = [g for g in HRR_GENES if g in mutated_genes]
+        
+        tp53_mutant = 'TP53' in mutated_genes
+        
+        # Determine DDR status and sensitivities
+        if ber_mutated:
+            # BER deficiency (e.g., MBD4)
+            ddr_status = "compromised"
+            platinum_sensitivity = "very_high" if tp53_mutant else "high"
+            parp_sensitivity = "very_high"
+            parp_resistance_risk = 0.10
+            mechanism = f"BER_DEFICIENCY_{ber_mutated[0]}"
+            parp_mechanism = f"SYNTHETIC_LETHALITY_{ber_mutated[0]}"
+            confidence = 0.85
+            
+        elif hrr_mutated or hrd_status in ["HRD+", "HRD-INFERRED"]:
+            # HRR deficiency (BRCA, etc.)
+            ddr_status = "compromised"
+            platinum_sensitivity = "high"
+            parp_sensitivity = "very_high"
+            parp_resistance_risk = 0.15
+            mechanism = f"HRR_DEFICIENCY_{hrr_mutated[0] if hrr_mutated else 'HRD'}"
+            parp_mechanism = "SYNTHETIC_LETHALITY_HRD"
+            confidence = 0.90
+            
+        elif ddr_mutated:
+            # Other DDR mutations
+            ddr_status = "compromised"
+            platinum_sensitivity = "moderate"
+            parp_sensitivity = "moderate"
+            parp_resistance_risk = 0.30
+            mechanism = f"DDR_MUTATION_{ddr_mutated[0]}"
+            parp_mechanism = f"DDR_DISRUPTION_{ddr_mutated[0]}"
+            confidence = 0.70
+            
+        else:
+            # DDR intact
+            ddr_status = "intact"
+            platinum_sensitivity = "moderate"
+            parp_sensitivity = "low"
+            parp_resistance_risk = 0.50
+            mechanism = "DDR_INTACT"
+            parp_mechanism = "NO_SYNTHETIC_LETHALITY"
+            confidence = 0.75
+        
+        all_mutated = list(set(ddr_mutated + ber_mutated + hrr_mutated))
+        
+        return DDRResult(
+            ddr_status=ddr_status,
+            platinum_sensitivity=platinum_sensitivity,
+            parp_sensitivity=parp_sensitivity,
+            parp_resistance_risk=parp_resistance_risk,
+            mechanism=mechanism,
+            parp_mechanism=parp_mechanism,
+            genes_mutated=all_mutated,
+            confidence=confidence
+        )
+```
+
+### Constants
+
+```python
+# api/services/resistance/constants.py
+
+# MAPK pathway genes (validated for platinum resistance)
+MAPK_GENES = {
+    'KRAS', 'NRAS', 'HRAS',     # RAS family
+    'BRAF', 'ARAF', 'RAF1',     # RAF family
+    'MAP2K1', 'MAP2K2',         # MEK1/2
+    'MAPK1', 'MAPK3',           # ERK1/2
+    'NF1',                      # RAS regulator (RR=2.10)
+    'PTPN11',                   # SHP2
+    'SOS1', 'SOS2',             # RAS activators
+    'CBL'                       # E3 ligase
+}
+
+# All DDR genes
+DDR_GENES = {
+    'ATM', 'ATR', 'CHEK1', 'CHEK2',
+    'TP53', 'MDM2', 'CDKN2A',
+    'BRCA1', 'BRCA2', 'PALB2',
+    'RAD51C', 'RAD51D', 'BARD1',
+    'MBD4', 'MUTYH', 'OGG1',
+    'MLH1', 'MSH2', 'MSH6', 'PMS2'
+}
+
+# Base Excision Repair genes
+BER_GENES = {
+    'MBD4', 'MUTYH', 'OGG1', 'NTHL1',
+    'NEIL1', 'NEIL2', 'NEIL3',
+    'APEX1', 'XRCC1',
+    'PARP1', 'PARP2', 'PARP3'
+}
+
+# Homologous Recombination Repair genes
+HRR_GENES = {
+    'BRCA1', 'BRCA2', 'PALB2',
+    'RAD51', 'RAD51B', 'RAD51C', 'RAD51D',
+    'BRIP1', 'BARD1', 'NBN',
+    'MRE11', 'RAD50', 'ATM', 'ATR',
+    'FANCA', 'FANCD2', 'FANCL'
+}
+
+# Drug efflux genes (for resistance monitoring)
+EFFLUX_GENES = {
+    'ABCB1', 'ABCC1', 'ABCG2'
+}
+```
+
+---
+
+## 🧪 TESTING
+
+### MAPK Validation Test
+
+```python
+# api/services/resistance/tests/test_mapk.py
+
+import pytest
+from ..mapk_predictor import MAPKResistancePredictor
+
+@pytest.fixture
+def predictor():
+    return MAPKResistancePredictor()
+
+def test_mapk_wildtype(predictor):
+    mutations = [{'gene': 'TP53'}]  # Not MAPK
+    result = predictor.predict(mutations)
+    
+    assert result.has_mutation == False
+    assert result.resistance_risk == 0.145  # Baseline
+    assert result.relative_risk == 1.0
+
+def test_mapk_kras_mutation(predictor):
+    mutations = [{'gene': 'KRAS'}]
+    result = predictor.predict(mutations)
+    
+    assert result.has_mutation == True
+    assert 'KRAS' in result.genes_mutated
+    assert result.relative_risk == 1.97
+    assert result.resistance_risk == pytest.approx(0.145 * 1.97, rel=0.01)
+
+def test_mapk_nf1_mutation(predictor):
+    mutations = [{'gene': 'NF1'}]
+    result = predictor.predict(mutations)
+    
+    assert result.has_mutation == True
+    assert result.relative_risk == 2.10  # Higher risk for NF1
+    assert 'NF1_LOSS' in result.mechanism
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+### Phase 1: MAPK Predictor (Validated)
+- [ ] Port MAPK logic from `resistance_prophet_service.py`
+- [ ] Validate against TCGA-OV metrics (RR=1.97)
+- [ ] Add NF1-specific prediction (RR=2.10)
+- [ ] Unit tests matching validation
+
+### Phase 2: DDR Predictor
+- [ ] Implement BER deficiency detection
+- [ ] Implement HRR deficiency detection
+- [ ] Add TP53 synergy logic
+- [ ] Calculate platinum/PARP sensitivity
+- [ ] Unit tests
+
+### Phase 3: Pathway Analyzer
+- [ ] Generic pathway analysis
+- [ ] Pathway burden scoring
+- [ ] Multiple pathway support
+- [ ] Unit tests
+
+### Phase 4: Integration
+- [ ] Create ResistanceAgent class
+- [ ] Wire all predictors
+- [ ] Add monitoring priority logic
+- [ ] Integration tests
+
+---
+
+## 📡 API ENDPOINT
+
+```yaml
+POST /api/agents/resistance
+Content-Type: application/json
+
+Request:
+  patient_id: string
+  mutations: Mutation[]
+  current_treatment: string  # optional
+  hrd_status: string         # optional (from biomarker agent)
+
+Response:
+  resistance_prediction: ResistancePrediction
+  calculation_time_ms: number
+```
+
+---
+
+## ✅ ACCEPTANCE CRITERIA
+
+1. ✅ MAPK resistance matches validated RR=1.97
+2. ✅ NF1-specific prediction at RR=2.10
+3. ✅ Baseline resistance = 14.5% for wildtype
+4. ✅ DDR deficiency → high platinum sensitivity
+5. ✅ BER deficiency → very high PARP sensitivity
+6. ✅ All predictions include mechanism explanation
+7. ✅ Monitoring priorities generated
+8. ✅ Unit test coverage >80%
+
+---
+
+---
+
+## 🎯 MISSION
+
+Build a resistance prediction agent that can:
+1. Detect MAPK pathway mutations (validated RR=1.97 for platinum resistance)
+2. Analyze DDR pathway status for platinum/PARP sensitivity
+3. Calculate resistance risk scores with confidence
+4. Provide mechanism-based explanations
+5. Identify monitoring priorities
+
+---
+
+## 📊 VALIDATED CAPABILITIES (USE THESE)
+
+### MAPK Resistance - ALREADY VALIDATED ✅
+
+**Location:** `api/services/resistance_prophet_service.py`
+
+**Validation Metrics (TCGA-OV, n=469):**
+| Pathway | Mutated | Resistant Rate | Relative Risk |
+|---------|---------|----------------|---------------|
+| MAPK (any) | 35 pts | 28.6% | **1.97** |
+| NF1 specific | 26 pts | 30.8% | **2.10** |
+| Wildtype | 434 pts | 14.5% | 1.0 (baseline) |
+
+**Statistical Significance:** p < 0.05
+
+---
+
+## 📥 INPUTS
+
+### From PatientProfile (Module 01) & BiomarkerProfile (Module 02)
+
+```python
+# Required inputs
+patient_id: str
+mutations: List[Mutation]      # From Module 01
+disease: str                   # e.g., "ovarian_cancer"
+current_treatment: str         # e.g., "carboplatin"
+
+# Optional inputs (from Module 02)
+hrd_status: str               # "HRD+", "HRD-", "HRD-INFERRED"
+tmb_classification: str       # "TMB-H", "TMB-L"
+```
+
+---
+
+## 📤 OUTPUTS
+
+### ResistancePrediction Schema
+
+```python
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from enum import Enum
+
+class SensitivityLevel(Enum):
+    VERY_HIGH = "very_high"
+    HIGH = "high"
+    MODERATE = "moderate"
+    LOW = "low"
+    RESISTANT = "resistant"
+
+class RiskLevel(Enum):
+    HIGH = "high"
+    MODERATE = "moderate"
+    LOW = "low"
+    BASELINE = "baseline"
+
+@dataclass
+class PathwayAnalysis:
+    pathway: str                    # "MAPK", "DDR", "PI3K", etc.
+    status: str                     # "mutated", "wildtype", "compromised"
+    genes_mutated: List[str]        # ["KRAS", "NF1"]
+    genes_checked: List[str]        # All genes in pathway
+    burden_score: float             # 0.0 - 1.0
+
+@dataclass
+class DrugSensitivity:
+    drug_class: str                 # "platinum", "parp", "checkpoint"
+    sensitivity: SensitivityLevel
+    mechanism: str                  # "BER_DEFICIENCY", "DDR_INTACT"
+    confidence: float               # 0.0 - 1.0
+
+@dataclass
+class ResistancePrediction:
+    patient_id: str
+    
+    # Pathway analyses
+    pathways: List[PathwayAnalysis]
+    
+    # Per-drug-class predictions
+    drug_sensitivities: Dict[str, DrugSensitivity]
+    
+    # Platinum-specific (most validated)
+    platinum_sensitivity: SensitivityLevel
+    platinum_resistance_risk: float         # 0.0 - 1.0
+    platinum_mechanism: str
+    
+    # PARP-specific
+    parp_sensitivity: SensitivityLevel
+    parp_resistance_risk: float
+    parp_mechanism: str
+    
+    # Overall
+    signals_detected: int                   # Count of resistance signals
+    monitoring_priorities: List[str]        # ["MAPK_mutations", "ABCB1"]
+    
+    # Validation
+    validation: Dict[str, any]              # TCGA validation metrics
+    confidence: float
+    provenance: Dict[str, any]
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### File Structure
+
+```
+api/services/resistance/
+├── __init__.py
+├── resistance_agent.py         # Main agent
+├── pathway_analyzer.py         # Pathway mutation analysis
+├── mapk_predictor.py           # MAPK resistance (validated)
+├── ddr_predictor.py            # DDR sensitivity
+├── sensitivity_calculator.py   # Overall sensitivity
+├── constants.py                # Pathway gene lists
+└── tests/
+    ├── test_mapk.py
+    ├── test_ddr.py
+    └── test_integration.py
+```
+
+### Core Agent Implementation
+
+```python
+# api/services/resistance/resistance_agent.py
+
+from typing import List, Dict, Optional
+from datetime import datetime
+import logging
+
+from .pathway_analyzer import PathwayAnalyzer
+from .mapk_predictor import MAPKResistancePredictor
+from .ddr_predictor import DDRSensitivityPredictor
+from .sensitivity_calculator import SensitivityCalculator
+from ..models import PatientProfile, BiomarkerProfile, ResistancePrediction
+
+logger = logging.getLogger(__name__)
+
+class ResistanceAgent:
+    """
+    Predict drug resistance/sensitivity from pathway mutations.
+    
+    Validated:
+    - MAPK pathway: RR=1.97 for platinum resistance (TCGA-OV, n=469)
+    - DDR pathway: MBD4/TP53 synthetic lethality
+    """
+    
+    def __init__(self):
+        self.pathway_analyzer = PathwayAnalyzer()
+        self.mapk_predictor = MAPKResistancePredictor()
+        self.ddr_predictor = DDRSensitivityPredictor()
+        self.sensitivity_calc = SensitivityCalculator()
+    
+    async def predict(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile] = None,
+        current_treatment: str = None
+    ) -> ResistancePrediction:
+        """
+        Predict resistance/sensitivity for a patient.
+        
+        Args:
+            patient_profile: Patient with mutations
+            biomarker_profile: Optional biomarker data
+            current_treatment: Current drug (for context)
+        
+        Returns:
+            ResistancePrediction with pathway analysis and predictions
+        """
+        logger.info(f"Predicting resistance for {patient_profile.patient_id}")
+        
+        mutations = self._mutations_to_dicts(patient_profile.mutations)
+        
+        # Step 1: Analyze all pathways
+        pathways = self.pathway_analyzer.analyze(mutations)
+        
+        # Step 2: MAPK resistance prediction (validated)
+        mapk_result = self.mapk_predictor.predict(mutations)
+        
+        # Step 3: DDR sensitivity prediction
+        ddr_result = self.ddr_predictor.predict(
+            mutations=mutations,
+            hrd_status=biomarker_profile.hrd.status if biomarker_profile else None
+        )
+        
+        # Step 4: Calculate per-drug sensitivities
+        drug_sensitivities = self.sensitivity_calc.calculate_all(
+            pathways=pathways,
+            mapk_result=mapk_result,
+            ddr_result=ddr_result
+        )
+        
+        # Step 5: Count signals and determine monitoring priorities
+        signals = self._count_signals(mapk_result, ddr_result, pathways)
+        monitoring = self._determine_monitoring(pathways, current_treatment)
+        
+        return ResistancePrediction(
+            patient_id=patient_profile.patient_id,
+            pathways=pathways,
+            drug_sensitivities=drug_sensitivities,
+            platinum_sensitivity=ddr_result.platinum_sensitivity,
+            platinum_resistance_risk=mapk_result.resistance_risk,
+            platinum_mechanism=ddr_result.mechanism,
+            parp_sensitivity=ddr_result.parp_sensitivity,
+            parp_resistance_risk=ddr_result.parp_resistance_risk,
+            parp_mechanism=ddr_result.parp_mechanism,
+            signals_detected=signals,
+            monitoring_priorities=monitoring,
+            validation={
+                'mapk_validation': 'TCGA-OV n=469, MAPK RR=1.97, p<0.05',
+                'baseline_resistance': 0.145
+            },
+            confidence=self._calculate_confidence(pathways),
+            provenance={
+                'method': 'pathway_mutation_analysis',
+                'timestamp': datetime.utcnow().isoformat()
+            }
+        )
+```
+
+### MAPK Resistance Predictor (Validated)
+
+```python
+# api/services/resistance/mapk_predictor.py
+
+from typing import List, Dict
+from dataclasses import dataclass
+from .constants import MAPK_GENES
+
+@dataclass
+class MAPKResult:
+    has_mutation: bool
+    genes_mutated: List[str]
+    resistance_risk: float      # 0.0 - 1.0
+    relative_risk: float        # vs baseline
+    mechanism: str
+    confidence: float
+
+class MAPKResistancePredictor:
+    """
+    Predict platinum resistance from MAPK pathway mutations.
+    
+    Validated on TCGA-OV (n=469):
+    - MAPK mutated: 28.6% resistant (RR=1.97)
+    - NF1 specifically: 30.8% resistant (RR=2.10)
+    - Wildtype: 14.5% resistant (baseline)
+    """
+    
+    BASELINE_RESISTANCE = 0.145  # 14.5% for wildtype
+    MAPK_RELATIVE_RISK = 1.97
+    NF1_RELATIVE_RISK = 2.10
+    
+    def predict(self, mutations: List[Dict]) -> MAPKResult:
+        """
+        Predict MAPK-mediated platinum resistance.
+        
+        Args:
+            mutations: Patient mutations
+        
+        Returns:
+            MAPKResult with resistance prediction
+        """
+        # Find MAPK pathway mutations
+        mutated_genes = {m.get('gene', '').upper() for m in mutations}
+        mapk_mutated = [g for g in MAPK_GENES if g in mutated_genes]
+        
+        if not mapk_mutated:
+            return MAPKResult(
+                has_mutation=False,
+                genes_mutated=[],
+                resistance_risk=self.BASELINE_RESISTANCE,
+                relative_risk=1.0,
+                mechanism="MAPK_WILDTYPE",
+                confidence=0.85
+            )
+        
+        # Determine risk based on specific genes
+        if 'NF1' in mapk_mutated:
+            relative_risk = self.NF1_RELATIVE_RISK
+            mechanism = "NF1_LOSS_RAS_ACTIVATION"
+        else:
+            relative_risk = self.MAPK_RELATIVE_RISK
+            mechanism = f"MAPK_ACTIVATION_{mapk_mutated[0]}"
+        
+        # Calculate absolute resistance risk
+        resistance_risk = min(self.BASELINE_RESISTANCE * relative_risk, 1.0)
+        
+        return MAPKResult(
+            has_mutation=True,
+            genes_mutated=mapk_mutated,
+            resistance_risk=round(resistance_risk, 3),
+            relative_risk=relative_risk,
+            mechanism=mechanism,
+            confidence=0.80
+        )
+```
+
+### DDR Sensitivity Predictor
+
+```python
+# api/services/resistance/ddr_predictor.py
+
+from typing import List, Dict, Optional
+from dataclasses import dataclass
+from .constants import DDR_GENES, BER_GENES, HRR_GENES
+
+@dataclass
+class DDRResult:
+    ddr_status: str             # "compromised", "intact"
+    platinum_sensitivity: str   # "very_high", "high", "moderate", "low"
+    parp_sensitivity: str
+    parp_resistance_risk: float
+    mechanism: str
+    parp_mechanism: str
+    genes_mutated: List[str]
+    confidence: float
+
+class DDRSensitivityPredictor:
+    """
+    Predict DDR pathway status and drug sensitivity.
+    
+    Key insight: DDR deficiency → platinum/PARP sensitivity
+    - BRCA1/2 loss → HRR deficiency → PARP synthetic lethality
+    - MBD4 loss → BER deficiency → Platinum sensitivity + PARP
+    - TP53 loss + DDR loss → Checkpoint bypass → Enhanced sensitivity
+    """
+    
+    def predict(
+        self,
+        mutations: List[Dict],
+        hrd_status: Optional[str] = None
+    ) -> DDRResult:
+        """
+        Predict DDR-based drug sensitivity.
+        
+        Args:
+            mutations: Patient mutations
+            hrd_status: Optional HRD status from biomarker agent
+        
+        Returns:
+            DDRResult with sensitivity predictions
+        """
+        mutated_genes = {m.get('gene', '').upper() for m in mutations}
+        
+        # Find DDR mutations
+        ddr_mutated = [g for g in DDR_GENES if g in mutated_genes]
+        ber_mutated = [g for g in BER_GENES if g in mutated_genes]
+        hrr_mutated = [g for g in HRR_GENES if g in mutated_genes]
+        
+        tp53_mutant = 'TP53' in mutated_genes
+        
+        # Determine DDR status and sensitivities
+        if ber_mutated:
+            # BER deficiency (e.g., MBD4)
+            ddr_status = "compromised"
+            platinum_sensitivity = "very_high" if tp53_mutant else "high"
+            parp_sensitivity = "very_high"
+            parp_resistance_risk = 0.10
+            mechanism = f"BER_DEFICIENCY_{ber_mutated[0]}"
+            parp_mechanism = f"SYNTHETIC_LETHALITY_{ber_mutated[0]}"
+            confidence = 0.85
+            
+        elif hrr_mutated or hrd_status in ["HRD+", "HRD-INFERRED"]:
+            # HRR deficiency (BRCA, etc.)
+            ddr_status = "compromised"
+            platinum_sensitivity = "high"
+            parp_sensitivity = "very_high"
+            parp_resistance_risk = 0.15
+            mechanism = f"HRR_DEFICIENCY_{hrr_mutated[0] if hrr_mutated else 'HRD'}"
+            parp_mechanism = "SYNTHETIC_LETHALITY_HRD"
+            confidence = 0.90
+            
+        elif ddr_mutated:
+            # Other DDR mutations
+            ddr_status = "compromised"
+            platinum_sensitivity = "moderate"
+            parp_sensitivity = "moderate"
+            parp_resistance_risk = 0.30
+            mechanism = f"DDR_MUTATION_{ddr_mutated[0]}"
+            parp_mechanism = f"DDR_DISRUPTION_{ddr_mutated[0]}"
+            confidence = 0.70
+            
+        else:
+            # DDR intact
+            ddr_status = "intact"
+            platinum_sensitivity = "moderate"
+            parp_sensitivity = "low"
+            parp_resistance_risk = 0.50
+            mechanism = "DDR_INTACT"
+            parp_mechanism = "NO_SYNTHETIC_LETHALITY"
+            confidence = 0.75
+        
+        all_mutated = list(set(ddr_mutated + ber_mutated + hrr_mutated))
+        
+        return DDRResult(
+            ddr_status=ddr_status,
+            platinum_sensitivity=platinum_sensitivity,
+            parp_sensitivity=parp_sensitivity,
+            parp_resistance_risk=parp_resistance_risk,
+            mechanism=mechanism,
+            parp_mechanism=parp_mechanism,
+            genes_mutated=all_mutated,
+            confidence=confidence
+        )
+```
+
+### Constants
+
+```python
+# api/services/resistance/constants.py
+
+# MAPK pathway genes (validated for platinum resistance)
+MAPK_GENES = {
+    'KRAS', 'NRAS', 'HRAS',     # RAS family
+    'BRAF', 'ARAF', 'RAF1',     # RAF family
+    'MAP2K1', 'MAP2K2',         # MEK1/2
+    'MAPK1', 'MAPK3',           # ERK1/2
+    'NF1',                      # RAS regulator (RR=2.10)
+    'PTPN11',                   # SHP2
+    'SOS1', 'SOS2',             # RAS activators
+    'CBL'                       # E3 ligase
+}
+
+# All DDR genes
+DDR_GENES = {
+    'ATM', 'ATR', 'CHEK1', 'CHEK2',
+    'TP53', 'MDM2', 'CDKN2A',
+    'BRCA1', 'BRCA2', 'PALB2',
+    'RAD51C', 'RAD51D', 'BARD1',
+    'MBD4', 'MUTYH', 'OGG1',
+    'MLH1', 'MSH2', 'MSH6', 'PMS2'
+}
+
+# Base Excision Repair genes
+BER_GENES = {
+    'MBD4', 'MUTYH', 'OGG1', 'NTHL1',
+    'NEIL1', 'NEIL2', 'NEIL3',
+    'APEX1', 'XRCC1',
+    'PARP1', 'PARP2', 'PARP3'
+}
+
+# Homologous Recombination Repair genes
+HRR_GENES = {
+    'BRCA1', 'BRCA2', 'PALB2',
+    'RAD51', 'RAD51B', 'RAD51C', 'RAD51D',
+    'BRIP1', 'BARD1', 'NBN',
+    'MRE11', 'RAD50', 'ATM', 'ATR',
+    'FANCA', 'FANCD2', 'FANCL'
+}
+
+# Drug efflux genes (for resistance monitoring)
+EFFLUX_GENES = {
+    'ABCB1', 'ABCC1', 'ABCG2'
+}
+```
+
+---
+
+## 🧪 TESTING
+
+### MAPK Validation Test
+
+```python
+# api/services/resistance/tests/test_mapk.py
+
+import pytest
+from ..mapk_predictor import MAPKResistancePredictor
+
+@pytest.fixture
+def predictor():
+    return MAPKResistancePredictor()
+
+def test_mapk_wildtype(predictor):
+    mutations = [{'gene': 'TP53'}]  # Not MAPK
+    result = predictor.predict(mutations)
+    
+    assert result.has_mutation == False
+    assert result.resistance_risk == 0.145  # Baseline
+    assert result.relative_risk == 1.0
+
+def test_mapk_kras_mutation(predictor):
+    mutations = [{'gene': 'KRAS'}]
+    result = predictor.predict(mutations)
+    
+    assert result.has_mutation == True
+    assert 'KRAS' in result.genes_mutated
+    assert result.relative_risk == 1.97
+    assert result.resistance_risk == pytest.approx(0.145 * 1.97, rel=0.01)
+
+def test_mapk_nf1_mutation(predictor):
+    mutations = [{'gene': 'NF1'}]
+    result = predictor.predict(mutations)
+    
+    assert result.has_mutation == True
+    assert result.relative_risk == 2.10  # Higher risk for NF1
+    assert 'NF1_LOSS' in result.mechanism
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+### Phase 1: MAPK Predictor (Validated)
+- [ ] Port MAPK logic from `resistance_prophet_service.py`
+- [ ] Validate against TCGA-OV metrics (RR=1.97)
+- [ ] Add NF1-specific prediction (RR=2.10)
+- [ ] Unit tests matching validation
+
+### Phase 2: DDR Predictor
+- [ ] Implement BER deficiency detection
+- [ ] Implement HRR deficiency detection
+- [ ] Add TP53 synergy logic
+- [ ] Calculate platinum/PARP sensitivity
+- [ ] Unit tests
+
+### Phase 3: Pathway Analyzer
+- [ ] Generic pathway analysis
+- [ ] Pathway burden scoring
+- [ ] Multiple pathway support
+- [ ] Unit tests
+
+### Phase 4: Integration
+- [ ] Create ResistanceAgent class
+- [ ] Wire all predictors
+- [ ] Add monitoring priority logic
+- [ ] Integration tests
+
+---
+
+## 📡 API ENDPOINT
+
+```yaml
+POST /api/agents/resistance
+Content-Type: application/json
+
+Request:
+  patient_id: string
+  mutations: Mutation[]
+  current_treatment: string  # optional
+  hrd_status: string         # optional (from biomarker agent)
+
+Response:
+  resistance_prediction: ResistancePrediction
+  calculation_time_ms: number
+```
+
+---
+
+## ✅ ACCEPTANCE CRITERIA
+
+1. ✅ MAPK resistance matches validated RR=1.97
+2. ✅ NF1-specific prediction at RR=2.10
+3. ✅ Baseline resistance = 14.5% for wildtype
+4. ✅ DDR deficiency → high platinum sensitivity
+5. ✅ BER deficiency → very high PARP sensitivity
+6. ✅ All predictions include mechanism explanation
+7. ✅ Monitoring priorities generated
+8. ✅ Unit test coverage >80%
+
+---
+
+---
+
+## 🎯 MISSION
+
+Build a resistance prediction agent that can:
+1. Detect MAPK pathway mutations (validated RR=1.97 for platinum resistance)
+2. Analyze DDR pathway status for platinum/PARP sensitivity
+3. Calculate resistance risk scores with confidence
+4. Provide mechanism-based explanations
+5. Identify monitoring priorities
+
+---
+
+## 📊 VALIDATED CAPABILITIES (USE THESE)
+
+### MAPK Resistance - ALREADY VALIDATED ✅
+
+**Location:** `api/services/resistance_prophet_service.py`
+
+**Validation Metrics (TCGA-OV, n=469):**
+| Pathway | Mutated | Resistant Rate | Relative Risk |
+|---------|---------|----------------|---------------|
+| MAPK (any) | 35 pts | 28.6% | **1.97** |
+| NF1 specific | 26 pts | 30.8% | **2.10** |
+| Wildtype | 434 pts | 14.5% | 1.0 (baseline) |
+
+**Statistical Significance:** p < 0.05
+
+---
+
+## 📥 INPUTS
+
+### From PatientProfile (Module 01) & BiomarkerProfile (Module 02)
+
+```python
+# Required inputs
+patient_id: str
+mutations: List[Mutation]      # From Module 01
+disease: str                   # e.g., "ovarian_cancer"
+current_treatment: str         # e.g., "carboplatin"
+
+# Optional inputs (from Module 02)
+hrd_status: str               # "HRD+", "HRD-", "HRD-INFERRED"
+tmb_classification: str       # "TMB-H", "TMB-L"
+```
+
+---
+
+## 📤 OUTPUTS
+
+### ResistancePrediction Schema
+
+```python
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from enum import Enum
+
+class SensitivityLevel(Enum):
+    VERY_HIGH = "very_high"
+    HIGH = "high"
+    MODERATE = "moderate"
+    LOW = "low"
+    RESISTANT = "resistant"
+
+class RiskLevel(Enum):
+    HIGH = "high"
+    MODERATE = "moderate"
+    LOW = "low"
+    BASELINE = "baseline"
+
+@dataclass
+class PathwayAnalysis:
+    pathway: str                    # "MAPK", "DDR", "PI3K", etc.
+    status: str                     # "mutated", "wildtype", "compromised"
+    genes_mutated: List[str]        # ["KRAS", "NF1"]
+    genes_checked: List[str]        # All genes in pathway
+    burden_score: float             # 0.0 - 1.0
+
+@dataclass
+class DrugSensitivity:
+    drug_class: str                 # "platinum", "parp", "checkpoint"
+    sensitivity: SensitivityLevel
+    mechanism: str                  # "BER_DEFICIENCY", "DDR_INTACT"
+    confidence: float               # 0.0 - 1.0
+
+@dataclass
+class ResistancePrediction:
+    patient_id: str
+    
+    # Pathway analyses
+    pathways: List[PathwayAnalysis]
+    
+    # Per-drug-class predictions
+    drug_sensitivities: Dict[str, DrugSensitivity]
+    
+    # Platinum-specific (most validated)
+    platinum_sensitivity: SensitivityLevel
+    platinum_resistance_risk: float         # 0.0 - 1.0
+    platinum_mechanism: str
+    
+    # PARP-specific
+    parp_sensitivity: SensitivityLevel
+    parp_resistance_risk: float
+    parp_mechanism: str
+    
+    # Overall
+    signals_detected: int                   # Count of resistance signals
+    monitoring_priorities: List[str]        # ["MAPK_mutations", "ABCB1"]
+    
+    # Validation
+    validation: Dict[str, any]              # TCGA validation metrics
+    confidence: float
+    provenance: Dict[str, any]
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### File Structure
+
+```
+api/services/resistance/
+├── __init__.py
+├── resistance_agent.py         # Main agent
+├── pathway_analyzer.py         # Pathway mutation analysis
+├── mapk_predictor.py           # MAPK resistance (validated)
+├── ddr_predictor.py            # DDR sensitivity
+├── sensitivity_calculator.py   # Overall sensitivity
+├── constants.py                # Pathway gene lists
+└── tests/
+    ├── test_mapk.py
+    ├── test_ddr.py
+    └── test_integration.py
+```
+
+### Core Agent Implementation
+
+```python
+# api/services/resistance/resistance_agent.py
+
+from typing import List, Dict, Optional
+from datetime import datetime
+import logging
+
+from .pathway_analyzer import PathwayAnalyzer
+from .mapk_predictor import MAPKResistancePredictor
+from .ddr_predictor import DDRSensitivityPredictor
+from .sensitivity_calculator import SensitivityCalculator
+from ..models import PatientProfile, BiomarkerProfile, ResistancePrediction
+
+logger = logging.getLogger(__name__)
+
+class ResistanceAgent:
+    """
+    Predict drug resistance/sensitivity from pathway mutations.
+    
+    Validated:
+    - MAPK pathway: RR=1.97 for platinum resistance (TCGA-OV, n=469)
+    - DDR pathway: MBD4/TP53 synthetic lethality
+    """
+    
+    def __init__(self):
+        self.pathway_analyzer = PathwayAnalyzer()
+        self.mapk_predictor = MAPKResistancePredictor()
+        self.ddr_predictor = DDRSensitivityPredictor()
+        self.sensitivity_calc = SensitivityCalculator()
+    
+    async def predict(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile] = None,
+        current_treatment: str = None
+    ) -> ResistancePrediction:
+        """
+        Predict resistance/sensitivity for a patient.
+        
+        Args:
+            patient_profile: Patient with mutations
+            biomarker_profile: Optional biomarker data
+            current_treatment: Current drug (for context)
+        
+        Returns:
+            ResistancePrediction with pathway analysis and predictions
+        """
+        logger.info(f"Predicting resistance for {patient_profile.patient_id}")
+        
+        mutations = self._mutations_to_dicts(patient_profile.mutations)
+        
+        # Step 1: Analyze all pathways
+        pathways = self.pathway_analyzer.analyze(mutations)
+        
+        # Step 2: MAPK resistance prediction (validated)
+        mapk_result = self.mapk_predictor.predict(mutations)
+        
+        # Step 3: DDR sensitivity prediction
+        ddr_result = self.ddr_predictor.predict(
+            mutations=mutations,
+            hrd_status=biomarker_profile.hrd.status if biomarker_profile else None
+        )
+        
+        # Step 4: Calculate per-drug sensitivities
+        drug_sensitivities = self.sensitivity_calc.calculate_all(
+            pathways=pathways,
+            mapk_result=mapk_result,
+            ddr_result=ddr_result
+        )
+        
+        # Step 5: Count signals and determine monitoring priorities
+        signals = self._count_signals(mapk_result, ddr_result, pathways)
+        monitoring = self._determine_monitoring(pathways, current_treatment)
+        
+        return ResistancePrediction(
+            patient_id=patient_profile.patient_id,
+            pathways=pathways,
+            drug_sensitivities=drug_sensitivities,
+            platinum_sensitivity=ddr_result.platinum_sensitivity,
+            platinum_resistance_risk=mapk_result.resistance_risk,
+            platinum_mechanism=ddr_result.mechanism,
+            parp_sensitivity=ddr_result.parp_sensitivity,
+            parp_resistance_risk=ddr_result.parp_resistance_risk,
+            parp_mechanism=ddr_result.parp_mechanism,
+            signals_detected=signals,
+            monitoring_priorities=monitoring,
+            validation={
+                'mapk_validation': 'TCGA-OV n=469, MAPK RR=1.97, p<0.05',
+                'baseline_resistance': 0.145
+            },
+            confidence=self._calculate_confidence(pathways),
+            provenance={
+                'method': 'pathway_mutation_analysis',
+                'timestamp': datetime.utcnow().isoformat()
+            }
+        )
+```
+
+### MAPK Resistance Predictor (Validated)
+
+```python
+# api/services/resistance/mapk_predictor.py
+
+from typing import List, Dict
+from dataclasses import dataclass
+from .constants import MAPK_GENES
+
+@dataclass
+class MAPKResult:
+    has_mutation: bool
+    genes_mutated: List[str]
+    resistance_risk: float      # 0.0 - 1.0
+    relative_risk: float        # vs baseline
+    mechanism: str
+    confidence: float
+
+class MAPKResistancePredictor:
+    """
+    Predict platinum resistance from MAPK pathway mutations.
+    
+    Validated on TCGA-OV (n=469):
+    - MAPK mutated: 28.6% resistant (RR=1.97)
+    - NF1 specifically: 30.8% resistant (RR=2.10)
+    - Wildtype: 14.5% resistant (baseline)
+    """
+    
+    BASELINE_RESISTANCE = 0.145  # 14.5% for wildtype
+    MAPK_RELATIVE_RISK = 1.97
+    NF1_RELATIVE_RISK = 2.10
+    
+    def predict(self, mutations: List[Dict]) -> MAPKResult:
+        """
+        Predict MAPK-mediated platinum resistance.
+        
+        Args:
+            mutations: Patient mutations
+        
+        Returns:
+            MAPKResult with resistance prediction
+        """
+        # Find MAPK pathway mutations
+        mutated_genes = {m.get('gene', '').upper() for m in mutations}
+        mapk_mutated = [g for g in MAPK_GENES if g in mutated_genes]
+        
+        if not mapk_mutated:
+            return MAPKResult(
+                has_mutation=False,
+                genes_mutated=[],
+                resistance_risk=self.BASELINE_RESISTANCE,
+                relative_risk=1.0,
+                mechanism="MAPK_WILDTYPE",
+                confidence=0.85
+            )
+        
+        # Determine risk based on specific genes
+        if 'NF1' in mapk_mutated:
+            relative_risk = self.NF1_RELATIVE_RISK
+            mechanism = "NF1_LOSS_RAS_ACTIVATION"
+        else:
+            relative_risk = self.MAPK_RELATIVE_RISK
+            mechanism = f"MAPK_ACTIVATION_{mapk_mutated[0]}"
+        
+        # Calculate absolute resistance risk
+        resistance_risk = min(self.BASELINE_RESISTANCE * relative_risk, 1.0)
+        
+        return MAPKResult(
+            has_mutation=True,
+            genes_mutated=mapk_mutated,
+            resistance_risk=round(resistance_risk, 3),
+            relative_risk=relative_risk,
+            mechanism=mechanism,
+            confidence=0.80
+        )
+```
+
+### DDR Sensitivity Predictor
+
+```python
+# api/services/resistance/ddr_predictor.py
+
+from typing import List, Dict, Optional
+from dataclasses import dataclass
+from .constants import DDR_GENES, BER_GENES, HRR_GENES
+
+@dataclass
+class DDRResult:
+    ddr_status: str             # "compromised", "intact"
+    platinum_sensitivity: str   # "very_high", "high", "moderate", "low"
+    parp_sensitivity: str
+    parp_resistance_risk: float
+    mechanism: str
+    parp_mechanism: str
+    genes_mutated: List[str]
+    confidence: float
+
+class DDRSensitivityPredictor:
+    """
+    Predict DDR pathway status and drug sensitivity.
+    
+    Key insight: DDR deficiency → platinum/PARP sensitivity
+    - BRCA1/2 loss → HRR deficiency → PARP synthetic lethality
+    - MBD4 loss → BER deficiency → Platinum sensitivity + PARP
+    - TP53 loss + DDR loss → Checkpoint bypass → Enhanced sensitivity
+    """
+    
+    def predict(
+        self,
+        mutations: List[Dict],
+        hrd_status: Optional[str] = None
+    ) -> DDRResult:
+        """
+        Predict DDR-based drug sensitivity.
+        
+        Args:
+            mutations: Patient mutations
+            hrd_status: Optional HRD status from biomarker agent
+        
+        Returns:
+            DDRResult with sensitivity predictions
+        """
+        mutated_genes = {m.get('gene', '').upper() for m in mutations}
+        
+        # Find DDR mutations
+        ddr_mutated = [g for g in DDR_GENES if g in mutated_genes]
+        ber_mutated = [g for g in BER_GENES if g in mutated_genes]
+        hrr_mutated = [g for g in HRR_GENES if g in mutated_genes]
+        
+        tp53_mutant = 'TP53' in mutated_genes
+        
+        # Determine DDR status and sensitivities
+        if ber_mutated:
+            # BER deficiency (e.g., MBD4)
+            ddr_status = "compromised"
+            platinum_sensitivity = "very_high" if tp53_mutant else "high"
+            parp_sensitivity = "very_high"
+            parp_resistance_risk = 0.10
+            mechanism = f"BER_DEFICIENCY_{ber_mutated[0]}"
+            parp_mechanism = f"SYNTHETIC_LETHALITY_{ber_mutated[0]}"
+            confidence = 0.85
+            
+        elif hrr_mutated or hrd_status in ["HRD+", "HRD-INFERRED"]:
+            # HRR deficiency (BRCA, etc.)
+            ddr_status = "compromised"
+            platinum_sensitivity = "high"
+            parp_sensitivity = "very_high"
+            parp_resistance_risk = 0.15
+            mechanism = f"HRR_DEFICIENCY_{hrr_mutated[0] if hrr_mutated else 'HRD'}"
+            parp_mechanism = "SYNTHETIC_LETHALITY_HRD"
+            confidence = 0.90
+            
+        elif ddr_mutated:
+            # Other DDR mutations
+            ddr_status = "compromised"
+            platinum_sensitivity = "moderate"
+            parp_sensitivity = "moderate"
+            parp_resistance_risk = 0.30
+            mechanism = f"DDR_MUTATION_{ddr_mutated[0]}"
+            parp_mechanism = f"DDR_DISRUPTION_{ddr_mutated[0]}"
+            confidence = 0.70
+            
+        else:
+            # DDR intact
+            ddr_status = "intact"
+            platinum_sensitivity = "moderate"
+            parp_sensitivity = "low"
+            parp_resistance_risk = 0.50
+            mechanism = "DDR_INTACT"
+            parp_mechanism = "NO_SYNTHETIC_LETHALITY"
+            confidence = 0.75
+        
+        all_mutated = list(set(ddr_mutated + ber_mutated + hrr_mutated))
+        
+        return DDRResult(
+            ddr_status=ddr_status,
+            platinum_sensitivity=platinum_sensitivity,
+            parp_sensitivity=parp_sensitivity,
+            parp_resistance_risk=parp_resistance_risk,
+            mechanism=mechanism,
+            parp_mechanism=parp_mechanism,
+            genes_mutated=all_mutated,
+            confidence=confidence
+        )
+```
+
+### Constants
+
+```python
+# api/services/resistance/constants.py
+
+# MAPK pathway genes (validated for platinum resistance)
+MAPK_GENES = {
+    'KRAS', 'NRAS', 'HRAS',     # RAS family
+    'BRAF', 'ARAF', 'RAF1',     # RAF family
+    'MAP2K1', 'MAP2K2',         # MEK1/2
+    'MAPK1', 'MAPK3',           # ERK1/2
+    'NF1',                      # RAS regulator (RR=2.10)
+    'PTPN11',                   # SHP2
+    'SOS1', 'SOS2',             # RAS activators
+    'CBL'                       # E3 ligase
+}
+
+# All DDR genes
+DDR_GENES = {
+    'ATM', 'ATR', 'CHEK1', 'CHEK2',
+    'TP53', 'MDM2', 'CDKN2A',
+    'BRCA1', 'BRCA2', 'PALB2',
+    'RAD51C', 'RAD51D', 'BARD1',
+    'MBD4', 'MUTYH', 'OGG1',
+    'MLH1', 'MSH2', 'MSH6', 'PMS2'
+}
+
+# Base Excision Repair genes
+BER_GENES = {
+    'MBD4', 'MUTYH', 'OGG1', 'NTHL1',
+    'NEIL1', 'NEIL2', 'NEIL3',
+    'APEX1', 'XRCC1',
+    'PARP1', 'PARP2', 'PARP3'
+}
+
+# Homologous Recombination Repair genes
+HRR_GENES = {
+    'BRCA1', 'BRCA2', 'PALB2',
+    'RAD51', 'RAD51B', 'RAD51C', 'RAD51D',
+    'BRIP1', 'BARD1', 'NBN',
+    'MRE11', 'RAD50', 'ATM', 'ATR',
+    'FANCA', 'FANCD2', 'FANCL'
+}
+
+# Drug efflux genes (for resistance monitoring)
+EFFLUX_GENES = {
+    'ABCB1', 'ABCC1', 'ABCG2'
+}
+```
+
+---
+
+## 🧪 TESTING
+
+### MAPK Validation Test
+
+```python
+# api/services/resistance/tests/test_mapk.py
+
+import pytest
+from ..mapk_predictor import MAPKResistancePredictor
+
+@pytest.fixture
+def predictor():
+    return MAPKResistancePredictor()
+
+def test_mapk_wildtype(predictor):
+    mutations = [{'gene': 'TP53'}]  # Not MAPK
+    result = predictor.predict(mutations)
+    
+    assert result.has_mutation == False
+    assert result.resistance_risk == 0.145  # Baseline
+    assert result.relative_risk == 1.0
+
+def test_mapk_kras_mutation(predictor):
+    mutations = [{'gene': 'KRAS'}]
+    result = predictor.predict(mutations)
+    
+    assert result.has_mutation == True
+    assert 'KRAS' in result.genes_mutated
+    assert result.relative_risk == 1.97
+    assert result.resistance_risk == pytest.approx(0.145 * 1.97, rel=0.01)
+
+def test_mapk_nf1_mutation(predictor):
+    mutations = [{'gene': 'NF1'}]
+    result = predictor.predict(mutations)
+    
+    assert result.has_mutation == True
+    assert result.relative_risk == 2.10  # Higher risk for NF1
+    assert 'NF1_LOSS' in result.mechanism
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+### Phase 1: MAPK Predictor (Validated)
+- [ ] Port MAPK logic from `resistance_prophet_service.py`
+- [ ] Validate against TCGA-OV metrics (RR=1.97)
+- [ ] Add NF1-specific prediction (RR=2.10)
+- [ ] Unit tests matching validation
+
+### Phase 2: DDR Predictor
+- [ ] Implement BER deficiency detection
+- [ ] Implement HRR deficiency detection
+- [ ] Add TP53 synergy logic
+- [ ] Calculate platinum/PARP sensitivity
+- [ ] Unit tests
+
+### Phase 3: Pathway Analyzer
+- [ ] Generic pathway analysis
+- [ ] Pathway burden scoring
+- [ ] Multiple pathway support
+- [ ] Unit tests
+
+### Phase 4: Integration
+- [ ] Create ResistanceAgent class
+- [ ] Wire all predictors
+- [ ] Add monitoring priority logic
+- [ ] Integration tests
+
+---
+
+## 📡 API ENDPOINT
+
+```yaml
+POST /api/agents/resistance
+Content-Type: application/json
+
+Request:
+  patient_id: string
+  mutations: Mutation[]
+  current_treatment: string  # optional
+  hrd_status: string         # optional (from biomarker agent)
+
+Response:
+  resistance_prediction: ResistancePrediction
+  calculation_time_ms: number
+```
+
+---
+
+## ✅ ACCEPTANCE CRITERIA
+
+1. ✅ MAPK resistance matches validated RR=1.97
+2. ✅ NF1-specific prediction at RR=2.10
+3. ✅ Baseline resistance = 14.5% for wildtype
+4. ✅ DDR deficiency → high platinum sensitivity
+5. ✅ BER deficiency → very high PARP sensitivity
+6. ✅ All predictions include mechanism explanation
+7. ✅ Monitoring priorities generated
+8. ✅ Unit test coverage >80%
+
+---
+
+---
+
+## 🎯 MISSION
+
+Build a resistance prediction agent that can:
+1. Detect MAPK pathway mutations (validated RR=1.97 for platinum resistance)
+2. Analyze DDR pathway status for platinum/PARP sensitivity
+3. Calculate resistance risk scores with confidence
+4. Provide mechanism-based explanations
+5. Identify monitoring priorities
+
+---
+
+## 📊 VALIDATED CAPABILITIES (USE THESE)
+
+### MAPK Resistance - ALREADY VALIDATED ✅
+
+**Location:** `api/services/resistance_prophet_service.py`
+
+**Validation Metrics (TCGA-OV, n=469):**
+| Pathway | Mutated | Resistant Rate | Relative Risk |
+|---------|---------|----------------|---------------|
+| MAPK (any) | 35 pts | 28.6% | **1.97** |
+| NF1 specific | 26 pts | 30.8% | **2.10** |
+| Wildtype | 434 pts | 14.5% | 1.0 (baseline) |
+
+**Statistical Significance:** p < 0.05
+
+---
+
+## 📥 INPUTS
+
+### From PatientProfile (Module 01) & BiomarkerProfile (Module 02)
+
+```python
+# Required inputs
+patient_id: str
+mutations: List[Mutation]      # From Module 01
+disease: str                   # e.g., "ovarian_cancer"
+current_treatment: str         # e.g., "carboplatin"
+
+# Optional inputs (from Module 02)
+hrd_status: str               # "HRD+", "HRD-", "HRD-INFERRED"
+tmb_classification: str       # "TMB-H", "TMB-L"
+```
+
+---
+
+## 📤 OUTPUTS
+
+### ResistancePrediction Schema
+
+```python
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from enum import Enum
+
+class SensitivityLevel(Enum):
+    VERY_HIGH = "very_high"
+    HIGH = "high"
+    MODERATE = "moderate"
+    LOW = "low"
+    RESISTANT = "resistant"
+
+class RiskLevel(Enum):
+    HIGH = "high"
+    MODERATE = "moderate"
+    LOW = "low"
+    BASELINE = "baseline"
+
+@dataclass
+class PathwayAnalysis:
+    pathway: str                    # "MAPK", "DDR", "PI3K", etc.
+    status: str                     # "mutated", "wildtype", "compromised"
+    genes_mutated: List[str]        # ["KRAS", "NF1"]
+    genes_checked: List[str]        # All genes in pathway
+    burden_score: float             # 0.0 - 1.0
+
+@dataclass
+class DrugSensitivity:
+    drug_class: str                 # "platinum", "parp", "checkpoint"
+    sensitivity: SensitivityLevel
+    mechanism: str                  # "BER_DEFICIENCY", "DDR_INTACT"
+    confidence: float               # 0.0 - 1.0
+
+@dataclass
+class ResistancePrediction:
+    patient_id: str
+    
+    # Pathway analyses
+    pathways: List[PathwayAnalysis]
+    
+    # Per-drug-class predictions
+    drug_sensitivities: Dict[str, DrugSensitivity]
+    
+    # Platinum-specific (most validated)
+    platinum_sensitivity: SensitivityLevel
+    platinum_resistance_risk: float         # 0.0 - 1.0
+    platinum_mechanism: str
+    
+    # PARP-specific
+    parp_sensitivity: SensitivityLevel
+    parp_resistance_risk: float
+    parp_mechanism: str
+    
+    # Overall
+    signals_detected: int                   # Count of resistance signals
+    monitoring_priorities: List[str]        # ["MAPK_mutations", "ABCB1"]
+    
+    # Validation
+    validation: Dict[str, any]              # TCGA validation metrics
+    confidence: float
+    provenance: Dict[str, any]
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### File Structure
+
+```
+api/services/resistance/
+├── __init__.py
+├── resistance_agent.py         # Main agent
+├── pathway_analyzer.py         # Pathway mutation analysis
+├── mapk_predictor.py           # MAPK resistance (validated)
+├── ddr_predictor.py            # DDR sensitivity
+├── sensitivity_calculator.py   # Overall sensitivity
+├── constants.py                # Pathway gene lists
+└── tests/
+    ├── test_mapk.py
+    ├── test_ddr.py
+    └── test_integration.py
+```
+
+### Core Agent Implementation
+
+```python
+# api/services/resistance/resistance_agent.py
+
+from typing import List, Dict, Optional
+from datetime import datetime
+import logging
+
+from .pathway_analyzer import PathwayAnalyzer
+from .mapk_predictor import MAPKResistancePredictor
+from .ddr_predictor import DDRSensitivityPredictor
+from .sensitivity_calculator import SensitivityCalculator
+from ..models import PatientProfile, BiomarkerProfile, ResistancePrediction
+
+logger = logging.getLogger(__name__)
+
+class ResistanceAgent:
+    """
+    Predict drug resistance/sensitivity from pathway mutations.
+    
+    Validated:
+    - MAPK pathway: RR=1.97 for platinum resistance (TCGA-OV, n=469)
+    - DDR pathway: MBD4/TP53 synthetic lethality
+    """
+    
+    def __init__(self):
+        self.pathway_analyzer = PathwayAnalyzer()
+        self.mapk_predictor = MAPKResistancePredictor()
+        self.ddr_predictor = DDRSensitivityPredictor()
+        self.sensitivity_calc = SensitivityCalculator()
+    
+    async def predict(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile] = None,
+        current_treatment: str = None
+    ) -> ResistancePrediction:
+        """
+        Predict resistance/sensitivity for a patient.
+        
+        Args:
+            patient_profile: Patient with mutations
+            biomarker_profile: Optional biomarker data
+            current_treatment: Current drug (for context)
+        
+        Returns:
+            ResistancePrediction with pathway analysis and predictions
+        """
+        logger.info(f"Predicting resistance for {patient_profile.patient_id}")
+        
+        mutations = self._mutations_to_dicts(patient_profile.mutations)
+        
+        # Step 1: Analyze all pathways
+        pathways = self.pathway_analyzer.analyze(mutations)
+        
+        # Step 2: MAPK resistance prediction (validated)
+        mapk_result = self.mapk_predictor.predict(mutations)
+        
+        # Step 3: DDR sensitivity prediction
+        ddr_result = self.ddr_predictor.predict(
+            mutations=mutations,
+            hrd_status=biomarker_profile.hrd.status if biomarker_profile else None
+        )
+        
+        # Step 4: Calculate per-drug sensitivities
+        drug_sensitivities = self.sensitivity_calc.calculate_all(
+            pathways=pathways,
+            mapk_result=mapk_result,
+            ddr_result=ddr_result
+        )
+        
+        # Step 5: Count signals and determine monitoring priorities
+        signals = self._count_signals(mapk_result, ddr_result, pathways)
+        monitoring = self._determine_monitoring(pathways, current_treatment)
+        
+        return ResistancePrediction(
+            patient_id=patient_profile.patient_id,
+            pathways=pathways,
+            drug_sensitivities=drug_sensitivities,
+            platinum_sensitivity=ddr_result.platinum_sensitivity,
+            platinum_resistance_risk=mapk_result.resistance_risk,
+            platinum_mechanism=ddr_result.mechanism,
+            parp_sensitivity=ddr_result.parp_sensitivity,
+            parp_resistance_risk=ddr_result.parp_resistance_risk,
+            parp_mechanism=ddr_result.parp_mechanism,
+            signals_detected=signals,
+            monitoring_priorities=monitoring,
+            validation={
+                'mapk_validation': 'TCGA-OV n=469, MAPK RR=1.97, p<0.05',
+                'baseline_resistance': 0.145
+            },
+            confidence=self._calculate_confidence(pathways),
+            provenance={
+                'method': 'pathway_mutation_analysis',
+                'timestamp': datetime.utcnow().isoformat()
+            }
+        )
+```
+
+### MAPK Resistance Predictor (Validated)
+
+```python
+# api/services/resistance/mapk_predictor.py
+
+from typing import List, Dict
+from dataclasses import dataclass
+from .constants import MAPK_GENES
+
+@dataclass
+class MAPKResult:
+    has_mutation: bool
+    genes_mutated: List[str]
+    resistance_risk: float      # 0.0 - 1.0
+    relative_risk: float        # vs baseline
+    mechanism: str
+    confidence: float
+
+class MAPKResistancePredictor:
+    """
+    Predict platinum resistance from MAPK pathway mutations.
+    
+    Validated on TCGA-OV (n=469):
+    - MAPK mutated: 28.6% resistant (RR=1.97)
+    - NF1 specifically: 30.8% resistant (RR=2.10)
+    - Wildtype: 14.5% resistant (baseline)
+    """
+    
+    BASELINE_RESISTANCE = 0.145  # 14.5% for wildtype
+    MAPK_RELATIVE_RISK = 1.97
+    NF1_RELATIVE_RISK = 2.10
+    
+    def predict(self, mutations: List[Dict]) -> MAPKResult:
+        """
+        Predict MAPK-mediated platinum resistance.
+        
+        Args:
+            mutations: Patient mutations
+        
+        Returns:
+            MAPKResult with resistance prediction
+        """
+        # Find MAPK pathway mutations
+        mutated_genes = {m.get('gene', '').upper() for m in mutations}
+        mapk_mutated = [g for g in MAPK_GENES if g in mutated_genes]
+        
+        if not mapk_mutated:
+            return MAPKResult(
+                has_mutation=False,
+                genes_mutated=[],
+                resistance_risk=self.BASELINE_RESISTANCE,
+                relative_risk=1.0,
+                mechanism="MAPK_WILDTYPE",
+                confidence=0.85
+            )
+        
+        # Determine risk based on specific genes
+        if 'NF1' in mapk_mutated:
+            relative_risk = self.NF1_RELATIVE_RISK
+            mechanism = "NF1_LOSS_RAS_ACTIVATION"
+        else:
+            relative_risk = self.MAPK_RELATIVE_RISK
+            mechanism = f"MAPK_ACTIVATION_{mapk_mutated[0]}"
+        
+        # Calculate absolute resistance risk
+        resistance_risk = min(self.BASELINE_RESISTANCE * relative_risk, 1.0)
+        
+        return MAPKResult(
+            has_mutation=True,
+            genes_mutated=mapk_mutated,
+            resistance_risk=round(resistance_risk, 3),
+            relative_risk=relative_risk,
+            mechanism=mechanism,
+            confidence=0.80
+        )
+```
+
+### DDR Sensitivity Predictor
+
+```python
+# api/services/resistance/ddr_predictor.py
+
+from typing import List, Dict, Optional
+from dataclasses import dataclass
+from .constants import DDR_GENES, BER_GENES, HRR_GENES
+
+@dataclass
+class DDRResult:
+    ddr_status: str             # "compromised", "intact"
+    platinum_sensitivity: str   # "very_high", "high", "moderate", "low"
+    parp_sensitivity: str
+    parp_resistance_risk: float
+    mechanism: str
+    parp_mechanism: str
+    genes_mutated: List[str]
+    confidence: float
+
+class DDRSensitivityPredictor:
+    """
+    Predict DDR pathway status and drug sensitivity.
+    
+    Key insight: DDR deficiency → platinum/PARP sensitivity
+    - BRCA1/2 loss → HRR deficiency → PARP synthetic lethality
+    - MBD4 loss → BER deficiency → Platinum sensitivity + PARP
+    - TP53 loss + DDR loss → Checkpoint bypass → Enhanced sensitivity
+    """
+    
+    def predict(
+        self,
+        mutations: List[Dict],
+        hrd_status: Optional[str] = None
+    ) -> DDRResult:
+        """
+        Predict DDR-based drug sensitivity.
+        
+        Args:
+            mutations: Patient mutations
+            hrd_status: Optional HRD status from biomarker agent
+        
+        Returns:
+            DDRResult with sensitivity predictions
+        """
+        mutated_genes = {m.get('gene', '').upper() for m in mutations}
+        
+        # Find DDR mutations
+        ddr_mutated = [g for g in DDR_GENES if g in mutated_genes]
+        ber_mutated = [g for g in BER_GENES if g in mutated_genes]
+        hrr_mutated = [g for g in HRR_GENES if g in mutated_genes]
+        
+        tp53_mutant = 'TP53' in mutated_genes
+        
+        # Determine DDR status and sensitivities
+        if ber_mutated:
+            # BER deficiency (e.g., MBD4)
+            ddr_status = "compromised"
+            platinum_sensitivity = "very_high" if tp53_mutant else "high"
+            parp_sensitivity = "very_high"
+            parp_resistance_risk = 0.10
+            mechanism = f"BER_DEFICIENCY_{ber_mutated[0]}"
+            parp_mechanism = f"SYNTHETIC_LETHALITY_{ber_mutated[0]}"
+            confidence = 0.85
+            
+        elif hrr_mutated or hrd_status in ["HRD+", "HRD-INFERRED"]:
+            # HRR deficiency (BRCA, etc.)
+            ddr_status = "compromised"
+            platinum_sensitivity = "high"
+            parp_sensitivity = "very_high"
+            parp_resistance_risk = 0.15
+            mechanism = f"HRR_DEFICIENCY_{hrr_mutated[0] if hrr_mutated else 'HRD'}"
+            parp_mechanism = "SYNTHETIC_LETHALITY_HRD"
+            confidence = 0.90
+            
+        elif ddr_mutated:
+            # Other DDR mutations
+            ddr_status = "compromised"
+            platinum_sensitivity = "moderate"
+            parp_sensitivity = "moderate"
+            parp_resistance_risk = 0.30
+            mechanism = f"DDR_MUTATION_{ddr_mutated[0]}"
+            parp_mechanism = f"DDR_DISRUPTION_{ddr_mutated[0]}"
+            confidence = 0.70
+            
+        else:
+            # DDR intact
+            ddr_status = "intact"
+            platinum_sensitivity = "moderate"
+            parp_sensitivity = "low"
+            parp_resistance_risk = 0.50
+            mechanism = "DDR_INTACT"
+            parp_mechanism = "NO_SYNTHETIC_LETHALITY"
+            confidence = 0.75
+        
+        all_mutated = list(set(ddr_mutated + ber_mutated + hrr_mutated))
+        
+        return DDRResult(
+            ddr_status=ddr_status,
+            platinum_sensitivity=platinum_sensitivity,
+            parp_sensitivity=parp_sensitivity,
+            parp_resistance_risk=parp_resistance_risk,
+            mechanism=mechanism,
+            parp_mechanism=parp_mechanism,
+            genes_mutated=all_mutated,
+            confidence=confidence
+        )
+```
+
+### Constants
+
+```python
+# api/services/resistance/constants.py
+
+# MAPK pathway genes (validated for platinum resistance)
+MAPK_GENES = {
+    'KRAS', 'NRAS', 'HRAS',     # RAS family
+    'BRAF', 'ARAF', 'RAF1',     # RAF family
+    'MAP2K1', 'MAP2K2',         # MEK1/2
+    'MAPK1', 'MAPK3',           # ERK1/2
+    'NF1',                      # RAS regulator (RR=2.10)
+    'PTPN11',                   # SHP2
+    'SOS1', 'SOS2',             # RAS activators
+    'CBL'                       # E3 ligase
+}
+
+# All DDR genes
+DDR_GENES = {
+    'ATM', 'ATR', 'CHEK1', 'CHEK2',
+    'TP53', 'MDM2', 'CDKN2A',
+    'BRCA1', 'BRCA2', 'PALB2',
+    'RAD51C', 'RAD51D', 'BARD1',
+    'MBD4', 'MUTYH', 'OGG1',
+    'MLH1', 'MSH2', 'MSH6', 'PMS2'
+}
+
+# Base Excision Repair genes
+BER_GENES = {
+    'MBD4', 'MUTYH', 'OGG1', 'NTHL1',
+    'NEIL1', 'NEIL2', 'NEIL3',
+    'APEX1', 'XRCC1',
+    'PARP1', 'PARP2', 'PARP3'
+}
+
+# Homologous Recombination Repair genes
+HRR_GENES = {
+    'BRCA1', 'BRCA2', 'PALB2',
+    'RAD51', 'RAD51B', 'RAD51C', 'RAD51D',
+    'BRIP1', 'BARD1', 'NBN',
+    'MRE11', 'RAD50', 'ATM', 'ATR',
+    'FANCA', 'FANCD2', 'FANCL'
+}
+
+# Drug efflux genes (for resistance monitoring)
+EFFLUX_GENES = {
+    'ABCB1', 'ABCC1', 'ABCG2'
+}
+```
+
+---
+
+## 🧪 TESTING
+
+### MAPK Validation Test
+
+```python
+# api/services/resistance/tests/test_mapk.py
+
+import pytest
+from ..mapk_predictor import MAPKResistancePredictor
+
+@pytest.fixture
+def predictor():
+    return MAPKResistancePredictor()
+
+def test_mapk_wildtype(predictor):
+    mutations = [{'gene': 'TP53'}]  # Not MAPK
+    result = predictor.predict(mutations)
+    
+    assert result.has_mutation == False
+    assert result.resistance_risk == 0.145  # Baseline
+    assert result.relative_risk == 1.0
+
+def test_mapk_kras_mutation(predictor):
+    mutations = [{'gene': 'KRAS'}]
+    result = predictor.predict(mutations)
+    
+    assert result.has_mutation == True
+    assert 'KRAS' in result.genes_mutated
+    assert result.relative_risk == 1.97
+    assert result.resistance_risk == pytest.approx(0.145 * 1.97, rel=0.01)
+
+def test_mapk_nf1_mutation(predictor):
+    mutations = [{'gene': 'NF1'}]
+    result = predictor.predict(mutations)
+    
+    assert result.has_mutation == True
+    assert result.relative_risk == 2.10  # Higher risk for NF1
+    assert 'NF1_LOSS' in result.mechanism
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+### Phase 1: MAPK Predictor (Validated)
+- [ ] Port MAPK logic from `resistance_prophet_service.py`
+- [ ] Validate against TCGA-OV metrics (RR=1.97)
+- [ ] Add NF1-specific prediction (RR=2.10)
+- [ ] Unit tests matching validation
+
+### Phase 2: DDR Predictor
+- [ ] Implement BER deficiency detection
+- [ ] Implement HRR deficiency detection
+- [ ] Add TP53 synergy logic
+- [ ] Calculate platinum/PARP sensitivity
+- [ ] Unit tests
+
+### Phase 3: Pathway Analyzer
+- [ ] Generic pathway analysis
+- [ ] Pathway burden scoring
+- [ ] Multiple pathway support
+- [ ] Unit tests
+
+### Phase 4: Integration
+- [ ] Create ResistanceAgent class
+- [ ] Wire all predictors
+- [ ] Add monitoring priority logic
+- [ ] Integration tests
+
+---
+
+## 📡 API ENDPOINT
+
+```yaml
+POST /api/agents/resistance
+Content-Type: application/json
+
+Request:
+  patient_id: string
+  mutations: Mutation[]
+  current_treatment: string  # optional
+  hrd_status: string         # optional (from biomarker agent)
+
+Response:
+  resistance_prediction: ResistancePrediction
+  calculation_time_ms: number
+```
+
+---
+
+## ✅ ACCEPTANCE CRITERIA
+
+1. ✅ MAPK resistance matches validated RR=1.97
+2. ✅ NF1-specific prediction at RR=2.10
+3. ✅ Baseline resistance = 14.5% for wildtype
+4. ✅ DDR deficiency → high platinum sensitivity
+5. ✅ BER deficiency → very high PARP sensitivity
+6. ✅ All predictions include mechanism explanation
+7. ✅ Monitoring priorities generated
+8. ✅ Unit test coverage >80%
+
+---

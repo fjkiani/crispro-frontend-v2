@@ -1,0 +1,281 @@
+# 🔐 MODULE 13: SECURITY & COMPLIANCE
+
+**Purpose:** Security hardening and HIPAA compliance  
+**Priority:** 🟡 HIGH | **Dependencies:** All | **Consumers:** All
+
+---
+
+## 🎯 MISSION
+
+Implement security and compliance for:
+1. Data encryption (at rest and in transit)
+2. Authentication and authorization
+3. Audit logging
+4. HIPAA compliance
+5. Data retention policies
+
+---
+
+## 🔒 SECURITY LAYERS
+
+### Layer 1: Transport Security
+
+```yaml
+TLS Configuration:
+  version: TLS 1.3
+  cipher_suites:
+    - TLS_AES_256_GCM_SHA384
+    - TLS_CHACHA20_POLY1305_SHA256
+  certificate_pinning: enabled
+  hsts: enabled
+```
+
+### Layer 2: Authentication
+
+```yaml
+Authentication:
+  method: OAuth 2.0 / JWT
+  token_expiry: 1 hour
+  refresh_token_expiry: 7 days
+  mfa: required for clinical users
+  api_keys: for service-to-service
+```
+
+### Layer 3: Authorization (RBAC)
+
+```yaml
+Roles:
+  admin:
+    permissions: [read, write, delete, manage_users]
+  oncologist:
+    permissions: [read, write, view_patient]
+  nurse:
+    permissions: [read, view_patient, add_notes]
+  researcher:
+    permissions: [read_anonymized]
+  patient:
+    permissions: [view_own_data]
+```
+
+### Layer 4: Data Encryption
+
+```yaml
+Encryption at Rest:
+  algorithm: AES-256
+  key_rotation: every 90 days
+  field_level: [patient_id, name, dob, ssn]
+  
+Encryption in Transit:
+  protocol: TLS 1.3
+  all_apis: required
+```
+
+### Layer 5: Audit Logging
+
+```yaml
+Audit Events:
+  - data_access (who, what, when)
+  - data_modification (field, old, new)
+  - login_attempts (success, failure)
+  - permission_changes
+  - export_requests
+  
+Log Retention: 7 years (HIPAA)
+Log Format: JSON with immutable timestamps
+```
+
+---
+
+## 📋 HIPAA REQUIREMENTS
+
+### Technical Safeguards
+
+| Requirement | Implementation |
+|-------------|----------------|
+| Access Control | RBAC + MFA |
+| Audit Controls | Immutable audit logs |
+| Integrity Controls | Hash verification |
+| Transmission Security | TLS 1.3 |
+| Encryption | AES-256 at rest |
+
+### Administrative Safeguards
+
+| Requirement | Implementation |
+|-------------|----------------|
+| Security Officer | Designated role |
+| Workforce Training | Annual HIPAA training |
+| Access Management | Provisioning workflow |
+| Incident Response | Breach notification <72h |
+
+### Physical Safeguards
+
+| Requirement | Implementation |
+|-------------|----------------|
+| Facility Access | Cloud provider (SOC 2) |
+| Workstation Security | Endpoint protection |
+| Device Controls | Encrypted storage |
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### Authentication Middleware
+
+```python
+# api/middleware/auth.py
+
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+import jwt
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        user_id = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return await get_user(user_id)
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+def require_role(allowed_roles: list):
+    async def role_checker(user = Depends(get_current_user)):
+        if user.role not in allowed_roles:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        return user
+    return role_checker
+```
+
+### Audit Logger
+
+```python
+# api/middleware/audit.py
+
+from datetime import datetime
+import json
+
+class AuditLogger:
+    """Immutable audit logging for HIPAA compliance."""
+    
+    async def log(
+        self,
+        event_type: str,
+        user_id: str,
+        patient_id: str,
+        action: str,
+        details: dict
+    ):
+        entry = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "event_type": event_type,
+            "user_id": user_id,
+            "patient_id": patient_id,
+            "action": action,
+            "details": details,
+            "ip_address": self.get_client_ip(),
+            "user_agent": self.get_user_agent()
+        }
+        
+        # Sign entry with HMAC
+        entry["signature"] = self._sign(entry)
+        
+        # Write to immutable log
+        await self._write_to_log(entry)
+    
+    def _sign(self, entry: dict) -> str:
+        """Sign entry for tamper detection."""
+        import hmac
+        import hashlib
+        message = json.dumps(entry, sort_keys=True)
+        return hmac.new(
+            AUDIT_SECRET.encode(),
+            message.encode(),
+            hashlib.sha256
+        ).hexdigest()
+```
+
+### Data Encryption
+
+```python
+# api/security/encryption.py
+
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
+class FieldEncryption:
+    """Field-level encryption for PII."""
+    
+    PII_FIELDS = ['patient_id', 'name', 'dob', 'mrn', 'ssn', 'address']
+    
+    def __init__(self, key: bytes):
+        self.fernet = Fernet(key)
+    
+    def encrypt_patient(self, patient: dict) -> dict:
+        """Encrypt PII fields in patient record."""
+        encrypted = patient.copy()
+        for field in self.PII_FIELDS:
+            if field in encrypted and encrypted[field]:
+                encrypted[field] = self._encrypt_field(encrypted[field])
+        return encrypted
+    
+    def decrypt_patient(self, patient: dict) -> dict:
+        """Decrypt PII fields in patient record."""
+        decrypted = patient.copy()
+        for field in self.PII_FIELDS:
+            if field in decrypted and decrypted[field]:
+                decrypted[field] = self._decrypt_field(decrypted[field])
+        return decrypted
+    
+    def _encrypt_field(self, value: str) -> str:
+        return self.fernet.encrypt(value.encode()).decode()
+    
+    def _decrypt_field(self, value: str) -> str:
+        return self.fernet.decrypt(value.encode()).decode()
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+- [ ] TLS 1.3 configuration
+- [ ] OAuth 2.0 / JWT authentication
+- [ ] RBAC implementation
+- [ ] MFA for clinical users
+- [ ] Field-level encryption
+- [ ] Audit logging (immutable)
+- [ ] Log retention (7 years)
+- [ ] Breach notification workflow
+- [ ] Security testing (OWASP)
+- [ ] Penetration testing
+- [ ] SOC 2 readiness
+
+---
+
+## ✅ COMPLIANCE CHECKLIST
+
+### HIPAA
+
+- [ ] Risk assessment documented
+- [ ] Security policies in place
+- [ ] Workforce training records
+- [ ] BAAs with vendors
+- [ ] Incident response plan
+- [ ] Breach notification procedure
+
+### SOC 2
+
+- [ ] Security controls
+- [ ] Availability controls
+- [ ] Processing integrity
+- [ ] Confidentiality
+- [ ] Privacy
+
+---
+
+**Module Status:** ⬜ TODO  
+**Estimated Time:** 3-4 days

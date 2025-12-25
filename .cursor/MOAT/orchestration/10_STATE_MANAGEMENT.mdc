@@ -1,0 +1,761 @@
+# 🎛️ MODULE 10: STATE MANAGEMENT & ORCHESTRATOR
+
+**Purpose:** Central patient state management and agent coordination  
+**Priority:** 🔴 CRITICAL | **Dependencies:** None | **Consumers:** All agents
+
+---
+
+## 🎯 MISSION
+
+Build the central orchestrator that:
+1. Maintains patient state across all agents
+2. Coordinates agent execution (parallel where possible)
+3. Handles inter-agent communication
+4. Manages event queue for triggers
+5. Provides audit trail for all state changes
+
+---
+
+## 📊 ARCHITECTURE OVERVIEW
+
+```
+                    ┌─────────────────────────────────────────┐
+                    │         ORCHESTRATOR AGENT              │
+                    │  • Patient state management             │
+                    │  • Agent coordination                   │
+                    │  • Event queue                          │
+                    │  • Audit trail                          │
+                    └───────────────────┬─────────────────────┘
+                                        │
+        ┌───────────────────────────────┼───────────────────────────────┐
+        │                               │                               │
+        ▼                               ▼                               ▼
+┌───────────────┐             ┌───────────────┐             ┌───────────────┐
+│ DATA AGENTS   │             │ ANALYSIS      │             │ ACTION        │
+│ (Sequential)  │             │ AGENTS        │             │ AGENTS        │
+│               │             │ (Parallel OK) │             │ (Event-based) │
+├───────────────┤             ├───────────────┤             ├───────────────┤
+│ 01_Extraction │──────────▶  │ 02_Biomarker  │             │ Notification  │
+│               │             │ 03_Resistance │             │ Plan Update   │
+│               │             │ 06_Nutrition  │             │ Report Gen    │
+│               │             │ (parallel)    │             │               │
+└───────────────┘             └───────────────┘             └───────────────┘
+```
+
+---
+
+## 📤 OUTPUTS
+
+### PatientState Schema
+
+```python
+from dataclasses import dataclass, field
+from typing import List, Dict, Optional, Any
+from datetime import datetime
+from enum import Enum
+import uuid
+
+class StatePhase(Enum):
+    INITIALIZED = "initialized"
+    EXTRACTING = "extracting"
+    ANALYZING = "analyzing"
+    RANKING = "ranking"
+    MATCHING = "matching"
+    PLANNING = "planning"
+    MONITORING = "monitoring"
+    COMPLETE = "complete"
+    ERROR = "error"
+
+@dataclass
+class StateChange:
+    """Record of a state change."""
+    id: str
+    timestamp: datetime
+    field: str
+    old_value: Any
+    new_value: Any
+    agent: str
+    reason: str
+
+@dataclass
+class AgentExecution:
+    """Record of agent execution."""
+    agent_id: str
+    started_at: datetime
+    completed_at: Optional[datetime] = None
+    status: str = "running"
+    error: Optional[str] = None
+    output_summary: Optional[Dict] = None
+
+@dataclass
+class PatientState:
+    """
+    Central patient state object.
+    
+    This is the single source of truth for all patient data
+    across all agents in the orchestration pipeline.
+    """
+    # Identity
+    patient_id: str
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: datetime = field(default_factory=datetime.utcnow)
+    
+    # Current phase
+    phase: StatePhase = StatePhase.INITIALIZED
+    
+    # Agent outputs (populated as agents complete)
+    patient_profile: Optional[Any] = None       # From 01_DATA_EXTRACTION
+    biomarker_profile: Optional[Any] = None     # From 02_BIOMARKER
+    resistance_prediction: Optional[Any] = None # From 03_RESISTANCE
+    drug_ranking: Optional[List] = None         # From 04_DRUG_EFFICACY
+    trial_matches: Optional[List] = None        # From 05_TRIAL_MATCHING
+    nutrition_plan: Optional[Any] = None        # From 06_NUTRITION
+    care_plan: Optional[Any] = None             # From 07_CARE_PLAN
+    monitoring_config: Optional[Any] = None     # From 08_MONITORING
+    
+    # Metadata
+    mechanism_vector: List[float] = field(default_factory=lambda: [0.0] * 7)
+    data_quality_flags: List[str] = field(default_factory=list)
+    alerts: List[Dict] = field(default_factory=list)
+    
+    # Audit trail
+    history: List[StateChange] = field(default_factory=list)
+    agent_executions: List[AgentExecution] = field(default_factory=list)
+    
+    def update(self, field: str, value: Any, agent: str, reason: str = ""):
+        """Update a field and log the change."""
+        old_value = getattr(self, field, None)
+        setattr(self, field, value)
+        self.updated_at = datetime.utcnow()
+        
+        # Log change
+        change = StateChange(
+            id=str(uuid.uuid4()),
+            timestamp=datetime.utcnow(),
+            field=field,
+            old_value=self._summarize(old_value),
+            new_value=self._summarize(value),
+            agent=agent,
+            reason=reason
+        )
+        self.history.append(change)
+    
+    def _summarize(self, value: Any) -> Any:
+        """Create a summary of a value for logging."""
+        if value is None:
+            return None
+        if isinstance(value, (str, int, float, bool)):
+            return value
+        if isinstance(value, list):
+            return f"List[{len(value)} items]"
+        if hasattr(value, '__class__'):
+            return f"{value.__class__.__name__}"
+        return str(value)[:100]
+    
+    def add_alert(self, alert_type: str, message: str, severity: str = "info"):
+        """Add an alert to the state."""
+        self.alerts.append({
+            'id': str(uuid.uuid4()),
+            'type': alert_type,
+            'message': message,
+            'severity': severity,
+            'timestamp': datetime.utcnow().isoformat()
+        })
+    
+    def to_dict(self) -> Dict:
+        """Serialize state to dictionary."""
+        return {
+            'patient_id': self.patient_id,
+            'phase': self.phase.value,
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat(),
+            'has_patient_profile': self.patient_profile is not None,
+            'has_biomarker_profile': self.biomarker_profile is not None,
+            'has_resistance_prediction': self.resistance_prediction is not None,
+            'has_drug_ranking': self.drug_ranking is not None,
+            'has_trial_matches': self.trial_matches is not None,
+            'has_nutrition_plan': self.nutrition_plan is not None,
+            'has_care_plan': self.care_plan is not None,
+            'mechanism_vector': self.mechanism_vector,
+            'data_quality_flags': self.data_quality_flags,
+            'alert_count': len(self.alerts),
+            'history_count': len(self.history)
+        }
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### File Structure
+
+```
+api/services/orchestrator/
+├── __init__.py
+├── orchestrator.py             # Main orchestrator
+├── state.py                    # PatientState class
+├── state_store.py              # State persistence
+├── agent_coordinator.py        # Agent execution coordination
+├── event_queue.py              # Event queue for triggers
+├── message_bus.py              # Inter-agent messaging
+└── tests/
+    ├── test_state.py
+    ├── test_orchestrator.py
+    └── test_coordination.py
+```
+
+### Core Orchestrator Implementation
+
+```python
+# api/services/orchestrator/orchestrator.py
+
+from typing import Optional, Dict, Any, BinaryIO
+from datetime import datetime
+import asyncio
+import logging
+
+from .state import PatientState, StatePhase, AgentExecution
+from .state_store import StateStore
+from .agent_coordinator import AgentCoordinator
+from .event_queue import EventQueue
+
+# Import agents
+from ..extraction import DataExtractionAgent
+from ..biomarkers import BiomarkerAgent
+from ..resistance import ResistanceAgent
+from ..efficacy import DrugEfficacyAgent
+from ..trials import TrialMatchingAgent
+from ..nutrition import NutritionAgent
+from ..careplan import CarePlanAgent
+from ..monitoring import MonitoringAgent
+
+logger = logging.getLogger(__name__)
+
+class Orchestrator:
+    """
+    Central orchestrator for the patient care pipeline.
+    
+    Coordinates all agents, manages state, handles events.
+    
+    Usage:
+        orchestrator = Orchestrator()
+        result = await orchestrator.run_full_pipeline(
+            file=uploaded_file,
+            file_type='pdf'
+        )
+    """
+    
+    def __init__(self, api_base: str = "http://127.0.0.1:8000"):
+        # State management
+        self.state_store = StateStore()
+        self.event_queue = EventQueue()
+        
+        # Initialize agents
+        self.agents = {
+            'extraction': DataExtractionAgent(),
+            'biomarker': BiomarkerAgent(),
+            'resistance': ResistanceAgent(),
+            'drug_efficacy': DrugEfficacyAgent(api_base),
+            'trial_matching': TrialMatchingAgent(),
+            'nutrition': NutritionAgent(),
+            'care_plan': CarePlanAgent(),
+            'monitoring': MonitoringAgent()
+        }
+        
+        self.coordinator = AgentCoordinator(self.agents)
+    
+    async def run_full_pipeline(
+        self,
+        file: Optional[BinaryIO] = None,
+        file_type: str = None,
+        patient_profile: Optional[Any] = None,
+        patient_id: str = None,
+        options: Dict = None
+    ) -> PatientState:
+        """
+        Run the complete end-to-end pipeline.
+        
+        Args:
+            file: Uploaded file (NGS PDF, VCF, etc.)
+            file_type: Type of file
+            patient_profile: Or pre-parsed patient profile
+            patient_id: Optional patient ID
+            options: Pipeline options
+        
+        Returns:
+            Final PatientState with all agent outputs
+        """
+        # Create initial state
+        state = PatientState(
+            patient_id=patient_id or self._generate_patient_id()
+        )
+        await self.state_store.save(state)
+        
+        logger.info(f"Starting pipeline for {state.patient_id}")
+        
+        try:
+            # Phase 1: Data Extraction
+            state.phase = StatePhase.EXTRACTING
+            await self.state_store.save(state)
+            
+            if file:
+                state.patient_profile = await self._run_agent(
+                    agent='extraction',
+                    state=state,
+                    file=file,
+                    file_type=file_type
+                )
+            elif patient_profile:
+                state.patient_profile = patient_profile
+            else:
+                raise ValueError("Either file or patient_profile required")
+            
+            # Phase 2: Parallel Analysis (Biomarker, Resistance, Nutrition)
+            state.phase = StatePhase.ANALYZING
+            await self.state_store.save(state)
+            
+            biomarker_task = self._run_agent(
+                agent='biomarker',
+                state=state,
+                patient_profile=state.patient_profile
+            )
+            
+            nutrition_task = self._run_agent(
+                agent='nutrition',
+                state=state,
+                patient_profile=state.patient_profile
+            )
+            
+            # Run in parallel
+            results = await asyncio.gather(
+                biomarker_task,
+                nutrition_task,
+                return_exceptions=True
+            )
+            
+            state.biomarker_profile = results[0] if not isinstance(results[0], Exception) else None
+            state.nutrition_plan = results[1] if not isinstance(results[1], Exception) else None
+            
+            # Resistance depends on biomarker
+            if state.biomarker_profile:
+                state.resistance_prediction = await self._run_agent(
+                    agent='resistance',
+                    state=state,
+                    patient_profile=state.patient_profile,
+                    biomarker_profile=state.biomarker_profile
+                )
+            
+            # Phase 3: Drug Ranking (depends on previous phases)
+            state.phase = StatePhase.RANKING
+            await self.state_store.save(state)
+            
+            drug_result = await self._run_agent(
+                agent='drug_efficacy',
+                state=state,
+                patient_profile=state.patient_profile,
+                biomarker_profile=state.biomarker_profile,
+                resistance_prediction=state.resistance_prediction
+            )
+            state.drug_ranking = drug_result.ranked_drugs if drug_result else []
+            state.mechanism_vector = drug_result.mechanism_vector if drug_result else [0.0] * 7
+            
+            # Phase 4: Trial Matching
+            state.phase = StatePhase.MATCHING
+            await self.state_store.save(state)
+            
+            trial_result = await self._run_agent(
+                agent='trial_matching',
+                state=state,
+                patient_profile=state.patient_profile,
+                biomarker_profile=state.biomarker_profile,
+                mechanism_vector=state.mechanism_vector
+            )
+            state.trial_matches = trial_result.matches if trial_result else []
+            
+            # Phase 5: Care Plan Generation
+            state.phase = StatePhase.PLANNING
+            await self.state_store.save(state)
+            
+            state.care_plan = await self._run_agent(
+                agent='care_plan',
+                state=state
+            )
+            
+            # Phase 6: Set Up Monitoring
+            state.phase = StatePhase.MONITORING
+            state.monitoring_config = await self._run_agent(
+                agent='monitoring',
+                state=state
+            )
+            
+            # Complete!
+            state.phase = StatePhase.COMPLETE
+            await self.state_store.save(state)
+            
+            logger.info(f"Pipeline complete for {state.patient_id}")
+            
+            return state
+            
+        except Exception as e:
+            state.phase = StatePhase.ERROR
+            state.add_alert('pipeline_error', str(e), 'error')
+            await self.state_store.save(state)
+            logger.error(f"Pipeline failed for {state.patient_id}: {e}")
+            raise
+    
+    async def _run_agent(
+        self,
+        agent: str,
+        state: PatientState,
+        **kwargs
+    ) -> Any:
+        """Run a single agent and log execution."""
+        execution = AgentExecution(
+            agent_id=agent,
+            started_at=datetime.utcnow()
+        )
+        state.agent_executions.append(execution)
+        
+        try:
+            agent_instance = self.agents[agent]
+            
+            # Call the appropriate method
+            if agent == 'extraction':
+                result = await agent_instance.extract(
+                    file=kwargs.get('file'),
+                    file_type=kwargs.get('file_type'),
+                    metadata={'patient_id': state.patient_id}
+                )
+            elif agent == 'biomarker':
+                result = await agent_instance.calculate(
+                    patient_profile=kwargs.get('patient_profile')
+                )
+            elif agent == 'resistance':
+                result = await agent_instance.predict(
+                    patient_profile=kwargs.get('patient_profile'),
+                    biomarker_profile=kwargs.get('biomarker_profile')
+                )
+            elif agent == 'drug_efficacy':
+                result = await agent_instance.rank_drugs(
+                    patient_profile=kwargs.get('patient_profile'),
+                    biomarker_profile=kwargs.get('biomarker_profile'),
+                    resistance_prediction=kwargs.get('resistance_prediction')
+                )
+            elif agent == 'trial_matching':
+                result = await agent_instance.match(
+                    patient_profile=kwargs.get('patient_profile'),
+                    biomarker_profile=kwargs.get('biomarker_profile'),
+                    mechanism_vector=kwargs.get('mechanism_vector')
+                )
+            elif agent == 'nutrition':
+                result = await agent_instance.generate(
+                    patient_profile=kwargs.get('patient_profile')
+                )
+            elif agent == 'care_plan':
+                result = await agent_instance.generate(state)
+            elif agent == 'monitoring':
+                result = await agent_instance.configure(state)
+            else:
+                raise ValueError(f"Unknown agent: {agent}")
+            
+            execution.completed_at = datetime.utcnow()
+            execution.status = "complete"
+            execution.output_summary = {'type': type(result).__name__}
+            
+            return result
+            
+        except Exception as e:
+            execution.completed_at = datetime.utcnow()
+            execution.status = "error"
+            execution.error = str(e)
+            logger.error(f"Agent {agent} failed: {e}")
+            raise
+    
+    def _generate_patient_id(self) -> str:
+        """Generate a unique patient ID."""
+        import uuid
+        return f"PT-{uuid.uuid4().hex[:8].upper()}"
+    
+    # State query methods
+    
+    async def get_state(self, patient_id: str) -> Optional[PatientState]:
+        """Get current state for a patient."""
+        return await self.state_store.get(patient_id)
+    
+    async def get_all_states(self) -> List[PatientState]:
+        """Get all patient states."""
+        return await self.state_store.get_all()
+    
+    # Event handling
+    
+    async def process_event(self, event_type: str, data: Dict) -> Dict:
+        """Process an incoming event (e.g., new lab result)."""
+        return await self.event_queue.process(event_type, data)
+```
+
+### State Store
+
+```python
+# api/services/orchestrator/state_store.py
+
+from typing import Dict, List, Optional
+import json
+from pathlib import Path
+from datetime import datetime
+import asyncio
+import aiofiles
+
+from .state import PatientState
+
+class StateStore:
+    """
+    Persistent storage for patient states.
+    
+    Uses JSON files for simplicity. In production,
+    replace with Redis or PostgreSQL.
+    """
+    
+    def __init__(self, storage_dir: str = "data/patient_states"):
+        self.storage_dir = Path(storage_dir)
+        self.storage_dir.mkdir(parents=True, exist_ok=True)
+        self._cache: Dict[str, PatientState] = {}
+        self._lock = asyncio.Lock()
+    
+    async def save(self, state: PatientState) -> None:
+        """Save patient state to storage."""
+        async with self._lock:
+            # Update cache
+            self._cache[state.patient_id] = state
+            
+            # Persist to file
+            file_path = self.storage_dir / f"{state.patient_id}.json"
+            data = self._serialize(state)
+            
+            async with aiofiles.open(file_path, 'w') as f:
+                await f.write(json.dumps(data, indent=2, default=str))
+    
+    async def get(self, patient_id: str) -> Optional[PatientState]:
+        """Get patient state by ID."""
+        # Check cache first
+        if patient_id in self._cache:
+            return self._cache[patient_id]
+        
+        # Load from file
+        file_path = self.storage_dir / f"{patient_id}.json"
+        if not file_path.exists():
+            return None
+        
+        async with aiofiles.open(file_path, 'r') as f:
+            data = json.loads(await f.read())
+        
+        state = self._deserialize(data)
+        self._cache[patient_id] = state
+        return state
+    
+    async def get_all(self) -> List[PatientState]:
+        """Get all patient states."""
+        states = []
+        for file_path in self.storage_dir.glob("*.json"):
+            patient_id = file_path.stem
+            state = await self.get(patient_id)
+            if state:
+                states.append(state)
+        return states
+    
+    def _serialize(self, state: PatientState) -> Dict:
+        """Serialize state to JSON-compatible dict."""
+        return {
+            'patient_id': state.patient_id,
+            'phase': state.phase.value,
+            'created_at': state.created_at.isoformat(),
+            'updated_at': state.updated_at.isoformat(),
+            'mechanism_vector': state.mechanism_vector,
+            'data_quality_flags': state.data_quality_flags,
+            'alerts': state.alerts,
+            # Serialize complex objects as needed
+            # For now, just store summaries
+            'has_patient_profile': state.patient_profile is not None,
+            'has_biomarker_profile': state.biomarker_profile is not None,
+            # ... etc
+        }
+    
+    def _deserialize(self, data: Dict) -> PatientState:
+        """Deserialize JSON data to PatientState."""
+        from .state import StatePhase
+        
+        state = PatientState(
+            patient_id=data['patient_id']
+        )
+        state.phase = StatePhase(data['phase'])
+        state.created_at = datetime.fromisoformat(data['created_at'])
+        state.updated_at = datetime.fromisoformat(data['updated_at'])
+        state.mechanism_vector = data.get('mechanism_vector', [0.0] * 7)
+        state.data_quality_flags = data.get('data_quality_flags', [])
+        state.alerts = data.get('alerts', [])
+        
+        return state
+```
+
+### Agent Message Protocol
+
+```python
+# api/services/orchestrator/message_bus.py
+
+from dataclasses import dataclass
+from typing import Dict, Any, Optional
+from datetime import datetime
+from enum import Enum
+import uuid
+import asyncio
+
+class MessageType(Enum):
+    REQUEST = "request"
+    RESPONSE = "response"
+    EVENT = "event"
+    ALERT = "alert"
+    BROADCAST = "broadcast"
+
+@dataclass
+class AgentMessage:
+    """
+    Standard message format for inter-agent communication.
+    """
+    id: str
+    sender: str
+    recipient: str          # Agent ID or "broadcast"
+    message_type: MessageType
+    payload: Dict[str, Any]
+    correlation_id: Optional[str] = None  # For request-response
+    timestamp: datetime = None
+    priority: int = 3       # 1=highest, 5=lowest
+    
+    def __post_init__(self):
+        if self.id is None:
+            self.id = str(uuid.uuid4())
+        if self.timestamp is None:
+            self.timestamp = datetime.utcnow()
+
+class MessageBus:
+    """
+    Simple message bus for agent communication.
+    """
+    
+    def __init__(self):
+        self._queues: Dict[str, asyncio.Queue] = {}
+        self._handlers: Dict[str, callable] = {}
+    
+    def register_agent(self, agent_id: str, handler: callable = None):
+        """Register an agent to receive messages."""
+        self._queues[agent_id] = asyncio.Queue()
+        if handler:
+            self._handlers[agent_id] = handler
+    
+    async def send(self, message: AgentMessage) -> None:
+        """Send a message to an agent."""
+        if message.recipient == "broadcast":
+            for queue in self._queues.values():
+                await queue.put(message)
+        elif message.recipient in self._queues:
+            await self._queues[message.recipient].put(message)
+    
+    async def receive(self, agent_id: str, timeout: float = None) -> Optional[AgentMessage]:
+        """Receive a message for an agent."""
+        if agent_id not in self._queues:
+            return None
+        
+        try:
+            if timeout:
+                return await asyncio.wait_for(
+                    self._queues[agent_id].get(),
+                    timeout=timeout
+                )
+            else:
+                return await self._queues[agent_id].get()
+        except asyncio.TimeoutError:
+            return None
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+### Phase 1: PatientState
+- [ ] Implement PatientState dataclass
+- [ ] Add state change tracking
+- [ ] Add alert management
+- [ ] Add serialization
+- [ ] Unit tests
+
+### Phase 2: State Store
+- [ ] Implement file-based storage
+- [ ] Add caching
+- [ ] Add serialization/deserialization
+- [ ] Unit tests
+
+### Phase 3: Orchestrator
+- [ ] Implement run_full_pipeline
+- [ ] Wire all agents
+- [ ] Parallel execution where possible
+- [ ] Error handling
+- [ ] Unit tests
+
+### Phase 4: Message Bus
+- [ ] Implement AgentMessage
+- [ ] Implement MessageBus
+- [ ] Agent registration
+- [ ] Unit tests
+
+### Phase 5: Integration
+- [ ] End-to-end pipeline test
+- [ ] Performance testing
+- [ ] Error recovery testing
+
+---
+
+## 📡 API ENDPOINT
+
+```yaml
+POST /api/orchestrate/full
+Content-Type: multipart/form-data
+
+Request:
+  file: binary  # NGS PDF, VCF, etc.
+  file_type: string
+  patient_id: string  # optional
+  options: json       # optional
+
+Response:
+  job_id: string
+  patient_id: string
+  status: string
+  estimated_time_seconds: number
+
+# Poll for status
+GET /api/orchestrate/status/{patient_id}
+
+Response:
+  patient_id: string
+  phase: string
+  progress: number
+  alerts: Alert[]
+  care_plan: CarePlan  # when complete
+```
+
+---
+
+## ✅ ACCEPTANCE CRITERIA
+
+1. ✅ PatientState tracks all agent outputs
+2. ✅ State changes are logged with audit trail
+3. ✅ Pipeline runs phases in correct order
+4. ✅ Parallel execution where dependencies allow
+5. ✅ Errors handled gracefully
+6. ✅ State persisted to disk
+7. ✅ Full pipeline completes in <60 seconds
+8. ✅ Unit test coverage >80%
+
+---
+
+**Module Status:** ⬜ TODO  
+**Estimated Time:** 3-4 days  
+**Assigned To:** Available for agent pickup

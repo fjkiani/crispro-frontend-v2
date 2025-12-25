@@ -1,0 +1,204 @@
+# 📊 MODULE 08: CONTINUOUS MONITORING AGENT
+
+**Purpose:** Configure and manage continuous patient monitoring  
+**Priority:** 🟡 HIGH | **Dependencies:** 07 | **Consumers:** 09
+
+---
+
+## 🎯 MISSION
+
+Build a monitoring agent that can:
+1. Set up biomarker tracking (CA-125, ctDNA)
+2. Configure alert thresholds
+3. Detect resistance signals early
+4. Track treatment response
+5. Monitor for new trial matches
+
+---
+
+## 📊 MONITORING TYPES
+
+### 1. CA-125 Kinetics
+- **Purpose:** Early resistance detection (3-6 weeks before clinical PD)
+- **Threshold:** >25% rise from nadir
+- **Frequency:** Every 3 weeks during chemo
+
+### 2. ctDNA Mutation Monitoring
+- **Purpose:** MRD detection, resistance mutation emergence
+- **Watch genes:** KRAS, NRAS, BRAF, NF1, ABCB1
+- **Alert:** New mutation detected
+
+### 3. Treatment Response (RECIST)
+- **Purpose:** Classify response
+- **Categories:** CR, PR, SD, PD
+- **Trigger on:** PD → resistance_detected
+
+### 4. New Trial Matching
+- **Purpose:** Match new trials as they open
+- **Frequency:** Weekly scan
+- **Alert:** New trial with >80% mechanism fit
+
+---
+
+## 📤 OUTPUTS
+
+```python
+@dataclass
+class Monitor:
+    monitor_type: str       # ca125, ctdna, recist, trials
+    status: str             # active, paused, completed
+    baseline_value: any
+    current_value: any
+    threshold: str
+    alert_triggered: bool
+    last_checked: datetime
+    next_check: datetime
+
+@dataclass
+class MonitoringConfig:
+    patient_id: str
+    monitors: List[Monitor]
+    active_alerts: List[Alert]
+    check_schedule: Dict[str, str]
+    escalation_rules: List[Dict]
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+```python
+# api/services/monitoring/monitoring_agent.py
+
+class MonitoringAgent:
+    """Configure and manage continuous patient monitoring."""
+    
+    async def configure(self, state: PatientState) -> MonitoringConfig:
+        """Set up monitoring based on patient state."""
+        
+        monitors = []
+        
+        # CA-125 monitoring (if ovarian/endometrial)
+        if self._needs_ca125(state):
+            monitors.append(Monitor(
+                monitor_type='ca125',
+                status='pending_baseline',  # Need baseline first
+                baseline_value=None,
+                current_value=None,
+                threshold='>25% rise from nadir',
+                alert_triggered=False,
+                last_checked=None,
+                next_check=datetime.utcnow()
+            ))
+        
+        # ctDNA monitoring
+        if self._needs_ctdna(state):
+            watch_genes = ['KRAS', 'NRAS', 'BRAF', 'NF1', 'ABCB1']
+            monitors.append(Monitor(
+                monitor_type='ctdna',
+                status='pending_baseline',
+                baseline_value={'genes': watch_genes, 'mutations': []},
+                current_value=None,
+                threshold='new mutation detected',
+                alert_triggered=False,
+                last_checked=None,
+                next_check=datetime.utcnow()
+            ))
+        
+        # RECIST monitoring
+        monitors.append(Monitor(
+            monitor_type='recist',
+            status='pending_scan',
+            baseline_value=None,
+            current_value=None,
+            threshold='PD',
+            alert_triggered=False,
+            last_checked=None,
+            next_check=datetime.utcnow() + timedelta(weeks=9)  # After C3
+        ))
+        
+        # Trial matching
+        monitors.append(Monitor(
+            monitor_type='trials',
+            status='active',
+            baseline_value={'mechanism_vector': state.mechanism_vector},
+            current_value=None,
+            threshold='score >= 0.80',
+            alert_triggered=False,
+            last_checked=datetime.utcnow(),
+            next_check=datetime.utcnow() + timedelta(weeks=1)
+        ))
+        
+        return MonitoringConfig(
+            patient_id=state.patient_id,
+            monitors=monitors,
+            active_alerts=[],
+            check_schedule={
+                'ca125': 'every 3 weeks',
+                'ctdna': 'monthly',
+                'recist': 'after cycle 3',
+                'trials': 'weekly'
+            },
+            escalation_rules=[
+                {'trigger': 'resistance_detected', 'escalate_to': 'tumor_board', 'within': '24h'}
+            ]
+        )
+    
+    async def check(
+        self,
+        patient_id: str,
+        new_data: Dict
+    ) -> List[Alert]:
+        """Check monitors against new data."""
+        
+        config = await self.get_config(patient_id)
+        alerts = []
+        
+        for monitor in config.monitors:
+            if monitor.monitor_type == 'ca125' and 'ca125' in new_data:
+                alert = self._check_ca125(monitor, new_data['ca125'])
+                if alert:
+                    alerts.append(alert)
+            
+            # ... similar for other monitor types
+        
+        return alerts
+    
+    def _check_ca125(self, monitor: Monitor, new_value: float) -> Optional[Alert]:
+        """Check CA-125 for resistance signal."""
+        
+        if monitor.baseline_value is None:
+            # First value becomes baseline
+            monitor.baseline_value = new_value
+            monitor.status = 'active'
+            return None
+        
+        # Calculate rise from nadir
+        nadir = min(monitor.baseline_value, monitor.current_value or float('inf'))
+        if new_value > nadir * 1.25:
+            return Alert(
+                alert_type='resistance_signal',
+                severity='high',
+                message=f'CA-125 rose >25% from nadir ({nadir} → {new_value})',
+                trigger='ca125_kinetics'
+            )
+        
+        return None
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+- [ ] CA-125 kinetics monitoring
+- [ ] ctDNA mutation tracking
+- [ ] RECIST response tracking
+- [ ] New trial matching (weekly)
+- [ ] Alert generation
+- [ ] Escalation rules
+- [ ] Unit tests
+
+---
+
+**Module Status:** ⬜ TODO  
+**Estimated Time:** 2 days

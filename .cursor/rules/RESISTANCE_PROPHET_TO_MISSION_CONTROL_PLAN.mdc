@@ -5,10 +5,44 @@ description: "Complete plan: Resistance Prophet prediction engine → Mission Co
 
 # ⚔️ RESISTANCE PROPHET → MISSION CONTROL: THE COMPLETE PLAN ⚔️
 
-**Date:** January 14, 2025  
-**Status:** APPROVED - Ready for Implementation  
-**Timeline:** 3 weeks to production  
+**Date:** January 14, 2025 (Updated: January 28, 2025)  
+**Status:** ✅ **IN PRODUCTION** (RUO Only - Validation Failed)  
+**Validation Result:** AUROC 0.464 (target ≥0.70) — Phase 1 retrospective validation failed  
+**Current Mode:** Research Use Only with disclaimers  
 **Owner:** Zo (prediction engine) + Jr (dashboard integration)
+
+---
+
+## ⚠️ PRODUCTION STATUS UPDATE (January 28, 2025)
+
+### What's Actually Deployed
+
+| Component | Status | File |
+|-----------|--------|------|
+| **Resistance Prophet Service** | ✅ **DEPLOYED** | `api/services/resistance_prophet_service.py` (62KB) |
+| **Complete Care V2 Integration** | ✅ **DEPLOYED** | Opt-in via `include_resistance_prediction` |
+| **Mechanism Fit Ranker** | ✅ **DEPLOYED** | `api/services/mechanism_fit_ranker.py` |
+
+### Validation Results (Phase 1 - No CA-125)
+
+```
+AUROC: 0.464 (target ≥0.70) ❌ FAIL
+Sensitivity: 0.000 (target ≥0.75) ❌ FAIL
+Specificity: 1.000 (target ≥0.70) ✅ PASS
+
+VERDICT: ⚠️ NO-GO - RUO ONLY WITH DISCLAIMERS
+```
+
+**Root Cause:** Phase 1 used only DNA Repair + Pathway Escape signals (no CA-125). Without CA-125 kinetics, zero true positives detected.
+
+**Path Forward:** Phase 1b with CA-125 kinetics (Manager Q15: "If CA-125 missing → skip; cap confidence")
+
+### What's Working
+
+- ✅ Service architecture as designed
+- ✅ Integration pattern (opt-in flag, provenance)
+- ✅ Manager policy references correct
+- ⚠️ RUO banners required in UI
 
 ---
 

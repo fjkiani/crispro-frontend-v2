@@ -1,0 +1,5636 @@
+# 🔬 MODULE 05: TRIAL MATCHING AGENT
+
+**Purpose:** Match patients to clinical trials using mechanism-based ranking  
+**Priority:** 🟡 HIGH | **Dependencies:** 01, 02, 04 | **Consumers:** 07, 08
+
+---
+
+## 🎯 MISSION
+
+Build a trial matching agent that can:
+1. Generate disease/mutation-specific trial queries
+2. Search ClinicalTrials.gov API
+3. Rank trials by mechanism fit using 7D vector
+4. Check eligibility criteria
+5. Provide transparent matching rationale
+
+---
+
+## 📊 EXISTING IMPLEMENTATION
+
+### Already Built ✅
+
+**Location:** `api/services/autonomous_trial_agent.py`
+
+**Key Components:**
+- Trial search via ClinicalTrials.gov API
+- Query generation (3 templates)
+- Basic eligibility checking
+
+**Location:** `api/services/mechanism_fit_ranker.py`
+
+**Key Components:**
+- 7D mechanism vector comparison
+- Cosine similarity for mechanism fit
+- Combined scoring (eligibility + mechanism)
+
+---
+
+## 📥 INPUTS
+
+### From Previous Agents
+
+```python
+# From Module 01 (Data Extraction)
+patient_profile: PatientProfile
+mutations: List[Mutation]
+disease: str
+
+# From Module 02 (Biomarker)
+biomarker_profile: BiomarkerProfile
+tmb: float
+msi_status: str
+io_eligible: bool
+
+# From Module 04 (Drug Efficacy)
+mechanism_vector: List[float]  # 7D: [DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux]
+```
+
+---
+
+## 📤 OUTPUTS
+
+### TrialMatch Schema
+
+```python
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from enum import Enum
+
+class TrialStatus(Enum):
+    RECRUITING = "Recruiting"
+    NOT_YET_RECRUITING = "Not yet recruiting"
+    ACTIVE_NOT_RECRUITING = "Active, not recruiting"
+    COMPLETED = "Completed"
+    SUSPENDED = "Suspended"
+    TERMINATED = "Terminated"
+
+class TrialPhase(Enum):
+    PHASE_1 = "Phase 1"
+    PHASE_1_2 = "Phase 1/Phase 2"
+    PHASE_2 = "Phase 2"
+    PHASE_2_3 = "Phase 2/Phase 3"
+    PHASE_3 = "Phase 3"
+    PHASE_4 = "Phase 4"
+    NA = "N/A"
+
+@dataclass
+class TrialMoA:
+    """Trial mechanism of action vector."""
+    ddr: float = 0.0
+    mapk: float = 0.0
+    pi3k: float = 0.0
+    vegf: float = 0.0
+    her2: float = 0.0
+    io: float = 0.0
+    efflux: float = 0.0
+    
+    def to_vector(self) -> List[float]:
+        return [self.ddr, self.mapk, self.pi3k, self.vegf, self.her2, self.io, self.efflux]
+
+@dataclass
+class EligibilityCriteria:
+    meets_criteria: bool
+    score: float                    # 0.0 - 1.0
+    matched: List[str]              # Criteria patient meets
+    unmatched: List[str]            # Criteria patient doesn't meet
+    uncertain: List[str]            # Criteria we can't evaluate
+
+@dataclass
+class TrialMatch:
+    nct_id: str
+    title: str
+    brief_summary: str
+    phase: TrialPhase
+    status: TrialStatus
+    
+    # Matching scores
+    mechanism_fit_score: float      # Cosine similarity (0-1)
+    eligibility_score: float        # Eligibility match (0-1)
+    combined_score: float           # Weighted combination
+    
+    # Details
+    trial_moa: TrialMoA
+    eligibility: EligibilityCriteria
+    mechanism_alignment: Dict[str, float]  # Per-pathway alignment
+    
+    # Why matched
+    why_matched: str                # Human-readable explanation
+    query_matched: str              # Which query found it
+    
+    # Logistics
+    locations: List[Dict]           # Study locations
+    contact: Optional[Dict]         # Contact info
+    url: str                        # ClinicalTrials.gov URL
+    
+    # Provenance
+    last_updated: str
+    sponsor: str
+
+@dataclass
+class TrialMatchingResult:
+    patient_id: str
+    queries_used: List[str]
+    trials_found: int
+    trials_ranked: int
+    matches: List[TrialMatch]
+    top_match: Optional[TrialMatch]
+    search_time_ms: int
+    provenance: Dict[str, any]
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### File Structure
+
+```
+api/services/trials/
+├── __init__.py
+├── trial_matching_agent.py     # Main agent
+├── query_generator.py          # Generate search queries
+├── clinicaltrials_client.py    # ClinicalTrials.gov API
+├── mechanism_ranker.py         # 7D vector ranking
+├── eligibility_checker.py      # Check eligibility criteria
+├── trial_parser.py             # Parse trial data
+├── moa_extractor.py            # Extract trial MoA vector
+├── constants.py                # Query templates, weights
+└── tests/
+    ├── test_query_gen.py
+    ├── test_matching.py
+    └── test_eligibility.py
+```
+
+### Core Agent Implementation
+
+```python
+# api/services/trials/trial_matching_agent.py
+
+from typing import List, Optional
+from datetime import datetime
+import logging
+
+from .query_generator import QueryGenerator
+from .clinicaltrials_client import ClinicalTrialsClient
+from .mechanism_ranker import MechanismRanker
+from .eligibility_checker import EligibilityChecker
+from .moa_extractor import MoAExtractor
+from ..models import (
+    PatientProfile, BiomarkerProfile,
+    TrialMatchingResult, TrialMatch
+)
+
+logger = logging.getLogger(__name__)
+
+class TrialMatchingAgent:
+    """
+    Match patients to clinical trials using mechanism-based ranking.
+    
+    Process:
+    1. Generate disease/mutation-specific queries
+    2. Search ClinicalTrials.gov
+    3. Extract trial MoA vectors
+    4. Rank by mechanism fit (cosine similarity)
+    5. Check eligibility criteria
+    6. Return ranked matches with rationale
+    """
+    
+    def __init__(self):
+        self.query_gen = QueryGenerator()
+        self.ct_client = ClinicalTrialsClient()
+        self.ranker = MechanismRanker(alpha=0.7, beta=0.3)  # eligibility/mechanism
+        self.eligibility_checker = EligibilityChecker()
+        self.moa_extractor = MoAExtractor()
+    
+    async def match(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile] = None,
+        mechanism_vector: List[float] = None,
+        max_results: int = 10
+    ) -> TrialMatchingResult:
+        """
+        Find and rank matching clinical trials.
+        
+        Args:
+            patient_profile: Patient mutations and disease
+            biomarker_profile: TMB, MSI, IO eligibility
+            mechanism_vector: 7D pathway vector from drug efficacy agent
+            max_results: Maximum trials to return
+        
+        Returns:
+            TrialMatchingResult with ranked matches
+        """
+        start_time = datetime.utcnow()
+        logger.info(f"Matching trials for {patient_profile.patient_id}")
+        
+        # Build context for query generation
+        context = self._build_context(
+            patient_profile=patient_profile,
+            biomarker_profile=biomarker_profile
+        )
+        
+        # Step 1: Generate queries
+        queries = self.query_gen.generate(
+            disease=patient_profile.disease,
+            mutations=patient_profile.mutations,
+            biomarkers=biomarker_profile,
+            context=context
+        )
+        logger.info(f"Generated {len(queries)} queries")
+        
+        # Step 2: Search for trials
+        all_trials = []
+        for query in queries:
+            try:
+                trials = await self.ct_client.search(
+                    query=query['query'],
+                    status=['RECRUITING', 'NOT_YET_RECRUITING'],
+                    max_results=50
+                )
+                for trial in trials:
+                    trial['matched_query'] = query['query']
+                    trial['query_type'] = query['type']
+                all_trials.extend(trials)
+            except Exception as e:
+                logger.error(f"Search failed for query '{query}': {e}")
+        
+        # Deduplicate by NCT ID
+        unique_trials = {t['nct_id']: t for t in all_trials}
+        trials = list(unique_trials.values())
+        logger.info(f"Found {len(trials)} unique trials")
+        
+        if not trials:
+            return self._empty_result(patient_profile.patient_id, queries)
+        
+        # Step 3: Extract MoA vectors for each trial
+        for trial in trials:
+            trial['moa_vector'] = self.moa_extractor.extract(trial)
+        
+        # Step 4: Rank by mechanism fit
+        if mechanism_vector is None:
+            mechanism_vector = [0.5] * 7  # Default neutral
+        
+        ranked = self.ranker.rank(
+            trials=trials,
+            patient_mechanism_vector=mechanism_vector,
+            min_eligibility=0.5,
+            min_mechanism_fit=0.3
+        )
+        
+        # Step 5: Check eligibility for top candidates
+        matches = []
+        for trial in ranked[:max_results * 2]:  # Over-fetch for eligibility filtering
+            eligibility = self.eligibility_checker.check(
+                trial=trial,
+                patient=patient_profile,
+                biomarkers=biomarker_profile
+            )
+            
+            if eligibility.score < 0.5:
+                continue  # Skip if clearly ineligible
+            
+            match = self._build_match(
+                trial=trial,
+                eligibility=eligibility,
+                patient_mechanism=mechanism_vector
+            )
+            matches.append(match)
+            
+            if len(matches) >= max_results:
+                break
+        
+        elapsed = (datetime.utcnow() - start_time).total_seconds() * 1000
+        
+        return TrialMatchingResult(
+            patient_id=patient_profile.patient_id,
+            queries_used=[q['query'] for q in queries],
+            trials_found=len(trials),
+            trials_ranked=len(ranked),
+            matches=matches,
+            top_match=matches[0] if matches else None,
+            search_time_ms=int(elapsed),
+            provenance={
+                'ranking_formula': '0.7*eligibility + 0.3*mechanism_fit',
+                'min_thresholds': {'eligibility': 0.5, 'mechanism': 0.3}
+            }
+        )
+    
+    def _build_context(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile]
+    ) -> Dict:
+        """Build context for query generation."""
+        genes = [m.gene for m in patient_profile.mutations]
+        
+        context = {
+            'disease': patient_profile.disease,
+            'genes': genes,
+            'has_ddr_mutation': any(g in DDR_GENES for g in genes),
+            'has_mapk_mutation': any(g in MAPK_GENES for g in genes)
+        }
+        
+        if biomarker_profile:
+            context['io_eligible'] = biomarker_profile.io_eligible
+            context['tmb_high'] = biomarker_profile.tmb.classification == 'TMB-H'
+            context['msi_high'] = biomarker_profile.msi.status == 'MSI-H'
+            context['hrd_positive'] = biomarker_profile.hrd.status in ['HRD+', 'HRD-INFERRED']
+        
+        return context
+    
+    def _build_match(
+        self,
+        trial: Dict,
+        eligibility: EligibilityCriteria,
+        patient_mechanism: List[float]
+    ) -> TrialMatch:
+        """Build TrialMatch from trial data."""
+        trial_moa = TrialMoA(*trial['moa_vector'])
+        
+        # Calculate per-pathway alignment
+        pathway_names = ['DDR', 'MAPK', 'PI3K', 'VEGF', 'HER2', 'IO', 'Efflux']
+        alignment = {}
+        for i, name in enumerate(pathway_names):
+            patient_val = patient_mechanism[i]
+            trial_val = trial['moa_vector'][i]
+            alignment[name] = min(patient_val, trial_val)
+        
+        # Generate why_matched explanation
+        why = self._explain_match(trial, eligibility, alignment)
+        
+        return TrialMatch(
+            nct_id=trial['nct_id'],
+            title=trial.get('brief_title', ''),
+            brief_summary=trial.get('brief_summary', '')[:500],
+            phase=self._parse_phase(trial.get('phase', '')),
+            status=TrialStatus(trial.get('overall_status', 'Recruiting')),
+            mechanism_fit_score=trial['mechanism_fit'],
+            eligibility_score=eligibility.score,
+            combined_score=trial['combined_score'],
+            trial_moa=trial_moa,
+            eligibility=eligibility,
+            mechanism_alignment=alignment,
+            why_matched=why,
+            query_matched=trial.get('matched_query', ''),
+            locations=trial.get('locations', [])[:5],
+            contact=trial.get('central_contact'),
+            url=f"https://clinicaltrials.gov/study/{trial['nct_id']}",
+            last_updated=trial.get('last_update_submitted', ''),
+            sponsor=trial.get('lead_sponsor', {}).get('name', '')
+        )
+    
+    def _explain_match(
+        self,
+        trial: Dict,
+        eligibility: EligibilityCriteria,
+        alignment: Dict[str, float]
+    ) -> str:
+        """Generate human-readable explanation."""
+        explanations = []
+        
+        # Top aligned pathways
+        top_pathways = sorted(
+            alignment.items(),
+            key=lambda x: x[1],
+            reverse=True
+        )[:2]
+        
+        for pathway, score in top_pathways:
+            if score > 0.5:
+                explanations.append(f"{pathway} pathway alignment ({score:.0%})")
+        
+        # Eligibility highlights
+        if eligibility.matched:
+            explanations.append(f"Meets: {', '.join(eligibility.matched[:2])}")
+        
+        return "; ".join(explanations) if explanations else "Broad mechanism match"
+```
+
+### Query Generator
+
+```python
+# api/services/trials/query_generator.py
+
+from typing import List, Dict
+
+class QueryGenerator:
+    """
+    Generate disease/mutation-specific trial queries.
+    
+    Query types:
+    - Disease-specific
+    - Mutation-specific
+    - Pathway-specific (DDR, basket)
+    - Biomarker-specific (IO, TMB-H)
+    """
+    
+    QUERY_TEMPLATES = {
+        'disease': "{disease} cancer clinical trial",
+        'gene': "{gene} mutation {disease} trial",
+        'basket': "{disease} basket trial tumor agnostic",
+        'ddr': "{disease} DNA repair deficiency trial",
+        'parp': "{disease} PARP inhibitor trial",
+        'io': "{disease} immunotherapy checkpoint inhibitor trial",
+        'tmb_high': "TMB-high tumor agnostic trial",
+        'msi_high': "MSI-high dMMR clinical trial",
+        'hrd': "{disease} HRD homologous recombination deficiency trial",
+        'rare_mutation': "{gene} mutation rare disease registry trial"
+    }
+    
+    def generate(
+        self,
+        disease: str,
+        mutations: List,
+        biomarkers = None,
+        context: Dict = None
+    ) -> List[Dict]:
+        """
+        Generate ranked list of queries.
+        
+        Returns list of {query, type, priority}
+        """
+        queries = []
+        
+        # Always include disease query
+        queries.append({
+            'query': self.QUERY_TEMPLATES['disease'].format(disease=disease),
+            'type': 'disease',
+            'priority': 1
+        })
+        
+        # Gene-specific queries for key mutations
+        key_genes = self._get_key_genes(mutations)
+        for gene in key_genes[:3]:
+            queries.append({
+                'query': self.QUERY_TEMPLATES['gene'].format(
+                    gene=gene, disease=disease
+                ),
+                'type': 'gene',
+                'priority': 2
+            })
+        
+        # Context-aware queries
+        if context:
+            if context.get('has_ddr_mutation'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['ddr'].format(disease=disease),
+                    'type': 'ddr',
+                    'priority': 2
+                })
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['parp'].format(disease=disease),
+                    'type': 'parp',
+                    'priority': 2
+                })
+            
+            if context.get('io_eligible'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['io'].format(disease=disease),
+                    'type': 'io',
+                    'priority': 2
+                })
+            
+            if context.get('tmb_high'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['tmb_high'],
+                    'type': 'tmb_high',
+                    'priority': 3
+                })
+            
+            if context.get('msi_high'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['msi_high'],
+                    'type': 'msi_high',
+                    'priority': 3
+                })
+            
+            if context.get('hrd_positive'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['hrd'].format(disease=disease),
+                    'type': 'hrd',
+                    'priority': 2
+                })
+        
+        # Basket trial query
+        queries.append({
+            'query': self.QUERY_TEMPLATES['basket'].format(disease=disease),
+            'type': 'basket',
+            'priority': 3
+        })
+        
+        # Sort by priority
+        queries.sort(key=lambda x: x['priority'])
+        
+        return queries
+    
+    def _get_key_genes(self, mutations: List) -> List[str]:
+        """Extract key genes for querying."""
+        priority_genes = {'BRCA1', 'BRCA2', 'TP53', 'KRAS', 'BRAF', 'MBD4', 'NF1'}
+        
+        genes = []
+        for mut in mutations:
+            gene = mut.gene if hasattr(mut, 'gene') else mut.get('gene', '')
+            if gene.upper() in priority_genes:
+                genes.append(gene)
+        
+        return genes
+```
+
+### Mechanism Ranker
+
+```python
+# api/services/trials/mechanism_ranker.py
+
+from typing import List, Dict
+import numpy as np
+
+class MechanismRanker:
+    """
+    Rank trials by mechanism fit using 7D vector cosine similarity.
+    
+    Formula: combined_score = alpha * eligibility + beta * mechanism_fit
+    Default: alpha=0.7, beta=0.3
+    """
+    
+    def __init__(self, alpha: float = 0.7, beta: float = 0.3):
+        self.alpha = alpha
+        self.beta = beta
+    
+    def rank(
+        self,
+        trials: List[Dict],
+        patient_mechanism_vector: List[float],
+        min_eligibility: float = 0.5,
+        min_mechanism_fit: float = 0.3
+    ) -> List[Dict]:
+        """
+        Rank trials by combined eligibility + mechanism fit.
+        
+        Args:
+            trials: List of trial dicts with moa_vector
+            patient_mechanism_vector: 7D patient pathway vector
+            min_eligibility: Minimum eligibility score
+            min_mechanism_fit: Minimum mechanism fit score
+        
+        Returns:
+            Sorted list of trials with scores
+        """
+        patient_vec = np.array(patient_mechanism_vector)
+        
+        for trial in trials:
+            trial_vec = np.array(trial.get('moa_vector', [0.5] * 7))
+            
+            # Calculate mechanism fit (cosine similarity)
+            mechanism_fit = self._cosine_similarity(patient_vec, trial_vec)
+            trial['mechanism_fit'] = mechanism_fit
+            
+            # Estimate eligibility (placeholder - real check is later)
+            eligibility = trial.get('eligibility_estimate', 0.7)
+            trial['eligibility'] = eligibility
+            
+            # Combined score
+            trial['combined_score'] = (
+                self.alpha * eligibility +
+                self.beta * mechanism_fit
+            )
+        
+        # Filter by thresholds
+        filtered = [
+            t for t in trials
+            if t['mechanism_fit'] >= min_mechanism_fit
+        ]
+        
+        # Sort by combined score
+        filtered.sort(key=lambda x: x['combined_score'], reverse=True)
+        
+        return filtered
+    
+    def _cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> float:
+        """Calculate cosine similarity between two vectors."""
+        dot = np.dot(a, b)
+        norm_a = np.linalg.norm(a)
+        norm_b = np.linalg.norm(b)
+        
+        if norm_a == 0 or norm_b == 0:
+            return 0.0
+        
+        return float(dot / (norm_a * norm_b))
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+### Phase 1: Query Generator
+- [ ] Implement 10 query templates
+- [ ] Add context-aware query selection
+- [ ] Priority-based ordering
+- [ ] Unit tests
+
+### Phase 2: ClinicalTrials Client
+- [ ] Implement ClinicalTrials.gov v2 API client
+- [ ] Handle pagination
+- [ ] Caching (24h)
+- [ ] Rate limiting
+- [ ] Unit tests
+
+### Phase 3: MoA Extractor
+- [ ] Extract MoA from trial descriptions
+- [ ] Map interventions to 7D vector
+- [ ] Handle unknown drugs
+- [ ] Unit tests
+
+### Phase 4: Mechanism Ranker
+- [ ] Implement cosine similarity
+- [ ] Combined scoring (eligibility + mechanism)
+- [ ] Threshold filtering
+- [ ] Unit tests
+
+### Phase 5: Eligibility Checker
+- [ ] Parse eligibility criteria
+- [ ] Match against patient data
+- [ ] Handle uncertain criteria
+- [ ] Unit tests
+
+### Phase 6: Integration
+- [ ] Create TrialMatchingAgent
+- [ ] Wire all components
+- [ ] Build TrialMatch objects
+- [ ] Integration tests
+
+---
+
+## 📡 API ENDPOINT
+
+```yaml
+POST /api/agents/trials
+Content-Type: application/json
+
+Request:
+  patient_id: string
+  mutations: Mutation[]
+  disease: string
+  mechanism_vector: float[7]  # From drug efficacy agent
+  biomarker_profile: BiomarkerProfile  # optional
+  max_results: number  # default: 10
+
+Response:
+  trial_matching_result: TrialMatchingResult
+  search_time_ms: number
+```
+
+---
+
+## ✅ ACCEPTANCE CRITERIA
+
+1. ✅ Generate 5-10 disease/mutation-specific queries
+2. ✅ Search ClinicalTrials.gov successfully
+3. ✅ Extract MoA vectors for trials
+4. ✅ Rank by mechanism fit (cosine similarity)
+5. ✅ Check eligibility criteria
+6. ✅ Return top 10 matches with rationale
+7. ✅ Include per-pathway alignment
+8. ✅ Search time <10 seconds
+9. ✅ Unit test coverage >80%
+
+---
+
+---
+
+## 🎯 MISSION
+
+Build a trial matching agent that can:
+1. Generate disease/mutation-specific trial queries
+2. Search ClinicalTrials.gov API
+3. Rank trials by mechanism fit using 7D vector
+4. Check eligibility criteria
+5. Provide transparent matching rationale
+
+---
+
+## 📊 EXISTING IMPLEMENTATION
+
+### Already Built ✅
+
+**Location:** `api/services/autonomous_trial_agent.py`
+
+**Key Components:**
+- Trial search via ClinicalTrials.gov API
+- Query generation (3 templates)
+- Basic eligibility checking
+
+**Location:** `api/services/mechanism_fit_ranker.py`
+
+**Key Components:**
+- 7D mechanism vector comparison
+- Cosine similarity for mechanism fit
+- Combined scoring (eligibility + mechanism)
+
+---
+
+## 📥 INPUTS
+
+### From Previous Agents
+
+```python
+# From Module 01 (Data Extraction)
+patient_profile: PatientProfile
+mutations: List[Mutation]
+disease: str
+
+# From Module 02 (Biomarker)
+biomarker_profile: BiomarkerProfile
+tmb: float
+msi_status: str
+io_eligible: bool
+
+# From Module 04 (Drug Efficacy)
+mechanism_vector: List[float]  # 7D: [DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux]
+```
+
+---
+
+## 📤 OUTPUTS
+
+### TrialMatch Schema
+
+```python
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from enum import Enum
+
+class TrialStatus(Enum):
+    RECRUITING = "Recruiting"
+    NOT_YET_RECRUITING = "Not yet recruiting"
+    ACTIVE_NOT_RECRUITING = "Active, not recruiting"
+    COMPLETED = "Completed"
+    SUSPENDED = "Suspended"
+    TERMINATED = "Terminated"
+
+class TrialPhase(Enum):
+    PHASE_1 = "Phase 1"
+    PHASE_1_2 = "Phase 1/Phase 2"
+    PHASE_2 = "Phase 2"
+    PHASE_2_3 = "Phase 2/Phase 3"
+    PHASE_3 = "Phase 3"
+    PHASE_4 = "Phase 4"
+    NA = "N/A"
+
+@dataclass
+class TrialMoA:
+    """Trial mechanism of action vector."""
+    ddr: float = 0.0
+    mapk: float = 0.0
+    pi3k: float = 0.0
+    vegf: float = 0.0
+    her2: float = 0.0
+    io: float = 0.0
+    efflux: float = 0.0
+    
+    def to_vector(self) -> List[float]:
+        return [self.ddr, self.mapk, self.pi3k, self.vegf, self.her2, self.io, self.efflux]
+
+@dataclass
+class EligibilityCriteria:
+    meets_criteria: bool
+    score: float                    # 0.0 - 1.0
+    matched: List[str]              # Criteria patient meets
+    unmatched: List[str]            # Criteria patient doesn't meet
+    uncertain: List[str]            # Criteria we can't evaluate
+
+@dataclass
+class TrialMatch:
+    nct_id: str
+    title: str
+    brief_summary: str
+    phase: TrialPhase
+    status: TrialStatus
+    
+    # Matching scores
+    mechanism_fit_score: float      # Cosine similarity (0-1)
+    eligibility_score: float        # Eligibility match (0-1)
+    combined_score: float           # Weighted combination
+    
+    # Details
+    trial_moa: TrialMoA
+    eligibility: EligibilityCriteria
+    mechanism_alignment: Dict[str, float]  # Per-pathway alignment
+    
+    # Why matched
+    why_matched: str                # Human-readable explanation
+    query_matched: str              # Which query found it
+    
+    # Logistics
+    locations: List[Dict]           # Study locations
+    contact: Optional[Dict]         # Contact info
+    url: str                        # ClinicalTrials.gov URL
+    
+    # Provenance
+    last_updated: str
+    sponsor: str
+
+@dataclass
+class TrialMatchingResult:
+    patient_id: str
+    queries_used: List[str]
+    trials_found: int
+    trials_ranked: int
+    matches: List[TrialMatch]
+    top_match: Optional[TrialMatch]
+    search_time_ms: int
+    provenance: Dict[str, any]
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### File Structure
+
+```
+api/services/trials/
+├── __init__.py
+├── trial_matching_agent.py     # Main agent
+├── query_generator.py          # Generate search queries
+├── clinicaltrials_client.py    # ClinicalTrials.gov API
+├── mechanism_ranker.py         # 7D vector ranking
+├── eligibility_checker.py      # Check eligibility criteria
+├── trial_parser.py             # Parse trial data
+├── moa_extractor.py            # Extract trial MoA vector
+├── constants.py                # Query templates, weights
+└── tests/
+    ├── test_query_gen.py
+    ├── test_matching.py
+    └── test_eligibility.py
+```
+
+### Core Agent Implementation
+
+```python
+# api/services/trials/trial_matching_agent.py
+
+from typing import List, Optional
+from datetime import datetime
+import logging
+
+from .query_generator import QueryGenerator
+from .clinicaltrials_client import ClinicalTrialsClient
+from .mechanism_ranker import MechanismRanker
+from .eligibility_checker import EligibilityChecker
+from .moa_extractor import MoAExtractor
+from ..models import (
+    PatientProfile, BiomarkerProfile,
+    TrialMatchingResult, TrialMatch
+)
+
+logger = logging.getLogger(__name__)
+
+class TrialMatchingAgent:
+    """
+    Match patients to clinical trials using mechanism-based ranking.
+    
+    Process:
+    1. Generate disease/mutation-specific queries
+    2. Search ClinicalTrials.gov
+    3. Extract trial MoA vectors
+    4. Rank by mechanism fit (cosine similarity)
+    5. Check eligibility criteria
+    6. Return ranked matches with rationale
+    """
+    
+    def __init__(self):
+        self.query_gen = QueryGenerator()
+        self.ct_client = ClinicalTrialsClient()
+        self.ranker = MechanismRanker(alpha=0.7, beta=0.3)  # eligibility/mechanism
+        self.eligibility_checker = EligibilityChecker()
+        self.moa_extractor = MoAExtractor()
+    
+    async def match(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile] = None,
+        mechanism_vector: List[float] = None,
+        max_results: int = 10
+    ) -> TrialMatchingResult:
+        """
+        Find and rank matching clinical trials.
+        
+        Args:
+            patient_profile: Patient mutations and disease
+            biomarker_profile: TMB, MSI, IO eligibility
+            mechanism_vector: 7D pathway vector from drug efficacy agent
+            max_results: Maximum trials to return
+        
+        Returns:
+            TrialMatchingResult with ranked matches
+        """
+        start_time = datetime.utcnow()
+        logger.info(f"Matching trials for {patient_profile.patient_id}")
+        
+        # Build context for query generation
+        context = self._build_context(
+            patient_profile=patient_profile,
+            biomarker_profile=biomarker_profile
+        )
+        
+        # Step 1: Generate queries
+        queries = self.query_gen.generate(
+            disease=patient_profile.disease,
+            mutations=patient_profile.mutations,
+            biomarkers=biomarker_profile,
+            context=context
+        )
+        logger.info(f"Generated {len(queries)} queries")
+        
+        # Step 2: Search for trials
+        all_trials = []
+        for query in queries:
+            try:
+                trials = await self.ct_client.search(
+                    query=query['query'],
+                    status=['RECRUITING', 'NOT_YET_RECRUITING'],
+                    max_results=50
+                )
+                for trial in trials:
+                    trial['matched_query'] = query['query']
+                    trial['query_type'] = query['type']
+                all_trials.extend(trials)
+            except Exception as e:
+                logger.error(f"Search failed for query '{query}': {e}")
+        
+        # Deduplicate by NCT ID
+        unique_trials = {t['nct_id']: t for t in all_trials}
+        trials = list(unique_trials.values())
+        logger.info(f"Found {len(trials)} unique trials")
+        
+        if not trials:
+            return self._empty_result(patient_profile.patient_id, queries)
+        
+        # Step 3: Extract MoA vectors for each trial
+        for trial in trials:
+            trial['moa_vector'] = self.moa_extractor.extract(trial)
+        
+        # Step 4: Rank by mechanism fit
+        if mechanism_vector is None:
+            mechanism_vector = [0.5] * 7  # Default neutral
+        
+        ranked = self.ranker.rank(
+            trials=trials,
+            patient_mechanism_vector=mechanism_vector,
+            min_eligibility=0.5,
+            min_mechanism_fit=0.3
+        )
+        
+        # Step 5: Check eligibility for top candidates
+        matches = []
+        for trial in ranked[:max_results * 2]:  # Over-fetch for eligibility filtering
+            eligibility = self.eligibility_checker.check(
+                trial=trial,
+                patient=patient_profile,
+                biomarkers=biomarker_profile
+            )
+            
+            if eligibility.score < 0.5:
+                continue  # Skip if clearly ineligible
+            
+            match = self._build_match(
+                trial=trial,
+                eligibility=eligibility,
+                patient_mechanism=mechanism_vector
+            )
+            matches.append(match)
+            
+            if len(matches) >= max_results:
+                break
+        
+        elapsed = (datetime.utcnow() - start_time).total_seconds() * 1000
+        
+        return TrialMatchingResult(
+            patient_id=patient_profile.patient_id,
+            queries_used=[q['query'] for q in queries],
+            trials_found=len(trials),
+            trials_ranked=len(ranked),
+            matches=matches,
+            top_match=matches[0] if matches else None,
+            search_time_ms=int(elapsed),
+            provenance={
+                'ranking_formula': '0.7*eligibility + 0.3*mechanism_fit',
+                'min_thresholds': {'eligibility': 0.5, 'mechanism': 0.3}
+            }
+        )
+    
+    def _build_context(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile]
+    ) -> Dict:
+        """Build context for query generation."""
+        genes = [m.gene for m in patient_profile.mutations]
+        
+        context = {
+            'disease': patient_profile.disease,
+            'genes': genes,
+            'has_ddr_mutation': any(g in DDR_GENES for g in genes),
+            'has_mapk_mutation': any(g in MAPK_GENES for g in genes)
+        }
+        
+        if biomarker_profile:
+            context['io_eligible'] = biomarker_profile.io_eligible
+            context['tmb_high'] = biomarker_profile.tmb.classification == 'TMB-H'
+            context['msi_high'] = biomarker_profile.msi.status == 'MSI-H'
+            context['hrd_positive'] = biomarker_profile.hrd.status in ['HRD+', 'HRD-INFERRED']
+        
+        return context
+    
+    def _build_match(
+        self,
+        trial: Dict,
+        eligibility: EligibilityCriteria,
+        patient_mechanism: List[float]
+    ) -> TrialMatch:
+        """Build TrialMatch from trial data."""
+        trial_moa = TrialMoA(*trial['moa_vector'])
+        
+        # Calculate per-pathway alignment
+        pathway_names = ['DDR', 'MAPK', 'PI3K', 'VEGF', 'HER2', 'IO', 'Efflux']
+        alignment = {}
+        for i, name in enumerate(pathway_names):
+            patient_val = patient_mechanism[i]
+            trial_val = trial['moa_vector'][i]
+            alignment[name] = min(patient_val, trial_val)
+        
+        # Generate why_matched explanation
+        why = self._explain_match(trial, eligibility, alignment)
+        
+        return TrialMatch(
+            nct_id=trial['nct_id'],
+            title=trial.get('brief_title', ''),
+            brief_summary=trial.get('brief_summary', '')[:500],
+            phase=self._parse_phase(trial.get('phase', '')),
+            status=TrialStatus(trial.get('overall_status', 'Recruiting')),
+            mechanism_fit_score=trial['mechanism_fit'],
+            eligibility_score=eligibility.score,
+            combined_score=trial['combined_score'],
+            trial_moa=trial_moa,
+            eligibility=eligibility,
+            mechanism_alignment=alignment,
+            why_matched=why,
+            query_matched=trial.get('matched_query', ''),
+            locations=trial.get('locations', [])[:5],
+            contact=trial.get('central_contact'),
+            url=f"https://clinicaltrials.gov/study/{trial['nct_id']}",
+            last_updated=trial.get('last_update_submitted', ''),
+            sponsor=trial.get('lead_sponsor', {}).get('name', '')
+        )
+    
+    def _explain_match(
+        self,
+        trial: Dict,
+        eligibility: EligibilityCriteria,
+        alignment: Dict[str, float]
+    ) -> str:
+        """Generate human-readable explanation."""
+        explanations = []
+        
+        # Top aligned pathways
+        top_pathways = sorted(
+            alignment.items(),
+            key=lambda x: x[1],
+            reverse=True
+        )[:2]
+        
+        for pathway, score in top_pathways:
+            if score > 0.5:
+                explanations.append(f"{pathway} pathway alignment ({score:.0%})")
+        
+        # Eligibility highlights
+        if eligibility.matched:
+            explanations.append(f"Meets: {', '.join(eligibility.matched[:2])}")
+        
+        return "; ".join(explanations) if explanations else "Broad mechanism match"
+```
+
+### Query Generator
+
+```python
+# api/services/trials/query_generator.py
+
+from typing import List, Dict
+
+class QueryGenerator:
+    """
+    Generate disease/mutation-specific trial queries.
+    
+    Query types:
+    - Disease-specific
+    - Mutation-specific
+    - Pathway-specific (DDR, basket)
+    - Biomarker-specific (IO, TMB-H)
+    """
+    
+    QUERY_TEMPLATES = {
+        'disease': "{disease} cancer clinical trial",
+        'gene': "{gene} mutation {disease} trial",
+        'basket': "{disease} basket trial tumor agnostic",
+        'ddr': "{disease} DNA repair deficiency trial",
+        'parp': "{disease} PARP inhibitor trial",
+        'io': "{disease} immunotherapy checkpoint inhibitor trial",
+        'tmb_high': "TMB-high tumor agnostic trial",
+        'msi_high': "MSI-high dMMR clinical trial",
+        'hrd': "{disease} HRD homologous recombination deficiency trial",
+        'rare_mutation': "{gene} mutation rare disease registry trial"
+    }
+    
+    def generate(
+        self,
+        disease: str,
+        mutations: List,
+        biomarkers = None,
+        context: Dict = None
+    ) -> List[Dict]:
+        """
+        Generate ranked list of queries.
+        
+        Returns list of {query, type, priority}
+        """
+        queries = []
+        
+        # Always include disease query
+        queries.append({
+            'query': self.QUERY_TEMPLATES['disease'].format(disease=disease),
+            'type': 'disease',
+            'priority': 1
+        })
+        
+        # Gene-specific queries for key mutations
+        key_genes = self._get_key_genes(mutations)
+        for gene in key_genes[:3]:
+            queries.append({
+                'query': self.QUERY_TEMPLATES['gene'].format(
+                    gene=gene, disease=disease
+                ),
+                'type': 'gene',
+                'priority': 2
+            })
+        
+        # Context-aware queries
+        if context:
+            if context.get('has_ddr_mutation'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['ddr'].format(disease=disease),
+                    'type': 'ddr',
+                    'priority': 2
+                })
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['parp'].format(disease=disease),
+                    'type': 'parp',
+                    'priority': 2
+                })
+            
+            if context.get('io_eligible'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['io'].format(disease=disease),
+                    'type': 'io',
+                    'priority': 2
+                })
+            
+            if context.get('tmb_high'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['tmb_high'],
+                    'type': 'tmb_high',
+                    'priority': 3
+                })
+            
+            if context.get('msi_high'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['msi_high'],
+                    'type': 'msi_high',
+                    'priority': 3
+                })
+            
+            if context.get('hrd_positive'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['hrd'].format(disease=disease),
+                    'type': 'hrd',
+                    'priority': 2
+                })
+        
+        # Basket trial query
+        queries.append({
+            'query': self.QUERY_TEMPLATES['basket'].format(disease=disease),
+            'type': 'basket',
+            'priority': 3
+        })
+        
+        # Sort by priority
+        queries.sort(key=lambda x: x['priority'])
+        
+        return queries
+    
+    def _get_key_genes(self, mutations: List) -> List[str]:
+        """Extract key genes for querying."""
+        priority_genes = {'BRCA1', 'BRCA2', 'TP53', 'KRAS', 'BRAF', 'MBD4', 'NF1'}
+        
+        genes = []
+        for mut in mutations:
+            gene = mut.gene if hasattr(mut, 'gene') else mut.get('gene', '')
+            if gene.upper() in priority_genes:
+                genes.append(gene)
+        
+        return genes
+```
+
+### Mechanism Ranker
+
+```python
+# api/services/trials/mechanism_ranker.py
+
+from typing import List, Dict
+import numpy as np
+
+class MechanismRanker:
+    """
+    Rank trials by mechanism fit using 7D vector cosine similarity.
+    
+    Formula: combined_score = alpha * eligibility + beta * mechanism_fit
+    Default: alpha=0.7, beta=0.3
+    """
+    
+    def __init__(self, alpha: float = 0.7, beta: float = 0.3):
+        self.alpha = alpha
+        self.beta = beta
+    
+    def rank(
+        self,
+        trials: List[Dict],
+        patient_mechanism_vector: List[float],
+        min_eligibility: float = 0.5,
+        min_mechanism_fit: float = 0.3
+    ) -> List[Dict]:
+        """
+        Rank trials by combined eligibility + mechanism fit.
+        
+        Args:
+            trials: List of trial dicts with moa_vector
+            patient_mechanism_vector: 7D patient pathway vector
+            min_eligibility: Minimum eligibility score
+            min_mechanism_fit: Minimum mechanism fit score
+        
+        Returns:
+            Sorted list of trials with scores
+        """
+        patient_vec = np.array(patient_mechanism_vector)
+        
+        for trial in trials:
+            trial_vec = np.array(trial.get('moa_vector', [0.5] * 7))
+            
+            # Calculate mechanism fit (cosine similarity)
+            mechanism_fit = self._cosine_similarity(patient_vec, trial_vec)
+            trial['mechanism_fit'] = mechanism_fit
+            
+            # Estimate eligibility (placeholder - real check is later)
+            eligibility = trial.get('eligibility_estimate', 0.7)
+            trial['eligibility'] = eligibility
+            
+            # Combined score
+            trial['combined_score'] = (
+                self.alpha * eligibility +
+                self.beta * mechanism_fit
+            )
+        
+        # Filter by thresholds
+        filtered = [
+            t for t in trials
+            if t['mechanism_fit'] >= min_mechanism_fit
+        ]
+        
+        # Sort by combined score
+        filtered.sort(key=lambda x: x['combined_score'], reverse=True)
+        
+        return filtered
+    
+    def _cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> float:
+        """Calculate cosine similarity between two vectors."""
+        dot = np.dot(a, b)
+        norm_a = np.linalg.norm(a)
+        norm_b = np.linalg.norm(b)
+        
+        if norm_a == 0 or norm_b == 0:
+            return 0.0
+        
+        return float(dot / (norm_a * norm_b))
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+### Phase 1: Query Generator
+- [ ] Implement 10 query templates
+- [ ] Add context-aware query selection
+- [ ] Priority-based ordering
+- [ ] Unit tests
+
+### Phase 2: ClinicalTrials Client
+- [ ] Implement ClinicalTrials.gov v2 API client
+- [ ] Handle pagination
+- [ ] Caching (24h)
+- [ ] Rate limiting
+- [ ] Unit tests
+
+### Phase 3: MoA Extractor
+- [ ] Extract MoA from trial descriptions
+- [ ] Map interventions to 7D vector
+- [ ] Handle unknown drugs
+- [ ] Unit tests
+
+### Phase 4: Mechanism Ranker
+- [ ] Implement cosine similarity
+- [ ] Combined scoring (eligibility + mechanism)
+- [ ] Threshold filtering
+- [ ] Unit tests
+
+### Phase 5: Eligibility Checker
+- [ ] Parse eligibility criteria
+- [ ] Match against patient data
+- [ ] Handle uncertain criteria
+- [ ] Unit tests
+
+### Phase 6: Integration
+- [ ] Create TrialMatchingAgent
+- [ ] Wire all components
+- [ ] Build TrialMatch objects
+- [ ] Integration tests
+
+---
+
+## 📡 API ENDPOINT
+
+```yaml
+POST /api/agents/trials
+Content-Type: application/json
+
+Request:
+  patient_id: string
+  mutations: Mutation[]
+  disease: string
+  mechanism_vector: float[7]  # From drug efficacy agent
+  biomarker_profile: BiomarkerProfile  # optional
+  max_results: number  # default: 10
+
+Response:
+  trial_matching_result: TrialMatchingResult
+  search_time_ms: number
+```
+
+---
+
+## ✅ ACCEPTANCE CRITERIA
+
+1. ✅ Generate 5-10 disease/mutation-specific queries
+2. ✅ Search ClinicalTrials.gov successfully
+3. ✅ Extract MoA vectors for trials
+4. ✅ Rank by mechanism fit (cosine similarity)
+5. ✅ Check eligibility criteria
+6. ✅ Return top 10 matches with rationale
+7. ✅ Include per-pathway alignment
+8. ✅ Search time <10 seconds
+9. ✅ Unit test coverage >80%
+
+---
+
+---
+
+## 🎯 MISSION
+
+Build a trial matching agent that can:
+1. Generate disease/mutation-specific trial queries
+2. Search ClinicalTrials.gov API
+3. Rank trials by mechanism fit using 7D vector
+4. Check eligibility criteria
+5. Provide transparent matching rationale
+
+---
+
+## 📊 EXISTING IMPLEMENTATION
+
+### Already Built ✅
+
+**Location:** `api/services/autonomous_trial_agent.py`
+
+**Key Components:**
+- Trial search via ClinicalTrials.gov API
+- Query generation (3 templates)
+- Basic eligibility checking
+
+**Location:** `api/services/mechanism_fit_ranker.py`
+
+**Key Components:**
+- 7D mechanism vector comparison
+- Cosine similarity for mechanism fit
+- Combined scoring (eligibility + mechanism)
+
+---
+
+## 📥 INPUTS
+
+### From Previous Agents
+
+```python
+# From Module 01 (Data Extraction)
+patient_profile: PatientProfile
+mutations: List[Mutation]
+disease: str
+
+# From Module 02 (Biomarker)
+biomarker_profile: BiomarkerProfile
+tmb: float
+msi_status: str
+io_eligible: bool
+
+# From Module 04 (Drug Efficacy)
+mechanism_vector: List[float]  # 7D: [DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux]
+```
+
+---
+
+## 📤 OUTPUTS
+
+### TrialMatch Schema
+
+```python
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from enum import Enum
+
+class TrialStatus(Enum):
+    RECRUITING = "Recruiting"
+    NOT_YET_RECRUITING = "Not yet recruiting"
+    ACTIVE_NOT_RECRUITING = "Active, not recruiting"
+    COMPLETED = "Completed"
+    SUSPENDED = "Suspended"
+    TERMINATED = "Terminated"
+
+class TrialPhase(Enum):
+    PHASE_1 = "Phase 1"
+    PHASE_1_2 = "Phase 1/Phase 2"
+    PHASE_2 = "Phase 2"
+    PHASE_2_3 = "Phase 2/Phase 3"
+    PHASE_3 = "Phase 3"
+    PHASE_4 = "Phase 4"
+    NA = "N/A"
+
+@dataclass
+class TrialMoA:
+    """Trial mechanism of action vector."""
+    ddr: float = 0.0
+    mapk: float = 0.0
+    pi3k: float = 0.0
+    vegf: float = 0.0
+    her2: float = 0.0
+    io: float = 0.0
+    efflux: float = 0.0
+    
+    def to_vector(self) -> List[float]:
+        return [self.ddr, self.mapk, self.pi3k, self.vegf, self.her2, self.io, self.efflux]
+
+@dataclass
+class EligibilityCriteria:
+    meets_criteria: bool
+    score: float                    # 0.0 - 1.0
+    matched: List[str]              # Criteria patient meets
+    unmatched: List[str]            # Criteria patient doesn't meet
+    uncertain: List[str]            # Criteria we can't evaluate
+
+@dataclass
+class TrialMatch:
+    nct_id: str
+    title: str
+    brief_summary: str
+    phase: TrialPhase
+    status: TrialStatus
+    
+    # Matching scores
+    mechanism_fit_score: float      # Cosine similarity (0-1)
+    eligibility_score: float        # Eligibility match (0-1)
+    combined_score: float           # Weighted combination
+    
+    # Details
+    trial_moa: TrialMoA
+    eligibility: EligibilityCriteria
+    mechanism_alignment: Dict[str, float]  # Per-pathway alignment
+    
+    # Why matched
+    why_matched: str                # Human-readable explanation
+    query_matched: str              # Which query found it
+    
+    # Logistics
+    locations: List[Dict]           # Study locations
+    contact: Optional[Dict]         # Contact info
+    url: str                        # ClinicalTrials.gov URL
+    
+    # Provenance
+    last_updated: str
+    sponsor: str
+
+@dataclass
+class TrialMatchingResult:
+    patient_id: str
+    queries_used: List[str]
+    trials_found: int
+    trials_ranked: int
+    matches: List[TrialMatch]
+    top_match: Optional[TrialMatch]
+    search_time_ms: int
+    provenance: Dict[str, any]
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### File Structure
+
+```
+api/services/trials/
+├── __init__.py
+├── trial_matching_agent.py     # Main agent
+├── query_generator.py          # Generate search queries
+├── clinicaltrials_client.py    # ClinicalTrials.gov API
+├── mechanism_ranker.py         # 7D vector ranking
+├── eligibility_checker.py      # Check eligibility criteria
+├── trial_parser.py             # Parse trial data
+├── moa_extractor.py            # Extract trial MoA vector
+├── constants.py                # Query templates, weights
+└── tests/
+    ├── test_query_gen.py
+    ├── test_matching.py
+    └── test_eligibility.py
+```
+
+### Core Agent Implementation
+
+```python
+# api/services/trials/trial_matching_agent.py
+
+from typing import List, Optional
+from datetime import datetime
+import logging
+
+from .query_generator import QueryGenerator
+from .clinicaltrials_client import ClinicalTrialsClient
+from .mechanism_ranker import MechanismRanker
+from .eligibility_checker import EligibilityChecker
+from .moa_extractor import MoAExtractor
+from ..models import (
+    PatientProfile, BiomarkerProfile,
+    TrialMatchingResult, TrialMatch
+)
+
+logger = logging.getLogger(__name__)
+
+class TrialMatchingAgent:
+    """
+    Match patients to clinical trials using mechanism-based ranking.
+    
+    Process:
+    1. Generate disease/mutation-specific queries
+    2. Search ClinicalTrials.gov
+    3. Extract trial MoA vectors
+    4. Rank by mechanism fit (cosine similarity)
+    5. Check eligibility criteria
+    6. Return ranked matches with rationale
+    """
+    
+    def __init__(self):
+        self.query_gen = QueryGenerator()
+        self.ct_client = ClinicalTrialsClient()
+        self.ranker = MechanismRanker(alpha=0.7, beta=0.3)  # eligibility/mechanism
+        self.eligibility_checker = EligibilityChecker()
+        self.moa_extractor = MoAExtractor()
+    
+    async def match(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile] = None,
+        mechanism_vector: List[float] = None,
+        max_results: int = 10
+    ) -> TrialMatchingResult:
+        """
+        Find and rank matching clinical trials.
+        
+        Args:
+            patient_profile: Patient mutations and disease
+            biomarker_profile: TMB, MSI, IO eligibility
+            mechanism_vector: 7D pathway vector from drug efficacy agent
+            max_results: Maximum trials to return
+        
+        Returns:
+            TrialMatchingResult with ranked matches
+        """
+        start_time = datetime.utcnow()
+        logger.info(f"Matching trials for {patient_profile.patient_id}")
+        
+        # Build context for query generation
+        context = self._build_context(
+            patient_profile=patient_profile,
+            biomarker_profile=biomarker_profile
+        )
+        
+        # Step 1: Generate queries
+        queries = self.query_gen.generate(
+            disease=patient_profile.disease,
+            mutations=patient_profile.mutations,
+            biomarkers=biomarker_profile,
+            context=context
+        )
+        logger.info(f"Generated {len(queries)} queries")
+        
+        # Step 2: Search for trials
+        all_trials = []
+        for query in queries:
+            try:
+                trials = await self.ct_client.search(
+                    query=query['query'],
+                    status=['RECRUITING', 'NOT_YET_RECRUITING'],
+                    max_results=50
+                )
+                for trial in trials:
+                    trial['matched_query'] = query['query']
+                    trial['query_type'] = query['type']
+                all_trials.extend(trials)
+            except Exception as e:
+                logger.error(f"Search failed for query '{query}': {e}")
+        
+        # Deduplicate by NCT ID
+        unique_trials = {t['nct_id']: t for t in all_trials}
+        trials = list(unique_trials.values())
+        logger.info(f"Found {len(trials)} unique trials")
+        
+        if not trials:
+            return self._empty_result(patient_profile.patient_id, queries)
+        
+        # Step 3: Extract MoA vectors for each trial
+        for trial in trials:
+            trial['moa_vector'] = self.moa_extractor.extract(trial)
+        
+        # Step 4: Rank by mechanism fit
+        if mechanism_vector is None:
+            mechanism_vector = [0.5] * 7  # Default neutral
+        
+        ranked = self.ranker.rank(
+            trials=trials,
+            patient_mechanism_vector=mechanism_vector,
+            min_eligibility=0.5,
+            min_mechanism_fit=0.3
+        )
+        
+        # Step 5: Check eligibility for top candidates
+        matches = []
+        for trial in ranked[:max_results * 2]:  # Over-fetch for eligibility filtering
+            eligibility = self.eligibility_checker.check(
+                trial=trial,
+                patient=patient_profile,
+                biomarkers=biomarker_profile
+            )
+            
+            if eligibility.score < 0.5:
+                continue  # Skip if clearly ineligible
+            
+            match = self._build_match(
+                trial=trial,
+                eligibility=eligibility,
+                patient_mechanism=mechanism_vector
+            )
+            matches.append(match)
+            
+            if len(matches) >= max_results:
+                break
+        
+        elapsed = (datetime.utcnow() - start_time).total_seconds() * 1000
+        
+        return TrialMatchingResult(
+            patient_id=patient_profile.patient_id,
+            queries_used=[q['query'] for q in queries],
+            trials_found=len(trials),
+            trials_ranked=len(ranked),
+            matches=matches,
+            top_match=matches[0] if matches else None,
+            search_time_ms=int(elapsed),
+            provenance={
+                'ranking_formula': '0.7*eligibility + 0.3*mechanism_fit',
+                'min_thresholds': {'eligibility': 0.5, 'mechanism': 0.3}
+            }
+        )
+    
+    def _build_context(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile]
+    ) -> Dict:
+        """Build context for query generation."""
+        genes = [m.gene for m in patient_profile.mutations]
+        
+        context = {
+            'disease': patient_profile.disease,
+            'genes': genes,
+            'has_ddr_mutation': any(g in DDR_GENES for g in genes),
+            'has_mapk_mutation': any(g in MAPK_GENES for g in genes)
+        }
+        
+        if biomarker_profile:
+            context['io_eligible'] = biomarker_profile.io_eligible
+            context['tmb_high'] = biomarker_profile.tmb.classification == 'TMB-H'
+            context['msi_high'] = biomarker_profile.msi.status == 'MSI-H'
+            context['hrd_positive'] = biomarker_profile.hrd.status in ['HRD+', 'HRD-INFERRED']
+        
+        return context
+    
+    def _build_match(
+        self,
+        trial: Dict,
+        eligibility: EligibilityCriteria,
+        patient_mechanism: List[float]
+    ) -> TrialMatch:
+        """Build TrialMatch from trial data."""
+        trial_moa = TrialMoA(*trial['moa_vector'])
+        
+        # Calculate per-pathway alignment
+        pathway_names = ['DDR', 'MAPK', 'PI3K', 'VEGF', 'HER2', 'IO', 'Efflux']
+        alignment = {}
+        for i, name in enumerate(pathway_names):
+            patient_val = patient_mechanism[i]
+            trial_val = trial['moa_vector'][i]
+            alignment[name] = min(patient_val, trial_val)
+        
+        # Generate why_matched explanation
+        why = self._explain_match(trial, eligibility, alignment)
+        
+        return TrialMatch(
+            nct_id=trial['nct_id'],
+            title=trial.get('brief_title', ''),
+            brief_summary=trial.get('brief_summary', '')[:500],
+            phase=self._parse_phase(trial.get('phase', '')),
+            status=TrialStatus(trial.get('overall_status', 'Recruiting')),
+            mechanism_fit_score=trial['mechanism_fit'],
+            eligibility_score=eligibility.score,
+            combined_score=trial['combined_score'],
+            trial_moa=trial_moa,
+            eligibility=eligibility,
+            mechanism_alignment=alignment,
+            why_matched=why,
+            query_matched=trial.get('matched_query', ''),
+            locations=trial.get('locations', [])[:5],
+            contact=trial.get('central_contact'),
+            url=f"https://clinicaltrials.gov/study/{trial['nct_id']}",
+            last_updated=trial.get('last_update_submitted', ''),
+            sponsor=trial.get('lead_sponsor', {}).get('name', '')
+        )
+    
+    def _explain_match(
+        self,
+        trial: Dict,
+        eligibility: EligibilityCriteria,
+        alignment: Dict[str, float]
+    ) -> str:
+        """Generate human-readable explanation."""
+        explanations = []
+        
+        # Top aligned pathways
+        top_pathways = sorted(
+            alignment.items(),
+            key=lambda x: x[1],
+            reverse=True
+        )[:2]
+        
+        for pathway, score in top_pathways:
+            if score > 0.5:
+                explanations.append(f"{pathway} pathway alignment ({score:.0%})")
+        
+        # Eligibility highlights
+        if eligibility.matched:
+            explanations.append(f"Meets: {', '.join(eligibility.matched[:2])}")
+        
+        return "; ".join(explanations) if explanations else "Broad mechanism match"
+```
+
+### Query Generator
+
+```python
+# api/services/trials/query_generator.py
+
+from typing import List, Dict
+
+class QueryGenerator:
+    """
+    Generate disease/mutation-specific trial queries.
+    
+    Query types:
+    - Disease-specific
+    - Mutation-specific
+    - Pathway-specific (DDR, basket)
+    - Biomarker-specific (IO, TMB-H)
+    """
+    
+    QUERY_TEMPLATES = {
+        'disease': "{disease} cancer clinical trial",
+        'gene': "{gene} mutation {disease} trial",
+        'basket': "{disease} basket trial tumor agnostic",
+        'ddr': "{disease} DNA repair deficiency trial",
+        'parp': "{disease} PARP inhibitor trial",
+        'io': "{disease} immunotherapy checkpoint inhibitor trial",
+        'tmb_high': "TMB-high tumor agnostic trial",
+        'msi_high': "MSI-high dMMR clinical trial",
+        'hrd': "{disease} HRD homologous recombination deficiency trial",
+        'rare_mutation': "{gene} mutation rare disease registry trial"
+    }
+    
+    def generate(
+        self,
+        disease: str,
+        mutations: List,
+        biomarkers = None,
+        context: Dict = None
+    ) -> List[Dict]:
+        """
+        Generate ranked list of queries.
+        
+        Returns list of {query, type, priority}
+        """
+        queries = []
+        
+        # Always include disease query
+        queries.append({
+            'query': self.QUERY_TEMPLATES['disease'].format(disease=disease),
+            'type': 'disease',
+            'priority': 1
+        })
+        
+        # Gene-specific queries for key mutations
+        key_genes = self._get_key_genes(mutations)
+        for gene in key_genes[:3]:
+            queries.append({
+                'query': self.QUERY_TEMPLATES['gene'].format(
+                    gene=gene, disease=disease
+                ),
+                'type': 'gene',
+                'priority': 2
+            })
+        
+        # Context-aware queries
+        if context:
+            if context.get('has_ddr_mutation'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['ddr'].format(disease=disease),
+                    'type': 'ddr',
+                    'priority': 2
+                })
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['parp'].format(disease=disease),
+                    'type': 'parp',
+                    'priority': 2
+                })
+            
+            if context.get('io_eligible'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['io'].format(disease=disease),
+                    'type': 'io',
+                    'priority': 2
+                })
+            
+            if context.get('tmb_high'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['tmb_high'],
+                    'type': 'tmb_high',
+                    'priority': 3
+                })
+            
+            if context.get('msi_high'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['msi_high'],
+                    'type': 'msi_high',
+                    'priority': 3
+                })
+            
+            if context.get('hrd_positive'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['hrd'].format(disease=disease),
+                    'type': 'hrd',
+                    'priority': 2
+                })
+        
+        # Basket trial query
+        queries.append({
+            'query': self.QUERY_TEMPLATES['basket'].format(disease=disease),
+            'type': 'basket',
+            'priority': 3
+        })
+        
+        # Sort by priority
+        queries.sort(key=lambda x: x['priority'])
+        
+        return queries
+    
+    def _get_key_genes(self, mutations: List) -> List[str]:
+        """Extract key genes for querying."""
+        priority_genes = {'BRCA1', 'BRCA2', 'TP53', 'KRAS', 'BRAF', 'MBD4', 'NF1'}
+        
+        genes = []
+        for mut in mutations:
+            gene = mut.gene if hasattr(mut, 'gene') else mut.get('gene', '')
+            if gene.upper() in priority_genes:
+                genes.append(gene)
+        
+        return genes
+```
+
+### Mechanism Ranker
+
+```python
+# api/services/trials/mechanism_ranker.py
+
+from typing import List, Dict
+import numpy as np
+
+class MechanismRanker:
+    """
+    Rank trials by mechanism fit using 7D vector cosine similarity.
+    
+    Formula: combined_score = alpha * eligibility + beta * mechanism_fit
+    Default: alpha=0.7, beta=0.3
+    """
+    
+    def __init__(self, alpha: float = 0.7, beta: float = 0.3):
+        self.alpha = alpha
+        self.beta = beta
+    
+    def rank(
+        self,
+        trials: List[Dict],
+        patient_mechanism_vector: List[float],
+        min_eligibility: float = 0.5,
+        min_mechanism_fit: float = 0.3
+    ) -> List[Dict]:
+        """
+        Rank trials by combined eligibility + mechanism fit.
+        
+        Args:
+            trials: List of trial dicts with moa_vector
+            patient_mechanism_vector: 7D patient pathway vector
+            min_eligibility: Minimum eligibility score
+            min_mechanism_fit: Minimum mechanism fit score
+        
+        Returns:
+            Sorted list of trials with scores
+        """
+        patient_vec = np.array(patient_mechanism_vector)
+        
+        for trial in trials:
+            trial_vec = np.array(trial.get('moa_vector', [0.5] * 7))
+            
+            # Calculate mechanism fit (cosine similarity)
+            mechanism_fit = self._cosine_similarity(patient_vec, trial_vec)
+            trial['mechanism_fit'] = mechanism_fit
+            
+            # Estimate eligibility (placeholder - real check is later)
+            eligibility = trial.get('eligibility_estimate', 0.7)
+            trial['eligibility'] = eligibility
+            
+            # Combined score
+            trial['combined_score'] = (
+                self.alpha * eligibility +
+                self.beta * mechanism_fit
+            )
+        
+        # Filter by thresholds
+        filtered = [
+            t for t in trials
+            if t['mechanism_fit'] >= min_mechanism_fit
+        ]
+        
+        # Sort by combined score
+        filtered.sort(key=lambda x: x['combined_score'], reverse=True)
+        
+        return filtered
+    
+    def _cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> float:
+        """Calculate cosine similarity between two vectors."""
+        dot = np.dot(a, b)
+        norm_a = np.linalg.norm(a)
+        norm_b = np.linalg.norm(b)
+        
+        if norm_a == 0 or norm_b == 0:
+            return 0.0
+        
+        return float(dot / (norm_a * norm_b))
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+### Phase 1: Query Generator
+- [ ] Implement 10 query templates
+- [ ] Add context-aware query selection
+- [ ] Priority-based ordering
+- [ ] Unit tests
+
+### Phase 2: ClinicalTrials Client
+- [ ] Implement ClinicalTrials.gov v2 API client
+- [ ] Handle pagination
+- [ ] Caching (24h)
+- [ ] Rate limiting
+- [ ] Unit tests
+
+### Phase 3: MoA Extractor
+- [ ] Extract MoA from trial descriptions
+- [ ] Map interventions to 7D vector
+- [ ] Handle unknown drugs
+- [ ] Unit tests
+
+### Phase 4: Mechanism Ranker
+- [ ] Implement cosine similarity
+- [ ] Combined scoring (eligibility + mechanism)
+- [ ] Threshold filtering
+- [ ] Unit tests
+
+### Phase 5: Eligibility Checker
+- [ ] Parse eligibility criteria
+- [ ] Match against patient data
+- [ ] Handle uncertain criteria
+- [ ] Unit tests
+
+### Phase 6: Integration
+- [ ] Create TrialMatchingAgent
+- [ ] Wire all components
+- [ ] Build TrialMatch objects
+- [ ] Integration tests
+
+---
+
+## 📡 API ENDPOINT
+
+```yaml
+POST /api/agents/trials
+Content-Type: application/json
+
+Request:
+  patient_id: string
+  mutations: Mutation[]
+  disease: string
+  mechanism_vector: float[7]  # From drug efficacy agent
+  biomarker_profile: BiomarkerProfile  # optional
+  max_results: number  # default: 10
+
+Response:
+  trial_matching_result: TrialMatchingResult
+  search_time_ms: number
+```
+
+---
+
+## ✅ ACCEPTANCE CRITERIA
+
+1. ✅ Generate 5-10 disease/mutation-specific queries
+2. ✅ Search ClinicalTrials.gov successfully
+3. ✅ Extract MoA vectors for trials
+4. ✅ Rank by mechanism fit (cosine similarity)
+5. ✅ Check eligibility criteria
+6. ✅ Return top 10 matches with rationale
+7. ✅ Include per-pathway alignment
+8. ✅ Search time <10 seconds
+9. ✅ Unit test coverage >80%
+
+---
+
+---
+
+## 🎯 MISSION
+
+Build a trial matching agent that can:
+1. Generate disease/mutation-specific trial queries
+2. Search ClinicalTrials.gov API
+3. Rank trials by mechanism fit using 7D vector
+4. Check eligibility criteria
+5. Provide transparent matching rationale
+
+---
+
+## 📊 EXISTING IMPLEMENTATION
+
+### Already Built ✅
+
+**Location:** `api/services/autonomous_trial_agent.py`
+
+**Key Components:**
+- Trial search via ClinicalTrials.gov API
+- Query generation (3 templates)
+- Basic eligibility checking
+
+**Location:** `api/services/mechanism_fit_ranker.py`
+
+**Key Components:**
+- 7D mechanism vector comparison
+- Cosine similarity for mechanism fit
+- Combined scoring (eligibility + mechanism)
+
+---
+
+## 📥 INPUTS
+
+### From Previous Agents
+
+```python
+# From Module 01 (Data Extraction)
+patient_profile: PatientProfile
+mutations: List[Mutation]
+disease: str
+
+# From Module 02 (Biomarker)
+biomarker_profile: BiomarkerProfile
+tmb: float
+msi_status: str
+io_eligible: bool
+
+# From Module 04 (Drug Efficacy)
+mechanism_vector: List[float]  # 7D: [DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux]
+```
+
+---
+
+## 📤 OUTPUTS
+
+### TrialMatch Schema
+
+```python
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from enum import Enum
+
+class TrialStatus(Enum):
+    RECRUITING = "Recruiting"
+    NOT_YET_RECRUITING = "Not yet recruiting"
+    ACTIVE_NOT_RECRUITING = "Active, not recruiting"
+    COMPLETED = "Completed"
+    SUSPENDED = "Suspended"
+    TERMINATED = "Terminated"
+
+class TrialPhase(Enum):
+    PHASE_1 = "Phase 1"
+    PHASE_1_2 = "Phase 1/Phase 2"
+    PHASE_2 = "Phase 2"
+    PHASE_2_3 = "Phase 2/Phase 3"
+    PHASE_3 = "Phase 3"
+    PHASE_4 = "Phase 4"
+    NA = "N/A"
+
+@dataclass
+class TrialMoA:
+    """Trial mechanism of action vector."""
+    ddr: float = 0.0
+    mapk: float = 0.0
+    pi3k: float = 0.0
+    vegf: float = 0.0
+    her2: float = 0.0
+    io: float = 0.0
+    efflux: float = 0.0
+    
+    def to_vector(self) -> List[float]:
+        return [self.ddr, self.mapk, self.pi3k, self.vegf, self.her2, self.io, self.efflux]
+
+@dataclass
+class EligibilityCriteria:
+    meets_criteria: bool
+    score: float                    # 0.0 - 1.0
+    matched: List[str]              # Criteria patient meets
+    unmatched: List[str]            # Criteria patient doesn't meet
+    uncertain: List[str]            # Criteria we can't evaluate
+
+@dataclass
+class TrialMatch:
+    nct_id: str
+    title: str
+    brief_summary: str
+    phase: TrialPhase
+    status: TrialStatus
+    
+    # Matching scores
+    mechanism_fit_score: float      # Cosine similarity (0-1)
+    eligibility_score: float        # Eligibility match (0-1)
+    combined_score: float           # Weighted combination
+    
+    # Details
+    trial_moa: TrialMoA
+    eligibility: EligibilityCriteria
+    mechanism_alignment: Dict[str, float]  # Per-pathway alignment
+    
+    # Why matched
+    why_matched: str                # Human-readable explanation
+    query_matched: str              # Which query found it
+    
+    # Logistics
+    locations: List[Dict]           # Study locations
+    contact: Optional[Dict]         # Contact info
+    url: str                        # ClinicalTrials.gov URL
+    
+    # Provenance
+    last_updated: str
+    sponsor: str
+
+@dataclass
+class TrialMatchingResult:
+    patient_id: str
+    queries_used: List[str]
+    trials_found: int
+    trials_ranked: int
+    matches: List[TrialMatch]
+    top_match: Optional[TrialMatch]
+    search_time_ms: int
+    provenance: Dict[str, any]
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### File Structure
+
+```
+api/services/trials/
+├── __init__.py
+├── trial_matching_agent.py     # Main agent
+├── query_generator.py          # Generate search queries
+├── clinicaltrials_client.py    # ClinicalTrials.gov API
+├── mechanism_ranker.py         # 7D vector ranking
+├── eligibility_checker.py      # Check eligibility criteria
+├── trial_parser.py             # Parse trial data
+├── moa_extractor.py            # Extract trial MoA vector
+├── constants.py                # Query templates, weights
+└── tests/
+    ├── test_query_gen.py
+    ├── test_matching.py
+    └── test_eligibility.py
+```
+
+### Core Agent Implementation
+
+```python
+# api/services/trials/trial_matching_agent.py
+
+from typing import List, Optional
+from datetime import datetime
+import logging
+
+from .query_generator import QueryGenerator
+from .clinicaltrials_client import ClinicalTrialsClient
+from .mechanism_ranker import MechanismRanker
+from .eligibility_checker import EligibilityChecker
+from .moa_extractor import MoAExtractor
+from ..models import (
+    PatientProfile, BiomarkerProfile,
+    TrialMatchingResult, TrialMatch
+)
+
+logger = logging.getLogger(__name__)
+
+class TrialMatchingAgent:
+    """
+    Match patients to clinical trials using mechanism-based ranking.
+    
+    Process:
+    1. Generate disease/mutation-specific queries
+    2. Search ClinicalTrials.gov
+    3. Extract trial MoA vectors
+    4. Rank by mechanism fit (cosine similarity)
+    5. Check eligibility criteria
+    6. Return ranked matches with rationale
+    """
+    
+    def __init__(self):
+        self.query_gen = QueryGenerator()
+        self.ct_client = ClinicalTrialsClient()
+        self.ranker = MechanismRanker(alpha=0.7, beta=0.3)  # eligibility/mechanism
+        self.eligibility_checker = EligibilityChecker()
+        self.moa_extractor = MoAExtractor()
+    
+    async def match(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile] = None,
+        mechanism_vector: List[float] = None,
+        max_results: int = 10
+    ) -> TrialMatchingResult:
+        """
+        Find and rank matching clinical trials.
+        
+        Args:
+            patient_profile: Patient mutations and disease
+            biomarker_profile: TMB, MSI, IO eligibility
+            mechanism_vector: 7D pathway vector from drug efficacy agent
+            max_results: Maximum trials to return
+        
+        Returns:
+            TrialMatchingResult with ranked matches
+        """
+        start_time = datetime.utcnow()
+        logger.info(f"Matching trials for {patient_profile.patient_id}")
+        
+        # Build context for query generation
+        context = self._build_context(
+            patient_profile=patient_profile,
+            biomarker_profile=biomarker_profile
+        )
+        
+        # Step 1: Generate queries
+        queries = self.query_gen.generate(
+            disease=patient_profile.disease,
+            mutations=patient_profile.mutations,
+            biomarkers=biomarker_profile,
+            context=context
+        )
+        logger.info(f"Generated {len(queries)} queries")
+        
+        # Step 2: Search for trials
+        all_trials = []
+        for query in queries:
+            try:
+                trials = await self.ct_client.search(
+                    query=query['query'],
+                    status=['RECRUITING', 'NOT_YET_RECRUITING'],
+                    max_results=50
+                )
+                for trial in trials:
+                    trial['matched_query'] = query['query']
+                    trial['query_type'] = query['type']
+                all_trials.extend(trials)
+            except Exception as e:
+                logger.error(f"Search failed for query '{query}': {e}")
+        
+        # Deduplicate by NCT ID
+        unique_trials = {t['nct_id']: t for t in all_trials}
+        trials = list(unique_trials.values())
+        logger.info(f"Found {len(trials)} unique trials")
+        
+        if not trials:
+            return self._empty_result(patient_profile.patient_id, queries)
+        
+        # Step 3: Extract MoA vectors for each trial
+        for trial in trials:
+            trial['moa_vector'] = self.moa_extractor.extract(trial)
+        
+        # Step 4: Rank by mechanism fit
+        if mechanism_vector is None:
+            mechanism_vector = [0.5] * 7  # Default neutral
+        
+        ranked = self.ranker.rank(
+            trials=trials,
+            patient_mechanism_vector=mechanism_vector,
+            min_eligibility=0.5,
+            min_mechanism_fit=0.3
+        )
+        
+        # Step 5: Check eligibility for top candidates
+        matches = []
+        for trial in ranked[:max_results * 2]:  # Over-fetch for eligibility filtering
+            eligibility = self.eligibility_checker.check(
+                trial=trial,
+                patient=patient_profile,
+                biomarkers=biomarker_profile
+            )
+            
+            if eligibility.score < 0.5:
+                continue  # Skip if clearly ineligible
+            
+            match = self._build_match(
+                trial=trial,
+                eligibility=eligibility,
+                patient_mechanism=mechanism_vector
+            )
+            matches.append(match)
+            
+            if len(matches) >= max_results:
+                break
+        
+        elapsed = (datetime.utcnow() - start_time).total_seconds() * 1000
+        
+        return TrialMatchingResult(
+            patient_id=patient_profile.patient_id,
+            queries_used=[q['query'] for q in queries],
+            trials_found=len(trials),
+            trials_ranked=len(ranked),
+            matches=matches,
+            top_match=matches[0] if matches else None,
+            search_time_ms=int(elapsed),
+            provenance={
+                'ranking_formula': '0.7*eligibility + 0.3*mechanism_fit',
+                'min_thresholds': {'eligibility': 0.5, 'mechanism': 0.3}
+            }
+        )
+    
+    def _build_context(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile]
+    ) -> Dict:
+        """Build context for query generation."""
+        genes = [m.gene for m in patient_profile.mutations]
+        
+        context = {
+            'disease': patient_profile.disease,
+            'genes': genes,
+            'has_ddr_mutation': any(g in DDR_GENES for g in genes),
+            'has_mapk_mutation': any(g in MAPK_GENES for g in genes)
+        }
+        
+        if biomarker_profile:
+            context['io_eligible'] = biomarker_profile.io_eligible
+            context['tmb_high'] = biomarker_profile.tmb.classification == 'TMB-H'
+            context['msi_high'] = biomarker_profile.msi.status == 'MSI-H'
+            context['hrd_positive'] = biomarker_profile.hrd.status in ['HRD+', 'HRD-INFERRED']
+        
+        return context
+    
+    def _build_match(
+        self,
+        trial: Dict,
+        eligibility: EligibilityCriteria,
+        patient_mechanism: List[float]
+    ) -> TrialMatch:
+        """Build TrialMatch from trial data."""
+        trial_moa = TrialMoA(*trial['moa_vector'])
+        
+        # Calculate per-pathway alignment
+        pathway_names = ['DDR', 'MAPK', 'PI3K', 'VEGF', 'HER2', 'IO', 'Efflux']
+        alignment = {}
+        for i, name in enumerate(pathway_names):
+            patient_val = patient_mechanism[i]
+            trial_val = trial['moa_vector'][i]
+            alignment[name] = min(patient_val, trial_val)
+        
+        # Generate why_matched explanation
+        why = self._explain_match(trial, eligibility, alignment)
+        
+        return TrialMatch(
+            nct_id=trial['nct_id'],
+            title=trial.get('brief_title', ''),
+            brief_summary=trial.get('brief_summary', '')[:500],
+            phase=self._parse_phase(trial.get('phase', '')),
+            status=TrialStatus(trial.get('overall_status', 'Recruiting')),
+            mechanism_fit_score=trial['mechanism_fit'],
+            eligibility_score=eligibility.score,
+            combined_score=trial['combined_score'],
+            trial_moa=trial_moa,
+            eligibility=eligibility,
+            mechanism_alignment=alignment,
+            why_matched=why,
+            query_matched=trial.get('matched_query', ''),
+            locations=trial.get('locations', [])[:5],
+            contact=trial.get('central_contact'),
+            url=f"https://clinicaltrials.gov/study/{trial['nct_id']}",
+            last_updated=trial.get('last_update_submitted', ''),
+            sponsor=trial.get('lead_sponsor', {}).get('name', '')
+        )
+    
+    def _explain_match(
+        self,
+        trial: Dict,
+        eligibility: EligibilityCriteria,
+        alignment: Dict[str, float]
+    ) -> str:
+        """Generate human-readable explanation."""
+        explanations = []
+        
+        # Top aligned pathways
+        top_pathways = sorted(
+            alignment.items(),
+            key=lambda x: x[1],
+            reverse=True
+        )[:2]
+        
+        for pathway, score in top_pathways:
+            if score > 0.5:
+                explanations.append(f"{pathway} pathway alignment ({score:.0%})")
+        
+        # Eligibility highlights
+        if eligibility.matched:
+            explanations.append(f"Meets: {', '.join(eligibility.matched[:2])}")
+        
+        return "; ".join(explanations) if explanations else "Broad mechanism match"
+```
+
+### Query Generator
+
+```python
+# api/services/trials/query_generator.py
+
+from typing import List, Dict
+
+class QueryGenerator:
+    """
+    Generate disease/mutation-specific trial queries.
+    
+    Query types:
+    - Disease-specific
+    - Mutation-specific
+    - Pathway-specific (DDR, basket)
+    - Biomarker-specific (IO, TMB-H)
+    """
+    
+    QUERY_TEMPLATES = {
+        'disease': "{disease} cancer clinical trial",
+        'gene': "{gene} mutation {disease} trial",
+        'basket': "{disease} basket trial tumor agnostic",
+        'ddr': "{disease} DNA repair deficiency trial",
+        'parp': "{disease} PARP inhibitor trial",
+        'io': "{disease} immunotherapy checkpoint inhibitor trial",
+        'tmb_high': "TMB-high tumor agnostic trial",
+        'msi_high': "MSI-high dMMR clinical trial",
+        'hrd': "{disease} HRD homologous recombination deficiency trial",
+        'rare_mutation': "{gene} mutation rare disease registry trial"
+    }
+    
+    def generate(
+        self,
+        disease: str,
+        mutations: List,
+        biomarkers = None,
+        context: Dict = None
+    ) -> List[Dict]:
+        """
+        Generate ranked list of queries.
+        
+        Returns list of {query, type, priority}
+        """
+        queries = []
+        
+        # Always include disease query
+        queries.append({
+            'query': self.QUERY_TEMPLATES['disease'].format(disease=disease),
+            'type': 'disease',
+            'priority': 1
+        })
+        
+        # Gene-specific queries for key mutations
+        key_genes = self._get_key_genes(mutations)
+        for gene in key_genes[:3]:
+            queries.append({
+                'query': self.QUERY_TEMPLATES['gene'].format(
+                    gene=gene, disease=disease
+                ),
+                'type': 'gene',
+                'priority': 2
+            })
+        
+        # Context-aware queries
+        if context:
+            if context.get('has_ddr_mutation'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['ddr'].format(disease=disease),
+                    'type': 'ddr',
+                    'priority': 2
+                })
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['parp'].format(disease=disease),
+                    'type': 'parp',
+                    'priority': 2
+                })
+            
+            if context.get('io_eligible'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['io'].format(disease=disease),
+                    'type': 'io',
+                    'priority': 2
+                })
+            
+            if context.get('tmb_high'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['tmb_high'],
+                    'type': 'tmb_high',
+                    'priority': 3
+                })
+            
+            if context.get('msi_high'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['msi_high'],
+                    'type': 'msi_high',
+                    'priority': 3
+                })
+            
+            if context.get('hrd_positive'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['hrd'].format(disease=disease),
+                    'type': 'hrd',
+                    'priority': 2
+                })
+        
+        # Basket trial query
+        queries.append({
+            'query': self.QUERY_TEMPLATES['basket'].format(disease=disease),
+            'type': 'basket',
+            'priority': 3
+        })
+        
+        # Sort by priority
+        queries.sort(key=lambda x: x['priority'])
+        
+        return queries
+    
+    def _get_key_genes(self, mutations: List) -> List[str]:
+        """Extract key genes for querying."""
+        priority_genes = {'BRCA1', 'BRCA2', 'TP53', 'KRAS', 'BRAF', 'MBD4', 'NF1'}
+        
+        genes = []
+        for mut in mutations:
+            gene = mut.gene if hasattr(mut, 'gene') else mut.get('gene', '')
+            if gene.upper() in priority_genes:
+                genes.append(gene)
+        
+        return genes
+```
+
+### Mechanism Ranker
+
+```python
+# api/services/trials/mechanism_ranker.py
+
+from typing import List, Dict
+import numpy as np
+
+class MechanismRanker:
+    """
+    Rank trials by mechanism fit using 7D vector cosine similarity.
+    
+    Formula: combined_score = alpha * eligibility + beta * mechanism_fit
+    Default: alpha=0.7, beta=0.3
+    """
+    
+    def __init__(self, alpha: float = 0.7, beta: float = 0.3):
+        self.alpha = alpha
+        self.beta = beta
+    
+    def rank(
+        self,
+        trials: List[Dict],
+        patient_mechanism_vector: List[float],
+        min_eligibility: float = 0.5,
+        min_mechanism_fit: float = 0.3
+    ) -> List[Dict]:
+        """
+        Rank trials by combined eligibility + mechanism fit.
+        
+        Args:
+            trials: List of trial dicts with moa_vector
+            patient_mechanism_vector: 7D patient pathway vector
+            min_eligibility: Minimum eligibility score
+            min_mechanism_fit: Minimum mechanism fit score
+        
+        Returns:
+            Sorted list of trials with scores
+        """
+        patient_vec = np.array(patient_mechanism_vector)
+        
+        for trial in trials:
+            trial_vec = np.array(trial.get('moa_vector', [0.5] * 7))
+            
+            # Calculate mechanism fit (cosine similarity)
+            mechanism_fit = self._cosine_similarity(patient_vec, trial_vec)
+            trial['mechanism_fit'] = mechanism_fit
+            
+            # Estimate eligibility (placeholder - real check is later)
+            eligibility = trial.get('eligibility_estimate', 0.7)
+            trial['eligibility'] = eligibility
+            
+            # Combined score
+            trial['combined_score'] = (
+                self.alpha * eligibility +
+                self.beta * mechanism_fit
+            )
+        
+        # Filter by thresholds
+        filtered = [
+            t for t in trials
+            if t['mechanism_fit'] >= min_mechanism_fit
+        ]
+        
+        # Sort by combined score
+        filtered.sort(key=lambda x: x['combined_score'], reverse=True)
+        
+        return filtered
+    
+    def _cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> float:
+        """Calculate cosine similarity between two vectors."""
+        dot = np.dot(a, b)
+        norm_a = np.linalg.norm(a)
+        norm_b = np.linalg.norm(b)
+        
+        if norm_a == 0 or norm_b == 0:
+            return 0.0
+        
+        return float(dot / (norm_a * norm_b))
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+### Phase 1: Query Generator
+- [ ] Implement 10 query templates
+- [ ] Add context-aware query selection
+- [ ] Priority-based ordering
+- [ ] Unit tests
+
+### Phase 2: ClinicalTrials Client
+- [ ] Implement ClinicalTrials.gov v2 API client
+- [ ] Handle pagination
+- [ ] Caching (24h)
+- [ ] Rate limiting
+- [ ] Unit tests
+
+### Phase 3: MoA Extractor
+- [ ] Extract MoA from trial descriptions
+- [ ] Map interventions to 7D vector
+- [ ] Handle unknown drugs
+- [ ] Unit tests
+
+### Phase 4: Mechanism Ranker
+- [ ] Implement cosine similarity
+- [ ] Combined scoring (eligibility + mechanism)
+- [ ] Threshold filtering
+- [ ] Unit tests
+
+### Phase 5: Eligibility Checker
+- [ ] Parse eligibility criteria
+- [ ] Match against patient data
+- [ ] Handle uncertain criteria
+- [ ] Unit tests
+
+### Phase 6: Integration
+- [ ] Create TrialMatchingAgent
+- [ ] Wire all components
+- [ ] Build TrialMatch objects
+- [ ] Integration tests
+
+---
+
+## 📡 API ENDPOINT
+
+```yaml
+POST /api/agents/trials
+Content-Type: application/json
+
+Request:
+  patient_id: string
+  mutations: Mutation[]
+  disease: string
+  mechanism_vector: float[7]  # From drug efficacy agent
+  biomarker_profile: BiomarkerProfile  # optional
+  max_results: number  # default: 10
+
+Response:
+  trial_matching_result: TrialMatchingResult
+  search_time_ms: number
+```
+
+---
+
+## ✅ ACCEPTANCE CRITERIA
+
+1. ✅ Generate 5-10 disease/mutation-specific queries
+2. ✅ Search ClinicalTrials.gov successfully
+3. ✅ Extract MoA vectors for trials
+4. ✅ Rank by mechanism fit (cosine similarity)
+5. ✅ Check eligibility criteria
+6. ✅ Return top 10 matches with rationale
+7. ✅ Include per-pathway alignment
+8. ✅ Search time <10 seconds
+9. ✅ Unit test coverage >80%
+
+---
+
+---
+
+## 🎯 MISSION
+
+Build a trial matching agent that can:
+1. Generate disease/mutation-specific trial queries
+2. Search ClinicalTrials.gov API
+3. Rank trials by mechanism fit using 7D vector
+4. Check eligibility criteria
+5. Provide transparent matching rationale
+
+---
+
+## 📊 EXISTING IMPLEMENTATION
+
+### Already Built ✅
+
+**Location:** `api/services/autonomous_trial_agent.py`
+
+**Key Components:**
+- Trial search via ClinicalTrials.gov API
+- Query generation (3 templates)
+- Basic eligibility checking
+
+**Location:** `api/services/mechanism_fit_ranker.py`
+
+**Key Components:**
+- 7D mechanism vector comparison
+- Cosine similarity for mechanism fit
+- Combined scoring (eligibility + mechanism)
+
+---
+
+## 📥 INPUTS
+
+### From Previous Agents
+
+```python
+# From Module 01 (Data Extraction)
+patient_profile: PatientProfile
+mutations: List[Mutation]
+disease: str
+
+# From Module 02 (Biomarker)
+biomarker_profile: BiomarkerProfile
+tmb: float
+msi_status: str
+io_eligible: bool
+
+# From Module 04 (Drug Efficacy)
+mechanism_vector: List[float]  # 7D: [DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux]
+```
+
+---
+
+## 📤 OUTPUTS
+
+### TrialMatch Schema
+
+```python
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from enum import Enum
+
+class TrialStatus(Enum):
+    RECRUITING = "Recruiting"
+    NOT_YET_RECRUITING = "Not yet recruiting"
+    ACTIVE_NOT_RECRUITING = "Active, not recruiting"
+    COMPLETED = "Completed"
+    SUSPENDED = "Suspended"
+    TERMINATED = "Terminated"
+
+class TrialPhase(Enum):
+    PHASE_1 = "Phase 1"
+    PHASE_1_2 = "Phase 1/Phase 2"
+    PHASE_2 = "Phase 2"
+    PHASE_2_3 = "Phase 2/Phase 3"
+    PHASE_3 = "Phase 3"
+    PHASE_4 = "Phase 4"
+    NA = "N/A"
+
+@dataclass
+class TrialMoA:
+    """Trial mechanism of action vector."""
+    ddr: float = 0.0
+    mapk: float = 0.0
+    pi3k: float = 0.0
+    vegf: float = 0.0
+    her2: float = 0.0
+    io: float = 0.0
+    efflux: float = 0.0
+    
+    def to_vector(self) -> List[float]:
+        return [self.ddr, self.mapk, self.pi3k, self.vegf, self.her2, self.io, self.efflux]
+
+@dataclass
+class EligibilityCriteria:
+    meets_criteria: bool
+    score: float                    # 0.0 - 1.0
+    matched: List[str]              # Criteria patient meets
+    unmatched: List[str]            # Criteria patient doesn't meet
+    uncertain: List[str]            # Criteria we can't evaluate
+
+@dataclass
+class TrialMatch:
+    nct_id: str
+    title: str
+    brief_summary: str
+    phase: TrialPhase
+    status: TrialStatus
+    
+    # Matching scores
+    mechanism_fit_score: float      # Cosine similarity (0-1)
+    eligibility_score: float        # Eligibility match (0-1)
+    combined_score: float           # Weighted combination
+    
+    # Details
+    trial_moa: TrialMoA
+    eligibility: EligibilityCriteria
+    mechanism_alignment: Dict[str, float]  # Per-pathway alignment
+    
+    # Why matched
+    why_matched: str                # Human-readable explanation
+    query_matched: str              # Which query found it
+    
+    # Logistics
+    locations: List[Dict]           # Study locations
+    contact: Optional[Dict]         # Contact info
+    url: str                        # ClinicalTrials.gov URL
+    
+    # Provenance
+    last_updated: str
+    sponsor: str
+
+@dataclass
+class TrialMatchingResult:
+    patient_id: str
+    queries_used: List[str]
+    trials_found: int
+    trials_ranked: int
+    matches: List[TrialMatch]
+    top_match: Optional[TrialMatch]
+    search_time_ms: int
+    provenance: Dict[str, any]
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### File Structure
+
+```
+api/services/trials/
+├── __init__.py
+├── trial_matching_agent.py     # Main agent
+├── query_generator.py          # Generate search queries
+├── clinicaltrials_client.py    # ClinicalTrials.gov API
+├── mechanism_ranker.py         # 7D vector ranking
+├── eligibility_checker.py      # Check eligibility criteria
+├── trial_parser.py             # Parse trial data
+├── moa_extractor.py            # Extract trial MoA vector
+├── constants.py                # Query templates, weights
+└── tests/
+    ├── test_query_gen.py
+    ├── test_matching.py
+    └── test_eligibility.py
+```
+
+### Core Agent Implementation
+
+```python
+# api/services/trials/trial_matching_agent.py
+
+from typing import List, Optional
+from datetime import datetime
+import logging
+
+from .query_generator import QueryGenerator
+from .clinicaltrials_client import ClinicalTrialsClient
+from .mechanism_ranker import MechanismRanker
+from .eligibility_checker import EligibilityChecker
+from .moa_extractor import MoAExtractor
+from ..models import (
+    PatientProfile, BiomarkerProfile,
+    TrialMatchingResult, TrialMatch
+)
+
+logger = logging.getLogger(__name__)
+
+class TrialMatchingAgent:
+    """
+    Match patients to clinical trials using mechanism-based ranking.
+    
+    Process:
+    1. Generate disease/mutation-specific queries
+    2. Search ClinicalTrials.gov
+    3. Extract trial MoA vectors
+    4. Rank by mechanism fit (cosine similarity)
+    5. Check eligibility criteria
+    6. Return ranked matches with rationale
+    """
+    
+    def __init__(self):
+        self.query_gen = QueryGenerator()
+        self.ct_client = ClinicalTrialsClient()
+        self.ranker = MechanismRanker(alpha=0.7, beta=0.3)  # eligibility/mechanism
+        self.eligibility_checker = EligibilityChecker()
+        self.moa_extractor = MoAExtractor()
+    
+    async def match(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile] = None,
+        mechanism_vector: List[float] = None,
+        max_results: int = 10
+    ) -> TrialMatchingResult:
+        """
+        Find and rank matching clinical trials.
+        
+        Args:
+            patient_profile: Patient mutations and disease
+            biomarker_profile: TMB, MSI, IO eligibility
+            mechanism_vector: 7D pathway vector from drug efficacy agent
+            max_results: Maximum trials to return
+        
+        Returns:
+            TrialMatchingResult with ranked matches
+        """
+        start_time = datetime.utcnow()
+        logger.info(f"Matching trials for {patient_profile.patient_id}")
+        
+        # Build context for query generation
+        context = self._build_context(
+            patient_profile=patient_profile,
+            biomarker_profile=biomarker_profile
+        )
+        
+        # Step 1: Generate queries
+        queries = self.query_gen.generate(
+            disease=patient_profile.disease,
+            mutations=patient_profile.mutations,
+            biomarkers=biomarker_profile,
+            context=context
+        )
+        logger.info(f"Generated {len(queries)} queries")
+        
+        # Step 2: Search for trials
+        all_trials = []
+        for query in queries:
+            try:
+                trials = await self.ct_client.search(
+                    query=query['query'],
+                    status=['RECRUITING', 'NOT_YET_RECRUITING'],
+                    max_results=50
+                )
+                for trial in trials:
+                    trial['matched_query'] = query['query']
+                    trial['query_type'] = query['type']
+                all_trials.extend(trials)
+            except Exception as e:
+                logger.error(f"Search failed for query '{query}': {e}")
+        
+        # Deduplicate by NCT ID
+        unique_trials = {t['nct_id']: t for t in all_trials}
+        trials = list(unique_trials.values())
+        logger.info(f"Found {len(trials)} unique trials")
+        
+        if not trials:
+            return self._empty_result(patient_profile.patient_id, queries)
+        
+        # Step 3: Extract MoA vectors for each trial
+        for trial in trials:
+            trial['moa_vector'] = self.moa_extractor.extract(trial)
+        
+        # Step 4: Rank by mechanism fit
+        if mechanism_vector is None:
+            mechanism_vector = [0.5] * 7  # Default neutral
+        
+        ranked = self.ranker.rank(
+            trials=trials,
+            patient_mechanism_vector=mechanism_vector,
+            min_eligibility=0.5,
+            min_mechanism_fit=0.3
+        )
+        
+        # Step 5: Check eligibility for top candidates
+        matches = []
+        for trial in ranked[:max_results * 2]:  # Over-fetch for eligibility filtering
+            eligibility = self.eligibility_checker.check(
+                trial=trial,
+                patient=patient_profile,
+                biomarkers=biomarker_profile
+            )
+            
+            if eligibility.score < 0.5:
+                continue  # Skip if clearly ineligible
+            
+            match = self._build_match(
+                trial=trial,
+                eligibility=eligibility,
+                patient_mechanism=mechanism_vector
+            )
+            matches.append(match)
+            
+            if len(matches) >= max_results:
+                break
+        
+        elapsed = (datetime.utcnow() - start_time).total_seconds() * 1000
+        
+        return TrialMatchingResult(
+            patient_id=patient_profile.patient_id,
+            queries_used=[q['query'] for q in queries],
+            trials_found=len(trials),
+            trials_ranked=len(ranked),
+            matches=matches,
+            top_match=matches[0] if matches else None,
+            search_time_ms=int(elapsed),
+            provenance={
+                'ranking_formula': '0.7*eligibility + 0.3*mechanism_fit',
+                'min_thresholds': {'eligibility': 0.5, 'mechanism': 0.3}
+            }
+        )
+    
+    def _build_context(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile]
+    ) -> Dict:
+        """Build context for query generation."""
+        genes = [m.gene for m in patient_profile.mutations]
+        
+        context = {
+            'disease': patient_profile.disease,
+            'genes': genes,
+            'has_ddr_mutation': any(g in DDR_GENES for g in genes),
+            'has_mapk_mutation': any(g in MAPK_GENES for g in genes)
+        }
+        
+        if biomarker_profile:
+            context['io_eligible'] = biomarker_profile.io_eligible
+            context['tmb_high'] = biomarker_profile.tmb.classification == 'TMB-H'
+            context['msi_high'] = biomarker_profile.msi.status == 'MSI-H'
+            context['hrd_positive'] = biomarker_profile.hrd.status in ['HRD+', 'HRD-INFERRED']
+        
+        return context
+    
+    def _build_match(
+        self,
+        trial: Dict,
+        eligibility: EligibilityCriteria,
+        patient_mechanism: List[float]
+    ) -> TrialMatch:
+        """Build TrialMatch from trial data."""
+        trial_moa = TrialMoA(*trial['moa_vector'])
+        
+        # Calculate per-pathway alignment
+        pathway_names = ['DDR', 'MAPK', 'PI3K', 'VEGF', 'HER2', 'IO', 'Efflux']
+        alignment = {}
+        for i, name in enumerate(pathway_names):
+            patient_val = patient_mechanism[i]
+            trial_val = trial['moa_vector'][i]
+            alignment[name] = min(patient_val, trial_val)
+        
+        # Generate why_matched explanation
+        why = self._explain_match(trial, eligibility, alignment)
+        
+        return TrialMatch(
+            nct_id=trial['nct_id'],
+            title=trial.get('brief_title', ''),
+            brief_summary=trial.get('brief_summary', '')[:500],
+            phase=self._parse_phase(trial.get('phase', '')),
+            status=TrialStatus(trial.get('overall_status', 'Recruiting')),
+            mechanism_fit_score=trial['mechanism_fit'],
+            eligibility_score=eligibility.score,
+            combined_score=trial['combined_score'],
+            trial_moa=trial_moa,
+            eligibility=eligibility,
+            mechanism_alignment=alignment,
+            why_matched=why,
+            query_matched=trial.get('matched_query', ''),
+            locations=trial.get('locations', [])[:5],
+            contact=trial.get('central_contact'),
+            url=f"https://clinicaltrials.gov/study/{trial['nct_id']}",
+            last_updated=trial.get('last_update_submitted', ''),
+            sponsor=trial.get('lead_sponsor', {}).get('name', '')
+        )
+    
+    def _explain_match(
+        self,
+        trial: Dict,
+        eligibility: EligibilityCriteria,
+        alignment: Dict[str, float]
+    ) -> str:
+        """Generate human-readable explanation."""
+        explanations = []
+        
+        # Top aligned pathways
+        top_pathways = sorted(
+            alignment.items(),
+            key=lambda x: x[1],
+            reverse=True
+        )[:2]
+        
+        for pathway, score in top_pathways:
+            if score > 0.5:
+                explanations.append(f"{pathway} pathway alignment ({score:.0%})")
+        
+        # Eligibility highlights
+        if eligibility.matched:
+            explanations.append(f"Meets: {', '.join(eligibility.matched[:2])}")
+        
+        return "; ".join(explanations) if explanations else "Broad mechanism match"
+```
+
+### Query Generator
+
+```python
+# api/services/trials/query_generator.py
+
+from typing import List, Dict
+
+class QueryGenerator:
+    """
+    Generate disease/mutation-specific trial queries.
+    
+    Query types:
+    - Disease-specific
+    - Mutation-specific
+    - Pathway-specific (DDR, basket)
+    - Biomarker-specific (IO, TMB-H)
+    """
+    
+    QUERY_TEMPLATES = {
+        'disease': "{disease} cancer clinical trial",
+        'gene': "{gene} mutation {disease} trial",
+        'basket': "{disease} basket trial tumor agnostic",
+        'ddr': "{disease} DNA repair deficiency trial",
+        'parp': "{disease} PARP inhibitor trial",
+        'io': "{disease} immunotherapy checkpoint inhibitor trial",
+        'tmb_high': "TMB-high tumor agnostic trial",
+        'msi_high': "MSI-high dMMR clinical trial",
+        'hrd': "{disease} HRD homologous recombination deficiency trial",
+        'rare_mutation': "{gene} mutation rare disease registry trial"
+    }
+    
+    def generate(
+        self,
+        disease: str,
+        mutations: List,
+        biomarkers = None,
+        context: Dict = None
+    ) -> List[Dict]:
+        """
+        Generate ranked list of queries.
+        
+        Returns list of {query, type, priority}
+        """
+        queries = []
+        
+        # Always include disease query
+        queries.append({
+            'query': self.QUERY_TEMPLATES['disease'].format(disease=disease),
+            'type': 'disease',
+            'priority': 1
+        })
+        
+        # Gene-specific queries for key mutations
+        key_genes = self._get_key_genes(mutations)
+        for gene in key_genes[:3]:
+            queries.append({
+                'query': self.QUERY_TEMPLATES['gene'].format(
+                    gene=gene, disease=disease
+                ),
+                'type': 'gene',
+                'priority': 2
+            })
+        
+        # Context-aware queries
+        if context:
+            if context.get('has_ddr_mutation'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['ddr'].format(disease=disease),
+                    'type': 'ddr',
+                    'priority': 2
+                })
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['parp'].format(disease=disease),
+                    'type': 'parp',
+                    'priority': 2
+                })
+            
+            if context.get('io_eligible'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['io'].format(disease=disease),
+                    'type': 'io',
+                    'priority': 2
+                })
+            
+            if context.get('tmb_high'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['tmb_high'],
+                    'type': 'tmb_high',
+                    'priority': 3
+                })
+            
+            if context.get('msi_high'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['msi_high'],
+                    'type': 'msi_high',
+                    'priority': 3
+                })
+            
+            if context.get('hrd_positive'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['hrd'].format(disease=disease),
+                    'type': 'hrd',
+                    'priority': 2
+                })
+        
+        # Basket trial query
+        queries.append({
+            'query': self.QUERY_TEMPLATES['basket'].format(disease=disease),
+            'type': 'basket',
+            'priority': 3
+        })
+        
+        # Sort by priority
+        queries.sort(key=lambda x: x['priority'])
+        
+        return queries
+    
+    def _get_key_genes(self, mutations: List) -> List[str]:
+        """Extract key genes for querying."""
+        priority_genes = {'BRCA1', 'BRCA2', 'TP53', 'KRAS', 'BRAF', 'MBD4', 'NF1'}
+        
+        genes = []
+        for mut in mutations:
+            gene = mut.gene if hasattr(mut, 'gene') else mut.get('gene', '')
+            if gene.upper() in priority_genes:
+                genes.append(gene)
+        
+        return genes
+```
+
+### Mechanism Ranker
+
+```python
+# api/services/trials/mechanism_ranker.py
+
+from typing import List, Dict
+import numpy as np
+
+class MechanismRanker:
+    """
+    Rank trials by mechanism fit using 7D vector cosine similarity.
+    
+    Formula: combined_score = alpha * eligibility + beta * mechanism_fit
+    Default: alpha=0.7, beta=0.3
+    """
+    
+    def __init__(self, alpha: float = 0.7, beta: float = 0.3):
+        self.alpha = alpha
+        self.beta = beta
+    
+    def rank(
+        self,
+        trials: List[Dict],
+        patient_mechanism_vector: List[float],
+        min_eligibility: float = 0.5,
+        min_mechanism_fit: float = 0.3
+    ) -> List[Dict]:
+        """
+        Rank trials by combined eligibility + mechanism fit.
+        
+        Args:
+            trials: List of trial dicts with moa_vector
+            patient_mechanism_vector: 7D patient pathway vector
+            min_eligibility: Minimum eligibility score
+            min_mechanism_fit: Minimum mechanism fit score
+        
+        Returns:
+            Sorted list of trials with scores
+        """
+        patient_vec = np.array(patient_mechanism_vector)
+        
+        for trial in trials:
+            trial_vec = np.array(trial.get('moa_vector', [0.5] * 7))
+            
+            # Calculate mechanism fit (cosine similarity)
+            mechanism_fit = self._cosine_similarity(patient_vec, trial_vec)
+            trial['mechanism_fit'] = mechanism_fit
+            
+            # Estimate eligibility (placeholder - real check is later)
+            eligibility = trial.get('eligibility_estimate', 0.7)
+            trial['eligibility'] = eligibility
+            
+            # Combined score
+            trial['combined_score'] = (
+                self.alpha * eligibility +
+                self.beta * mechanism_fit
+            )
+        
+        # Filter by thresholds
+        filtered = [
+            t for t in trials
+            if t['mechanism_fit'] >= min_mechanism_fit
+        ]
+        
+        # Sort by combined score
+        filtered.sort(key=lambda x: x['combined_score'], reverse=True)
+        
+        return filtered
+    
+    def _cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> float:
+        """Calculate cosine similarity between two vectors."""
+        dot = np.dot(a, b)
+        norm_a = np.linalg.norm(a)
+        norm_b = np.linalg.norm(b)
+        
+        if norm_a == 0 or norm_b == 0:
+            return 0.0
+        
+        return float(dot / (norm_a * norm_b))
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+### Phase 1: Query Generator
+- [ ] Implement 10 query templates
+- [ ] Add context-aware query selection
+- [ ] Priority-based ordering
+- [ ] Unit tests
+
+### Phase 2: ClinicalTrials Client
+- [ ] Implement ClinicalTrials.gov v2 API client
+- [ ] Handle pagination
+- [ ] Caching (24h)
+- [ ] Rate limiting
+- [ ] Unit tests
+
+### Phase 3: MoA Extractor
+- [ ] Extract MoA from trial descriptions
+- [ ] Map interventions to 7D vector
+- [ ] Handle unknown drugs
+- [ ] Unit tests
+
+### Phase 4: Mechanism Ranker
+- [ ] Implement cosine similarity
+- [ ] Combined scoring (eligibility + mechanism)
+- [ ] Threshold filtering
+- [ ] Unit tests
+
+### Phase 5: Eligibility Checker
+- [ ] Parse eligibility criteria
+- [ ] Match against patient data
+- [ ] Handle uncertain criteria
+- [ ] Unit tests
+
+### Phase 6: Integration
+- [ ] Create TrialMatchingAgent
+- [ ] Wire all components
+- [ ] Build TrialMatch objects
+- [ ] Integration tests
+
+---
+
+## 📡 API ENDPOINT
+
+```yaml
+POST /api/agents/trials
+Content-Type: application/json
+
+Request:
+  patient_id: string
+  mutations: Mutation[]
+  disease: string
+  mechanism_vector: float[7]  # From drug efficacy agent
+  biomarker_profile: BiomarkerProfile  # optional
+  max_results: number  # default: 10
+
+Response:
+  trial_matching_result: TrialMatchingResult
+  search_time_ms: number
+```
+
+---
+
+## ✅ ACCEPTANCE CRITERIA
+
+1. ✅ Generate 5-10 disease/mutation-specific queries
+2. ✅ Search ClinicalTrials.gov successfully
+3. ✅ Extract MoA vectors for trials
+4. ✅ Rank by mechanism fit (cosine similarity)
+5. ✅ Check eligibility criteria
+6. ✅ Return top 10 matches with rationale
+7. ✅ Include per-pathway alignment
+8. ✅ Search time <10 seconds
+9. ✅ Unit test coverage >80%
+
+---
+
+---
+
+## 🎯 MISSION
+
+Build a trial matching agent that can:
+1. Generate disease/mutation-specific trial queries
+2. Search ClinicalTrials.gov API
+3. Rank trials by mechanism fit using 7D vector
+4. Check eligibility criteria
+5. Provide transparent matching rationale
+
+---
+
+## 📊 EXISTING IMPLEMENTATION
+
+### Already Built ✅
+
+**Location:** `api/services/autonomous_trial_agent.py`
+
+**Key Components:**
+- Trial search via ClinicalTrials.gov API
+- Query generation (3 templates)
+- Basic eligibility checking
+
+**Location:** `api/services/mechanism_fit_ranker.py`
+
+**Key Components:**
+- 7D mechanism vector comparison
+- Cosine similarity for mechanism fit
+- Combined scoring (eligibility + mechanism)
+
+---
+
+## 📥 INPUTS
+
+### From Previous Agents
+
+```python
+# From Module 01 (Data Extraction)
+patient_profile: PatientProfile
+mutations: List[Mutation]
+disease: str
+
+# From Module 02 (Biomarker)
+biomarker_profile: BiomarkerProfile
+tmb: float
+msi_status: str
+io_eligible: bool
+
+# From Module 04 (Drug Efficacy)
+mechanism_vector: List[float]  # 7D: [DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux]
+```
+
+---
+
+## 📤 OUTPUTS
+
+### TrialMatch Schema
+
+```python
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from enum import Enum
+
+class TrialStatus(Enum):
+    RECRUITING = "Recruiting"
+    NOT_YET_RECRUITING = "Not yet recruiting"
+    ACTIVE_NOT_RECRUITING = "Active, not recruiting"
+    COMPLETED = "Completed"
+    SUSPENDED = "Suspended"
+    TERMINATED = "Terminated"
+
+class TrialPhase(Enum):
+    PHASE_1 = "Phase 1"
+    PHASE_1_2 = "Phase 1/Phase 2"
+    PHASE_2 = "Phase 2"
+    PHASE_2_3 = "Phase 2/Phase 3"
+    PHASE_3 = "Phase 3"
+    PHASE_4 = "Phase 4"
+    NA = "N/A"
+
+@dataclass
+class TrialMoA:
+    """Trial mechanism of action vector."""
+    ddr: float = 0.0
+    mapk: float = 0.0
+    pi3k: float = 0.0
+    vegf: float = 0.0
+    her2: float = 0.0
+    io: float = 0.0
+    efflux: float = 0.0
+    
+    def to_vector(self) -> List[float]:
+        return [self.ddr, self.mapk, self.pi3k, self.vegf, self.her2, self.io, self.efflux]
+
+@dataclass
+class EligibilityCriteria:
+    meets_criteria: bool
+    score: float                    # 0.0 - 1.0
+    matched: List[str]              # Criteria patient meets
+    unmatched: List[str]            # Criteria patient doesn't meet
+    uncertain: List[str]            # Criteria we can't evaluate
+
+@dataclass
+class TrialMatch:
+    nct_id: str
+    title: str
+    brief_summary: str
+    phase: TrialPhase
+    status: TrialStatus
+    
+    # Matching scores
+    mechanism_fit_score: float      # Cosine similarity (0-1)
+    eligibility_score: float        # Eligibility match (0-1)
+    combined_score: float           # Weighted combination
+    
+    # Details
+    trial_moa: TrialMoA
+    eligibility: EligibilityCriteria
+    mechanism_alignment: Dict[str, float]  # Per-pathway alignment
+    
+    # Why matched
+    why_matched: str                # Human-readable explanation
+    query_matched: str              # Which query found it
+    
+    # Logistics
+    locations: List[Dict]           # Study locations
+    contact: Optional[Dict]         # Contact info
+    url: str                        # ClinicalTrials.gov URL
+    
+    # Provenance
+    last_updated: str
+    sponsor: str
+
+@dataclass
+class TrialMatchingResult:
+    patient_id: str
+    queries_used: List[str]
+    trials_found: int
+    trials_ranked: int
+    matches: List[TrialMatch]
+    top_match: Optional[TrialMatch]
+    search_time_ms: int
+    provenance: Dict[str, any]
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### File Structure
+
+```
+api/services/trials/
+├── __init__.py
+├── trial_matching_agent.py     # Main agent
+├── query_generator.py          # Generate search queries
+├── clinicaltrials_client.py    # ClinicalTrials.gov API
+├── mechanism_ranker.py         # 7D vector ranking
+├── eligibility_checker.py      # Check eligibility criteria
+├── trial_parser.py             # Parse trial data
+├── moa_extractor.py            # Extract trial MoA vector
+├── constants.py                # Query templates, weights
+└── tests/
+    ├── test_query_gen.py
+    ├── test_matching.py
+    └── test_eligibility.py
+```
+
+### Core Agent Implementation
+
+```python
+# api/services/trials/trial_matching_agent.py
+
+from typing import List, Optional
+from datetime import datetime
+import logging
+
+from .query_generator import QueryGenerator
+from .clinicaltrials_client import ClinicalTrialsClient
+from .mechanism_ranker import MechanismRanker
+from .eligibility_checker import EligibilityChecker
+from .moa_extractor import MoAExtractor
+from ..models import (
+    PatientProfile, BiomarkerProfile,
+    TrialMatchingResult, TrialMatch
+)
+
+logger = logging.getLogger(__name__)
+
+class TrialMatchingAgent:
+    """
+    Match patients to clinical trials using mechanism-based ranking.
+    
+    Process:
+    1. Generate disease/mutation-specific queries
+    2. Search ClinicalTrials.gov
+    3. Extract trial MoA vectors
+    4. Rank by mechanism fit (cosine similarity)
+    5. Check eligibility criteria
+    6. Return ranked matches with rationale
+    """
+    
+    def __init__(self):
+        self.query_gen = QueryGenerator()
+        self.ct_client = ClinicalTrialsClient()
+        self.ranker = MechanismRanker(alpha=0.7, beta=0.3)  # eligibility/mechanism
+        self.eligibility_checker = EligibilityChecker()
+        self.moa_extractor = MoAExtractor()
+    
+    async def match(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile] = None,
+        mechanism_vector: List[float] = None,
+        max_results: int = 10
+    ) -> TrialMatchingResult:
+        """
+        Find and rank matching clinical trials.
+        
+        Args:
+            patient_profile: Patient mutations and disease
+            biomarker_profile: TMB, MSI, IO eligibility
+            mechanism_vector: 7D pathway vector from drug efficacy agent
+            max_results: Maximum trials to return
+        
+        Returns:
+            TrialMatchingResult with ranked matches
+        """
+        start_time = datetime.utcnow()
+        logger.info(f"Matching trials for {patient_profile.patient_id}")
+        
+        # Build context for query generation
+        context = self._build_context(
+            patient_profile=patient_profile,
+            biomarker_profile=biomarker_profile
+        )
+        
+        # Step 1: Generate queries
+        queries = self.query_gen.generate(
+            disease=patient_profile.disease,
+            mutations=patient_profile.mutations,
+            biomarkers=biomarker_profile,
+            context=context
+        )
+        logger.info(f"Generated {len(queries)} queries")
+        
+        # Step 2: Search for trials
+        all_trials = []
+        for query in queries:
+            try:
+                trials = await self.ct_client.search(
+                    query=query['query'],
+                    status=['RECRUITING', 'NOT_YET_RECRUITING'],
+                    max_results=50
+                )
+                for trial in trials:
+                    trial['matched_query'] = query['query']
+                    trial['query_type'] = query['type']
+                all_trials.extend(trials)
+            except Exception as e:
+                logger.error(f"Search failed for query '{query}': {e}")
+        
+        # Deduplicate by NCT ID
+        unique_trials = {t['nct_id']: t for t in all_trials}
+        trials = list(unique_trials.values())
+        logger.info(f"Found {len(trials)} unique trials")
+        
+        if not trials:
+            return self._empty_result(patient_profile.patient_id, queries)
+        
+        # Step 3: Extract MoA vectors for each trial
+        for trial in trials:
+            trial['moa_vector'] = self.moa_extractor.extract(trial)
+        
+        # Step 4: Rank by mechanism fit
+        if mechanism_vector is None:
+            mechanism_vector = [0.5] * 7  # Default neutral
+        
+        ranked = self.ranker.rank(
+            trials=trials,
+            patient_mechanism_vector=mechanism_vector,
+            min_eligibility=0.5,
+            min_mechanism_fit=0.3
+        )
+        
+        # Step 5: Check eligibility for top candidates
+        matches = []
+        for trial in ranked[:max_results * 2]:  # Over-fetch for eligibility filtering
+            eligibility = self.eligibility_checker.check(
+                trial=trial,
+                patient=patient_profile,
+                biomarkers=biomarker_profile
+            )
+            
+            if eligibility.score < 0.5:
+                continue  # Skip if clearly ineligible
+            
+            match = self._build_match(
+                trial=trial,
+                eligibility=eligibility,
+                patient_mechanism=mechanism_vector
+            )
+            matches.append(match)
+            
+            if len(matches) >= max_results:
+                break
+        
+        elapsed = (datetime.utcnow() - start_time).total_seconds() * 1000
+        
+        return TrialMatchingResult(
+            patient_id=patient_profile.patient_id,
+            queries_used=[q['query'] for q in queries],
+            trials_found=len(trials),
+            trials_ranked=len(ranked),
+            matches=matches,
+            top_match=matches[0] if matches else None,
+            search_time_ms=int(elapsed),
+            provenance={
+                'ranking_formula': '0.7*eligibility + 0.3*mechanism_fit',
+                'min_thresholds': {'eligibility': 0.5, 'mechanism': 0.3}
+            }
+        )
+    
+    def _build_context(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile]
+    ) -> Dict:
+        """Build context for query generation."""
+        genes = [m.gene for m in patient_profile.mutations]
+        
+        context = {
+            'disease': patient_profile.disease,
+            'genes': genes,
+            'has_ddr_mutation': any(g in DDR_GENES for g in genes),
+            'has_mapk_mutation': any(g in MAPK_GENES for g in genes)
+        }
+        
+        if biomarker_profile:
+            context['io_eligible'] = biomarker_profile.io_eligible
+            context['tmb_high'] = biomarker_profile.tmb.classification == 'TMB-H'
+            context['msi_high'] = biomarker_profile.msi.status == 'MSI-H'
+            context['hrd_positive'] = biomarker_profile.hrd.status in ['HRD+', 'HRD-INFERRED']
+        
+        return context
+    
+    def _build_match(
+        self,
+        trial: Dict,
+        eligibility: EligibilityCriteria,
+        patient_mechanism: List[float]
+    ) -> TrialMatch:
+        """Build TrialMatch from trial data."""
+        trial_moa = TrialMoA(*trial['moa_vector'])
+        
+        # Calculate per-pathway alignment
+        pathway_names = ['DDR', 'MAPK', 'PI3K', 'VEGF', 'HER2', 'IO', 'Efflux']
+        alignment = {}
+        for i, name in enumerate(pathway_names):
+            patient_val = patient_mechanism[i]
+            trial_val = trial['moa_vector'][i]
+            alignment[name] = min(patient_val, trial_val)
+        
+        # Generate why_matched explanation
+        why = self._explain_match(trial, eligibility, alignment)
+        
+        return TrialMatch(
+            nct_id=trial['nct_id'],
+            title=trial.get('brief_title', ''),
+            brief_summary=trial.get('brief_summary', '')[:500],
+            phase=self._parse_phase(trial.get('phase', '')),
+            status=TrialStatus(trial.get('overall_status', 'Recruiting')),
+            mechanism_fit_score=trial['mechanism_fit'],
+            eligibility_score=eligibility.score,
+            combined_score=trial['combined_score'],
+            trial_moa=trial_moa,
+            eligibility=eligibility,
+            mechanism_alignment=alignment,
+            why_matched=why,
+            query_matched=trial.get('matched_query', ''),
+            locations=trial.get('locations', [])[:5],
+            contact=trial.get('central_contact'),
+            url=f"https://clinicaltrials.gov/study/{trial['nct_id']}",
+            last_updated=trial.get('last_update_submitted', ''),
+            sponsor=trial.get('lead_sponsor', {}).get('name', '')
+        )
+    
+    def _explain_match(
+        self,
+        trial: Dict,
+        eligibility: EligibilityCriteria,
+        alignment: Dict[str, float]
+    ) -> str:
+        """Generate human-readable explanation."""
+        explanations = []
+        
+        # Top aligned pathways
+        top_pathways = sorted(
+            alignment.items(),
+            key=lambda x: x[1],
+            reverse=True
+        )[:2]
+        
+        for pathway, score in top_pathways:
+            if score > 0.5:
+                explanations.append(f"{pathway} pathway alignment ({score:.0%})")
+        
+        # Eligibility highlights
+        if eligibility.matched:
+            explanations.append(f"Meets: {', '.join(eligibility.matched[:2])}")
+        
+        return "; ".join(explanations) if explanations else "Broad mechanism match"
+```
+
+### Query Generator
+
+```python
+# api/services/trials/query_generator.py
+
+from typing import List, Dict
+
+class QueryGenerator:
+    """
+    Generate disease/mutation-specific trial queries.
+    
+    Query types:
+    - Disease-specific
+    - Mutation-specific
+    - Pathway-specific (DDR, basket)
+    - Biomarker-specific (IO, TMB-H)
+    """
+    
+    QUERY_TEMPLATES = {
+        'disease': "{disease} cancer clinical trial",
+        'gene': "{gene} mutation {disease} trial",
+        'basket': "{disease} basket trial tumor agnostic",
+        'ddr': "{disease} DNA repair deficiency trial",
+        'parp': "{disease} PARP inhibitor trial",
+        'io': "{disease} immunotherapy checkpoint inhibitor trial",
+        'tmb_high': "TMB-high tumor agnostic trial",
+        'msi_high': "MSI-high dMMR clinical trial",
+        'hrd': "{disease} HRD homologous recombination deficiency trial",
+        'rare_mutation': "{gene} mutation rare disease registry trial"
+    }
+    
+    def generate(
+        self,
+        disease: str,
+        mutations: List,
+        biomarkers = None,
+        context: Dict = None
+    ) -> List[Dict]:
+        """
+        Generate ranked list of queries.
+        
+        Returns list of {query, type, priority}
+        """
+        queries = []
+        
+        # Always include disease query
+        queries.append({
+            'query': self.QUERY_TEMPLATES['disease'].format(disease=disease),
+            'type': 'disease',
+            'priority': 1
+        })
+        
+        # Gene-specific queries for key mutations
+        key_genes = self._get_key_genes(mutations)
+        for gene in key_genes[:3]:
+            queries.append({
+                'query': self.QUERY_TEMPLATES['gene'].format(
+                    gene=gene, disease=disease
+                ),
+                'type': 'gene',
+                'priority': 2
+            })
+        
+        # Context-aware queries
+        if context:
+            if context.get('has_ddr_mutation'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['ddr'].format(disease=disease),
+                    'type': 'ddr',
+                    'priority': 2
+                })
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['parp'].format(disease=disease),
+                    'type': 'parp',
+                    'priority': 2
+                })
+            
+            if context.get('io_eligible'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['io'].format(disease=disease),
+                    'type': 'io',
+                    'priority': 2
+                })
+            
+            if context.get('tmb_high'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['tmb_high'],
+                    'type': 'tmb_high',
+                    'priority': 3
+                })
+            
+            if context.get('msi_high'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['msi_high'],
+                    'type': 'msi_high',
+                    'priority': 3
+                })
+            
+            if context.get('hrd_positive'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['hrd'].format(disease=disease),
+                    'type': 'hrd',
+                    'priority': 2
+                })
+        
+        # Basket trial query
+        queries.append({
+            'query': self.QUERY_TEMPLATES['basket'].format(disease=disease),
+            'type': 'basket',
+            'priority': 3
+        })
+        
+        # Sort by priority
+        queries.sort(key=lambda x: x['priority'])
+        
+        return queries
+    
+    def _get_key_genes(self, mutations: List) -> List[str]:
+        """Extract key genes for querying."""
+        priority_genes = {'BRCA1', 'BRCA2', 'TP53', 'KRAS', 'BRAF', 'MBD4', 'NF1'}
+        
+        genes = []
+        for mut in mutations:
+            gene = mut.gene if hasattr(mut, 'gene') else mut.get('gene', '')
+            if gene.upper() in priority_genes:
+                genes.append(gene)
+        
+        return genes
+```
+
+### Mechanism Ranker
+
+```python
+# api/services/trials/mechanism_ranker.py
+
+from typing import List, Dict
+import numpy as np
+
+class MechanismRanker:
+    """
+    Rank trials by mechanism fit using 7D vector cosine similarity.
+    
+    Formula: combined_score = alpha * eligibility + beta * mechanism_fit
+    Default: alpha=0.7, beta=0.3
+    """
+    
+    def __init__(self, alpha: float = 0.7, beta: float = 0.3):
+        self.alpha = alpha
+        self.beta = beta
+    
+    def rank(
+        self,
+        trials: List[Dict],
+        patient_mechanism_vector: List[float],
+        min_eligibility: float = 0.5,
+        min_mechanism_fit: float = 0.3
+    ) -> List[Dict]:
+        """
+        Rank trials by combined eligibility + mechanism fit.
+        
+        Args:
+            trials: List of trial dicts with moa_vector
+            patient_mechanism_vector: 7D patient pathway vector
+            min_eligibility: Minimum eligibility score
+            min_mechanism_fit: Minimum mechanism fit score
+        
+        Returns:
+            Sorted list of trials with scores
+        """
+        patient_vec = np.array(patient_mechanism_vector)
+        
+        for trial in trials:
+            trial_vec = np.array(trial.get('moa_vector', [0.5] * 7))
+            
+            # Calculate mechanism fit (cosine similarity)
+            mechanism_fit = self._cosine_similarity(patient_vec, trial_vec)
+            trial['mechanism_fit'] = mechanism_fit
+            
+            # Estimate eligibility (placeholder - real check is later)
+            eligibility = trial.get('eligibility_estimate', 0.7)
+            trial['eligibility'] = eligibility
+            
+            # Combined score
+            trial['combined_score'] = (
+                self.alpha * eligibility +
+                self.beta * mechanism_fit
+            )
+        
+        # Filter by thresholds
+        filtered = [
+            t for t in trials
+            if t['mechanism_fit'] >= min_mechanism_fit
+        ]
+        
+        # Sort by combined score
+        filtered.sort(key=lambda x: x['combined_score'], reverse=True)
+        
+        return filtered
+    
+    def _cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> float:
+        """Calculate cosine similarity between two vectors."""
+        dot = np.dot(a, b)
+        norm_a = np.linalg.norm(a)
+        norm_b = np.linalg.norm(b)
+        
+        if norm_a == 0 or norm_b == 0:
+            return 0.0
+        
+        return float(dot / (norm_a * norm_b))
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+### Phase 1: Query Generator
+- [ ] Implement 10 query templates
+- [ ] Add context-aware query selection
+- [ ] Priority-based ordering
+- [ ] Unit tests
+
+### Phase 2: ClinicalTrials Client
+- [ ] Implement ClinicalTrials.gov v2 API client
+- [ ] Handle pagination
+- [ ] Caching (24h)
+- [ ] Rate limiting
+- [ ] Unit tests
+
+### Phase 3: MoA Extractor
+- [ ] Extract MoA from trial descriptions
+- [ ] Map interventions to 7D vector
+- [ ] Handle unknown drugs
+- [ ] Unit tests
+
+### Phase 4: Mechanism Ranker
+- [ ] Implement cosine similarity
+- [ ] Combined scoring (eligibility + mechanism)
+- [ ] Threshold filtering
+- [ ] Unit tests
+
+### Phase 5: Eligibility Checker
+- [ ] Parse eligibility criteria
+- [ ] Match against patient data
+- [ ] Handle uncertain criteria
+- [ ] Unit tests
+
+### Phase 6: Integration
+- [ ] Create TrialMatchingAgent
+- [ ] Wire all components
+- [ ] Build TrialMatch objects
+- [ ] Integration tests
+
+---
+
+## 📡 API ENDPOINT
+
+```yaml
+POST /api/agents/trials
+Content-Type: application/json
+
+Request:
+  patient_id: string
+  mutations: Mutation[]
+  disease: string
+  mechanism_vector: float[7]  # From drug efficacy agent
+  biomarker_profile: BiomarkerProfile  # optional
+  max_results: number  # default: 10
+
+Response:
+  trial_matching_result: TrialMatchingResult
+  search_time_ms: number
+```
+
+---
+
+## ✅ ACCEPTANCE CRITERIA
+
+1. ✅ Generate 5-10 disease/mutation-specific queries
+2. ✅ Search ClinicalTrials.gov successfully
+3. ✅ Extract MoA vectors for trials
+4. ✅ Rank by mechanism fit (cosine similarity)
+5. ✅ Check eligibility criteria
+6. ✅ Return top 10 matches with rationale
+7. ✅ Include per-pathway alignment
+8. ✅ Search time <10 seconds
+9. ✅ Unit test coverage >80%
+
+---
+
+---
+
+## 🎯 MISSION
+
+Build a trial matching agent that can:
+1. Generate disease/mutation-specific trial queries
+2. Search ClinicalTrials.gov API
+3. Rank trials by mechanism fit using 7D vector
+4. Check eligibility criteria
+5. Provide transparent matching rationale
+
+---
+
+## 📊 EXISTING IMPLEMENTATION
+
+### Already Built ✅
+
+**Location:** `api/services/autonomous_trial_agent.py`
+
+**Key Components:**
+- Trial search via ClinicalTrials.gov API
+- Query generation (3 templates)
+- Basic eligibility checking
+
+**Location:** `api/services/mechanism_fit_ranker.py`
+
+**Key Components:**
+- 7D mechanism vector comparison
+- Cosine similarity for mechanism fit
+- Combined scoring (eligibility + mechanism)
+
+---
+
+## 📥 INPUTS
+
+### From Previous Agents
+
+```python
+# From Module 01 (Data Extraction)
+patient_profile: PatientProfile
+mutations: List[Mutation]
+disease: str
+
+# From Module 02 (Biomarker)
+biomarker_profile: BiomarkerProfile
+tmb: float
+msi_status: str
+io_eligible: bool
+
+# From Module 04 (Drug Efficacy)
+mechanism_vector: List[float]  # 7D: [DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux]
+```
+
+---
+
+## 📤 OUTPUTS
+
+### TrialMatch Schema
+
+```python
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from enum import Enum
+
+class TrialStatus(Enum):
+    RECRUITING = "Recruiting"
+    NOT_YET_RECRUITING = "Not yet recruiting"
+    ACTIVE_NOT_RECRUITING = "Active, not recruiting"
+    COMPLETED = "Completed"
+    SUSPENDED = "Suspended"
+    TERMINATED = "Terminated"
+
+class TrialPhase(Enum):
+    PHASE_1 = "Phase 1"
+    PHASE_1_2 = "Phase 1/Phase 2"
+    PHASE_2 = "Phase 2"
+    PHASE_2_3 = "Phase 2/Phase 3"
+    PHASE_3 = "Phase 3"
+    PHASE_4 = "Phase 4"
+    NA = "N/A"
+
+@dataclass
+class TrialMoA:
+    """Trial mechanism of action vector."""
+    ddr: float = 0.0
+    mapk: float = 0.0
+    pi3k: float = 0.0
+    vegf: float = 0.0
+    her2: float = 0.0
+    io: float = 0.0
+    efflux: float = 0.0
+    
+    def to_vector(self) -> List[float]:
+        return [self.ddr, self.mapk, self.pi3k, self.vegf, self.her2, self.io, self.efflux]
+
+@dataclass
+class EligibilityCriteria:
+    meets_criteria: bool
+    score: float                    # 0.0 - 1.0
+    matched: List[str]              # Criteria patient meets
+    unmatched: List[str]            # Criteria patient doesn't meet
+    uncertain: List[str]            # Criteria we can't evaluate
+
+@dataclass
+class TrialMatch:
+    nct_id: str
+    title: str
+    brief_summary: str
+    phase: TrialPhase
+    status: TrialStatus
+    
+    # Matching scores
+    mechanism_fit_score: float      # Cosine similarity (0-1)
+    eligibility_score: float        # Eligibility match (0-1)
+    combined_score: float           # Weighted combination
+    
+    # Details
+    trial_moa: TrialMoA
+    eligibility: EligibilityCriteria
+    mechanism_alignment: Dict[str, float]  # Per-pathway alignment
+    
+    # Why matched
+    why_matched: str                # Human-readable explanation
+    query_matched: str              # Which query found it
+    
+    # Logistics
+    locations: List[Dict]           # Study locations
+    contact: Optional[Dict]         # Contact info
+    url: str                        # ClinicalTrials.gov URL
+    
+    # Provenance
+    last_updated: str
+    sponsor: str
+
+@dataclass
+class TrialMatchingResult:
+    patient_id: str
+    queries_used: List[str]
+    trials_found: int
+    trials_ranked: int
+    matches: List[TrialMatch]
+    top_match: Optional[TrialMatch]
+    search_time_ms: int
+    provenance: Dict[str, any]
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### File Structure
+
+```
+api/services/trials/
+├── __init__.py
+├── trial_matching_agent.py     # Main agent
+├── query_generator.py          # Generate search queries
+├── clinicaltrials_client.py    # ClinicalTrials.gov API
+├── mechanism_ranker.py         # 7D vector ranking
+├── eligibility_checker.py      # Check eligibility criteria
+├── trial_parser.py             # Parse trial data
+├── moa_extractor.py            # Extract trial MoA vector
+├── constants.py                # Query templates, weights
+└── tests/
+    ├── test_query_gen.py
+    ├── test_matching.py
+    └── test_eligibility.py
+```
+
+### Core Agent Implementation
+
+```python
+# api/services/trials/trial_matching_agent.py
+
+from typing import List, Optional
+from datetime import datetime
+import logging
+
+from .query_generator import QueryGenerator
+from .clinicaltrials_client import ClinicalTrialsClient
+from .mechanism_ranker import MechanismRanker
+from .eligibility_checker import EligibilityChecker
+from .moa_extractor import MoAExtractor
+from ..models import (
+    PatientProfile, BiomarkerProfile,
+    TrialMatchingResult, TrialMatch
+)
+
+logger = logging.getLogger(__name__)
+
+class TrialMatchingAgent:
+    """
+    Match patients to clinical trials using mechanism-based ranking.
+    
+    Process:
+    1. Generate disease/mutation-specific queries
+    2. Search ClinicalTrials.gov
+    3. Extract trial MoA vectors
+    4. Rank by mechanism fit (cosine similarity)
+    5. Check eligibility criteria
+    6. Return ranked matches with rationale
+    """
+    
+    def __init__(self):
+        self.query_gen = QueryGenerator()
+        self.ct_client = ClinicalTrialsClient()
+        self.ranker = MechanismRanker(alpha=0.7, beta=0.3)  # eligibility/mechanism
+        self.eligibility_checker = EligibilityChecker()
+        self.moa_extractor = MoAExtractor()
+    
+    async def match(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile] = None,
+        mechanism_vector: List[float] = None,
+        max_results: int = 10
+    ) -> TrialMatchingResult:
+        """
+        Find and rank matching clinical trials.
+        
+        Args:
+            patient_profile: Patient mutations and disease
+            biomarker_profile: TMB, MSI, IO eligibility
+            mechanism_vector: 7D pathway vector from drug efficacy agent
+            max_results: Maximum trials to return
+        
+        Returns:
+            TrialMatchingResult with ranked matches
+        """
+        start_time = datetime.utcnow()
+        logger.info(f"Matching trials for {patient_profile.patient_id}")
+        
+        # Build context for query generation
+        context = self._build_context(
+            patient_profile=patient_profile,
+            biomarker_profile=biomarker_profile
+        )
+        
+        # Step 1: Generate queries
+        queries = self.query_gen.generate(
+            disease=patient_profile.disease,
+            mutations=patient_profile.mutations,
+            biomarkers=biomarker_profile,
+            context=context
+        )
+        logger.info(f"Generated {len(queries)} queries")
+        
+        # Step 2: Search for trials
+        all_trials = []
+        for query in queries:
+            try:
+                trials = await self.ct_client.search(
+                    query=query['query'],
+                    status=['RECRUITING', 'NOT_YET_RECRUITING'],
+                    max_results=50
+                )
+                for trial in trials:
+                    trial['matched_query'] = query['query']
+                    trial['query_type'] = query['type']
+                all_trials.extend(trials)
+            except Exception as e:
+                logger.error(f"Search failed for query '{query}': {e}")
+        
+        # Deduplicate by NCT ID
+        unique_trials = {t['nct_id']: t for t in all_trials}
+        trials = list(unique_trials.values())
+        logger.info(f"Found {len(trials)} unique trials")
+        
+        if not trials:
+            return self._empty_result(patient_profile.patient_id, queries)
+        
+        # Step 3: Extract MoA vectors for each trial
+        for trial in trials:
+            trial['moa_vector'] = self.moa_extractor.extract(trial)
+        
+        # Step 4: Rank by mechanism fit
+        if mechanism_vector is None:
+            mechanism_vector = [0.5] * 7  # Default neutral
+        
+        ranked = self.ranker.rank(
+            trials=trials,
+            patient_mechanism_vector=mechanism_vector,
+            min_eligibility=0.5,
+            min_mechanism_fit=0.3
+        )
+        
+        # Step 5: Check eligibility for top candidates
+        matches = []
+        for trial in ranked[:max_results * 2]:  # Over-fetch for eligibility filtering
+            eligibility = self.eligibility_checker.check(
+                trial=trial,
+                patient=patient_profile,
+                biomarkers=biomarker_profile
+            )
+            
+            if eligibility.score < 0.5:
+                continue  # Skip if clearly ineligible
+            
+            match = self._build_match(
+                trial=trial,
+                eligibility=eligibility,
+                patient_mechanism=mechanism_vector
+            )
+            matches.append(match)
+            
+            if len(matches) >= max_results:
+                break
+        
+        elapsed = (datetime.utcnow() - start_time).total_seconds() * 1000
+        
+        return TrialMatchingResult(
+            patient_id=patient_profile.patient_id,
+            queries_used=[q['query'] for q in queries],
+            trials_found=len(trials),
+            trials_ranked=len(ranked),
+            matches=matches,
+            top_match=matches[0] if matches else None,
+            search_time_ms=int(elapsed),
+            provenance={
+                'ranking_formula': '0.7*eligibility + 0.3*mechanism_fit',
+                'min_thresholds': {'eligibility': 0.5, 'mechanism': 0.3}
+            }
+        )
+    
+    def _build_context(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile]
+    ) -> Dict:
+        """Build context for query generation."""
+        genes = [m.gene for m in patient_profile.mutations]
+        
+        context = {
+            'disease': patient_profile.disease,
+            'genes': genes,
+            'has_ddr_mutation': any(g in DDR_GENES for g in genes),
+            'has_mapk_mutation': any(g in MAPK_GENES for g in genes)
+        }
+        
+        if biomarker_profile:
+            context['io_eligible'] = biomarker_profile.io_eligible
+            context['tmb_high'] = biomarker_profile.tmb.classification == 'TMB-H'
+            context['msi_high'] = biomarker_profile.msi.status == 'MSI-H'
+            context['hrd_positive'] = biomarker_profile.hrd.status in ['HRD+', 'HRD-INFERRED']
+        
+        return context
+    
+    def _build_match(
+        self,
+        trial: Dict,
+        eligibility: EligibilityCriteria,
+        patient_mechanism: List[float]
+    ) -> TrialMatch:
+        """Build TrialMatch from trial data."""
+        trial_moa = TrialMoA(*trial['moa_vector'])
+        
+        # Calculate per-pathway alignment
+        pathway_names = ['DDR', 'MAPK', 'PI3K', 'VEGF', 'HER2', 'IO', 'Efflux']
+        alignment = {}
+        for i, name in enumerate(pathway_names):
+            patient_val = patient_mechanism[i]
+            trial_val = trial['moa_vector'][i]
+            alignment[name] = min(patient_val, trial_val)
+        
+        # Generate why_matched explanation
+        why = self._explain_match(trial, eligibility, alignment)
+        
+        return TrialMatch(
+            nct_id=trial['nct_id'],
+            title=trial.get('brief_title', ''),
+            brief_summary=trial.get('brief_summary', '')[:500],
+            phase=self._parse_phase(trial.get('phase', '')),
+            status=TrialStatus(trial.get('overall_status', 'Recruiting')),
+            mechanism_fit_score=trial['mechanism_fit'],
+            eligibility_score=eligibility.score,
+            combined_score=trial['combined_score'],
+            trial_moa=trial_moa,
+            eligibility=eligibility,
+            mechanism_alignment=alignment,
+            why_matched=why,
+            query_matched=trial.get('matched_query', ''),
+            locations=trial.get('locations', [])[:5],
+            contact=trial.get('central_contact'),
+            url=f"https://clinicaltrials.gov/study/{trial['nct_id']}",
+            last_updated=trial.get('last_update_submitted', ''),
+            sponsor=trial.get('lead_sponsor', {}).get('name', '')
+        )
+    
+    def _explain_match(
+        self,
+        trial: Dict,
+        eligibility: EligibilityCriteria,
+        alignment: Dict[str, float]
+    ) -> str:
+        """Generate human-readable explanation."""
+        explanations = []
+        
+        # Top aligned pathways
+        top_pathways = sorted(
+            alignment.items(),
+            key=lambda x: x[1],
+            reverse=True
+        )[:2]
+        
+        for pathway, score in top_pathways:
+            if score > 0.5:
+                explanations.append(f"{pathway} pathway alignment ({score:.0%})")
+        
+        # Eligibility highlights
+        if eligibility.matched:
+            explanations.append(f"Meets: {', '.join(eligibility.matched[:2])}")
+        
+        return "; ".join(explanations) if explanations else "Broad mechanism match"
+```
+
+### Query Generator
+
+```python
+# api/services/trials/query_generator.py
+
+from typing import List, Dict
+
+class QueryGenerator:
+    """
+    Generate disease/mutation-specific trial queries.
+    
+    Query types:
+    - Disease-specific
+    - Mutation-specific
+    - Pathway-specific (DDR, basket)
+    - Biomarker-specific (IO, TMB-H)
+    """
+    
+    QUERY_TEMPLATES = {
+        'disease': "{disease} cancer clinical trial",
+        'gene': "{gene} mutation {disease} trial",
+        'basket': "{disease} basket trial tumor agnostic",
+        'ddr': "{disease} DNA repair deficiency trial",
+        'parp': "{disease} PARP inhibitor trial",
+        'io': "{disease} immunotherapy checkpoint inhibitor trial",
+        'tmb_high': "TMB-high tumor agnostic trial",
+        'msi_high': "MSI-high dMMR clinical trial",
+        'hrd': "{disease} HRD homologous recombination deficiency trial",
+        'rare_mutation': "{gene} mutation rare disease registry trial"
+    }
+    
+    def generate(
+        self,
+        disease: str,
+        mutations: List,
+        biomarkers = None,
+        context: Dict = None
+    ) -> List[Dict]:
+        """
+        Generate ranked list of queries.
+        
+        Returns list of {query, type, priority}
+        """
+        queries = []
+        
+        # Always include disease query
+        queries.append({
+            'query': self.QUERY_TEMPLATES['disease'].format(disease=disease),
+            'type': 'disease',
+            'priority': 1
+        })
+        
+        # Gene-specific queries for key mutations
+        key_genes = self._get_key_genes(mutations)
+        for gene in key_genes[:3]:
+            queries.append({
+                'query': self.QUERY_TEMPLATES['gene'].format(
+                    gene=gene, disease=disease
+                ),
+                'type': 'gene',
+                'priority': 2
+            })
+        
+        # Context-aware queries
+        if context:
+            if context.get('has_ddr_mutation'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['ddr'].format(disease=disease),
+                    'type': 'ddr',
+                    'priority': 2
+                })
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['parp'].format(disease=disease),
+                    'type': 'parp',
+                    'priority': 2
+                })
+            
+            if context.get('io_eligible'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['io'].format(disease=disease),
+                    'type': 'io',
+                    'priority': 2
+                })
+            
+            if context.get('tmb_high'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['tmb_high'],
+                    'type': 'tmb_high',
+                    'priority': 3
+                })
+            
+            if context.get('msi_high'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['msi_high'],
+                    'type': 'msi_high',
+                    'priority': 3
+                })
+            
+            if context.get('hrd_positive'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['hrd'].format(disease=disease),
+                    'type': 'hrd',
+                    'priority': 2
+                })
+        
+        # Basket trial query
+        queries.append({
+            'query': self.QUERY_TEMPLATES['basket'].format(disease=disease),
+            'type': 'basket',
+            'priority': 3
+        })
+        
+        # Sort by priority
+        queries.sort(key=lambda x: x['priority'])
+        
+        return queries
+    
+    def _get_key_genes(self, mutations: List) -> List[str]:
+        """Extract key genes for querying."""
+        priority_genes = {'BRCA1', 'BRCA2', 'TP53', 'KRAS', 'BRAF', 'MBD4', 'NF1'}
+        
+        genes = []
+        for mut in mutations:
+            gene = mut.gene if hasattr(mut, 'gene') else mut.get('gene', '')
+            if gene.upper() in priority_genes:
+                genes.append(gene)
+        
+        return genes
+```
+
+### Mechanism Ranker
+
+```python
+# api/services/trials/mechanism_ranker.py
+
+from typing import List, Dict
+import numpy as np
+
+class MechanismRanker:
+    """
+    Rank trials by mechanism fit using 7D vector cosine similarity.
+    
+    Formula: combined_score = alpha * eligibility + beta * mechanism_fit
+    Default: alpha=0.7, beta=0.3
+    """
+    
+    def __init__(self, alpha: float = 0.7, beta: float = 0.3):
+        self.alpha = alpha
+        self.beta = beta
+    
+    def rank(
+        self,
+        trials: List[Dict],
+        patient_mechanism_vector: List[float],
+        min_eligibility: float = 0.5,
+        min_mechanism_fit: float = 0.3
+    ) -> List[Dict]:
+        """
+        Rank trials by combined eligibility + mechanism fit.
+        
+        Args:
+            trials: List of trial dicts with moa_vector
+            patient_mechanism_vector: 7D patient pathway vector
+            min_eligibility: Minimum eligibility score
+            min_mechanism_fit: Minimum mechanism fit score
+        
+        Returns:
+            Sorted list of trials with scores
+        """
+        patient_vec = np.array(patient_mechanism_vector)
+        
+        for trial in trials:
+            trial_vec = np.array(trial.get('moa_vector', [0.5] * 7))
+            
+            # Calculate mechanism fit (cosine similarity)
+            mechanism_fit = self._cosine_similarity(patient_vec, trial_vec)
+            trial['mechanism_fit'] = mechanism_fit
+            
+            # Estimate eligibility (placeholder - real check is later)
+            eligibility = trial.get('eligibility_estimate', 0.7)
+            trial['eligibility'] = eligibility
+            
+            # Combined score
+            trial['combined_score'] = (
+                self.alpha * eligibility +
+                self.beta * mechanism_fit
+            )
+        
+        # Filter by thresholds
+        filtered = [
+            t for t in trials
+            if t['mechanism_fit'] >= min_mechanism_fit
+        ]
+        
+        # Sort by combined score
+        filtered.sort(key=lambda x: x['combined_score'], reverse=True)
+        
+        return filtered
+    
+    def _cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> float:
+        """Calculate cosine similarity between two vectors."""
+        dot = np.dot(a, b)
+        norm_a = np.linalg.norm(a)
+        norm_b = np.linalg.norm(b)
+        
+        if norm_a == 0 or norm_b == 0:
+            return 0.0
+        
+        return float(dot / (norm_a * norm_b))
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+### Phase 1: Query Generator
+- [ ] Implement 10 query templates
+- [ ] Add context-aware query selection
+- [ ] Priority-based ordering
+- [ ] Unit tests
+
+### Phase 2: ClinicalTrials Client
+- [ ] Implement ClinicalTrials.gov v2 API client
+- [ ] Handle pagination
+- [ ] Caching (24h)
+- [ ] Rate limiting
+- [ ] Unit tests
+
+### Phase 3: MoA Extractor
+- [ ] Extract MoA from trial descriptions
+- [ ] Map interventions to 7D vector
+- [ ] Handle unknown drugs
+- [ ] Unit tests
+
+### Phase 4: Mechanism Ranker
+- [ ] Implement cosine similarity
+- [ ] Combined scoring (eligibility + mechanism)
+- [ ] Threshold filtering
+- [ ] Unit tests
+
+### Phase 5: Eligibility Checker
+- [ ] Parse eligibility criteria
+- [ ] Match against patient data
+- [ ] Handle uncertain criteria
+- [ ] Unit tests
+
+### Phase 6: Integration
+- [ ] Create TrialMatchingAgent
+- [ ] Wire all components
+- [ ] Build TrialMatch objects
+- [ ] Integration tests
+
+---
+
+## 📡 API ENDPOINT
+
+```yaml
+POST /api/agents/trials
+Content-Type: application/json
+
+Request:
+  patient_id: string
+  mutations: Mutation[]
+  disease: string
+  mechanism_vector: float[7]  # From drug efficacy agent
+  biomarker_profile: BiomarkerProfile  # optional
+  max_results: number  # default: 10
+
+Response:
+  trial_matching_result: TrialMatchingResult
+  search_time_ms: number
+```
+
+---
+
+## ✅ ACCEPTANCE CRITERIA
+
+1. ✅ Generate 5-10 disease/mutation-specific queries
+2. ✅ Search ClinicalTrials.gov successfully
+3. ✅ Extract MoA vectors for trials
+4. ✅ Rank by mechanism fit (cosine similarity)
+5. ✅ Check eligibility criteria
+6. ✅ Return top 10 matches with rationale
+7. ✅ Include per-pathway alignment
+8. ✅ Search time <10 seconds
+9. ✅ Unit test coverage >80%
+
+---
+
+---
+
+## 🎯 MISSION
+
+Build a trial matching agent that can:
+1. Generate disease/mutation-specific trial queries
+2. Search ClinicalTrials.gov API
+3. Rank trials by mechanism fit using 7D vector
+4. Check eligibility criteria
+5. Provide transparent matching rationale
+
+---
+
+## 📊 EXISTING IMPLEMENTATION
+
+### Already Built ✅
+
+**Location:** `api/services/autonomous_trial_agent.py`
+
+**Key Components:**
+- Trial search via ClinicalTrials.gov API
+- Query generation (3 templates)
+- Basic eligibility checking
+
+**Location:** `api/services/mechanism_fit_ranker.py`
+
+**Key Components:**
+- 7D mechanism vector comparison
+- Cosine similarity for mechanism fit
+- Combined scoring (eligibility + mechanism)
+
+---
+
+## 📥 INPUTS
+
+### From Previous Agents
+
+```python
+# From Module 01 (Data Extraction)
+patient_profile: PatientProfile
+mutations: List[Mutation]
+disease: str
+
+# From Module 02 (Biomarker)
+biomarker_profile: BiomarkerProfile
+tmb: float
+msi_status: str
+io_eligible: bool
+
+# From Module 04 (Drug Efficacy)
+mechanism_vector: List[float]  # 7D: [DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux]
+```
+
+---
+
+## 📤 OUTPUTS
+
+### TrialMatch Schema
+
+```python
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from enum import Enum
+
+class TrialStatus(Enum):
+    RECRUITING = "Recruiting"
+    NOT_YET_RECRUITING = "Not yet recruiting"
+    ACTIVE_NOT_RECRUITING = "Active, not recruiting"
+    COMPLETED = "Completed"
+    SUSPENDED = "Suspended"
+    TERMINATED = "Terminated"
+
+class TrialPhase(Enum):
+    PHASE_1 = "Phase 1"
+    PHASE_1_2 = "Phase 1/Phase 2"
+    PHASE_2 = "Phase 2"
+    PHASE_2_3 = "Phase 2/Phase 3"
+    PHASE_3 = "Phase 3"
+    PHASE_4 = "Phase 4"
+    NA = "N/A"
+
+@dataclass
+class TrialMoA:
+    """Trial mechanism of action vector."""
+    ddr: float = 0.0
+    mapk: float = 0.0
+    pi3k: float = 0.0
+    vegf: float = 0.0
+    her2: float = 0.0
+    io: float = 0.0
+    efflux: float = 0.0
+    
+    def to_vector(self) -> List[float]:
+        return [self.ddr, self.mapk, self.pi3k, self.vegf, self.her2, self.io, self.efflux]
+
+@dataclass
+class EligibilityCriteria:
+    meets_criteria: bool
+    score: float                    # 0.0 - 1.0
+    matched: List[str]              # Criteria patient meets
+    unmatched: List[str]            # Criteria patient doesn't meet
+    uncertain: List[str]            # Criteria we can't evaluate
+
+@dataclass
+class TrialMatch:
+    nct_id: str
+    title: str
+    brief_summary: str
+    phase: TrialPhase
+    status: TrialStatus
+    
+    # Matching scores
+    mechanism_fit_score: float      # Cosine similarity (0-1)
+    eligibility_score: float        # Eligibility match (0-1)
+    combined_score: float           # Weighted combination
+    
+    # Details
+    trial_moa: TrialMoA
+    eligibility: EligibilityCriteria
+    mechanism_alignment: Dict[str, float]  # Per-pathway alignment
+    
+    # Why matched
+    why_matched: str                # Human-readable explanation
+    query_matched: str              # Which query found it
+    
+    # Logistics
+    locations: List[Dict]           # Study locations
+    contact: Optional[Dict]         # Contact info
+    url: str                        # ClinicalTrials.gov URL
+    
+    # Provenance
+    last_updated: str
+    sponsor: str
+
+@dataclass
+class TrialMatchingResult:
+    patient_id: str
+    queries_used: List[str]
+    trials_found: int
+    trials_ranked: int
+    matches: List[TrialMatch]
+    top_match: Optional[TrialMatch]
+    search_time_ms: int
+    provenance: Dict[str, any]
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### File Structure
+
+```
+api/services/trials/
+├── __init__.py
+├── trial_matching_agent.py     # Main agent
+├── query_generator.py          # Generate search queries
+├── clinicaltrials_client.py    # ClinicalTrials.gov API
+├── mechanism_ranker.py         # 7D vector ranking
+├── eligibility_checker.py      # Check eligibility criteria
+├── trial_parser.py             # Parse trial data
+├── moa_extractor.py            # Extract trial MoA vector
+├── constants.py                # Query templates, weights
+└── tests/
+    ├── test_query_gen.py
+    ├── test_matching.py
+    └── test_eligibility.py
+```
+
+### Core Agent Implementation
+
+```python
+# api/services/trials/trial_matching_agent.py
+
+from typing import List, Optional
+from datetime import datetime
+import logging
+
+from .query_generator import QueryGenerator
+from .clinicaltrials_client import ClinicalTrialsClient
+from .mechanism_ranker import MechanismRanker
+from .eligibility_checker import EligibilityChecker
+from .moa_extractor import MoAExtractor
+from ..models import (
+    PatientProfile, BiomarkerProfile,
+    TrialMatchingResult, TrialMatch
+)
+
+logger = logging.getLogger(__name__)
+
+class TrialMatchingAgent:
+    """
+    Match patients to clinical trials using mechanism-based ranking.
+    
+    Process:
+    1. Generate disease/mutation-specific queries
+    2. Search ClinicalTrials.gov
+    3. Extract trial MoA vectors
+    4. Rank by mechanism fit (cosine similarity)
+    5. Check eligibility criteria
+    6. Return ranked matches with rationale
+    """
+    
+    def __init__(self):
+        self.query_gen = QueryGenerator()
+        self.ct_client = ClinicalTrialsClient()
+        self.ranker = MechanismRanker(alpha=0.7, beta=0.3)  # eligibility/mechanism
+        self.eligibility_checker = EligibilityChecker()
+        self.moa_extractor = MoAExtractor()
+    
+    async def match(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile] = None,
+        mechanism_vector: List[float] = None,
+        max_results: int = 10
+    ) -> TrialMatchingResult:
+        """
+        Find and rank matching clinical trials.
+        
+        Args:
+            patient_profile: Patient mutations and disease
+            biomarker_profile: TMB, MSI, IO eligibility
+            mechanism_vector: 7D pathway vector from drug efficacy agent
+            max_results: Maximum trials to return
+        
+        Returns:
+            TrialMatchingResult with ranked matches
+        """
+        start_time = datetime.utcnow()
+        logger.info(f"Matching trials for {patient_profile.patient_id}")
+        
+        # Build context for query generation
+        context = self._build_context(
+            patient_profile=patient_profile,
+            biomarker_profile=biomarker_profile
+        )
+        
+        # Step 1: Generate queries
+        queries = self.query_gen.generate(
+            disease=patient_profile.disease,
+            mutations=patient_profile.mutations,
+            biomarkers=biomarker_profile,
+            context=context
+        )
+        logger.info(f"Generated {len(queries)} queries")
+        
+        # Step 2: Search for trials
+        all_trials = []
+        for query in queries:
+            try:
+                trials = await self.ct_client.search(
+                    query=query['query'],
+                    status=['RECRUITING', 'NOT_YET_RECRUITING'],
+                    max_results=50
+                )
+                for trial in trials:
+                    trial['matched_query'] = query['query']
+                    trial['query_type'] = query['type']
+                all_trials.extend(trials)
+            except Exception as e:
+                logger.error(f"Search failed for query '{query}': {e}")
+        
+        # Deduplicate by NCT ID
+        unique_trials = {t['nct_id']: t for t in all_trials}
+        trials = list(unique_trials.values())
+        logger.info(f"Found {len(trials)} unique trials")
+        
+        if not trials:
+            return self._empty_result(patient_profile.patient_id, queries)
+        
+        # Step 3: Extract MoA vectors for each trial
+        for trial in trials:
+            trial['moa_vector'] = self.moa_extractor.extract(trial)
+        
+        # Step 4: Rank by mechanism fit
+        if mechanism_vector is None:
+            mechanism_vector = [0.5] * 7  # Default neutral
+        
+        ranked = self.ranker.rank(
+            trials=trials,
+            patient_mechanism_vector=mechanism_vector,
+            min_eligibility=0.5,
+            min_mechanism_fit=0.3
+        )
+        
+        # Step 5: Check eligibility for top candidates
+        matches = []
+        for trial in ranked[:max_results * 2]:  # Over-fetch for eligibility filtering
+            eligibility = self.eligibility_checker.check(
+                trial=trial,
+                patient=patient_profile,
+                biomarkers=biomarker_profile
+            )
+            
+            if eligibility.score < 0.5:
+                continue  # Skip if clearly ineligible
+            
+            match = self._build_match(
+                trial=trial,
+                eligibility=eligibility,
+                patient_mechanism=mechanism_vector
+            )
+            matches.append(match)
+            
+            if len(matches) >= max_results:
+                break
+        
+        elapsed = (datetime.utcnow() - start_time).total_seconds() * 1000
+        
+        return TrialMatchingResult(
+            patient_id=patient_profile.patient_id,
+            queries_used=[q['query'] for q in queries],
+            trials_found=len(trials),
+            trials_ranked=len(ranked),
+            matches=matches,
+            top_match=matches[0] if matches else None,
+            search_time_ms=int(elapsed),
+            provenance={
+                'ranking_formula': '0.7*eligibility + 0.3*mechanism_fit',
+                'min_thresholds': {'eligibility': 0.5, 'mechanism': 0.3}
+            }
+        )
+    
+    def _build_context(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile]
+    ) -> Dict:
+        """Build context for query generation."""
+        genes = [m.gene for m in patient_profile.mutations]
+        
+        context = {
+            'disease': patient_profile.disease,
+            'genes': genes,
+            'has_ddr_mutation': any(g in DDR_GENES for g in genes),
+            'has_mapk_mutation': any(g in MAPK_GENES for g in genes)
+        }
+        
+        if biomarker_profile:
+            context['io_eligible'] = biomarker_profile.io_eligible
+            context['tmb_high'] = biomarker_profile.tmb.classification == 'TMB-H'
+            context['msi_high'] = biomarker_profile.msi.status == 'MSI-H'
+            context['hrd_positive'] = biomarker_profile.hrd.status in ['HRD+', 'HRD-INFERRED']
+        
+        return context
+    
+    def _build_match(
+        self,
+        trial: Dict,
+        eligibility: EligibilityCriteria,
+        patient_mechanism: List[float]
+    ) -> TrialMatch:
+        """Build TrialMatch from trial data."""
+        trial_moa = TrialMoA(*trial['moa_vector'])
+        
+        # Calculate per-pathway alignment
+        pathway_names = ['DDR', 'MAPK', 'PI3K', 'VEGF', 'HER2', 'IO', 'Efflux']
+        alignment = {}
+        for i, name in enumerate(pathway_names):
+            patient_val = patient_mechanism[i]
+            trial_val = trial['moa_vector'][i]
+            alignment[name] = min(patient_val, trial_val)
+        
+        # Generate why_matched explanation
+        why = self._explain_match(trial, eligibility, alignment)
+        
+        return TrialMatch(
+            nct_id=trial['nct_id'],
+            title=trial.get('brief_title', ''),
+            brief_summary=trial.get('brief_summary', '')[:500],
+            phase=self._parse_phase(trial.get('phase', '')),
+            status=TrialStatus(trial.get('overall_status', 'Recruiting')),
+            mechanism_fit_score=trial['mechanism_fit'],
+            eligibility_score=eligibility.score,
+            combined_score=trial['combined_score'],
+            trial_moa=trial_moa,
+            eligibility=eligibility,
+            mechanism_alignment=alignment,
+            why_matched=why,
+            query_matched=trial.get('matched_query', ''),
+            locations=trial.get('locations', [])[:5],
+            contact=trial.get('central_contact'),
+            url=f"https://clinicaltrials.gov/study/{trial['nct_id']}",
+            last_updated=trial.get('last_update_submitted', ''),
+            sponsor=trial.get('lead_sponsor', {}).get('name', '')
+        )
+    
+    def _explain_match(
+        self,
+        trial: Dict,
+        eligibility: EligibilityCriteria,
+        alignment: Dict[str, float]
+    ) -> str:
+        """Generate human-readable explanation."""
+        explanations = []
+        
+        # Top aligned pathways
+        top_pathways = sorted(
+            alignment.items(),
+            key=lambda x: x[1],
+            reverse=True
+        )[:2]
+        
+        for pathway, score in top_pathways:
+            if score > 0.5:
+                explanations.append(f"{pathway} pathway alignment ({score:.0%})")
+        
+        # Eligibility highlights
+        if eligibility.matched:
+            explanations.append(f"Meets: {', '.join(eligibility.matched[:2])}")
+        
+        return "; ".join(explanations) if explanations else "Broad mechanism match"
+```
+
+### Query Generator
+
+```python
+# api/services/trials/query_generator.py
+
+from typing import List, Dict
+
+class QueryGenerator:
+    """
+    Generate disease/mutation-specific trial queries.
+    
+    Query types:
+    - Disease-specific
+    - Mutation-specific
+    - Pathway-specific (DDR, basket)
+    - Biomarker-specific (IO, TMB-H)
+    """
+    
+    QUERY_TEMPLATES = {
+        'disease': "{disease} cancer clinical trial",
+        'gene': "{gene} mutation {disease} trial",
+        'basket': "{disease} basket trial tumor agnostic",
+        'ddr': "{disease} DNA repair deficiency trial",
+        'parp': "{disease} PARP inhibitor trial",
+        'io': "{disease} immunotherapy checkpoint inhibitor trial",
+        'tmb_high': "TMB-high tumor agnostic trial",
+        'msi_high': "MSI-high dMMR clinical trial",
+        'hrd': "{disease} HRD homologous recombination deficiency trial",
+        'rare_mutation': "{gene} mutation rare disease registry trial"
+    }
+    
+    def generate(
+        self,
+        disease: str,
+        mutations: List,
+        biomarkers = None,
+        context: Dict = None
+    ) -> List[Dict]:
+        """
+        Generate ranked list of queries.
+        
+        Returns list of {query, type, priority}
+        """
+        queries = []
+        
+        # Always include disease query
+        queries.append({
+            'query': self.QUERY_TEMPLATES['disease'].format(disease=disease),
+            'type': 'disease',
+            'priority': 1
+        })
+        
+        # Gene-specific queries for key mutations
+        key_genes = self._get_key_genes(mutations)
+        for gene in key_genes[:3]:
+            queries.append({
+                'query': self.QUERY_TEMPLATES['gene'].format(
+                    gene=gene, disease=disease
+                ),
+                'type': 'gene',
+                'priority': 2
+            })
+        
+        # Context-aware queries
+        if context:
+            if context.get('has_ddr_mutation'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['ddr'].format(disease=disease),
+                    'type': 'ddr',
+                    'priority': 2
+                })
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['parp'].format(disease=disease),
+                    'type': 'parp',
+                    'priority': 2
+                })
+            
+            if context.get('io_eligible'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['io'].format(disease=disease),
+                    'type': 'io',
+                    'priority': 2
+                })
+            
+            if context.get('tmb_high'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['tmb_high'],
+                    'type': 'tmb_high',
+                    'priority': 3
+                })
+            
+            if context.get('msi_high'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['msi_high'],
+                    'type': 'msi_high',
+                    'priority': 3
+                })
+            
+            if context.get('hrd_positive'):
+                queries.append({
+                    'query': self.QUERY_TEMPLATES['hrd'].format(disease=disease),
+                    'type': 'hrd',
+                    'priority': 2
+                })
+        
+        # Basket trial query
+        queries.append({
+            'query': self.QUERY_TEMPLATES['basket'].format(disease=disease),
+            'type': 'basket',
+            'priority': 3
+        })
+        
+        # Sort by priority
+        queries.sort(key=lambda x: x['priority'])
+        
+        return queries
+    
+    def _get_key_genes(self, mutations: List) -> List[str]:
+        """Extract key genes for querying."""
+        priority_genes = {'BRCA1', 'BRCA2', 'TP53', 'KRAS', 'BRAF', 'MBD4', 'NF1'}
+        
+        genes = []
+        for mut in mutations:
+            gene = mut.gene if hasattr(mut, 'gene') else mut.get('gene', '')
+            if gene.upper() in priority_genes:
+                genes.append(gene)
+        
+        return genes
+```
+
+### Mechanism Ranker
+
+```python
+# api/services/trials/mechanism_ranker.py
+
+from typing import List, Dict
+import numpy as np
+
+class MechanismRanker:
+    """
+    Rank trials by mechanism fit using 7D vector cosine similarity.
+    
+    Formula: combined_score = alpha * eligibility + beta * mechanism_fit
+    Default: alpha=0.7, beta=0.3
+    """
+    
+    def __init__(self, alpha: float = 0.7, beta: float = 0.3):
+        self.alpha = alpha
+        self.beta = beta
+    
+    def rank(
+        self,
+        trials: List[Dict],
+        patient_mechanism_vector: List[float],
+        min_eligibility: float = 0.5,
+        min_mechanism_fit: float = 0.3
+    ) -> List[Dict]:
+        """
+        Rank trials by combined eligibility + mechanism fit.
+        
+        Args:
+            trials: List of trial dicts with moa_vector
+            patient_mechanism_vector: 7D patient pathway vector
+            min_eligibility: Minimum eligibility score
+            min_mechanism_fit: Minimum mechanism fit score
+        
+        Returns:
+            Sorted list of trials with scores
+        """
+        patient_vec = np.array(patient_mechanism_vector)
+        
+        for trial in trials:
+            trial_vec = np.array(trial.get('moa_vector', [0.5] * 7))
+            
+            # Calculate mechanism fit (cosine similarity)
+            mechanism_fit = self._cosine_similarity(patient_vec, trial_vec)
+            trial['mechanism_fit'] = mechanism_fit
+            
+            # Estimate eligibility (placeholder - real check is later)
+            eligibility = trial.get('eligibility_estimate', 0.7)
+            trial['eligibility'] = eligibility
+            
+            # Combined score
+            trial['combined_score'] = (
+                self.alpha * eligibility +
+                self.beta * mechanism_fit
+            )
+        
+        # Filter by thresholds
+        filtered = [
+            t for t in trials
+            if t['mechanism_fit'] >= min_mechanism_fit
+        ]
+        
+        # Sort by combined score
+        filtered.sort(key=lambda x: x['combined_score'], reverse=True)
+        
+        return filtered
+    
+    def _cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> float:
+        """Calculate cosine similarity between two vectors."""
+        dot = np.dot(a, b)
+        norm_a = np.linalg.norm(a)
+        norm_b = np.linalg.norm(b)
+        
+        if norm_a == 0 or norm_b == 0:
+            return 0.0
+        
+        return float(dot / (norm_a * norm_b))
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+### Phase 1: Query Generator
+- [ ] Implement 10 query templates
+- [ ] Add context-aware query selection
+- [ ] Priority-based ordering
+- [ ] Unit tests
+
+### Phase 2: ClinicalTrials Client
+- [ ] Implement ClinicalTrials.gov v2 API client
+- [ ] Handle pagination
+- [ ] Caching (24h)
+- [ ] Rate limiting
+- [ ] Unit tests
+
+### Phase 3: MoA Extractor
+- [ ] Extract MoA from trial descriptions
+- [ ] Map interventions to 7D vector
+- [ ] Handle unknown drugs
+- [ ] Unit tests
+
+### Phase 4: Mechanism Ranker
+- [ ] Implement cosine similarity
+- [ ] Combined scoring (eligibility + mechanism)
+- [ ] Threshold filtering
+- [ ] Unit tests
+
+### Phase 5: Eligibility Checker
+- [ ] Parse eligibility criteria
+- [ ] Match against patient data
+- [ ] Handle uncertain criteria
+- [ ] Unit tests
+
+### Phase 6: Integration
+- [ ] Create TrialMatchingAgent
+- [ ] Wire all components
+- [ ] Build TrialMatch objects
+- [ ] Integration tests
+
+---
+
+## 📡 API ENDPOINT
+
+```yaml
+POST /api/agents/trials
+Content-Type: application/json
+
+Request:
+  patient_id: string
+  mutations: Mutation[]
+  disease: string
+  mechanism_vector: float[7]  # From drug efficacy agent
+  biomarker_profile: BiomarkerProfile  # optional
+  max_results: number  # default: 10
+
+Response:
+  trial_matching_result: TrialMatchingResult
+  search_time_ms: number
+```
+
+---
+
+## ✅ ACCEPTANCE CRITERIA
+
+1. ✅ Generate 5-10 disease/mutation-specific queries
+2. ✅ Search ClinicalTrials.gov successfully
+3. ✅ Extract MoA vectors for trials
+4. ✅ Rank by mechanism fit (cosine similarity)
+5. ✅ Check eligibility criteria
+6. ✅ Return top 10 matches with rationale
+7. ✅ Include per-pathway alignment
+8. ✅ Search time <10 seconds
+9. ✅ Unit test coverage >80%
+
+---

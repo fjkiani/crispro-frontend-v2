@@ -1,0 +1,245 @@
+# 🔔 MODULE 09: EVENT TRIGGER SYSTEM
+
+**Purpose:** Automated event detection and response  
+**Priority:** 🟡 HIGH | **Dependencies:** All | **Consumers:** Notifications, Alerts
+
+---
+
+## 🎯 MISSION
+
+Build an event trigger system that can:
+1. Detect clinical events (resistance, TMB-H, PD, etc.)
+2. Execute automated responses
+3. Send notifications
+4. Escalate when needed
+5. Log all actions for audit
+
+---
+
+## 📊 TRIGGER DEFINITIONS
+
+```yaml
+TRIGGERS:
+
+  resistance_detected:
+    condition: "CA-125 > baseline * 1.25 OR MAPK_mutation_in_ctDNA"
+    severity: HIGH
+    actions:
+      - notify_oncologist
+      - run_resistance_analysis
+      - suggest_alternatives
+      - re_match_trials
+    escalation: 24h → tumor_board
+
+  tmb_high_detected:
+    condition: "TMB >= 10.0"
+    severity: MEDIUM
+    actions:
+      - update_io_eligibility
+      - notify_oncologist
+      - re_rank_drugs
+      - match_io_trials
+
+  msi_high_detected:
+    condition: "MSI_status == 'MSI-H'"
+    severity: MEDIUM
+    actions:
+      - update_io_eligibility
+      - flag_lynch_screening
+
+  hrd_score_received:
+    condition: "hrd_score IS NOT NULL"
+    actions:
+      - if hrd_score >= 42: confirm_parp_eligibility
+      - else: consider_parp_anyway (MBD4 mechanism)
+
+  new_trial_available:
+    condition: "trial_match_score >= 0.80 AND status == 'RECRUITING'"
+    actions:
+      - add_to_dashboard
+      - notify_oncologist
+
+  adverse_event_reported:
+    condition: "ctcae_grade >= 2"
+    actions:
+      - log_event
+      - suggest_supportive_care
+      - if grade >= 3: escalate_urgent
+
+  treatment_response:
+    condition: "recist_assessment IS NOT NULL"
+    actions:
+      - if CR/PR: continue_plan
+      - if SD: increase_monitoring
+      - if PD: trigger resistance_detected
+
+  ngs_results_received:
+    condition: "ngs_report IS NOT NULL"
+    actions:
+      - parse_mutations
+      - recalculate_all_biomarkers
+      - update_resistance_prediction
+      - notify_oncologist
+```
+
+---
+
+## 📤 OUTPUTS
+
+```python
+@dataclass
+class TriggerResult:
+    trigger_id: str
+    event_type: str
+    timestamp: datetime
+    condition_matched: bool
+    actions_taken: List[str]
+    notifications_sent: List[Dict]
+    escalations: List[Dict]
+    audit_log: List[Dict]
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### File Structure
+
+```
+api/services/triggers/
+├── __init__.py
+├── trigger_engine.py
+├── conditions.py
+├── actions.py
+├── notifications.py
+├── escalation.py
+└── tests/
+```
+
+### Core Implementation
+
+```python
+# api/services/triggers/trigger_engine.py
+
+class TriggerEngine:
+    """
+    Event-driven trigger engine.
+    
+    Evaluates conditions against patient data
+    and executes automated responses.
+    """
+    
+    def __init__(self):
+        self.triggers = self._load_triggers()
+        self.action_handlers = {
+            'notify_oncologist': self._notify_oncologist,
+            'run_resistance_analysis': self._run_resistance,
+            'suggest_alternatives': self._suggest_alternatives,
+            're_match_trials': self._rematch_trials,
+            'update_io_eligibility': self._update_io,
+            'escalate_urgent': self._escalate
+        }
+    
+    async def evaluate(
+        self,
+        event_type: str,
+        data: Dict,
+        patient_state: PatientState
+    ) -> TriggerResult:
+        """Evaluate triggers for an event."""
+        
+        trigger = self.triggers.get(event_type)
+        if not trigger:
+            return None
+        
+        # Check condition
+        condition_met = self._evaluate_condition(
+            trigger['condition'],
+            data,
+            patient_state
+        )
+        
+        if not condition_met:
+            return TriggerResult(
+                trigger_id=event_type,
+                event_type=event_type,
+                timestamp=datetime.utcnow(),
+                condition_matched=False,
+                actions_taken=[],
+                notifications_sent=[],
+                escalations=[],
+                audit_log=[]
+            )
+        
+        # Execute actions
+        actions_taken = []
+        notifications = []
+        
+        for action in trigger['actions']:
+            handler = self.action_handlers.get(action)
+            if handler:
+                result = await handler(data, patient_state)
+                actions_taken.append(action)
+                if result.get('notification'):
+                    notifications.append(result['notification'])
+        
+        return TriggerResult(
+            trigger_id=event_type,
+            event_type=event_type,
+            timestamp=datetime.utcnow(),
+            condition_matched=True,
+            actions_taken=actions_taken,
+            notifications_sent=notifications,
+            escalations=[],
+            audit_log=[{'event': event_type, 'actions': actions_taken}]
+        )
+    
+    def _evaluate_condition(
+        self,
+        condition: str,
+        data: Dict,
+        state: PatientState
+    ) -> bool:
+        """Evaluate a trigger condition."""
+        # Simple condition evaluation
+        if 'TMB >= 10.0' in condition:
+            tmb = data.get('tmb') or getattr(state.biomarker_profile, 'tmb', None)
+            if tmb and tmb.value >= 10.0:
+                return True
+        
+        if 'CA-125 > baseline' in condition:
+            ca125 = data.get('ca125')
+            baseline = state.monitoring_config.ca125_baseline if state.monitoring_config else None
+            if ca125 and baseline and ca125 > baseline * 1.25:
+                return True
+        
+        return False
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+- [ ] Define all trigger conditions
+- [ ] Implement condition evaluator
+- [ ] Implement action handlers
+- [ ] Notification system (email, SMS, dashboard)
+- [ ] Escalation logic
+- [ ] Audit logging
+- [ ] Unit tests
+
+---
+
+## ✅ ACCEPTANCE CRITERIA
+
+1. ✅ 8 trigger types implemented
+2. ✅ Conditions evaluated correctly
+3. ✅ Actions executed reliably
+4. ✅ Notifications sent
+5. ✅ Escalation when needed
+6. ✅ Full audit trail
+
+---
+
+**Module Status:** ⬜ TODO  
+**Estimated Time:** 2-3 days

@@ -1,0 +1,170 @@
+# ⚠️ MM VALIDATION SAE GAP ANALYSIS
+
+**Issue:** SAE is mentioned but NOT actually used in MM validation
+
+---
+
+## WHAT WE HAVE (SAE Infrastructure)
+
+### 1. SAE Service (EXISTS but not called)
+```
+oncology-coPilot/oncology-backend-minimal/api/services/sae_service.py
+├── extract_sae_features_from_real_data()
+├── Features: exon_disruption, hotspot_mutation, essentiality_signal, DNA_repair_capacity
+└── NOT CALLED by MM validation scripts
+```
+
+### 2. SAE Model Service (EXISTS but not called)
+```
+oncology-coPilot/oncology-backend-minimal/api/services/sae_model_service.py
+├── extract_features_from_variant()
+├── Calls Evo2 layer 26 activations → SAE features
+└── NOT CALLED by MM validation scripts
+```
+
+### 3. SAE Feature Extraction Script (EXISTS but not run)
+```
+scripts/sae/extract_sae_features_cohort.py
+├── Calls /api/evo/score_variant_with_activations
+├── Calls /api/sae/extract_features
+├── Requires ENABLE_EVO2_SAE=1 and ENABLE_TRUE_SAE=1
+└── NOT RUN for MM cohort
+```
+
+---
+
+## WHAT WE'RE ACTUALLY USING (Current MM Validation)
+
+### Current Approach (NO SAE)
+```python
+# scripts/validation/validate_mm_resistance.py
+
+# Ground Truth: Mortality (vital_status == "Dead")
+# Prediction: Mutation presence (gene in mutated_genes)
+# NO EVO2 SCORING
+# NO SAE FEATURES
+```
+
+### "Proxy Delta" (NOT real SAE)
+```python
+# scripts/validation/mm_sae_validation_framework.py
+
+# This file is named "sae" but uses PROXY, not real SAE
+DELTA_PROXY = {
+    "Missense_Mutation": 0.3,
+    "Nonsense_Mutation": 0.8,
+    "Frame_Shift_Del": 0.9,
+    # ...
+}
+# This is variant classification → hardcoded score
+# NOT Evo2, NOT SAE layer 26 activations
+```
+
+---
+
+## THE GAP
+
+| Component | Available | Used in MM | Status |
+|-----------|-----------|------------|--------|
+| SAE Service | ✅ | ❌ | NOT CALLED |
+| SAE Model Service | ✅ | ❌ | NOT CALLED |
+| Evo2 Delta Scoring | ✅ | ❌ | NOT CALLED |
+| SAE Feature Extraction | ✅ | ❌ | NOT RUN |
+| Variant Classification Proxy | N/A | ✅ | USED |
+| Mutation Presence | N/A | ✅ | USED |
+
+---
+
+## TO USE REAL SAE
+
+### Option 1: Run SAE Feature Extraction for MM
+```bash
+# 1. Set environment variables
+export ENABLE_SAE_COHORT_RUN=1
+export ENABLE_EVO2_SAE=1
+export ENABLE_TRUE_SAE=1
+
+# 2. Prepare MM cohort in expected format
+python scripts/prepare_mm_cohort_for_sae.py
+
+# 3. Run SAE feature extraction
+python scripts/sae/extract_sae_features_cohort.py
+
+# 4. Correlate SAE features with mortality
+python scripts/validation/correlate_sae_with_mortality.py
+```
+
+### Option 2: Call SAE Directly for MM Variants
+```python
+# For each MM variant:
+POST /api/evo/score_variant_with_activations
+{
+    "chrom": "13",
+    "pos": 95863064,  # DIS3 position
+    "ref": "G",
+    "alt": "A",
+    "model_id": "evo2_1b",
+    "return_activations": true  # Get layer 26 activations
+}
+
+# Then extract SAE features:
+POST /api/sae/extract_features
+{
+    "activations": [...],  # From above
+}
+```
+
+---
+
+## RECOMMENDED FIX
+
+Create `scripts/validation/mm_true_sae_validation.py`:
+
+```python
+#!/usr/bin/env python3
+"""
+MM Validation with TRUE SAE features (not proxy).
+"""
+
+async def score_variant_with_sae(chrom, pos, ref, alt):
+    """Get real SAE features for a variant."""
+    
+    # Step 1: Get Evo2 delta + activations
+    response = await client.post(
+        f"{BACKEND_URL}/api/evo/score_variant_with_activations",
+        json={"chrom": chrom, "pos": pos, "ref": ref, "alt": alt}
+    )
+    evo_data = response.json()
+    
+    # Step 2: Extract SAE features from activations
+    sae_response = await client.post(
+        f"{BACKEND_URL}/api/sae/extract_features",
+        json={"activations": evo_data.get("activations")}
+    )
+    sae_features = sae_response.json()
+    
+    return {
+        "delta": evo_data.get("min_delta"),
+        "sae_features": sae_features.get("features"),
+        "top_features": sae_features.get("top_features")
+    }
+
+# Then correlate with mortality
+```
+
+---
+
+## BOTTOM LINE
+
+**Current MM validation does NOT use SAE.**
+
+It uses:
+1. Mutation presence (binary)
+2. Mortality outcome
+3. Hardcoded variant classification scores (proxy, not SAE)
+
+To use real SAE:
+1. Start Evo2 service with SAE enabled
+2. Call `/api/evo/score_variant_with_activations`
+3. Call `/api/sae/extract_features`
+4. Correlate SAE features with outcomes

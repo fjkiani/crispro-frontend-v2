@@ -1,0 +1,171 @@
+# MM VALIDATION: GROUND TRUTH & ACCURACY FRAMEWORK
+
+**Date:** December 3, 2025  
+**Status:** Pre-flight Complete | Ready for Phase 2
+
+---
+
+## 🎯 THE KEY QUESTION: "How do we know we're accurate?"
+
+### What We're Measuring
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│ GROUND TRUTH vs PREDICTION                                         │
+├────────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│ GROUND TRUTH (Y):                                                  │
+│   • Primary: MORTALITY (vital_status == "Dead")                    │
+│   • Available: 46 deaths in 219 patients with mutations            │
+│   • Limitation: This is OVERALL survival, not drug-specific        │
+│                                                                    │
+│ PREDICTION (X):                                                    │
+│   • Option 1: Evo2 delta score (sequence-level)                    │
+│   • Option 2: SAE features (functional interpretation)             │
+│   • Option 3: Pathway burden (aggregated mutation impact)          │
+│                                                                    │
+│ VALIDATION METRIC:                                                 │
+│   • Correlation: Does X predict Y?                                 │
+│   • RR/OR: Does mutation increase death risk?                      │
+│   • AUC: How well does our score discriminate?                     │
+│                                                                    │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 📊 WHAT WE HAVE (Pre-flight Results)
+
+| Component | Status | Details |
+|-----------|--------|---------|
+| **Backend** | ✅ Running | Port 8000 |
+| **Evo2 Service** | ⚠️ Needs start | Modal or local |
+| **Ground Truth** | ✅ Ready | 237 variants, 46 deaths |
+| **High-lethality variants** | ✅ Identified | DIS3 p.C562Y (100%), BRAF p.V640E (50%) |
+
+### Top Lethal Variants (Our Ground Truth Candidates)
+
+| Variant | Gene | Mortality | N |
+|---------|------|-----------|---|
+| p.C562Y | DIS3 | **100%** | 2 |
+| p.D488N | DIS3 | **75%** | 4 |
+| p.V640E | BRAF | **50%** | 10 |
+| p.R213* | TP53 | **50%** | 2 |
+| p.Q61K | NRAS | **50%** | 8 |
+
+---
+
+## 🔬 VALIDATION APPROACH
+
+### Phase 2: SAE Feature Extraction
+
+```python
+# For each lethal variant, extract SAE features
+POST /api/evo/score_variant_multi
+{
+    "chrom": "13",
+    "pos": ...,  # DIS3 p.D488N position
+    "ref": "A",
+    "alt": "T",
+    "model_id": "evo2_1b"
+}
+→ Returns: min_delta, sae_features
+
+# Compare SAE features between:
+#   - Lethal variants (DIS3 p.D488N, 75% mortality)
+#   - Non-lethal variants (KRAS p.G12A, 0% mortality)
+```
+
+### Phase 3: Accuracy Measurement
+
+```
+VALIDATION TEST:
+1. Score all 237 variants with Evo2
+2. Rank by delta score
+3. Correlate with mortality rate
+
+METRICS:
+• Pearson r: Correlation between delta and mortality
+• Spearman ρ: Rank correlation (more robust)
+• AUC: Does high delta predict death?
+• RR: Does delta > threshold increase death risk?
+
+SUCCESS CRITERIA:
+• r > 0.3 = Strong signal
+• AUC > 0.65 = Clinically useful
+• RR > 1.5 = Meaningful effect
+```
+
+---
+
+## ⚠️ HONEST LIMITATIONS
+
+### What Our Ground Truth CANNOT Tell Us
+
+1. **Drug-specific resistance** - We don't have "relapsed ON bortezomib"
+2. **Progression-free survival** - GDC doesn't have days_to_progression
+3. **Response categories** - No CR/VGPR/PR/SD/PD data
+4. **Treatment line** - 1st line vs relapsed/refractory
+
+### What Our Ground Truth CAN Tell Us
+
+1. **Overall prognosis** - Does mutation → death?
+2. **Variant severity** - Which variants are most lethal?
+3. **Gene-level signal** - DIS3 mutation → 2x death risk
+4. **Evo2 correlation** - Does delta score predict lethality?
+
+---
+
+## 🚀 NEXT STEPS
+
+### Option A: Run with Proxy (No Evo2 needed)
+```bash
+python scripts/validation/mm_sae_validation_framework.py
+# Uses variant classification as delta proxy
+# Already shows r=0.133 positive correlation
+```
+
+### Option B: Start Evo2 & Run Real Validation
+```bash
+# Start Evo2 service
+cd oncology-coPilot/oncology-backend-minimal
+python -m uvicorn api.index:app --port 8000
+
+# Or deploy to Modal
+modal deploy deploy/deploy_unified_oracle.py
+
+# Then run real scoring
+python scripts/validation/mm_evo2_real_validation.py
+```
+
+### Option C: Get Better Ground Truth
+Access MMRF Researcher Gateway for:
+- Response categories (CR, VGPR, PR, SD, PD)
+- Drug-specific outcomes
+- Progression-free survival
+
+---
+
+## 📈 CURRENT VALIDATION STATUS
+
+| Test | Ground Truth | Prediction | Result | Status |
+|------|--------------|------------|--------|--------|
+| DIS3 → Death | Mortality | Mutation present | **RR=2.08, p=0.0145** | ✅ VALIDATED |
+| TP53 → Death | Mortality | Mutation present | RR=1.90, p=0.11 | ⚠️ Trend |
+| Evo2 → Mortality | Mortality | Delta score (proxy) | r=0.133 | ⚠️ Weak signal |
+
+---
+
+## 🎯 BOTTOM LINE
+
+**Are we ready for Phase 2/3?**
+
+| Check | Status |
+|-------|--------|
+| Data ready | ✅ 237 variants, 46 deaths |
+| Ground truth defined | ✅ Mortality (with limitations) |
+| Validation framework | ✅ Created |
+| Evo2 service | ⚠️ Needs start (or use proxy) |
+| Accuracy metric | ✅ Correlation + RR |
+
+**Recommendation:** Run proxy validation now, Evo2 validation when service is available.

@@ -1,4 +1,51 @@
-<!-- c6619ece-14c6-4af4-aef3-c2562b4b1707 3749ef11-c264-4a3c-9641-c486bc0b28ec -->
+---
+name: Food Validation Product - Cancer-Specific Treatment Line Intelligence
+overview: ""
+todos:
+  - id: b119b8f9-80d8-463e-aba9-ade7eb572889
+    content: supplement_treatment_rules.json EXISTS (verified at `.cursor/ayesha/hypothesis_validator/data/`)
+    status: completed
+  - id: 83532c6d-19d1-4c66-a478-788e95945a1d
+    content: "**CRITICAL**: Add SAE structure adapter in hypothesis_validator.py:798-858 (copy from validate_food_ab_enhanced line 435-446)"
+    status: pending
+  - id: 09a76373-af5f-4de7-b4d0-9b7d607e97e4
+    content: Add treatment line format normalization in food_treatment_line_service.py (all formats → "L1"/"L2"/"L3")
+    status: pending
+  - id: abe7eeb2-6d9d-432f-8ee0-7cc1c0241b4c
+    content: Create cancer_type_food_recommendations.json mapping cancer types (ovarian_cancer_hgs, breast_cancer, etc.) to pathways and recommended foods with treatment line filters
+    status: pending
+  - id: 9ccada90-2527-4dbe-8fa5-9ccd8224a3d2
+    content: Treatment line affects confidence only (by design) - verified in code (food_spe_integration.py:233-237, 458-463)
+    status: completed
+  - id: 367dc7fc-bd61-41d1-9a7d-de082a00c17c
+    content: SAE boost is properly applied in food_spe_integration.py _compute_confidence (line_app + seq_fit) × 0.05 - verified
+    status: completed
+  - id: 1b1ae713-6fec-4912-a7d2-aa4da9c134d9
+    content: Update FoodRankingPanel.jsx to display treatment line context (L1, L2, L3), cancer type, biomarker matches (HRD+ match)
+    status: pending
+  - id: 00d005d8-5719-4455-8cde-f82ce8c574cf
+    content: "Fix SAE structure adapter so treatment line intelligence accordion displays correctly (nested structure) - **CRITICAL**: This is the same as Priority 1 #1"
+    status: pending
+  - id: 2010879e-285f-4fa1-a1fd-f291f57af936
+    content: Create biomarker_food_mapping.json at `.cursor/ayesha/hypothesis_validator/data/` mapping HRD_POSITIVE, TMB_HIGH, MSI_HIGH to target pathways and recommended foods with mechanisms
+    status: pending
+  - id: 083d19ff-695a-4601-9d7a-c8ea827f9551
+    content: Update enhanced_evidence_service.py get_complete_evidence to filter evidence by treatment line context (first-line vs maintenance)
+    status: pending
+  - id: f019b639-c58b-46e3-a9cd-60f3ad82c1cc
+    content: "Test first-line chemotherapy for ovarian cancer (HGS) scenario: verify foods target TP53/DNA repair, have high line_appropriateness, show HRD+ match in FoodRankingPanel"
+    status: pending
+  - id: 56981c8b-a6bd-4279-aaf3-89cfee83a6e2
+    content: "Verify SAE structure adapter works: flat structure from service → nested structure in frontend (test with validate_food_dynamic endpoint)"
+    status: pending
+  - id: fc94dbf4-c108-4c68-9697-b19d3b606424
+    content: "Verify treatment line format normalization: \"first-line\", \"L1\", \"frontline\" → all normalize to \"L1\" (test all format variations)"
+    status: pending
+  - id: 4dcf6e7f-f42e-4a14-8469-3160ae9cf419
+    content: "Test batch recommendation via orchestrator: verify ayesha_orchestrator.py call_food_validator can recommend multiple foods"
+    status: pending
+---
+
 # Food Validation Product - Cancer-Specific Treatment Line Intelligence
 
 **Product Vision**: Build a precision nutrition system that recommends foods/supplements based on cancer type, treatment line, and patient biomarkers, validated through SPE framework and displayed to patients via FoodRankingPanel.
@@ -680,20 +727,3 @@
 5. Create biomarker → food mapping
 6. Add batch recommendation endpoint
 7. Enhance evidence service for treatment line
-
-### To-dos
-
-- [x] supplement_treatment_rules.json EXISTS (verified at `.cursor/ayesha/hypothesis_validator/data/`)
-- [ ] **CRITICAL**: Add SAE structure adapter in hypothesis_validator.py:798-858 (copy from validate_food_ab_enhanced line 435-446)
-- [ ] Add treatment line format normalization in food_treatment_line_service.py (all formats → "L1"/"L2"/"L3")
-- [ ] Create cancer_type_food_recommendations.json mapping cancer types (ovarian_cancer_hgs, breast_cancer, etc.) to pathways and recommended foods with treatment line filters
-- [x] Treatment line affects confidence only (by design) - verified in code (food_spe_integration.py:233-237, 458-463)
-- [x] SAE boost is properly applied in food_spe_integration.py _compute_confidence (line_app + seq_fit) × 0.05 - verified
-- [ ] Update FoodRankingPanel.jsx to display treatment line context (L1, L2, L3), cancer type, biomarker matches (HRD+ match)
-- [ ] Fix SAE structure adapter so treatment line intelligence accordion displays correctly (nested structure) - **CRITICAL**: This is the same as Priority 1 #1
-- [ ] Create biomarker_food_mapping.json at `.cursor/ayesha/hypothesis_validator/data/` mapping HRD_POSITIVE, TMB_HIGH, MSI_HIGH to target pathways and recommended foods with mechanisms
-- [ ] Update enhanced_evidence_service.py get_complete_evidence to filter evidence by treatment line context (first-line vs maintenance)
-- [ ] Test first-line chemotherapy for ovarian cancer (HGS) scenario: verify foods target TP53/DNA repair, have high line_appropriateness, show HRD+ match in FoodRankingPanel
-- [ ] Verify SAE structure adapter works: flat structure from service → nested structure in frontend (test with validate_food_dynamic endpoint)
-- [ ] Verify treatment line format normalization: "first-line", "L1", "frontline" → all normalize to "L1" (test all format variations)
-- [ ] Test batch recommendation via orchestrator: verify ayesha_orchestrator.py call_food_validator can recommend multiple foods

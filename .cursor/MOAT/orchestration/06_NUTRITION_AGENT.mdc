@@ -1,0 +1,202 @@
+# 🥗 MODULE 06: TOXICITY-AWARE NUTRITION AGENT
+
+**Purpose:** Generate drug-aware nutrition plans with timing rules  
+**Priority:** 🟢 MEDIUM | **Dependencies:** 01 | **Consumers:** 07
+
+---
+
+## 🎯 MISSION
+
+Build a nutrition agent that can:
+1. Map drug mechanisms to toxicity pathways
+2. Recommend protective foods/supplements
+3. Identify foods to avoid (interactions)
+4. Generate timing rules (before/during/after treatment)
+5. Consider germline status (e.g., MBD4 → BER stress)
+
+---
+
+## 📥 INPUTS
+
+```python
+# From Module 01
+patient_profile: PatientProfile
+mutations: List[Mutation]
+germline_panel: GermlinePanel
+current_treatment: str  # e.g., "carboplatin"
+```
+
+---
+
+## 📤 OUTPUTS
+
+### NutritionPlan Schema
+
+```python
+@dataclass
+class Supplement:
+    name: str
+    dosage: str
+    timing: str  # "post_infusion", "daily", "with_food"
+    mechanism: str
+    evidence_level: str
+
+@dataclass
+class FoodRecommendation:
+    food: str
+    reason: str
+    frequency: str
+    category: str  # "prioritize", "include", "limit"
+
+@dataclass
+class DrugInteraction:
+    drug: str
+    food: str
+    interaction_type: str  # "avoid", "caution", "timing"
+    mechanism: str
+    severity: str
+
+@dataclass
+class NutritionPlan:
+    patient_id: str
+    treatment: str
+    supplements: List[Supplement]
+    foods_to_prioritize: List[FoodRecommendation]
+    foods_to_avoid: List[FoodRecommendation]
+    drug_food_interactions: List[DrugInteraction]
+    timing_rules: Dict[str, str]
+    provenance: Dict[str, any]
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### File Structure
+
+```
+api/services/nutrition/
+├── __init__.py
+├── nutrition_agent.py
+├── drug_toxicity_mapper.py
+├── food_database.py
+├── interaction_checker.py
+├── timing_generator.py
+└── tests/
+```
+
+### Core Implementation
+
+```python
+# api/services/nutrition/nutrition_agent.py
+
+class NutritionAgent:
+    """Generate toxicity-aware nutrition plans."""
+    
+    DRUG_TOXICITY_MAP = {
+        'carboplatin': {
+            'pathway': 'DDR',
+            'toxicity': 'DNA_repair_stress',
+            'protective': [
+                {'name': 'NAC', 'dose': '600mg', 'timing': 'post_infusion', 
+                 'mechanism': 'Glutathione precursor → DNA repair support'},
+                {'name': 'Vitamin D', 'dose': '2000 IU', 'timing': 'daily',
+                 'mechanism': 'DNA repair enzyme cofactor'},
+                {'name': 'Omega-3', 'dose': '2g', 'timing': 'daily',
+                 'mechanism': 'Anti-inflammatory → reduce oxidative stress'}
+            ],
+            'avoid': ['grapefruit'],  # CYP3A4
+            'avoid_during': ['high_antioxidants']  # May protect tumor
+        },
+        'olaparib': {
+            'pathway': 'DDR',
+            'toxicity': 'hematologic',
+            'protective': [
+                {'name': 'Folate', 'dose': '400mcg', 'timing': 'daily',
+                 'mechanism': 'One-carbon metabolism support'},
+                {'name': 'B12', 'dose': '1000mcg', 'timing': 'weekly',
+                 'mechanism': 'Hematologic support'}
+            ],
+            'avoid': ['st_johns_wort'],  # CYP3A4 inducer
+            'monitor': ['anemia', 'fatigue']
+        }
+    }
+    
+    async def generate(
+        self,
+        patient_profile,
+        current_treatment: str = None
+    ) -> NutritionPlan:
+        """Generate nutrition plan based on treatment."""
+        
+        treatment = current_treatment or self._infer_treatment(patient_profile)
+        drug_info = self.DRUG_TOXICITY_MAP.get(treatment.lower(), {})
+        
+        # Get protective supplements
+        supplements = [
+            Supplement(
+                name=s['name'],
+                dosage=s['dose'],
+                timing=s['timing'],
+                mechanism=s['mechanism'],
+                evidence_level='moderate'
+            )
+            for s in drug_info.get('protective', [])
+        ]
+        
+        # Adjust for germline status
+        if self._has_ber_deficiency(patient_profile):
+            # MBD4 loss → extra DNA repair stress
+            supplements.append(Supplement(
+                name='Zinc',
+                dosage='15mg',
+                timing='daily',
+                mechanism='DNA repair enzyme cofactor',
+                evidence_level='low'
+            ))
+        
+        return NutritionPlan(
+            patient_id=patient_profile.patient_id,
+            treatment=treatment,
+            supplements=supplements,
+            foods_to_prioritize=self._get_priority_foods(drug_info),
+            foods_to_avoid=self._get_avoid_foods(drug_info),
+            drug_food_interactions=self._check_interactions(treatment),
+            timing_rules=self._get_timing_rules(drug_info),
+            provenance={'method': 'drug_moa_based'}
+        )
+    
+    def _has_ber_deficiency(self, patient_profile) -> bool:
+        """Check for BER pathway deficiency."""
+        ber_genes = {'MBD4', 'MUTYH', 'OGG1'}
+        for mut in patient_profile.mutations:
+            if mut.gene.upper() in ber_genes:
+                return True
+        return False
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+- [ ] Drug toxicity mapping
+- [ ] Protective supplement recommendations
+- [ ] Food-drug interaction checking
+- [ ] Timing rule generation
+- [ ] Germline-aware adjustments
+- [ ] Unit tests
+
+---
+
+## ✅ ACCEPTANCE CRITERIA
+
+1. ✅ Map drug MoA to toxicity pathway
+2. ✅ Generate protective supplement list
+3. ✅ Identify foods to avoid
+4. ✅ Include timing rules
+5. ✅ Consider germline status
+
+---
+
+**Module Status:** ⬜ TODO  
+**Estimated Time:** 1-2 days

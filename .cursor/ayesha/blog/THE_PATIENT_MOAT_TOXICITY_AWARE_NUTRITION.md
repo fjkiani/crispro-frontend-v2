@@ -519,3 +519,6 @@ MOAT CAPABILITY VALIDATED:
 
 **The system works. The MOAT is real. The patients benefit.**
 
+
+
+

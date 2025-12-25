@@ -1,0 +1,697 @@
+---
+alwaysApply: false
+description: Demo Test Cases - Ready to Execute
+globs:
+---
+
+# 🎬 DEMO TEST CASES
+
+**Date:** January 28, 2025  
+**Status:** ✅ **READY TO EXECUTE**  
+**Backend:** http://localhost:8000  
+**Frontend:** http://localhost:5173
+
+---
+
+## 🎯 DEMO 1: RESISTANCE PREDICTION (Multiple Myeloma)
+
+### Test Case 1.1: DIS3 Mutation (HIGH Risk)
+
+**Endpoint:** `POST /api/resistance/predict`
+
+**Request:**
+```json
+{
+  "disease": "myeloma",
+  "mutations": [
+    {
+      "gene": "DIS3",
+      "hgvs_p": "p.Arg819Ter"
+    }
+  ],
+  "current_drug_class": "proteasome_inhibitor",
+  "treatment_line": 1
+}
+```
+
+**Expected Response:**
+- `risk_level`: "HIGH"
+- `relative_risk`: 2.08
+- `p_value`: 0.0145
+- `validation_source`: "MMRF_CoMMpass_995"
+- `alternatives`: Array with carfilzomib, daratumumab
+
+**Frontend:** Navigate to `/myeloma` page, input DIS3 mutation
+
+---
+
+### Test Case 1.2: NF1 Mutation (Ovarian Cancer)
+
+**Request:**
+```json
+{
+  "disease": "ovarian",
+  "mutations": [
+    {
+      "gene": "NF1",
+      "hgvs_p": "p.Arg1276Ter"
+    }
+  ],
+  "current_drug_class": "platinum",
+  "treatment_line": 1
+}
+```
+
+**Expected Response:**
+- `risk_level`: "MEDIUM-HIGH" or "HIGH"
+- `relative_risk`: ~2.10
+- `p_value`: <0.05
+- `alternatives`: Array with MAPK-targeting drugs
+
+**Frontend:** Navigate to `/ovarian` page, input NF1 mutation
+
+---
+
+## 🎯 DEMO 2: DRUG EFFICACY (S/P/E Framework)
+
+### Test Case 2.1: MBD4+TP53 Patient (Should Rank PARP #1-3)
+
+**Endpoint:** `POST /api/efficacy/predict`
+
+**Request:**
+```json
+{
+  "mutations": [
+    {
+      "gene": "MBD4",
+      "hgvs_p": "p.Arg1239del",
+      "chrom": "3",
+      "pos": 129430000,
+      "ref": "A",
+      "alt": ""
+    },
+    {
+      "gene": "TP53",
+      "hgvs_p": "p.Arg273His",
+      "chrom": "17",
+      "pos": 7673800,
+      "ref": "G",
+      "alt": "A"
+    }
+  ],
+  "disease": "ovarian",
+  "model_id": "evo2_1b",
+  "options": {
+    "adaptive": true,
+    "ensemble": false
+  }
+}
+```
+
+**Expected Response:**
+- `drugs`: Array with PARP inhibitors (olaparib, niraparib, rucaparib) ranked #1-3
+- `provenance`: Contains S/P/E breakdown
+- `confidence_breakdown`: Shows sequence, pathway, evidence scores
+
+**Frontend:** Navigate to `/clinical-genomics` or use `EfficacyPanel.jsx`
+
+---
+
+## 🎯 DEMO 3: VUS RESOLUTION
+
+### Test Case 3.1: RAD51C Variant (Should Resolve to "Likely damaging")
+
+**Endpoint:** `POST /api/vus/identify`
+
+**Request:**
+```json
+{
+  "gene": "RAD51C",
+  "chrom": "17",
+  "pos": 58709872,
+  "ref": "T",
+  "alt": "C",
+  "assembly": "GRCh38"
+}
+```
+
+**Expected Response:**
+- `triage.verdict`: "Likely damaging (ML)" or "Likely pathogenic"
+- `provenance.resolution_path`: "evo2"
+- `sequence.min_delta`: Negative value (damaging)
+- `pathway_context.pathway_relevance`: "high" (DDR pathway)
+
+**Frontend:** Navigate to `/mutation-explorer`, input RAD51C variant
+
+---
+
+### Test Case 3.2: Known Benign Variant
+
+**Request:**
+```json
+{
+  "gene": "BRCA1",
+  "hgvs_c": "c.81C>T",
+  "assembly": "GRCh38"
+}
+```
+
+**Expected Response:**
+- `triage.verdict`: "Benign" or "Likely benign"
+- `provenance.resolution_path`: "prior" (ClinVar)
+- `coverage.clinvar.status`: "Benign"
+
+---
+
+## 🎯 DEMO 4: TRIAL MATCHING
+
+### Test Case 4.1: DDR-High Patient (MBD4+TP53)
+
+**Endpoint:** `POST /api/trials/agent/search`
+
+**Request:**
+```json
+{
+  "disease": "ovarian",
+  "mutations": [
+    {"gene": "MBD4", "hgvs_p": "p.Arg1239del"},
+    {"gene": "TP53", "hgvs_p": "p.Arg273His"}
+  ],
+  "tumor_context": {
+    "tmb": 8.5,
+    "msi_status": "MSS"
+  }
+}
+```
+
+**Expected Response:**
+- `matched_trials`: Array of trials
+- Top trials should include PARP inhibitors, ATR inhibitors
+- `total_found`: >0
+- `excluded_count`: Number of filtered trials
+
+**Frontend:** Navigate to `/ayesha-trials` or use `AutonomousTrialAgent.jsx`
+
+---
+
+## 🎯 DEMO 5: METASTASIS ASSESSMENT
+
+### Test Case 5.1: KRAS G12C Variant
+
+**Endpoint:** `POST /api/metastasis/assess`
+
+**Request:**
+```json
+{
+  "gene": "KRAS",
+  "hgvs_p": "p.Gly12Cys",
+  "chrom": "12",
+  "pos": 25398284,
+  "ref": "G",
+  "alt": "T"
+}
+```
+
+**Expected Response:**
+- `metastatic_potential`: Score
+- `pathway_analysis`: MAPK pathway details
+- `interception_targets`: Array of potential targets
+
+**Frontend:** Navigate to `/metastasis-dashboard`
+
+---
+
+## 🎯 DEMO 6: SYNTHETIC LETHALITY
+
+### Test Case 6.1: KRAS G12C Synthetic Lethal Partners
+
+**Endpoint:** `POST /api/guidance/synthetic_lethality`
+
+**Request:**
+```json
+{
+  "gene": "KRAS",
+  "hgvs_p": "p.Gly12Cys",
+  "disease": "lung"
+}
+```
+
+**Expected Response:**
+- `synthetic_lethal_partners`: Array of genes
+- `confidence`: Scores for each partner
+- `evidence`: Literature support
+
+**Frontend:** Navigate to `/synthetic-lethality` or use `SyntheticLethalityDetective.jsx`
+
+---
+
+## 🚀 QUICK DEMO SCRIPT
+
+### 1. Test Backend Health
+```bash
+curl http://localhost:8000/api/health
+```
+
+### 2. Test Resistance Prediction (DIS3)
+```bash
+curl -X POST http://localhost:8000/api/resistance/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "disease": "myeloma",
+    "mutations": [{"gene": "DIS3", "hgvs_p": "p.Arg819Ter"}],
+    "current_drug_class": "proteasome_inhibitor",
+    "treatment_line": 1
+  }'
+```
+
+### 3. Test Drug Efficacy (MBD4+TP53)
+```bash
+curl -X POST http://localhost:8000/api/efficacy/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mutations": [
+      {"gene": "MBD4", "hgvs_p": "p.Arg1239del", "chrom": "3", "pos": 129430000, "ref": "A", "alt": ""},
+      {"gene": "TP53", "hgvs_p": "p.Arg273His", "chrom": "17", "pos": 7673800, "ref": "G", "alt": "A"}
+    ],
+    "disease": "ovarian",
+    "model_id": "evo2_1b"
+  }'
+```
+
+### 4. Test VUS Resolution (RAD51C)
+```bash
+curl -X POST http://localhost:8000/api/vus/identify \
+  -H "Content-Type: application/json" \
+  -d '{
+    "gene": "RAD51C",
+    "chrom": "17",
+    "pos": 58709872,
+    "ref": "T",
+    "alt": "C",
+    "assembly": "GRCh38"
+  }'
+```
+
+### 5. Test Trial Matching
+```bash
+curl -X POST http://localhost:8000/api/trials/agent/search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "disease": "ovarian",
+    "mutations": [
+      {"gene": "MBD4", "hgvs_p": "p.Arg1239del"},
+      {"gene": "TP53", "hgvs_p": "p.Arg273His"}
+    ]
+  }'
+```
+
+---
+
+## 📊 FRONTEND DEMO PAGES
+
+1. **Resistance Prediction:**
+   - `/myeloma` - Multiple Myeloma resistance panel
+   - `/ovarian` - Ovarian cancer resistance panel
+
+2. **Drug Efficacy:**
+   - `/clinical-genomics` - Clinical Genomics Command Center
+   - `/hypothesis-validator` - Hypothesis Validator with S/P/E
+
+3. **VUS Resolution:**
+   - `/mutation-explorer` - Mutation Explorer with VUS resolution
+
+4. **Trial Matching:**
+   - `/ayesha-trials` - Ayesha Trial Explorer
+   - `/agent-dashboard` - Autonomous Trial Agent
+
+5. **Metastasis:**
+   - `/metastasis-dashboard` - Metastasis Assessment Dashboard
+
+6. **Synthetic Lethality:**
+   - `/synthetic-lethality` - Synthetic Lethality Detective
+
+---
+
+## ✅ VERIFICATION CHECKLIST
+
+- [ ] Backend running on http://localhost:8000
+- [ ] Frontend running on http://localhost:5173
+- [ ] Health endpoint responds
+- [ ] Resistance prediction works (DIS3)
+- [ ] Drug efficacy works (MBD4+TP53)
+- [ ] VUS resolution works (RAD51C)
+- [ ] Trial matching works (DDR-high patient)
+- [ ] Frontend pages load correctly
+
+---
+
+*Document Author: Zo*  
+*Last Updated: January 28, 2025*  
+*Status: ✅ READY TO DEMO*
+
+---
+
+# 🎬 DEMO TEST CASES
+
+**Date:** January 28, 2025  
+**Status:** ✅ **READY TO EXECUTE**  
+**Backend:** http://localhost:8000  
+**Frontend:** http://localhost:5173
+
+---
+
+## 🎯 DEMO 1: RESISTANCE PREDICTION (Multiple Myeloma)
+
+### Test Case 1.1: DIS3 Mutation (HIGH Risk)
+
+**Endpoint:** `POST /api/resistance/predict`
+
+**Request:**
+```json
+{
+  "disease": "myeloma",
+  "mutations": [
+    {
+      "gene": "DIS3",
+      "hgvs_p": "p.Arg819Ter"
+    }
+  ],
+  "current_drug_class": "proteasome_inhibitor",
+  "treatment_line": 1
+}
+```
+
+**Expected Response:**
+- `risk_level`: "HIGH"
+- `relative_risk`: 2.08
+- `p_value`: 0.0145
+- `validation_source`: "MMRF_CoMMpass_995"
+- `alternatives`: Array with carfilzomib, daratumumab
+
+**Frontend:** Navigate to `/myeloma` page, input DIS3 mutation
+
+---
+
+### Test Case 1.2: NF1 Mutation (Ovarian Cancer)
+
+**Request:**
+```json
+{
+  "disease": "ovarian",
+  "mutations": [
+    {
+      "gene": "NF1",
+      "hgvs_p": "p.Arg1276Ter"
+    }
+  ],
+  "current_drug_class": "platinum",
+  "treatment_line": 1
+}
+```
+
+**Expected Response:**
+- `risk_level`: "MEDIUM-HIGH" or "HIGH"
+- `relative_risk`: ~2.10
+- `p_value`: <0.05
+- `alternatives`: Array with MAPK-targeting drugs
+
+**Frontend:** Navigate to `/ovarian` page, input NF1 mutation
+
+---
+
+## 🎯 DEMO 2: DRUG EFFICACY (S/P/E Framework)
+
+### Test Case 2.1: MBD4+TP53 Patient (Should Rank PARP #1-3)
+
+**Endpoint:** `POST /api/efficacy/predict`
+
+**Request:**
+```json
+{
+  "mutations": [
+    {
+      "gene": "MBD4",
+      "hgvs_p": "p.Arg1239del",
+      "chrom": "3",
+      "pos": 129430000,
+      "ref": "A",
+      "alt": ""
+    },
+    {
+      "gene": "TP53",
+      "hgvs_p": "p.Arg273His",
+      "chrom": "17",
+      "pos": 7673800,
+      "ref": "G",
+      "alt": "A"
+    }
+  ],
+  "disease": "ovarian",
+  "model_id": "evo2_1b",
+  "options": {
+    "adaptive": true,
+    "ensemble": false
+  }
+}
+```
+
+**Expected Response:**
+- `drugs`: Array with PARP inhibitors (olaparib, niraparib, rucaparib) ranked #1-3
+- `provenance`: Contains S/P/E breakdown
+- `confidence_breakdown`: Shows sequence, pathway, evidence scores
+
+**Frontend:** Navigate to `/clinical-genomics` or use `EfficacyPanel.jsx`
+
+---
+
+## 🎯 DEMO 3: VUS RESOLUTION
+
+### Test Case 3.1: RAD51C Variant (Should Resolve to "Likely damaging")
+
+**Endpoint:** `POST /api/vus/identify`
+
+**Request:**
+```json
+{
+  "gene": "RAD51C",
+  "chrom": "17",
+  "pos": 58709872,
+  "ref": "T",
+  "alt": "C",
+  "assembly": "GRCh38"
+}
+```
+
+**Expected Response:**
+- `triage.verdict`: "Likely damaging (ML)" or "Likely pathogenic"
+- `provenance.resolution_path`: "evo2"
+- `sequence.min_delta`: Negative value (damaging)
+- `pathway_context.pathway_relevance`: "high" (DDR pathway)
+
+**Frontend:** Navigate to `/mutation-explorer`, input RAD51C variant
+
+---
+
+### Test Case 3.2: Known Benign Variant
+
+**Request:**
+```json
+{
+  "gene": "BRCA1",
+  "hgvs_c": "c.81C>T",
+  "assembly": "GRCh38"
+}
+```
+
+**Expected Response:**
+- `triage.verdict`: "Benign" or "Likely benign"
+- `provenance.resolution_path`: "prior" (ClinVar)
+- `coverage.clinvar.status`: "Benign"
+
+---
+
+## 🎯 DEMO 4: TRIAL MATCHING
+
+### Test Case 4.1: DDR-High Patient (MBD4+TP53)
+
+**Endpoint:** `POST /api/trials/agent/search`
+
+**Request:**
+```json
+{
+  "disease": "ovarian",
+  "mutations": [
+    {"gene": "MBD4", "hgvs_p": "p.Arg1239del"},
+    {"gene": "TP53", "hgvs_p": "p.Arg273His"}
+  ],
+  "tumor_context": {
+    "tmb": 8.5,
+    "msi_status": "MSS"
+  }
+}
+```
+
+**Expected Response:**
+- `matched_trials`: Array of trials
+- Top trials should include PARP inhibitors, ATR inhibitors
+- `total_found`: >0
+- `excluded_count`: Number of filtered trials
+
+**Frontend:** Navigate to `/ayesha-trials` or use `AutonomousTrialAgent.jsx`
+
+---
+
+## 🎯 DEMO 5: METASTASIS ASSESSMENT
+
+### Test Case 5.1: KRAS G12C Variant
+
+**Endpoint:** `POST /api/metastasis/assess`
+
+**Request:**
+```json
+{
+  "gene": "KRAS",
+  "hgvs_p": "p.Gly12Cys",
+  "chrom": "12",
+  "pos": 25398284,
+  "ref": "G",
+  "alt": "T"
+}
+```
+
+**Expected Response:**
+- `metastatic_potential`: Score
+- `pathway_analysis`: MAPK pathway details
+- `interception_targets`: Array of potential targets
+
+**Frontend:** Navigate to `/metastasis-dashboard`
+
+---
+
+## 🎯 DEMO 6: SYNTHETIC LETHALITY
+
+### Test Case 6.1: KRAS G12C Synthetic Lethal Partners
+
+**Endpoint:** `POST /api/guidance/synthetic_lethality`
+
+**Request:**
+```json
+{
+  "gene": "KRAS",
+  "hgvs_p": "p.Gly12Cys",
+  "disease": "lung"
+}
+```
+
+**Expected Response:**
+- `synthetic_lethal_partners`: Array of genes
+- `confidence`: Scores for each partner
+- `evidence`: Literature support
+
+**Frontend:** Navigate to `/synthetic-lethality` or use `SyntheticLethalityDetective.jsx`
+
+---
+
+## 🚀 QUICK DEMO SCRIPT
+
+### 1. Test Backend Health
+```bash
+curl http://localhost:8000/api/health
+```
+
+### 2. Test Resistance Prediction (DIS3)
+```bash
+curl -X POST http://localhost:8000/api/resistance/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "disease": "myeloma",
+    "mutations": [{"gene": "DIS3", "hgvs_p": "p.Arg819Ter"}],
+    "current_drug_class": "proteasome_inhibitor",
+    "treatment_line": 1
+  }'
+```
+
+### 3. Test Drug Efficacy (MBD4+TP53)
+```bash
+curl -X POST http://localhost:8000/api/efficacy/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mutations": [
+      {"gene": "MBD4", "hgvs_p": "p.Arg1239del", "chrom": "3", "pos": 129430000, "ref": "A", "alt": ""},
+      {"gene": "TP53", "hgvs_p": "p.Arg273His", "chrom": "17", "pos": 7673800, "ref": "G", "alt": "A"}
+    ],
+    "disease": "ovarian",
+    "model_id": "evo2_1b"
+  }'
+```
+
+### 4. Test VUS Resolution (RAD51C)
+```bash
+curl -X POST http://localhost:8000/api/vus/identify \
+  -H "Content-Type: application/json" \
+  -d '{
+    "gene": "RAD51C",
+    "chrom": "17",
+    "pos": 58709872,
+    "ref": "T",
+    "alt": "C",
+    "assembly": "GRCh38"
+  }'
+```
+
+### 5. Test Trial Matching
+```bash
+curl -X POST http://localhost:8000/api/trials/agent/search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "disease": "ovarian",
+    "mutations": [
+      {"gene": "MBD4", "hgvs_p": "p.Arg1239del"},
+      {"gene": "TP53", "hgvs_p": "p.Arg273His"}
+    ]
+  }'
+```
+
+---
+
+## 📊 FRONTEND DEMO PAGES
+
+1. **Resistance Prediction:**
+   - `/myeloma` - Multiple Myeloma resistance panel
+   - `/ovarian` - Ovarian cancer resistance panel
+
+2. **Drug Efficacy:**
+   - `/clinical-genomics` - Clinical Genomics Command Center
+   - `/hypothesis-validator` - Hypothesis Validator with S/P/E
+
+3. **VUS Resolution:**
+   - `/mutation-explorer` - Mutation Explorer with VUS resolution
+
+4. **Trial Matching:**
+   - `/ayesha-trials` - Ayesha Trial Explorer
+   - `/agent-dashboard` - Autonomous Trial Agent
+
+5. **Metastasis:**
+   - `/metastasis-dashboard` - Metastasis Assessment Dashboard
+
+6. **Synthetic Lethality:**
+   - `/synthetic-lethality` - Synthetic Lethality Detective
+
+---
+
+## ✅ VERIFICATION CHECKLIST
+
+- [ ] Backend running on http://localhost:8000
+- [ ] Frontend running on http://localhost:5173
+- [ ] Health endpoint responds
+- [ ] Resistance prediction works (DIS3)
+- [ ] Drug efficacy works (MBD4+TP53)
+- [ ] VUS resolution works (RAD51C)
+- [ ] Trial matching works (DDR-high patient)
+- [ ] Frontend pages load correctly
+
+---
+
+*Document Author: Zo*  
+*Last Updated: January 28, 2025*  
+*Status: ✅ READY TO DEMO*

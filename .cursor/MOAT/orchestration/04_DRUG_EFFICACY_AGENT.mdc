@@ -1,0 +1,5276 @@
+# 💊 MODULE 04: DRUG EFFICACY AGENT (S/P/E FRAMEWORK)
+
+**Purpose:** Rank drugs by efficacy using Sequence/Pathway/Evidence scoring  
+**Priority:** 🟡 HIGH | **Dependencies:** 01, 02, 03 | **Consumers:** 05, 07
+
+---
+
+## 🎯 MISSION
+
+Build a drug efficacy agent that can:
+1. Score drugs using the S/P/E framework (validated in Multiple Myeloma)
+2. Integrate Evo2 sequence scoring (S)
+3. Calculate pathway burden alignment (P)
+4. Synthesize literature evidence (E)
+5. Rank drugs with confidence tiers (I/II/III/Research)
+
+---
+
+## 📊 VALIDATED FRAMEWORK
+
+### S/P/E Formula
+
+```
+efficacy_score = 0.3*S + 0.4*P + 0.3*E + clinvar_prior
+```
+
+Where:
+- **S (Sequence):** Evo2 variant impact (0.0 - 1.0)
+- **P (Pathway):** Drug-pathway alignment (0.0 - 1.0)
+- **E (Evidence):** Literature + ClinVar support (0.0 - 1.0)
+- **clinvar_prior:** ClinVar pathogenicity boost (0.0 - 0.1)
+
+### Existing Implementation
+
+**Location:** `api/routers/efficacy.py`
+
+**Key Endpoints:**
+- `POST /api/efficacy/predict` - Full S/P/E scoring
+- `POST /api/evo/score_variant_multi` - Evo2 sequence scoring
+- `POST /api/insights/predict_protein_functionality_change` - Functionality proxy
+
+---
+
+## 📥 INPUTS
+
+### From Previous Agents
+
+```python
+# From Module 01 (Data Extraction)
+patient_profile: PatientProfile
+mutations: List[Mutation]
+disease: str
+
+# From Module 02 (Biomarker)
+biomarker_profile: BiomarkerProfile
+tmb: float
+msi_status: str
+hrd_status: str
+io_eligible: bool
+parp_eligible: bool
+
+# From Module 03 (Resistance)
+resistance_prediction: ResistancePrediction
+pathway_analyses: List[PathwayAnalysis]
+```
+
+---
+
+## 📤 OUTPUTS
+
+### DrugRanking Schema
+
+```python
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from enum import Enum
+
+class EvidenceTier(Enum):
+    TIER_I = "I"       # On-label, guideline-backed
+    TIER_II = "II"     # Strong evidence, off-label
+    TIER_III = "III"   # Mechanistic support, limited evidence
+    RESEARCH = "Research"
+
+class Confidence(Enum):
+    VERY_HIGH = "very_high"
+    HIGH = "high"
+    MODERATE = "moderate"
+    LOW = "low"
+
+@dataclass
+class SPEBreakdown:
+    sequence_score: float           # S component (0-1)
+    sequence_provenance: Dict       # Evo2 details
+    pathway_score: float            # P component (0-1)
+    pathway_alignment: Dict[str, float]  # Per-pathway scores
+    evidence_score: float           # E component (0-1)
+    evidence_sources: List[Dict]    # Papers, ClinVar
+    clinvar_prior: float            # ClinVar boost
+
+@dataclass
+class DrugRanking:
+    drug_name: str
+    drug_class: str                 # e.g., "PARP_inhibitor"
+    efficacy_score: float           # 0.0 - 1.0
+    spe_breakdown: SPEBreakdown
+    tier: EvidenceTier
+    confidence: Confidence
+    on_label: bool
+    mechanism: str                  # Why this drug works
+    rationale: List[str]            # Supporting reasons
+    contraindications: List[str]    # Reasons against
+    citations: List[Dict]           # Key papers
+
+@dataclass
+class DrugEfficacyResult:
+    patient_id: str
+    disease: str
+    ranked_drugs: List[DrugRanking]
+    top_recommendation: DrugRanking
+    mechanism_vector: List[float]   # 7D vector for trial matching
+    calculation_time_ms: int
+    provenance: Dict[str, any]
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### File Structure
+
+```
+api/services/efficacy/
+├── __init__.py
+├── efficacy_agent.py           # Main agent
+├── sequence_scorer.py          # S: Evo2 integration
+├── pathway_scorer.py           # P: Pathway alignment
+├── evidence_scorer.py          # E: Literature + ClinVar
+├── drug_ranker.py              # Combine S/P/E, rank
+├── tier_classifier.py          # Assign tiers
+├── drug_catalog.py             # Drug metadata
+├── constants.py                # Weights, thresholds
+└── tests/
+    ├── test_spe.py
+    ├── test_ranking.py
+    └── test_integration.py
+```
+
+### Core Agent Implementation
+
+```python
+# api/services/efficacy/efficacy_agent.py
+
+from typing import List, Optional
+from datetime import datetime
+import logging
+
+from .sequence_scorer import SequenceScorer
+from .pathway_scorer import PathwayScorer
+from .evidence_scorer import EvidenceScorer
+from .drug_ranker import DrugRanker
+from .tier_classifier import TierClassifier
+from ..models import (
+    PatientProfile, BiomarkerProfile, ResistancePrediction,
+    DrugEfficacyResult, DrugRanking
+)
+
+logger = logging.getLogger(__name__)
+
+class DrugEfficacyAgent:
+    """
+    Rank drugs using the S/P/E framework.
+    
+    Formula: efficacy = 0.3*S + 0.4*P + 0.3*E + clinvar_prior
+    
+    S = Sequence impact (Evo2)
+    P = Pathway alignment (drug MoA vs patient pathways)
+    E = Evidence (literature + ClinVar)
+    """
+    
+    def __init__(self, api_base: str = "http://127.0.0.1:8000"):
+        self.sequence_scorer = SequenceScorer(api_base)
+        self.pathway_scorer = PathwayScorer()
+        self.evidence_scorer = EvidenceScorer(api_base)
+        self.drug_ranker = DrugRanker()
+        self.tier_classifier = TierClassifier()
+        self.api_base = api_base
+    
+    async def rank_drugs(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile] = None,
+        resistance_prediction: Optional[ResistancePrediction] = None,
+        drug_classes: List[str] = None
+    ) -> DrugEfficacyResult:
+        """
+        Rank drugs by efficacy for a patient.
+        
+        Args:
+            patient_profile: Patient mutations and disease
+            biomarker_profile: TMB, MSI, HRD status
+            resistance_prediction: Pathway analyses
+            drug_classes: Optional filter for drug classes
+        
+        Returns:
+            DrugEfficacyResult with ranked drugs
+        """
+        start_time = datetime.utcnow()
+        logger.info(f"Ranking drugs for {patient_profile.patient_id}")
+        
+        mutations = self._mutations_to_dicts(patient_profile.mutations)
+        disease = patient_profile.disease
+        
+        # Get candidate drugs
+        candidate_drugs = self._get_candidate_drugs(
+            disease=disease,
+            biomarker_profile=biomarker_profile,
+            drug_classes=drug_classes
+        )
+        
+        rankings = []
+        
+        for drug in candidate_drugs:
+            try:
+                # Step 1: Sequence score (S)
+                s_score, s_provenance = await self.sequence_scorer.score(
+                    mutations=mutations,
+                    drug=drug
+                )
+                
+                # Step 2: Pathway score (P)
+                p_score, p_alignment = self.pathway_scorer.score(
+                    mutations=mutations,
+                    drug=drug,
+                    pathways=resistance_prediction.pathways if resistance_prediction else []
+                )
+                
+                # Step 3: Evidence score (E)
+                e_score, e_sources = await self.evidence_scorer.score(
+                    mutations=mutations,
+                    disease=disease,
+                    drug=drug
+                )
+                
+                # Step 4: ClinVar prior
+                clinvar_prior = self._get_clinvar_prior(mutations, drug)
+                
+                # Step 5: Calculate final score
+                efficacy = (
+                    0.3 * s_score +
+                    0.4 * p_score +
+                    0.3 * e_score +
+                    clinvar_prior
+                )
+                
+                # Step 6: Build SPE breakdown
+                spe = SPEBreakdown(
+                    sequence_score=s_score,
+                    sequence_provenance=s_provenance,
+                    pathway_score=p_score,
+                    pathway_alignment=p_alignment,
+                    evidence_score=e_score,
+                    evidence_sources=e_sources,
+                    clinvar_prior=clinvar_prior
+                )
+                
+                # Step 7: Classify tier
+                tier, confidence = self.tier_classifier.classify(
+                    efficacy_score=efficacy,
+                    evidence_score=e_score,
+                    disease=disease,
+                    drug=drug
+                )
+                
+                # Step 8: Generate rationale
+                rationale = self._generate_rationale(
+                    drug=drug,
+                    spe=spe,
+                    biomarker_profile=biomarker_profile
+                )
+                
+                ranking = DrugRanking(
+                    drug_name=drug['name'],
+                    drug_class=drug['class'],
+                    efficacy_score=round(efficacy, 3),
+                    spe_breakdown=spe,
+                    tier=tier,
+                    confidence=confidence,
+                    on_label=self._is_on_label(drug, disease),
+                    mechanism=drug.get('mechanism', ''),
+                    rationale=rationale,
+                    contraindications=self._get_contraindications(drug, mutations),
+                    citations=e_sources[:5]  # Top 5 papers
+                )
+                
+                rankings.append(ranking)
+                
+            except Exception as e:
+                logger.error(f"Error scoring {drug['name']}: {e}")
+                continue
+        
+        # Sort by efficacy
+        rankings.sort(key=lambda x: x.efficacy_score, reverse=True)
+        
+        # Build mechanism vector for trial matching
+        mechanism_vector = self._build_mechanism_vector(
+            pathways=resistance_prediction.pathways if resistance_prediction else [],
+            biomarker_profile=biomarker_profile
+        )
+        
+        elapsed = (datetime.utcnow() - start_time).total_seconds() * 1000
+        
+        return DrugEfficacyResult(
+            patient_id=patient_profile.patient_id,
+            disease=disease,
+            ranked_drugs=rankings,
+            top_recommendation=rankings[0] if rankings else None,
+            mechanism_vector=mechanism_vector,
+            calculation_time_ms=int(elapsed),
+            provenance={
+                'formula': '0.3*S + 0.4*P + 0.3*E + clinvar_prior',
+                'drugs_evaluated': len(candidate_drugs),
+                'drugs_ranked': len(rankings)
+            }
+        )
+    
+    def _build_mechanism_vector(
+        self,
+        pathways: List,
+        biomarker_profile: Optional[BiomarkerProfile]
+    ) -> List[float]:
+        """
+        Build 7D mechanism vector for trial matching.
+        
+        Vector: [DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux]
+        """
+        vector = [0.0] * 7
+        
+        # Map pathway analyses to vector
+        pathway_index = {
+            'DDR': 0, 'MAPK': 1, 'PI3K': 2,
+            'VEGF': 3, 'HER2': 4, 'IO': 5, 'Efflux': 6
+        }
+        
+        for pathway in pathways:
+            if pathway.pathway.upper() in pathway_index:
+                idx = pathway_index[pathway.pathway.upper()]
+                vector[idx] = pathway.burden_score
+        
+        # Add IO from biomarkers
+        if biomarker_profile and biomarker_profile.io_eligible:
+            vector[5] = 1.0  # IO pathway
+        
+        return vector
+```
+
+### Sequence Scorer (Evo2 Integration)
+
+```python
+# api/services/efficacy/sequence_scorer.py
+
+from typing import List, Dict, Tuple
+import httpx
+import logging
+
+logger = logging.getLogger(__name__)
+
+class SequenceScorer:
+    """
+    Score variant impact using Evo2 foundation model.
+    
+    Calls existing Evo2 endpoints:
+    - /api/evo/score_variant_multi (multi-window)
+    - /api/evo/score_variant_exon (exon context)
+    """
+    
+    def __init__(self, api_base: str):
+        self.api_base = api_base
+    
+    async def score(
+        self,
+        mutations: List[Dict],
+        drug: Dict
+    ) -> Tuple[float, Dict]:
+        """
+        Score mutations using Evo2.
+        
+        Returns:
+            Tuple of (score 0-1, provenance dict)
+        """
+        if not mutations:
+            return 0.5, {'method': 'no_mutations'}
+        
+        # Get drug-relevant genes
+        target_genes = drug.get('target_genes', [])
+        
+        # Filter mutations to drug-relevant genes
+        relevant_mutations = [
+            m for m in mutations
+            if m.get('gene', '').upper() in [g.upper() for g in target_genes]
+        ]
+        
+        if not relevant_mutations:
+            # No mutations in drug targets
+            return 0.5, {'method': 'no_target_mutations'}
+        
+        # Score each mutation with Evo2
+        scores = []
+        provenance = {'mutations_scored': []}
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for mut in relevant_mutations[:5]:  # Limit to 5
+                try:
+                    # Call Evo2 multi-window endpoint
+                    response = await client.post(
+                        f"{self.api_base}/api/evo/score_variant_multi",
+                        json={
+                            'chrom': mut.get('chromosome', ''),
+                            'pos': mut.get('position', 0),
+                            'ref': mut.get('ref', ''),
+                            'alt': mut.get('alt', ''),
+                            'build': 'hg38'
+                        }
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        delta = abs(data.get('min_delta', 0))
+                        # Normalize delta to 0-1 (higher delta = more impact)
+                        normalized = min(delta / 5.0, 1.0)
+                        scores.append(normalized)
+                        provenance['mutations_scored'].append({
+                            'gene': mut.get('gene'),
+                            'delta': delta,
+                            'normalized': normalized
+                        })
+                
+                except Exception as e:
+                    logger.warning(f"Evo2 scoring failed for {mut}: {e}")
+        
+        if not scores:
+            return 0.5, {'method': 'evo2_fallback', 'reason': 'no_scores'}
+        
+        # Average across mutations
+        avg_score = sum(scores) / len(scores)
+        provenance['method'] = 'evo2_multi_window'
+        provenance['avg_score'] = avg_score
+        
+        return avg_score, provenance
+```
+
+### Pathway Scorer
+
+```python
+# api/services/efficacy/pathway_scorer.py
+
+from typing import List, Dict, Tuple
+from .constants import DRUG_PATHWAY_MAPPING
+
+class PathwayScorer:
+    """
+    Score drug-pathway alignment.
+    
+    High score = drug targets patient's disrupted pathways
+    """
+    
+    def score(
+        self,
+        mutations: List[Dict],
+        drug: Dict,
+        pathways: List = None
+    ) -> Tuple[float, Dict[str, float]]:
+        """
+        Score pathway alignment between drug MoA and patient pathways.
+        
+        Returns:
+            Tuple of (score 0-1, per-pathway alignment dict)
+        """
+        drug_pathways = drug.get('pathways', [])
+        
+        if not drug_pathways:
+            return 0.5, {}
+        
+        alignment = {}
+        
+        # If we have pathway analyses from resistance agent
+        if pathways:
+            for pathway in pathways:
+                if pathway.pathway in drug_pathways:
+                    alignment[pathway.pathway] = pathway.burden_score
+        
+        # Otherwise, infer from mutations
+        else:
+            mutated_genes = {m.get('gene', '').upper() for m in mutations}
+            
+            for pathway in drug_pathways:
+                pathway_genes = DRUG_PATHWAY_MAPPING.get(pathway, set())
+                overlap = mutated_genes & pathway_genes
+                
+                if pathway_genes:
+                    burden = len(overlap) / len(pathway_genes)
+                    alignment[pathway] = min(burden * 3, 1.0)  # Scale up
+                else:
+                    alignment[pathway] = 0.0
+        
+        # Average alignment across drug's pathways
+        if alignment:
+            avg_alignment = sum(alignment.values()) / len(alignment)
+        else:
+            avg_alignment = 0.5
+        
+        return avg_alignment, alignment
+```
+
+### Drug Catalog
+
+```python
+# api/services/efficacy/drug_catalog.py
+
+DRUG_CATALOG = {
+    # PARP Inhibitors
+    'olaparib': {
+        'name': 'Olaparib',
+        'class': 'PARP_inhibitor',
+        'target_genes': ['PARP1', 'PARP2'],
+        'pathways': ['DDR', 'HRR'],
+        'mechanism': 'PARP inhibition → synthetic lethality with HRD',
+        'indications': ['ovarian_cancer', 'breast_cancer', 'prostate_cancer'],
+        'biomarker_required': ['BRCA1', 'BRCA2', 'HRD+']
+    },
+    'niraparib': {
+        'name': 'Niraparib',
+        'class': 'PARP_inhibitor',
+        'target_genes': ['PARP1', 'PARP2'],
+        'pathways': ['DDR', 'HRR'],
+        'mechanism': 'PARP inhibition (works regardless of BRCA status in maintenance)',
+        'indications': ['ovarian_cancer'],
+        'biomarker_required': []  # Approved regardless of BRCA
+    },
+    
+    # Platinum
+    'carboplatin': {
+        'name': 'Carboplatin',
+        'class': 'platinum',
+        'target_genes': [],  # DNA crosslinks
+        'pathways': ['DDR'],
+        'mechanism': 'DNA crosslinks → DDR-mediated cell death',
+        'indications': ['ovarian_cancer', 'lung_cancer', 'breast_cancer'],
+        'biomarker_required': []
+    },
+    
+    # Checkpoint Inhibitors
+    'pembrolizumab': {
+        'name': 'Pembrolizumab',
+        'class': 'checkpoint_inhibitor',
+        'target_genes': ['PDCD1'],  # PD-1
+        'pathways': ['IO'],
+        'mechanism': 'PD-1 blockade → T cell activation',
+        'indications': ['melanoma', 'lung_cancer', 'msi_high_any'],
+        'biomarker_required': ['TMB-H', 'MSI-H', 'PD-L1']
+    },
+    
+    # Targeted therapies
+    'vemurafenib': {
+        'name': 'Vemurafenib',
+        'class': 'BRAF_inhibitor',
+        'target_genes': ['BRAF'],
+        'pathways': ['MAPK'],
+        'mechanism': 'BRAF V600 inhibition → MAPK pathway blockade',
+        'indications': ['melanoma'],
+        'biomarker_required': ['BRAF_V600']
+    },
+    
+    # Anti-VEGF
+    'bevacizumab': {
+        'name': 'Bevacizumab',
+        'class': 'anti_VEGF',
+        'target_genes': ['VEGFA'],
+        'pathways': ['VEGF'],
+        'mechanism': 'VEGF-A neutralization → anti-angiogenesis',
+        'indications': ['ovarian_cancer', 'colorectal_cancer', 'lung_cancer'],
+        'biomarker_required': []
+    }
+}
+
+def get_drugs_for_disease(disease: str) -> List[Dict]:
+    """Get candidate drugs for a disease."""
+    disease_lower = disease.lower().replace(' ', '_')
+    
+    candidates = []
+    for drug_id, drug in DRUG_CATALOG.items():
+        for indication in drug['indications']:
+            if indication in disease_lower or disease_lower in indication:
+                candidates.append({**drug, 'id': drug_id})
+                break
+    
+    return candidates
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+### Phase 1: Sequence Scorer
+- [ ] Integrate with existing `/api/evo/score_variant_multi`
+- [ ] Handle Evo2 API errors gracefully
+- [ ] Normalize delta scores to 0-1
+- [ ] Unit tests
+
+### Phase 2: Pathway Scorer
+- [ ] Create drug-pathway mapping
+- [ ] Calculate pathway burden alignment
+- [ ] Integrate with resistance agent pathways
+- [ ] Unit tests
+
+### Phase 3: Evidence Scorer
+- [ ] Integrate with existing `/api/evidence/literature`
+- [ ] Add ClinVar lookup
+- [ ] Score evidence quality
+- [ ] Unit tests
+
+### Phase 4: Integration
+- [ ] Create DrugEfficacyAgent class
+- [ ] Implement S/P/E formula
+- [ ] Add tier classification
+- [ ] Build 7D mechanism vector
+- [ ] Integration tests
+
+---
+
+## 📡 API ENDPOINT
+
+```yaml
+POST /api/agents/drugs
+Content-Type: application/json
+
+Request:
+  patient_id: string
+  mutations: Mutation[]
+  disease: string
+  biomarker_profile: BiomarkerProfile  # optional
+  resistance_prediction: ResistancePrediction  # optional
+  drug_classes: string[]  # optional filter
+
+Response:
+  drug_efficacy_result: DrugEfficacyResult
+  calculation_time_ms: number
+```
+
+---
+
+## ✅ ACCEPTANCE CRITERIA
+
+1. ✅ S/P/E formula correctly implemented
+2. ✅ Evo2 integration for sequence scoring
+3. ✅ Pathway alignment calculated
+4. ✅ Evidence from literature integrated
+5. ✅ Drugs ranked by efficacy
+6. ✅ Tiers assigned (I/II/III/Research)
+7. ✅ 7D mechanism vector built
+8. ✅ Rationale generated for each drug
+9. ✅ Unit test coverage >80%
+
+---
+
+---
+
+## 🎯 MISSION
+
+Build a drug efficacy agent that can:
+1. Score drugs using the S/P/E framework (validated in Multiple Myeloma)
+2. Integrate Evo2 sequence scoring (S)
+3. Calculate pathway burden alignment (P)
+4. Synthesize literature evidence (E)
+5. Rank drugs with confidence tiers (I/II/III/Research)
+
+---
+
+## 📊 VALIDATED FRAMEWORK
+
+### S/P/E Formula
+
+```
+efficacy_score = 0.3*S + 0.4*P + 0.3*E + clinvar_prior
+```
+
+Where:
+- **S (Sequence):** Evo2 variant impact (0.0 - 1.0)
+- **P (Pathway):** Drug-pathway alignment (0.0 - 1.0)
+- **E (Evidence):** Literature + ClinVar support (0.0 - 1.0)
+- **clinvar_prior:** ClinVar pathogenicity boost (0.0 - 0.1)
+
+### Existing Implementation
+
+**Location:** `api/routers/efficacy.py`
+
+**Key Endpoints:**
+- `POST /api/efficacy/predict` - Full S/P/E scoring
+- `POST /api/evo/score_variant_multi` - Evo2 sequence scoring
+- `POST /api/insights/predict_protein_functionality_change` - Functionality proxy
+
+---
+
+## 📥 INPUTS
+
+### From Previous Agents
+
+```python
+# From Module 01 (Data Extraction)
+patient_profile: PatientProfile
+mutations: List[Mutation]
+disease: str
+
+# From Module 02 (Biomarker)
+biomarker_profile: BiomarkerProfile
+tmb: float
+msi_status: str
+hrd_status: str
+io_eligible: bool
+parp_eligible: bool
+
+# From Module 03 (Resistance)
+resistance_prediction: ResistancePrediction
+pathway_analyses: List[PathwayAnalysis]
+```
+
+---
+
+## 📤 OUTPUTS
+
+### DrugRanking Schema
+
+```python
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from enum import Enum
+
+class EvidenceTier(Enum):
+    TIER_I = "I"       # On-label, guideline-backed
+    TIER_II = "II"     # Strong evidence, off-label
+    TIER_III = "III"   # Mechanistic support, limited evidence
+    RESEARCH = "Research"
+
+class Confidence(Enum):
+    VERY_HIGH = "very_high"
+    HIGH = "high"
+    MODERATE = "moderate"
+    LOW = "low"
+
+@dataclass
+class SPEBreakdown:
+    sequence_score: float           # S component (0-1)
+    sequence_provenance: Dict       # Evo2 details
+    pathway_score: float            # P component (0-1)
+    pathway_alignment: Dict[str, float]  # Per-pathway scores
+    evidence_score: float           # E component (0-1)
+    evidence_sources: List[Dict]    # Papers, ClinVar
+    clinvar_prior: float            # ClinVar boost
+
+@dataclass
+class DrugRanking:
+    drug_name: str
+    drug_class: str                 # e.g., "PARP_inhibitor"
+    efficacy_score: float           # 0.0 - 1.0
+    spe_breakdown: SPEBreakdown
+    tier: EvidenceTier
+    confidence: Confidence
+    on_label: bool
+    mechanism: str                  # Why this drug works
+    rationale: List[str]            # Supporting reasons
+    contraindications: List[str]    # Reasons against
+    citations: List[Dict]           # Key papers
+
+@dataclass
+class DrugEfficacyResult:
+    patient_id: str
+    disease: str
+    ranked_drugs: List[DrugRanking]
+    top_recommendation: DrugRanking
+    mechanism_vector: List[float]   # 7D vector for trial matching
+    calculation_time_ms: int
+    provenance: Dict[str, any]
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### File Structure
+
+```
+api/services/efficacy/
+├── __init__.py
+├── efficacy_agent.py           # Main agent
+├── sequence_scorer.py          # S: Evo2 integration
+├── pathway_scorer.py           # P: Pathway alignment
+├── evidence_scorer.py          # E: Literature + ClinVar
+├── drug_ranker.py              # Combine S/P/E, rank
+├── tier_classifier.py          # Assign tiers
+├── drug_catalog.py             # Drug metadata
+├── constants.py                # Weights, thresholds
+└── tests/
+    ├── test_spe.py
+    ├── test_ranking.py
+    └── test_integration.py
+```
+
+### Core Agent Implementation
+
+```python
+# api/services/efficacy/efficacy_agent.py
+
+from typing import List, Optional
+from datetime import datetime
+import logging
+
+from .sequence_scorer import SequenceScorer
+from .pathway_scorer import PathwayScorer
+from .evidence_scorer import EvidenceScorer
+from .drug_ranker import DrugRanker
+from .tier_classifier import TierClassifier
+from ..models import (
+    PatientProfile, BiomarkerProfile, ResistancePrediction,
+    DrugEfficacyResult, DrugRanking
+)
+
+logger = logging.getLogger(__name__)
+
+class DrugEfficacyAgent:
+    """
+    Rank drugs using the S/P/E framework.
+    
+    Formula: efficacy = 0.3*S + 0.4*P + 0.3*E + clinvar_prior
+    
+    S = Sequence impact (Evo2)
+    P = Pathway alignment (drug MoA vs patient pathways)
+    E = Evidence (literature + ClinVar)
+    """
+    
+    def __init__(self, api_base: str = "http://127.0.0.1:8000"):
+        self.sequence_scorer = SequenceScorer(api_base)
+        self.pathway_scorer = PathwayScorer()
+        self.evidence_scorer = EvidenceScorer(api_base)
+        self.drug_ranker = DrugRanker()
+        self.tier_classifier = TierClassifier()
+        self.api_base = api_base
+    
+    async def rank_drugs(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile] = None,
+        resistance_prediction: Optional[ResistancePrediction] = None,
+        drug_classes: List[str] = None
+    ) -> DrugEfficacyResult:
+        """
+        Rank drugs by efficacy for a patient.
+        
+        Args:
+            patient_profile: Patient mutations and disease
+            biomarker_profile: TMB, MSI, HRD status
+            resistance_prediction: Pathway analyses
+            drug_classes: Optional filter for drug classes
+        
+        Returns:
+            DrugEfficacyResult with ranked drugs
+        """
+        start_time = datetime.utcnow()
+        logger.info(f"Ranking drugs for {patient_profile.patient_id}")
+        
+        mutations = self._mutations_to_dicts(patient_profile.mutations)
+        disease = patient_profile.disease
+        
+        # Get candidate drugs
+        candidate_drugs = self._get_candidate_drugs(
+            disease=disease,
+            biomarker_profile=biomarker_profile,
+            drug_classes=drug_classes
+        )
+        
+        rankings = []
+        
+        for drug in candidate_drugs:
+            try:
+                # Step 1: Sequence score (S)
+                s_score, s_provenance = await self.sequence_scorer.score(
+                    mutations=mutations,
+                    drug=drug
+                )
+                
+                # Step 2: Pathway score (P)
+                p_score, p_alignment = self.pathway_scorer.score(
+                    mutations=mutations,
+                    drug=drug,
+                    pathways=resistance_prediction.pathways if resistance_prediction else []
+                )
+                
+                # Step 3: Evidence score (E)
+                e_score, e_sources = await self.evidence_scorer.score(
+                    mutations=mutations,
+                    disease=disease,
+                    drug=drug
+                )
+                
+                # Step 4: ClinVar prior
+                clinvar_prior = self._get_clinvar_prior(mutations, drug)
+                
+                # Step 5: Calculate final score
+                efficacy = (
+                    0.3 * s_score +
+                    0.4 * p_score +
+                    0.3 * e_score +
+                    clinvar_prior
+                )
+                
+                # Step 6: Build SPE breakdown
+                spe = SPEBreakdown(
+                    sequence_score=s_score,
+                    sequence_provenance=s_provenance,
+                    pathway_score=p_score,
+                    pathway_alignment=p_alignment,
+                    evidence_score=e_score,
+                    evidence_sources=e_sources,
+                    clinvar_prior=clinvar_prior
+                )
+                
+                # Step 7: Classify tier
+                tier, confidence = self.tier_classifier.classify(
+                    efficacy_score=efficacy,
+                    evidence_score=e_score,
+                    disease=disease,
+                    drug=drug
+                )
+                
+                # Step 8: Generate rationale
+                rationale = self._generate_rationale(
+                    drug=drug,
+                    spe=spe,
+                    biomarker_profile=biomarker_profile
+                )
+                
+                ranking = DrugRanking(
+                    drug_name=drug['name'],
+                    drug_class=drug['class'],
+                    efficacy_score=round(efficacy, 3),
+                    spe_breakdown=spe,
+                    tier=tier,
+                    confidence=confidence,
+                    on_label=self._is_on_label(drug, disease),
+                    mechanism=drug.get('mechanism', ''),
+                    rationale=rationale,
+                    contraindications=self._get_contraindications(drug, mutations),
+                    citations=e_sources[:5]  # Top 5 papers
+                )
+                
+                rankings.append(ranking)
+                
+            except Exception as e:
+                logger.error(f"Error scoring {drug['name']}: {e}")
+                continue
+        
+        # Sort by efficacy
+        rankings.sort(key=lambda x: x.efficacy_score, reverse=True)
+        
+        # Build mechanism vector for trial matching
+        mechanism_vector = self._build_mechanism_vector(
+            pathways=resistance_prediction.pathways if resistance_prediction else [],
+            biomarker_profile=biomarker_profile
+        )
+        
+        elapsed = (datetime.utcnow() - start_time).total_seconds() * 1000
+        
+        return DrugEfficacyResult(
+            patient_id=patient_profile.patient_id,
+            disease=disease,
+            ranked_drugs=rankings,
+            top_recommendation=rankings[0] if rankings else None,
+            mechanism_vector=mechanism_vector,
+            calculation_time_ms=int(elapsed),
+            provenance={
+                'formula': '0.3*S + 0.4*P + 0.3*E + clinvar_prior',
+                'drugs_evaluated': len(candidate_drugs),
+                'drugs_ranked': len(rankings)
+            }
+        )
+    
+    def _build_mechanism_vector(
+        self,
+        pathways: List,
+        biomarker_profile: Optional[BiomarkerProfile]
+    ) -> List[float]:
+        """
+        Build 7D mechanism vector for trial matching.
+        
+        Vector: [DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux]
+        """
+        vector = [0.0] * 7
+        
+        # Map pathway analyses to vector
+        pathway_index = {
+            'DDR': 0, 'MAPK': 1, 'PI3K': 2,
+            'VEGF': 3, 'HER2': 4, 'IO': 5, 'Efflux': 6
+        }
+        
+        for pathway in pathways:
+            if pathway.pathway.upper() in pathway_index:
+                idx = pathway_index[pathway.pathway.upper()]
+                vector[idx] = pathway.burden_score
+        
+        # Add IO from biomarkers
+        if biomarker_profile and biomarker_profile.io_eligible:
+            vector[5] = 1.0  # IO pathway
+        
+        return vector
+```
+
+### Sequence Scorer (Evo2 Integration)
+
+```python
+# api/services/efficacy/sequence_scorer.py
+
+from typing import List, Dict, Tuple
+import httpx
+import logging
+
+logger = logging.getLogger(__name__)
+
+class SequenceScorer:
+    """
+    Score variant impact using Evo2 foundation model.
+    
+    Calls existing Evo2 endpoints:
+    - /api/evo/score_variant_multi (multi-window)
+    - /api/evo/score_variant_exon (exon context)
+    """
+    
+    def __init__(self, api_base: str):
+        self.api_base = api_base
+    
+    async def score(
+        self,
+        mutations: List[Dict],
+        drug: Dict
+    ) -> Tuple[float, Dict]:
+        """
+        Score mutations using Evo2.
+        
+        Returns:
+            Tuple of (score 0-1, provenance dict)
+        """
+        if not mutations:
+            return 0.5, {'method': 'no_mutations'}
+        
+        # Get drug-relevant genes
+        target_genes = drug.get('target_genes', [])
+        
+        # Filter mutations to drug-relevant genes
+        relevant_mutations = [
+            m for m in mutations
+            if m.get('gene', '').upper() in [g.upper() for g in target_genes]
+        ]
+        
+        if not relevant_mutations:
+            # No mutations in drug targets
+            return 0.5, {'method': 'no_target_mutations'}
+        
+        # Score each mutation with Evo2
+        scores = []
+        provenance = {'mutations_scored': []}
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for mut in relevant_mutations[:5]:  # Limit to 5
+                try:
+                    # Call Evo2 multi-window endpoint
+                    response = await client.post(
+                        f"{self.api_base}/api/evo/score_variant_multi",
+                        json={
+                            'chrom': mut.get('chromosome', ''),
+                            'pos': mut.get('position', 0),
+                            'ref': mut.get('ref', ''),
+                            'alt': mut.get('alt', ''),
+                            'build': 'hg38'
+                        }
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        delta = abs(data.get('min_delta', 0))
+                        # Normalize delta to 0-1 (higher delta = more impact)
+                        normalized = min(delta / 5.0, 1.0)
+                        scores.append(normalized)
+                        provenance['mutations_scored'].append({
+                            'gene': mut.get('gene'),
+                            'delta': delta,
+                            'normalized': normalized
+                        })
+                
+                except Exception as e:
+                    logger.warning(f"Evo2 scoring failed for {mut}: {e}")
+        
+        if not scores:
+            return 0.5, {'method': 'evo2_fallback', 'reason': 'no_scores'}
+        
+        # Average across mutations
+        avg_score = sum(scores) / len(scores)
+        provenance['method'] = 'evo2_multi_window'
+        provenance['avg_score'] = avg_score
+        
+        return avg_score, provenance
+```
+
+### Pathway Scorer
+
+```python
+# api/services/efficacy/pathway_scorer.py
+
+from typing import List, Dict, Tuple
+from .constants import DRUG_PATHWAY_MAPPING
+
+class PathwayScorer:
+    """
+    Score drug-pathway alignment.
+    
+    High score = drug targets patient's disrupted pathways
+    """
+    
+    def score(
+        self,
+        mutations: List[Dict],
+        drug: Dict,
+        pathways: List = None
+    ) -> Tuple[float, Dict[str, float]]:
+        """
+        Score pathway alignment between drug MoA and patient pathways.
+        
+        Returns:
+            Tuple of (score 0-1, per-pathway alignment dict)
+        """
+        drug_pathways = drug.get('pathways', [])
+        
+        if not drug_pathways:
+            return 0.5, {}
+        
+        alignment = {}
+        
+        # If we have pathway analyses from resistance agent
+        if pathways:
+            for pathway in pathways:
+                if pathway.pathway in drug_pathways:
+                    alignment[pathway.pathway] = pathway.burden_score
+        
+        # Otherwise, infer from mutations
+        else:
+            mutated_genes = {m.get('gene', '').upper() for m in mutations}
+            
+            for pathway in drug_pathways:
+                pathway_genes = DRUG_PATHWAY_MAPPING.get(pathway, set())
+                overlap = mutated_genes & pathway_genes
+                
+                if pathway_genes:
+                    burden = len(overlap) / len(pathway_genes)
+                    alignment[pathway] = min(burden * 3, 1.0)  # Scale up
+                else:
+                    alignment[pathway] = 0.0
+        
+        # Average alignment across drug's pathways
+        if alignment:
+            avg_alignment = sum(alignment.values()) / len(alignment)
+        else:
+            avg_alignment = 0.5
+        
+        return avg_alignment, alignment
+```
+
+### Drug Catalog
+
+```python
+# api/services/efficacy/drug_catalog.py
+
+DRUG_CATALOG = {
+    # PARP Inhibitors
+    'olaparib': {
+        'name': 'Olaparib',
+        'class': 'PARP_inhibitor',
+        'target_genes': ['PARP1', 'PARP2'],
+        'pathways': ['DDR', 'HRR'],
+        'mechanism': 'PARP inhibition → synthetic lethality with HRD',
+        'indications': ['ovarian_cancer', 'breast_cancer', 'prostate_cancer'],
+        'biomarker_required': ['BRCA1', 'BRCA2', 'HRD+']
+    },
+    'niraparib': {
+        'name': 'Niraparib',
+        'class': 'PARP_inhibitor',
+        'target_genes': ['PARP1', 'PARP2'],
+        'pathways': ['DDR', 'HRR'],
+        'mechanism': 'PARP inhibition (works regardless of BRCA status in maintenance)',
+        'indications': ['ovarian_cancer'],
+        'biomarker_required': []  # Approved regardless of BRCA
+    },
+    
+    # Platinum
+    'carboplatin': {
+        'name': 'Carboplatin',
+        'class': 'platinum',
+        'target_genes': [],  # DNA crosslinks
+        'pathways': ['DDR'],
+        'mechanism': 'DNA crosslinks → DDR-mediated cell death',
+        'indications': ['ovarian_cancer', 'lung_cancer', 'breast_cancer'],
+        'biomarker_required': []
+    },
+    
+    # Checkpoint Inhibitors
+    'pembrolizumab': {
+        'name': 'Pembrolizumab',
+        'class': 'checkpoint_inhibitor',
+        'target_genes': ['PDCD1'],  # PD-1
+        'pathways': ['IO'],
+        'mechanism': 'PD-1 blockade → T cell activation',
+        'indications': ['melanoma', 'lung_cancer', 'msi_high_any'],
+        'biomarker_required': ['TMB-H', 'MSI-H', 'PD-L1']
+    },
+    
+    # Targeted therapies
+    'vemurafenib': {
+        'name': 'Vemurafenib',
+        'class': 'BRAF_inhibitor',
+        'target_genes': ['BRAF'],
+        'pathways': ['MAPK'],
+        'mechanism': 'BRAF V600 inhibition → MAPK pathway blockade',
+        'indications': ['melanoma'],
+        'biomarker_required': ['BRAF_V600']
+    },
+    
+    # Anti-VEGF
+    'bevacizumab': {
+        'name': 'Bevacizumab',
+        'class': 'anti_VEGF',
+        'target_genes': ['VEGFA'],
+        'pathways': ['VEGF'],
+        'mechanism': 'VEGF-A neutralization → anti-angiogenesis',
+        'indications': ['ovarian_cancer', 'colorectal_cancer', 'lung_cancer'],
+        'biomarker_required': []
+    }
+}
+
+def get_drugs_for_disease(disease: str) -> List[Dict]:
+    """Get candidate drugs for a disease."""
+    disease_lower = disease.lower().replace(' ', '_')
+    
+    candidates = []
+    for drug_id, drug in DRUG_CATALOG.items():
+        for indication in drug['indications']:
+            if indication in disease_lower or disease_lower in indication:
+                candidates.append({**drug, 'id': drug_id})
+                break
+    
+    return candidates
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+### Phase 1: Sequence Scorer
+- [ ] Integrate with existing `/api/evo/score_variant_multi`
+- [ ] Handle Evo2 API errors gracefully
+- [ ] Normalize delta scores to 0-1
+- [ ] Unit tests
+
+### Phase 2: Pathway Scorer
+- [ ] Create drug-pathway mapping
+- [ ] Calculate pathway burden alignment
+- [ ] Integrate with resistance agent pathways
+- [ ] Unit tests
+
+### Phase 3: Evidence Scorer
+- [ ] Integrate with existing `/api/evidence/literature`
+- [ ] Add ClinVar lookup
+- [ ] Score evidence quality
+- [ ] Unit tests
+
+### Phase 4: Integration
+- [ ] Create DrugEfficacyAgent class
+- [ ] Implement S/P/E formula
+- [ ] Add tier classification
+- [ ] Build 7D mechanism vector
+- [ ] Integration tests
+
+---
+
+## 📡 API ENDPOINT
+
+```yaml
+POST /api/agents/drugs
+Content-Type: application/json
+
+Request:
+  patient_id: string
+  mutations: Mutation[]
+  disease: string
+  biomarker_profile: BiomarkerProfile  # optional
+  resistance_prediction: ResistancePrediction  # optional
+  drug_classes: string[]  # optional filter
+
+Response:
+  drug_efficacy_result: DrugEfficacyResult
+  calculation_time_ms: number
+```
+
+---
+
+## ✅ ACCEPTANCE CRITERIA
+
+1. ✅ S/P/E formula correctly implemented
+2. ✅ Evo2 integration for sequence scoring
+3. ✅ Pathway alignment calculated
+4. ✅ Evidence from literature integrated
+5. ✅ Drugs ranked by efficacy
+6. ✅ Tiers assigned (I/II/III/Research)
+7. ✅ 7D mechanism vector built
+8. ✅ Rationale generated for each drug
+9. ✅ Unit test coverage >80%
+
+---
+
+---
+
+## 🎯 MISSION
+
+Build a drug efficacy agent that can:
+1. Score drugs using the S/P/E framework (validated in Multiple Myeloma)
+2. Integrate Evo2 sequence scoring (S)
+3. Calculate pathway burden alignment (P)
+4. Synthesize literature evidence (E)
+5. Rank drugs with confidence tiers (I/II/III/Research)
+
+---
+
+## 📊 VALIDATED FRAMEWORK
+
+### S/P/E Formula
+
+```
+efficacy_score = 0.3*S + 0.4*P + 0.3*E + clinvar_prior
+```
+
+Where:
+- **S (Sequence):** Evo2 variant impact (0.0 - 1.0)
+- **P (Pathway):** Drug-pathway alignment (0.0 - 1.0)
+- **E (Evidence):** Literature + ClinVar support (0.0 - 1.0)
+- **clinvar_prior:** ClinVar pathogenicity boost (0.0 - 0.1)
+
+### Existing Implementation
+
+**Location:** `api/routers/efficacy.py`
+
+**Key Endpoints:**
+- `POST /api/efficacy/predict` - Full S/P/E scoring
+- `POST /api/evo/score_variant_multi` - Evo2 sequence scoring
+- `POST /api/insights/predict_protein_functionality_change` - Functionality proxy
+
+---
+
+## 📥 INPUTS
+
+### From Previous Agents
+
+```python
+# From Module 01 (Data Extraction)
+patient_profile: PatientProfile
+mutations: List[Mutation]
+disease: str
+
+# From Module 02 (Biomarker)
+biomarker_profile: BiomarkerProfile
+tmb: float
+msi_status: str
+hrd_status: str
+io_eligible: bool
+parp_eligible: bool
+
+# From Module 03 (Resistance)
+resistance_prediction: ResistancePrediction
+pathway_analyses: List[PathwayAnalysis]
+```
+
+---
+
+## 📤 OUTPUTS
+
+### DrugRanking Schema
+
+```python
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from enum import Enum
+
+class EvidenceTier(Enum):
+    TIER_I = "I"       # On-label, guideline-backed
+    TIER_II = "II"     # Strong evidence, off-label
+    TIER_III = "III"   # Mechanistic support, limited evidence
+    RESEARCH = "Research"
+
+class Confidence(Enum):
+    VERY_HIGH = "very_high"
+    HIGH = "high"
+    MODERATE = "moderate"
+    LOW = "low"
+
+@dataclass
+class SPEBreakdown:
+    sequence_score: float           # S component (0-1)
+    sequence_provenance: Dict       # Evo2 details
+    pathway_score: float            # P component (0-1)
+    pathway_alignment: Dict[str, float]  # Per-pathway scores
+    evidence_score: float           # E component (0-1)
+    evidence_sources: List[Dict]    # Papers, ClinVar
+    clinvar_prior: float            # ClinVar boost
+
+@dataclass
+class DrugRanking:
+    drug_name: str
+    drug_class: str                 # e.g., "PARP_inhibitor"
+    efficacy_score: float           # 0.0 - 1.0
+    spe_breakdown: SPEBreakdown
+    tier: EvidenceTier
+    confidence: Confidence
+    on_label: bool
+    mechanism: str                  # Why this drug works
+    rationale: List[str]            # Supporting reasons
+    contraindications: List[str]    # Reasons against
+    citations: List[Dict]           # Key papers
+
+@dataclass
+class DrugEfficacyResult:
+    patient_id: str
+    disease: str
+    ranked_drugs: List[DrugRanking]
+    top_recommendation: DrugRanking
+    mechanism_vector: List[float]   # 7D vector for trial matching
+    calculation_time_ms: int
+    provenance: Dict[str, any]
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### File Structure
+
+```
+api/services/efficacy/
+├── __init__.py
+├── efficacy_agent.py           # Main agent
+├── sequence_scorer.py          # S: Evo2 integration
+├── pathway_scorer.py           # P: Pathway alignment
+├── evidence_scorer.py          # E: Literature + ClinVar
+├── drug_ranker.py              # Combine S/P/E, rank
+├── tier_classifier.py          # Assign tiers
+├── drug_catalog.py             # Drug metadata
+├── constants.py                # Weights, thresholds
+└── tests/
+    ├── test_spe.py
+    ├── test_ranking.py
+    └── test_integration.py
+```
+
+### Core Agent Implementation
+
+```python
+# api/services/efficacy/efficacy_agent.py
+
+from typing import List, Optional
+from datetime import datetime
+import logging
+
+from .sequence_scorer import SequenceScorer
+from .pathway_scorer import PathwayScorer
+from .evidence_scorer import EvidenceScorer
+from .drug_ranker import DrugRanker
+from .tier_classifier import TierClassifier
+from ..models import (
+    PatientProfile, BiomarkerProfile, ResistancePrediction,
+    DrugEfficacyResult, DrugRanking
+)
+
+logger = logging.getLogger(__name__)
+
+class DrugEfficacyAgent:
+    """
+    Rank drugs using the S/P/E framework.
+    
+    Formula: efficacy = 0.3*S + 0.4*P + 0.3*E + clinvar_prior
+    
+    S = Sequence impact (Evo2)
+    P = Pathway alignment (drug MoA vs patient pathways)
+    E = Evidence (literature + ClinVar)
+    """
+    
+    def __init__(self, api_base: str = "http://127.0.0.1:8000"):
+        self.sequence_scorer = SequenceScorer(api_base)
+        self.pathway_scorer = PathwayScorer()
+        self.evidence_scorer = EvidenceScorer(api_base)
+        self.drug_ranker = DrugRanker()
+        self.tier_classifier = TierClassifier()
+        self.api_base = api_base
+    
+    async def rank_drugs(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile] = None,
+        resistance_prediction: Optional[ResistancePrediction] = None,
+        drug_classes: List[str] = None
+    ) -> DrugEfficacyResult:
+        """
+        Rank drugs by efficacy for a patient.
+        
+        Args:
+            patient_profile: Patient mutations and disease
+            biomarker_profile: TMB, MSI, HRD status
+            resistance_prediction: Pathway analyses
+            drug_classes: Optional filter for drug classes
+        
+        Returns:
+            DrugEfficacyResult with ranked drugs
+        """
+        start_time = datetime.utcnow()
+        logger.info(f"Ranking drugs for {patient_profile.patient_id}")
+        
+        mutations = self._mutations_to_dicts(patient_profile.mutations)
+        disease = patient_profile.disease
+        
+        # Get candidate drugs
+        candidate_drugs = self._get_candidate_drugs(
+            disease=disease,
+            biomarker_profile=biomarker_profile,
+            drug_classes=drug_classes
+        )
+        
+        rankings = []
+        
+        for drug in candidate_drugs:
+            try:
+                # Step 1: Sequence score (S)
+                s_score, s_provenance = await self.sequence_scorer.score(
+                    mutations=mutations,
+                    drug=drug
+                )
+                
+                # Step 2: Pathway score (P)
+                p_score, p_alignment = self.pathway_scorer.score(
+                    mutations=mutations,
+                    drug=drug,
+                    pathways=resistance_prediction.pathways if resistance_prediction else []
+                )
+                
+                # Step 3: Evidence score (E)
+                e_score, e_sources = await self.evidence_scorer.score(
+                    mutations=mutations,
+                    disease=disease,
+                    drug=drug
+                )
+                
+                # Step 4: ClinVar prior
+                clinvar_prior = self._get_clinvar_prior(mutations, drug)
+                
+                # Step 5: Calculate final score
+                efficacy = (
+                    0.3 * s_score +
+                    0.4 * p_score +
+                    0.3 * e_score +
+                    clinvar_prior
+                )
+                
+                # Step 6: Build SPE breakdown
+                spe = SPEBreakdown(
+                    sequence_score=s_score,
+                    sequence_provenance=s_provenance,
+                    pathway_score=p_score,
+                    pathway_alignment=p_alignment,
+                    evidence_score=e_score,
+                    evidence_sources=e_sources,
+                    clinvar_prior=clinvar_prior
+                )
+                
+                # Step 7: Classify tier
+                tier, confidence = self.tier_classifier.classify(
+                    efficacy_score=efficacy,
+                    evidence_score=e_score,
+                    disease=disease,
+                    drug=drug
+                )
+                
+                # Step 8: Generate rationale
+                rationale = self._generate_rationale(
+                    drug=drug,
+                    spe=spe,
+                    biomarker_profile=biomarker_profile
+                )
+                
+                ranking = DrugRanking(
+                    drug_name=drug['name'],
+                    drug_class=drug['class'],
+                    efficacy_score=round(efficacy, 3),
+                    spe_breakdown=spe,
+                    tier=tier,
+                    confidence=confidence,
+                    on_label=self._is_on_label(drug, disease),
+                    mechanism=drug.get('mechanism', ''),
+                    rationale=rationale,
+                    contraindications=self._get_contraindications(drug, mutations),
+                    citations=e_sources[:5]  # Top 5 papers
+                )
+                
+                rankings.append(ranking)
+                
+            except Exception as e:
+                logger.error(f"Error scoring {drug['name']}: {e}")
+                continue
+        
+        # Sort by efficacy
+        rankings.sort(key=lambda x: x.efficacy_score, reverse=True)
+        
+        # Build mechanism vector for trial matching
+        mechanism_vector = self._build_mechanism_vector(
+            pathways=resistance_prediction.pathways if resistance_prediction else [],
+            biomarker_profile=biomarker_profile
+        )
+        
+        elapsed = (datetime.utcnow() - start_time).total_seconds() * 1000
+        
+        return DrugEfficacyResult(
+            patient_id=patient_profile.patient_id,
+            disease=disease,
+            ranked_drugs=rankings,
+            top_recommendation=rankings[0] if rankings else None,
+            mechanism_vector=mechanism_vector,
+            calculation_time_ms=int(elapsed),
+            provenance={
+                'formula': '0.3*S + 0.4*P + 0.3*E + clinvar_prior',
+                'drugs_evaluated': len(candidate_drugs),
+                'drugs_ranked': len(rankings)
+            }
+        )
+    
+    def _build_mechanism_vector(
+        self,
+        pathways: List,
+        biomarker_profile: Optional[BiomarkerProfile]
+    ) -> List[float]:
+        """
+        Build 7D mechanism vector for trial matching.
+        
+        Vector: [DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux]
+        """
+        vector = [0.0] * 7
+        
+        # Map pathway analyses to vector
+        pathway_index = {
+            'DDR': 0, 'MAPK': 1, 'PI3K': 2,
+            'VEGF': 3, 'HER2': 4, 'IO': 5, 'Efflux': 6
+        }
+        
+        for pathway in pathways:
+            if pathway.pathway.upper() in pathway_index:
+                idx = pathway_index[pathway.pathway.upper()]
+                vector[idx] = pathway.burden_score
+        
+        # Add IO from biomarkers
+        if biomarker_profile and biomarker_profile.io_eligible:
+            vector[5] = 1.0  # IO pathway
+        
+        return vector
+```
+
+### Sequence Scorer (Evo2 Integration)
+
+```python
+# api/services/efficacy/sequence_scorer.py
+
+from typing import List, Dict, Tuple
+import httpx
+import logging
+
+logger = logging.getLogger(__name__)
+
+class SequenceScorer:
+    """
+    Score variant impact using Evo2 foundation model.
+    
+    Calls existing Evo2 endpoints:
+    - /api/evo/score_variant_multi (multi-window)
+    - /api/evo/score_variant_exon (exon context)
+    """
+    
+    def __init__(self, api_base: str):
+        self.api_base = api_base
+    
+    async def score(
+        self,
+        mutations: List[Dict],
+        drug: Dict
+    ) -> Tuple[float, Dict]:
+        """
+        Score mutations using Evo2.
+        
+        Returns:
+            Tuple of (score 0-1, provenance dict)
+        """
+        if not mutations:
+            return 0.5, {'method': 'no_mutations'}
+        
+        # Get drug-relevant genes
+        target_genes = drug.get('target_genes', [])
+        
+        # Filter mutations to drug-relevant genes
+        relevant_mutations = [
+            m for m in mutations
+            if m.get('gene', '').upper() in [g.upper() for g in target_genes]
+        ]
+        
+        if not relevant_mutations:
+            # No mutations in drug targets
+            return 0.5, {'method': 'no_target_mutations'}
+        
+        # Score each mutation with Evo2
+        scores = []
+        provenance = {'mutations_scored': []}
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for mut in relevant_mutations[:5]:  # Limit to 5
+                try:
+                    # Call Evo2 multi-window endpoint
+                    response = await client.post(
+                        f"{self.api_base}/api/evo/score_variant_multi",
+                        json={
+                            'chrom': mut.get('chromosome', ''),
+                            'pos': mut.get('position', 0),
+                            'ref': mut.get('ref', ''),
+                            'alt': mut.get('alt', ''),
+                            'build': 'hg38'
+                        }
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        delta = abs(data.get('min_delta', 0))
+                        # Normalize delta to 0-1 (higher delta = more impact)
+                        normalized = min(delta / 5.0, 1.0)
+                        scores.append(normalized)
+                        provenance['mutations_scored'].append({
+                            'gene': mut.get('gene'),
+                            'delta': delta,
+                            'normalized': normalized
+                        })
+                
+                except Exception as e:
+                    logger.warning(f"Evo2 scoring failed for {mut}: {e}")
+        
+        if not scores:
+            return 0.5, {'method': 'evo2_fallback', 'reason': 'no_scores'}
+        
+        # Average across mutations
+        avg_score = sum(scores) / len(scores)
+        provenance['method'] = 'evo2_multi_window'
+        provenance['avg_score'] = avg_score
+        
+        return avg_score, provenance
+```
+
+### Pathway Scorer
+
+```python
+# api/services/efficacy/pathway_scorer.py
+
+from typing import List, Dict, Tuple
+from .constants import DRUG_PATHWAY_MAPPING
+
+class PathwayScorer:
+    """
+    Score drug-pathway alignment.
+    
+    High score = drug targets patient's disrupted pathways
+    """
+    
+    def score(
+        self,
+        mutations: List[Dict],
+        drug: Dict,
+        pathways: List = None
+    ) -> Tuple[float, Dict[str, float]]:
+        """
+        Score pathway alignment between drug MoA and patient pathways.
+        
+        Returns:
+            Tuple of (score 0-1, per-pathway alignment dict)
+        """
+        drug_pathways = drug.get('pathways', [])
+        
+        if not drug_pathways:
+            return 0.5, {}
+        
+        alignment = {}
+        
+        # If we have pathway analyses from resistance agent
+        if pathways:
+            for pathway in pathways:
+                if pathway.pathway in drug_pathways:
+                    alignment[pathway.pathway] = pathway.burden_score
+        
+        # Otherwise, infer from mutations
+        else:
+            mutated_genes = {m.get('gene', '').upper() for m in mutations}
+            
+            for pathway in drug_pathways:
+                pathway_genes = DRUG_PATHWAY_MAPPING.get(pathway, set())
+                overlap = mutated_genes & pathway_genes
+                
+                if pathway_genes:
+                    burden = len(overlap) / len(pathway_genes)
+                    alignment[pathway] = min(burden * 3, 1.0)  # Scale up
+                else:
+                    alignment[pathway] = 0.0
+        
+        # Average alignment across drug's pathways
+        if alignment:
+            avg_alignment = sum(alignment.values()) / len(alignment)
+        else:
+            avg_alignment = 0.5
+        
+        return avg_alignment, alignment
+```
+
+### Drug Catalog
+
+```python
+# api/services/efficacy/drug_catalog.py
+
+DRUG_CATALOG = {
+    # PARP Inhibitors
+    'olaparib': {
+        'name': 'Olaparib',
+        'class': 'PARP_inhibitor',
+        'target_genes': ['PARP1', 'PARP2'],
+        'pathways': ['DDR', 'HRR'],
+        'mechanism': 'PARP inhibition → synthetic lethality with HRD',
+        'indications': ['ovarian_cancer', 'breast_cancer', 'prostate_cancer'],
+        'biomarker_required': ['BRCA1', 'BRCA2', 'HRD+']
+    },
+    'niraparib': {
+        'name': 'Niraparib',
+        'class': 'PARP_inhibitor',
+        'target_genes': ['PARP1', 'PARP2'],
+        'pathways': ['DDR', 'HRR'],
+        'mechanism': 'PARP inhibition (works regardless of BRCA status in maintenance)',
+        'indications': ['ovarian_cancer'],
+        'biomarker_required': []  # Approved regardless of BRCA
+    },
+    
+    # Platinum
+    'carboplatin': {
+        'name': 'Carboplatin',
+        'class': 'platinum',
+        'target_genes': [],  # DNA crosslinks
+        'pathways': ['DDR'],
+        'mechanism': 'DNA crosslinks → DDR-mediated cell death',
+        'indications': ['ovarian_cancer', 'lung_cancer', 'breast_cancer'],
+        'biomarker_required': []
+    },
+    
+    # Checkpoint Inhibitors
+    'pembrolizumab': {
+        'name': 'Pembrolizumab',
+        'class': 'checkpoint_inhibitor',
+        'target_genes': ['PDCD1'],  # PD-1
+        'pathways': ['IO'],
+        'mechanism': 'PD-1 blockade → T cell activation',
+        'indications': ['melanoma', 'lung_cancer', 'msi_high_any'],
+        'biomarker_required': ['TMB-H', 'MSI-H', 'PD-L1']
+    },
+    
+    # Targeted therapies
+    'vemurafenib': {
+        'name': 'Vemurafenib',
+        'class': 'BRAF_inhibitor',
+        'target_genes': ['BRAF'],
+        'pathways': ['MAPK'],
+        'mechanism': 'BRAF V600 inhibition → MAPK pathway blockade',
+        'indications': ['melanoma'],
+        'biomarker_required': ['BRAF_V600']
+    },
+    
+    # Anti-VEGF
+    'bevacizumab': {
+        'name': 'Bevacizumab',
+        'class': 'anti_VEGF',
+        'target_genes': ['VEGFA'],
+        'pathways': ['VEGF'],
+        'mechanism': 'VEGF-A neutralization → anti-angiogenesis',
+        'indications': ['ovarian_cancer', 'colorectal_cancer', 'lung_cancer'],
+        'biomarker_required': []
+    }
+}
+
+def get_drugs_for_disease(disease: str) -> List[Dict]:
+    """Get candidate drugs for a disease."""
+    disease_lower = disease.lower().replace(' ', '_')
+    
+    candidates = []
+    for drug_id, drug in DRUG_CATALOG.items():
+        for indication in drug['indications']:
+            if indication in disease_lower or disease_lower in indication:
+                candidates.append({**drug, 'id': drug_id})
+                break
+    
+    return candidates
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+### Phase 1: Sequence Scorer
+- [ ] Integrate with existing `/api/evo/score_variant_multi`
+- [ ] Handle Evo2 API errors gracefully
+- [ ] Normalize delta scores to 0-1
+- [ ] Unit tests
+
+### Phase 2: Pathway Scorer
+- [ ] Create drug-pathway mapping
+- [ ] Calculate pathway burden alignment
+- [ ] Integrate with resistance agent pathways
+- [ ] Unit tests
+
+### Phase 3: Evidence Scorer
+- [ ] Integrate with existing `/api/evidence/literature`
+- [ ] Add ClinVar lookup
+- [ ] Score evidence quality
+- [ ] Unit tests
+
+### Phase 4: Integration
+- [ ] Create DrugEfficacyAgent class
+- [ ] Implement S/P/E formula
+- [ ] Add tier classification
+- [ ] Build 7D mechanism vector
+- [ ] Integration tests
+
+---
+
+## 📡 API ENDPOINT
+
+```yaml
+POST /api/agents/drugs
+Content-Type: application/json
+
+Request:
+  patient_id: string
+  mutations: Mutation[]
+  disease: string
+  biomarker_profile: BiomarkerProfile  # optional
+  resistance_prediction: ResistancePrediction  # optional
+  drug_classes: string[]  # optional filter
+
+Response:
+  drug_efficacy_result: DrugEfficacyResult
+  calculation_time_ms: number
+```
+
+---
+
+## ✅ ACCEPTANCE CRITERIA
+
+1. ✅ S/P/E formula correctly implemented
+2. ✅ Evo2 integration for sequence scoring
+3. ✅ Pathway alignment calculated
+4. ✅ Evidence from literature integrated
+5. ✅ Drugs ranked by efficacy
+6. ✅ Tiers assigned (I/II/III/Research)
+7. ✅ 7D mechanism vector built
+8. ✅ Rationale generated for each drug
+9. ✅ Unit test coverage >80%
+
+---
+
+---
+
+## 🎯 MISSION
+
+Build a drug efficacy agent that can:
+1. Score drugs using the S/P/E framework (validated in Multiple Myeloma)
+2. Integrate Evo2 sequence scoring (S)
+3. Calculate pathway burden alignment (P)
+4. Synthesize literature evidence (E)
+5. Rank drugs with confidence tiers (I/II/III/Research)
+
+---
+
+## 📊 VALIDATED FRAMEWORK
+
+### S/P/E Formula
+
+```
+efficacy_score = 0.3*S + 0.4*P + 0.3*E + clinvar_prior
+```
+
+Where:
+- **S (Sequence):** Evo2 variant impact (0.0 - 1.0)
+- **P (Pathway):** Drug-pathway alignment (0.0 - 1.0)
+- **E (Evidence):** Literature + ClinVar support (0.0 - 1.0)
+- **clinvar_prior:** ClinVar pathogenicity boost (0.0 - 0.1)
+
+### Existing Implementation
+
+**Location:** `api/routers/efficacy.py`
+
+**Key Endpoints:**
+- `POST /api/efficacy/predict` - Full S/P/E scoring
+- `POST /api/evo/score_variant_multi` - Evo2 sequence scoring
+- `POST /api/insights/predict_protein_functionality_change` - Functionality proxy
+
+---
+
+## 📥 INPUTS
+
+### From Previous Agents
+
+```python
+# From Module 01 (Data Extraction)
+patient_profile: PatientProfile
+mutations: List[Mutation]
+disease: str
+
+# From Module 02 (Biomarker)
+biomarker_profile: BiomarkerProfile
+tmb: float
+msi_status: str
+hrd_status: str
+io_eligible: bool
+parp_eligible: bool
+
+# From Module 03 (Resistance)
+resistance_prediction: ResistancePrediction
+pathway_analyses: List[PathwayAnalysis]
+```
+
+---
+
+## 📤 OUTPUTS
+
+### DrugRanking Schema
+
+```python
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from enum import Enum
+
+class EvidenceTier(Enum):
+    TIER_I = "I"       # On-label, guideline-backed
+    TIER_II = "II"     # Strong evidence, off-label
+    TIER_III = "III"   # Mechanistic support, limited evidence
+    RESEARCH = "Research"
+
+class Confidence(Enum):
+    VERY_HIGH = "very_high"
+    HIGH = "high"
+    MODERATE = "moderate"
+    LOW = "low"
+
+@dataclass
+class SPEBreakdown:
+    sequence_score: float           # S component (0-1)
+    sequence_provenance: Dict       # Evo2 details
+    pathway_score: float            # P component (0-1)
+    pathway_alignment: Dict[str, float]  # Per-pathway scores
+    evidence_score: float           # E component (0-1)
+    evidence_sources: List[Dict]    # Papers, ClinVar
+    clinvar_prior: float            # ClinVar boost
+
+@dataclass
+class DrugRanking:
+    drug_name: str
+    drug_class: str                 # e.g., "PARP_inhibitor"
+    efficacy_score: float           # 0.0 - 1.0
+    spe_breakdown: SPEBreakdown
+    tier: EvidenceTier
+    confidence: Confidence
+    on_label: bool
+    mechanism: str                  # Why this drug works
+    rationale: List[str]            # Supporting reasons
+    contraindications: List[str]    # Reasons against
+    citations: List[Dict]           # Key papers
+
+@dataclass
+class DrugEfficacyResult:
+    patient_id: str
+    disease: str
+    ranked_drugs: List[DrugRanking]
+    top_recommendation: DrugRanking
+    mechanism_vector: List[float]   # 7D vector for trial matching
+    calculation_time_ms: int
+    provenance: Dict[str, any]
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### File Structure
+
+```
+api/services/efficacy/
+├── __init__.py
+├── efficacy_agent.py           # Main agent
+├── sequence_scorer.py          # S: Evo2 integration
+├── pathway_scorer.py           # P: Pathway alignment
+├── evidence_scorer.py          # E: Literature + ClinVar
+├── drug_ranker.py              # Combine S/P/E, rank
+├── tier_classifier.py          # Assign tiers
+├── drug_catalog.py             # Drug metadata
+├── constants.py                # Weights, thresholds
+└── tests/
+    ├── test_spe.py
+    ├── test_ranking.py
+    └── test_integration.py
+```
+
+### Core Agent Implementation
+
+```python
+# api/services/efficacy/efficacy_agent.py
+
+from typing import List, Optional
+from datetime import datetime
+import logging
+
+from .sequence_scorer import SequenceScorer
+from .pathway_scorer import PathwayScorer
+from .evidence_scorer import EvidenceScorer
+from .drug_ranker import DrugRanker
+from .tier_classifier import TierClassifier
+from ..models import (
+    PatientProfile, BiomarkerProfile, ResistancePrediction,
+    DrugEfficacyResult, DrugRanking
+)
+
+logger = logging.getLogger(__name__)
+
+class DrugEfficacyAgent:
+    """
+    Rank drugs using the S/P/E framework.
+    
+    Formula: efficacy = 0.3*S + 0.4*P + 0.3*E + clinvar_prior
+    
+    S = Sequence impact (Evo2)
+    P = Pathway alignment (drug MoA vs patient pathways)
+    E = Evidence (literature + ClinVar)
+    """
+    
+    def __init__(self, api_base: str = "http://127.0.0.1:8000"):
+        self.sequence_scorer = SequenceScorer(api_base)
+        self.pathway_scorer = PathwayScorer()
+        self.evidence_scorer = EvidenceScorer(api_base)
+        self.drug_ranker = DrugRanker()
+        self.tier_classifier = TierClassifier()
+        self.api_base = api_base
+    
+    async def rank_drugs(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile] = None,
+        resistance_prediction: Optional[ResistancePrediction] = None,
+        drug_classes: List[str] = None
+    ) -> DrugEfficacyResult:
+        """
+        Rank drugs by efficacy for a patient.
+        
+        Args:
+            patient_profile: Patient mutations and disease
+            biomarker_profile: TMB, MSI, HRD status
+            resistance_prediction: Pathway analyses
+            drug_classes: Optional filter for drug classes
+        
+        Returns:
+            DrugEfficacyResult with ranked drugs
+        """
+        start_time = datetime.utcnow()
+        logger.info(f"Ranking drugs for {patient_profile.patient_id}")
+        
+        mutations = self._mutations_to_dicts(patient_profile.mutations)
+        disease = patient_profile.disease
+        
+        # Get candidate drugs
+        candidate_drugs = self._get_candidate_drugs(
+            disease=disease,
+            biomarker_profile=biomarker_profile,
+            drug_classes=drug_classes
+        )
+        
+        rankings = []
+        
+        for drug in candidate_drugs:
+            try:
+                # Step 1: Sequence score (S)
+                s_score, s_provenance = await self.sequence_scorer.score(
+                    mutations=mutations,
+                    drug=drug
+                )
+                
+                # Step 2: Pathway score (P)
+                p_score, p_alignment = self.pathway_scorer.score(
+                    mutations=mutations,
+                    drug=drug,
+                    pathways=resistance_prediction.pathways if resistance_prediction else []
+                )
+                
+                # Step 3: Evidence score (E)
+                e_score, e_sources = await self.evidence_scorer.score(
+                    mutations=mutations,
+                    disease=disease,
+                    drug=drug
+                )
+                
+                # Step 4: ClinVar prior
+                clinvar_prior = self._get_clinvar_prior(mutations, drug)
+                
+                # Step 5: Calculate final score
+                efficacy = (
+                    0.3 * s_score +
+                    0.4 * p_score +
+                    0.3 * e_score +
+                    clinvar_prior
+                )
+                
+                # Step 6: Build SPE breakdown
+                spe = SPEBreakdown(
+                    sequence_score=s_score,
+                    sequence_provenance=s_provenance,
+                    pathway_score=p_score,
+                    pathway_alignment=p_alignment,
+                    evidence_score=e_score,
+                    evidence_sources=e_sources,
+                    clinvar_prior=clinvar_prior
+                )
+                
+                # Step 7: Classify tier
+                tier, confidence = self.tier_classifier.classify(
+                    efficacy_score=efficacy,
+                    evidence_score=e_score,
+                    disease=disease,
+                    drug=drug
+                )
+                
+                # Step 8: Generate rationale
+                rationale = self._generate_rationale(
+                    drug=drug,
+                    spe=spe,
+                    biomarker_profile=biomarker_profile
+                )
+                
+                ranking = DrugRanking(
+                    drug_name=drug['name'],
+                    drug_class=drug['class'],
+                    efficacy_score=round(efficacy, 3),
+                    spe_breakdown=spe,
+                    tier=tier,
+                    confidence=confidence,
+                    on_label=self._is_on_label(drug, disease),
+                    mechanism=drug.get('mechanism', ''),
+                    rationale=rationale,
+                    contraindications=self._get_contraindications(drug, mutations),
+                    citations=e_sources[:5]  # Top 5 papers
+                )
+                
+                rankings.append(ranking)
+                
+            except Exception as e:
+                logger.error(f"Error scoring {drug['name']}: {e}")
+                continue
+        
+        # Sort by efficacy
+        rankings.sort(key=lambda x: x.efficacy_score, reverse=True)
+        
+        # Build mechanism vector for trial matching
+        mechanism_vector = self._build_mechanism_vector(
+            pathways=resistance_prediction.pathways if resistance_prediction else [],
+            biomarker_profile=biomarker_profile
+        )
+        
+        elapsed = (datetime.utcnow() - start_time).total_seconds() * 1000
+        
+        return DrugEfficacyResult(
+            patient_id=patient_profile.patient_id,
+            disease=disease,
+            ranked_drugs=rankings,
+            top_recommendation=rankings[0] if rankings else None,
+            mechanism_vector=mechanism_vector,
+            calculation_time_ms=int(elapsed),
+            provenance={
+                'formula': '0.3*S + 0.4*P + 0.3*E + clinvar_prior',
+                'drugs_evaluated': len(candidate_drugs),
+                'drugs_ranked': len(rankings)
+            }
+        )
+    
+    def _build_mechanism_vector(
+        self,
+        pathways: List,
+        biomarker_profile: Optional[BiomarkerProfile]
+    ) -> List[float]:
+        """
+        Build 7D mechanism vector for trial matching.
+        
+        Vector: [DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux]
+        """
+        vector = [0.0] * 7
+        
+        # Map pathway analyses to vector
+        pathway_index = {
+            'DDR': 0, 'MAPK': 1, 'PI3K': 2,
+            'VEGF': 3, 'HER2': 4, 'IO': 5, 'Efflux': 6
+        }
+        
+        for pathway in pathways:
+            if pathway.pathway.upper() in pathway_index:
+                idx = pathway_index[pathway.pathway.upper()]
+                vector[idx] = pathway.burden_score
+        
+        # Add IO from biomarkers
+        if biomarker_profile and biomarker_profile.io_eligible:
+            vector[5] = 1.0  # IO pathway
+        
+        return vector
+```
+
+### Sequence Scorer (Evo2 Integration)
+
+```python
+# api/services/efficacy/sequence_scorer.py
+
+from typing import List, Dict, Tuple
+import httpx
+import logging
+
+logger = logging.getLogger(__name__)
+
+class SequenceScorer:
+    """
+    Score variant impact using Evo2 foundation model.
+    
+    Calls existing Evo2 endpoints:
+    - /api/evo/score_variant_multi (multi-window)
+    - /api/evo/score_variant_exon (exon context)
+    """
+    
+    def __init__(self, api_base: str):
+        self.api_base = api_base
+    
+    async def score(
+        self,
+        mutations: List[Dict],
+        drug: Dict
+    ) -> Tuple[float, Dict]:
+        """
+        Score mutations using Evo2.
+        
+        Returns:
+            Tuple of (score 0-1, provenance dict)
+        """
+        if not mutations:
+            return 0.5, {'method': 'no_mutations'}
+        
+        # Get drug-relevant genes
+        target_genes = drug.get('target_genes', [])
+        
+        # Filter mutations to drug-relevant genes
+        relevant_mutations = [
+            m for m in mutations
+            if m.get('gene', '').upper() in [g.upper() for g in target_genes]
+        ]
+        
+        if not relevant_mutations:
+            # No mutations in drug targets
+            return 0.5, {'method': 'no_target_mutations'}
+        
+        # Score each mutation with Evo2
+        scores = []
+        provenance = {'mutations_scored': []}
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for mut in relevant_mutations[:5]:  # Limit to 5
+                try:
+                    # Call Evo2 multi-window endpoint
+                    response = await client.post(
+                        f"{self.api_base}/api/evo/score_variant_multi",
+                        json={
+                            'chrom': mut.get('chromosome', ''),
+                            'pos': mut.get('position', 0),
+                            'ref': mut.get('ref', ''),
+                            'alt': mut.get('alt', ''),
+                            'build': 'hg38'
+                        }
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        delta = abs(data.get('min_delta', 0))
+                        # Normalize delta to 0-1 (higher delta = more impact)
+                        normalized = min(delta / 5.0, 1.0)
+                        scores.append(normalized)
+                        provenance['mutations_scored'].append({
+                            'gene': mut.get('gene'),
+                            'delta': delta,
+                            'normalized': normalized
+                        })
+                
+                except Exception as e:
+                    logger.warning(f"Evo2 scoring failed for {mut}: {e}")
+        
+        if not scores:
+            return 0.5, {'method': 'evo2_fallback', 'reason': 'no_scores'}
+        
+        # Average across mutations
+        avg_score = sum(scores) / len(scores)
+        provenance['method'] = 'evo2_multi_window'
+        provenance['avg_score'] = avg_score
+        
+        return avg_score, provenance
+```
+
+### Pathway Scorer
+
+```python
+# api/services/efficacy/pathway_scorer.py
+
+from typing import List, Dict, Tuple
+from .constants import DRUG_PATHWAY_MAPPING
+
+class PathwayScorer:
+    """
+    Score drug-pathway alignment.
+    
+    High score = drug targets patient's disrupted pathways
+    """
+    
+    def score(
+        self,
+        mutations: List[Dict],
+        drug: Dict,
+        pathways: List = None
+    ) -> Tuple[float, Dict[str, float]]:
+        """
+        Score pathway alignment between drug MoA and patient pathways.
+        
+        Returns:
+            Tuple of (score 0-1, per-pathway alignment dict)
+        """
+        drug_pathways = drug.get('pathways', [])
+        
+        if not drug_pathways:
+            return 0.5, {}
+        
+        alignment = {}
+        
+        # If we have pathway analyses from resistance agent
+        if pathways:
+            for pathway in pathways:
+                if pathway.pathway in drug_pathways:
+                    alignment[pathway.pathway] = pathway.burden_score
+        
+        # Otherwise, infer from mutations
+        else:
+            mutated_genes = {m.get('gene', '').upper() for m in mutations}
+            
+            for pathway in drug_pathways:
+                pathway_genes = DRUG_PATHWAY_MAPPING.get(pathway, set())
+                overlap = mutated_genes & pathway_genes
+                
+                if pathway_genes:
+                    burden = len(overlap) / len(pathway_genes)
+                    alignment[pathway] = min(burden * 3, 1.0)  # Scale up
+                else:
+                    alignment[pathway] = 0.0
+        
+        # Average alignment across drug's pathways
+        if alignment:
+            avg_alignment = sum(alignment.values()) / len(alignment)
+        else:
+            avg_alignment = 0.5
+        
+        return avg_alignment, alignment
+```
+
+### Drug Catalog
+
+```python
+# api/services/efficacy/drug_catalog.py
+
+DRUG_CATALOG = {
+    # PARP Inhibitors
+    'olaparib': {
+        'name': 'Olaparib',
+        'class': 'PARP_inhibitor',
+        'target_genes': ['PARP1', 'PARP2'],
+        'pathways': ['DDR', 'HRR'],
+        'mechanism': 'PARP inhibition → synthetic lethality with HRD',
+        'indications': ['ovarian_cancer', 'breast_cancer', 'prostate_cancer'],
+        'biomarker_required': ['BRCA1', 'BRCA2', 'HRD+']
+    },
+    'niraparib': {
+        'name': 'Niraparib',
+        'class': 'PARP_inhibitor',
+        'target_genes': ['PARP1', 'PARP2'],
+        'pathways': ['DDR', 'HRR'],
+        'mechanism': 'PARP inhibition (works regardless of BRCA status in maintenance)',
+        'indications': ['ovarian_cancer'],
+        'biomarker_required': []  # Approved regardless of BRCA
+    },
+    
+    # Platinum
+    'carboplatin': {
+        'name': 'Carboplatin',
+        'class': 'platinum',
+        'target_genes': [],  # DNA crosslinks
+        'pathways': ['DDR'],
+        'mechanism': 'DNA crosslinks → DDR-mediated cell death',
+        'indications': ['ovarian_cancer', 'lung_cancer', 'breast_cancer'],
+        'biomarker_required': []
+    },
+    
+    # Checkpoint Inhibitors
+    'pembrolizumab': {
+        'name': 'Pembrolizumab',
+        'class': 'checkpoint_inhibitor',
+        'target_genes': ['PDCD1'],  # PD-1
+        'pathways': ['IO'],
+        'mechanism': 'PD-1 blockade → T cell activation',
+        'indications': ['melanoma', 'lung_cancer', 'msi_high_any'],
+        'biomarker_required': ['TMB-H', 'MSI-H', 'PD-L1']
+    },
+    
+    # Targeted therapies
+    'vemurafenib': {
+        'name': 'Vemurafenib',
+        'class': 'BRAF_inhibitor',
+        'target_genes': ['BRAF'],
+        'pathways': ['MAPK'],
+        'mechanism': 'BRAF V600 inhibition → MAPK pathway blockade',
+        'indications': ['melanoma'],
+        'biomarker_required': ['BRAF_V600']
+    },
+    
+    # Anti-VEGF
+    'bevacizumab': {
+        'name': 'Bevacizumab',
+        'class': 'anti_VEGF',
+        'target_genes': ['VEGFA'],
+        'pathways': ['VEGF'],
+        'mechanism': 'VEGF-A neutralization → anti-angiogenesis',
+        'indications': ['ovarian_cancer', 'colorectal_cancer', 'lung_cancer'],
+        'biomarker_required': []
+    }
+}
+
+def get_drugs_for_disease(disease: str) -> List[Dict]:
+    """Get candidate drugs for a disease."""
+    disease_lower = disease.lower().replace(' ', '_')
+    
+    candidates = []
+    for drug_id, drug in DRUG_CATALOG.items():
+        for indication in drug['indications']:
+            if indication in disease_lower or disease_lower in indication:
+                candidates.append({**drug, 'id': drug_id})
+                break
+    
+    return candidates
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+### Phase 1: Sequence Scorer
+- [ ] Integrate with existing `/api/evo/score_variant_multi`
+- [ ] Handle Evo2 API errors gracefully
+- [ ] Normalize delta scores to 0-1
+- [ ] Unit tests
+
+### Phase 2: Pathway Scorer
+- [ ] Create drug-pathway mapping
+- [ ] Calculate pathway burden alignment
+- [ ] Integrate with resistance agent pathways
+- [ ] Unit tests
+
+### Phase 3: Evidence Scorer
+- [ ] Integrate with existing `/api/evidence/literature`
+- [ ] Add ClinVar lookup
+- [ ] Score evidence quality
+- [ ] Unit tests
+
+### Phase 4: Integration
+- [ ] Create DrugEfficacyAgent class
+- [ ] Implement S/P/E formula
+- [ ] Add tier classification
+- [ ] Build 7D mechanism vector
+- [ ] Integration tests
+
+---
+
+## 📡 API ENDPOINT
+
+```yaml
+POST /api/agents/drugs
+Content-Type: application/json
+
+Request:
+  patient_id: string
+  mutations: Mutation[]
+  disease: string
+  biomarker_profile: BiomarkerProfile  # optional
+  resistance_prediction: ResistancePrediction  # optional
+  drug_classes: string[]  # optional filter
+
+Response:
+  drug_efficacy_result: DrugEfficacyResult
+  calculation_time_ms: number
+```
+
+---
+
+## ✅ ACCEPTANCE CRITERIA
+
+1. ✅ S/P/E formula correctly implemented
+2. ✅ Evo2 integration for sequence scoring
+3. ✅ Pathway alignment calculated
+4. ✅ Evidence from literature integrated
+5. ✅ Drugs ranked by efficacy
+6. ✅ Tiers assigned (I/II/III/Research)
+7. ✅ 7D mechanism vector built
+8. ✅ Rationale generated for each drug
+9. ✅ Unit test coverage >80%
+
+---
+
+---
+
+## 🎯 MISSION
+
+Build a drug efficacy agent that can:
+1. Score drugs using the S/P/E framework (validated in Multiple Myeloma)
+2. Integrate Evo2 sequence scoring (S)
+3. Calculate pathway burden alignment (P)
+4. Synthesize literature evidence (E)
+5. Rank drugs with confidence tiers (I/II/III/Research)
+
+---
+
+## 📊 VALIDATED FRAMEWORK
+
+### S/P/E Formula
+
+```
+efficacy_score = 0.3*S + 0.4*P + 0.3*E + clinvar_prior
+```
+
+Where:
+- **S (Sequence):** Evo2 variant impact (0.0 - 1.0)
+- **P (Pathway):** Drug-pathway alignment (0.0 - 1.0)
+- **E (Evidence):** Literature + ClinVar support (0.0 - 1.0)
+- **clinvar_prior:** ClinVar pathogenicity boost (0.0 - 0.1)
+
+### Existing Implementation
+
+**Location:** `api/routers/efficacy.py`
+
+**Key Endpoints:**
+- `POST /api/efficacy/predict` - Full S/P/E scoring
+- `POST /api/evo/score_variant_multi` - Evo2 sequence scoring
+- `POST /api/insights/predict_protein_functionality_change` - Functionality proxy
+
+---
+
+## 📥 INPUTS
+
+### From Previous Agents
+
+```python
+# From Module 01 (Data Extraction)
+patient_profile: PatientProfile
+mutations: List[Mutation]
+disease: str
+
+# From Module 02 (Biomarker)
+biomarker_profile: BiomarkerProfile
+tmb: float
+msi_status: str
+hrd_status: str
+io_eligible: bool
+parp_eligible: bool
+
+# From Module 03 (Resistance)
+resistance_prediction: ResistancePrediction
+pathway_analyses: List[PathwayAnalysis]
+```
+
+---
+
+## 📤 OUTPUTS
+
+### DrugRanking Schema
+
+```python
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from enum import Enum
+
+class EvidenceTier(Enum):
+    TIER_I = "I"       # On-label, guideline-backed
+    TIER_II = "II"     # Strong evidence, off-label
+    TIER_III = "III"   # Mechanistic support, limited evidence
+    RESEARCH = "Research"
+
+class Confidence(Enum):
+    VERY_HIGH = "very_high"
+    HIGH = "high"
+    MODERATE = "moderate"
+    LOW = "low"
+
+@dataclass
+class SPEBreakdown:
+    sequence_score: float           # S component (0-1)
+    sequence_provenance: Dict       # Evo2 details
+    pathway_score: float            # P component (0-1)
+    pathway_alignment: Dict[str, float]  # Per-pathway scores
+    evidence_score: float           # E component (0-1)
+    evidence_sources: List[Dict]    # Papers, ClinVar
+    clinvar_prior: float            # ClinVar boost
+
+@dataclass
+class DrugRanking:
+    drug_name: str
+    drug_class: str                 # e.g., "PARP_inhibitor"
+    efficacy_score: float           # 0.0 - 1.0
+    spe_breakdown: SPEBreakdown
+    tier: EvidenceTier
+    confidence: Confidence
+    on_label: bool
+    mechanism: str                  # Why this drug works
+    rationale: List[str]            # Supporting reasons
+    contraindications: List[str]    # Reasons against
+    citations: List[Dict]           # Key papers
+
+@dataclass
+class DrugEfficacyResult:
+    patient_id: str
+    disease: str
+    ranked_drugs: List[DrugRanking]
+    top_recommendation: DrugRanking
+    mechanism_vector: List[float]   # 7D vector for trial matching
+    calculation_time_ms: int
+    provenance: Dict[str, any]
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### File Structure
+
+```
+api/services/efficacy/
+├── __init__.py
+├── efficacy_agent.py           # Main agent
+├── sequence_scorer.py          # S: Evo2 integration
+├── pathway_scorer.py           # P: Pathway alignment
+├── evidence_scorer.py          # E: Literature + ClinVar
+├── drug_ranker.py              # Combine S/P/E, rank
+├── tier_classifier.py          # Assign tiers
+├── drug_catalog.py             # Drug metadata
+├── constants.py                # Weights, thresholds
+└── tests/
+    ├── test_spe.py
+    ├── test_ranking.py
+    └── test_integration.py
+```
+
+### Core Agent Implementation
+
+```python
+# api/services/efficacy/efficacy_agent.py
+
+from typing import List, Optional
+from datetime import datetime
+import logging
+
+from .sequence_scorer import SequenceScorer
+from .pathway_scorer import PathwayScorer
+from .evidence_scorer import EvidenceScorer
+from .drug_ranker import DrugRanker
+from .tier_classifier import TierClassifier
+from ..models import (
+    PatientProfile, BiomarkerProfile, ResistancePrediction,
+    DrugEfficacyResult, DrugRanking
+)
+
+logger = logging.getLogger(__name__)
+
+class DrugEfficacyAgent:
+    """
+    Rank drugs using the S/P/E framework.
+    
+    Formula: efficacy = 0.3*S + 0.4*P + 0.3*E + clinvar_prior
+    
+    S = Sequence impact (Evo2)
+    P = Pathway alignment (drug MoA vs patient pathways)
+    E = Evidence (literature + ClinVar)
+    """
+    
+    def __init__(self, api_base: str = "http://127.0.0.1:8000"):
+        self.sequence_scorer = SequenceScorer(api_base)
+        self.pathway_scorer = PathwayScorer()
+        self.evidence_scorer = EvidenceScorer(api_base)
+        self.drug_ranker = DrugRanker()
+        self.tier_classifier = TierClassifier()
+        self.api_base = api_base
+    
+    async def rank_drugs(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile] = None,
+        resistance_prediction: Optional[ResistancePrediction] = None,
+        drug_classes: List[str] = None
+    ) -> DrugEfficacyResult:
+        """
+        Rank drugs by efficacy for a patient.
+        
+        Args:
+            patient_profile: Patient mutations and disease
+            biomarker_profile: TMB, MSI, HRD status
+            resistance_prediction: Pathway analyses
+            drug_classes: Optional filter for drug classes
+        
+        Returns:
+            DrugEfficacyResult with ranked drugs
+        """
+        start_time = datetime.utcnow()
+        logger.info(f"Ranking drugs for {patient_profile.patient_id}")
+        
+        mutations = self._mutations_to_dicts(patient_profile.mutations)
+        disease = patient_profile.disease
+        
+        # Get candidate drugs
+        candidate_drugs = self._get_candidate_drugs(
+            disease=disease,
+            biomarker_profile=biomarker_profile,
+            drug_classes=drug_classes
+        )
+        
+        rankings = []
+        
+        for drug in candidate_drugs:
+            try:
+                # Step 1: Sequence score (S)
+                s_score, s_provenance = await self.sequence_scorer.score(
+                    mutations=mutations,
+                    drug=drug
+                )
+                
+                # Step 2: Pathway score (P)
+                p_score, p_alignment = self.pathway_scorer.score(
+                    mutations=mutations,
+                    drug=drug,
+                    pathways=resistance_prediction.pathways if resistance_prediction else []
+                )
+                
+                # Step 3: Evidence score (E)
+                e_score, e_sources = await self.evidence_scorer.score(
+                    mutations=mutations,
+                    disease=disease,
+                    drug=drug
+                )
+                
+                # Step 4: ClinVar prior
+                clinvar_prior = self._get_clinvar_prior(mutations, drug)
+                
+                # Step 5: Calculate final score
+                efficacy = (
+                    0.3 * s_score +
+                    0.4 * p_score +
+                    0.3 * e_score +
+                    clinvar_prior
+                )
+                
+                # Step 6: Build SPE breakdown
+                spe = SPEBreakdown(
+                    sequence_score=s_score,
+                    sequence_provenance=s_provenance,
+                    pathway_score=p_score,
+                    pathway_alignment=p_alignment,
+                    evidence_score=e_score,
+                    evidence_sources=e_sources,
+                    clinvar_prior=clinvar_prior
+                )
+                
+                # Step 7: Classify tier
+                tier, confidence = self.tier_classifier.classify(
+                    efficacy_score=efficacy,
+                    evidence_score=e_score,
+                    disease=disease,
+                    drug=drug
+                )
+                
+                # Step 8: Generate rationale
+                rationale = self._generate_rationale(
+                    drug=drug,
+                    spe=spe,
+                    biomarker_profile=biomarker_profile
+                )
+                
+                ranking = DrugRanking(
+                    drug_name=drug['name'],
+                    drug_class=drug['class'],
+                    efficacy_score=round(efficacy, 3),
+                    spe_breakdown=spe,
+                    tier=tier,
+                    confidence=confidence,
+                    on_label=self._is_on_label(drug, disease),
+                    mechanism=drug.get('mechanism', ''),
+                    rationale=rationale,
+                    contraindications=self._get_contraindications(drug, mutations),
+                    citations=e_sources[:5]  # Top 5 papers
+                )
+                
+                rankings.append(ranking)
+                
+            except Exception as e:
+                logger.error(f"Error scoring {drug['name']}: {e}")
+                continue
+        
+        # Sort by efficacy
+        rankings.sort(key=lambda x: x.efficacy_score, reverse=True)
+        
+        # Build mechanism vector for trial matching
+        mechanism_vector = self._build_mechanism_vector(
+            pathways=resistance_prediction.pathways if resistance_prediction else [],
+            biomarker_profile=biomarker_profile
+        )
+        
+        elapsed = (datetime.utcnow() - start_time).total_seconds() * 1000
+        
+        return DrugEfficacyResult(
+            patient_id=patient_profile.patient_id,
+            disease=disease,
+            ranked_drugs=rankings,
+            top_recommendation=rankings[0] if rankings else None,
+            mechanism_vector=mechanism_vector,
+            calculation_time_ms=int(elapsed),
+            provenance={
+                'formula': '0.3*S + 0.4*P + 0.3*E + clinvar_prior',
+                'drugs_evaluated': len(candidate_drugs),
+                'drugs_ranked': len(rankings)
+            }
+        )
+    
+    def _build_mechanism_vector(
+        self,
+        pathways: List,
+        biomarker_profile: Optional[BiomarkerProfile]
+    ) -> List[float]:
+        """
+        Build 7D mechanism vector for trial matching.
+        
+        Vector: [DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux]
+        """
+        vector = [0.0] * 7
+        
+        # Map pathway analyses to vector
+        pathway_index = {
+            'DDR': 0, 'MAPK': 1, 'PI3K': 2,
+            'VEGF': 3, 'HER2': 4, 'IO': 5, 'Efflux': 6
+        }
+        
+        for pathway in pathways:
+            if pathway.pathway.upper() in pathway_index:
+                idx = pathway_index[pathway.pathway.upper()]
+                vector[idx] = pathway.burden_score
+        
+        # Add IO from biomarkers
+        if biomarker_profile and biomarker_profile.io_eligible:
+            vector[5] = 1.0  # IO pathway
+        
+        return vector
+```
+
+### Sequence Scorer (Evo2 Integration)
+
+```python
+# api/services/efficacy/sequence_scorer.py
+
+from typing import List, Dict, Tuple
+import httpx
+import logging
+
+logger = logging.getLogger(__name__)
+
+class SequenceScorer:
+    """
+    Score variant impact using Evo2 foundation model.
+    
+    Calls existing Evo2 endpoints:
+    - /api/evo/score_variant_multi (multi-window)
+    - /api/evo/score_variant_exon (exon context)
+    """
+    
+    def __init__(self, api_base: str):
+        self.api_base = api_base
+    
+    async def score(
+        self,
+        mutations: List[Dict],
+        drug: Dict
+    ) -> Tuple[float, Dict]:
+        """
+        Score mutations using Evo2.
+        
+        Returns:
+            Tuple of (score 0-1, provenance dict)
+        """
+        if not mutations:
+            return 0.5, {'method': 'no_mutations'}
+        
+        # Get drug-relevant genes
+        target_genes = drug.get('target_genes', [])
+        
+        # Filter mutations to drug-relevant genes
+        relevant_mutations = [
+            m for m in mutations
+            if m.get('gene', '').upper() in [g.upper() for g in target_genes]
+        ]
+        
+        if not relevant_mutations:
+            # No mutations in drug targets
+            return 0.5, {'method': 'no_target_mutations'}
+        
+        # Score each mutation with Evo2
+        scores = []
+        provenance = {'mutations_scored': []}
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for mut in relevant_mutations[:5]:  # Limit to 5
+                try:
+                    # Call Evo2 multi-window endpoint
+                    response = await client.post(
+                        f"{self.api_base}/api/evo/score_variant_multi",
+                        json={
+                            'chrom': mut.get('chromosome', ''),
+                            'pos': mut.get('position', 0),
+                            'ref': mut.get('ref', ''),
+                            'alt': mut.get('alt', ''),
+                            'build': 'hg38'
+                        }
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        delta = abs(data.get('min_delta', 0))
+                        # Normalize delta to 0-1 (higher delta = more impact)
+                        normalized = min(delta / 5.0, 1.0)
+                        scores.append(normalized)
+                        provenance['mutations_scored'].append({
+                            'gene': mut.get('gene'),
+                            'delta': delta,
+                            'normalized': normalized
+                        })
+                
+                except Exception as e:
+                    logger.warning(f"Evo2 scoring failed for {mut}: {e}")
+        
+        if not scores:
+            return 0.5, {'method': 'evo2_fallback', 'reason': 'no_scores'}
+        
+        # Average across mutations
+        avg_score = sum(scores) / len(scores)
+        provenance['method'] = 'evo2_multi_window'
+        provenance['avg_score'] = avg_score
+        
+        return avg_score, provenance
+```
+
+### Pathway Scorer
+
+```python
+# api/services/efficacy/pathway_scorer.py
+
+from typing import List, Dict, Tuple
+from .constants import DRUG_PATHWAY_MAPPING
+
+class PathwayScorer:
+    """
+    Score drug-pathway alignment.
+    
+    High score = drug targets patient's disrupted pathways
+    """
+    
+    def score(
+        self,
+        mutations: List[Dict],
+        drug: Dict,
+        pathways: List = None
+    ) -> Tuple[float, Dict[str, float]]:
+        """
+        Score pathway alignment between drug MoA and patient pathways.
+        
+        Returns:
+            Tuple of (score 0-1, per-pathway alignment dict)
+        """
+        drug_pathways = drug.get('pathways', [])
+        
+        if not drug_pathways:
+            return 0.5, {}
+        
+        alignment = {}
+        
+        # If we have pathway analyses from resistance agent
+        if pathways:
+            for pathway in pathways:
+                if pathway.pathway in drug_pathways:
+                    alignment[pathway.pathway] = pathway.burden_score
+        
+        # Otherwise, infer from mutations
+        else:
+            mutated_genes = {m.get('gene', '').upper() for m in mutations}
+            
+            for pathway in drug_pathways:
+                pathway_genes = DRUG_PATHWAY_MAPPING.get(pathway, set())
+                overlap = mutated_genes & pathway_genes
+                
+                if pathway_genes:
+                    burden = len(overlap) / len(pathway_genes)
+                    alignment[pathway] = min(burden * 3, 1.0)  # Scale up
+                else:
+                    alignment[pathway] = 0.0
+        
+        # Average alignment across drug's pathways
+        if alignment:
+            avg_alignment = sum(alignment.values()) / len(alignment)
+        else:
+            avg_alignment = 0.5
+        
+        return avg_alignment, alignment
+```
+
+### Drug Catalog
+
+```python
+# api/services/efficacy/drug_catalog.py
+
+DRUG_CATALOG = {
+    # PARP Inhibitors
+    'olaparib': {
+        'name': 'Olaparib',
+        'class': 'PARP_inhibitor',
+        'target_genes': ['PARP1', 'PARP2'],
+        'pathways': ['DDR', 'HRR'],
+        'mechanism': 'PARP inhibition → synthetic lethality with HRD',
+        'indications': ['ovarian_cancer', 'breast_cancer', 'prostate_cancer'],
+        'biomarker_required': ['BRCA1', 'BRCA2', 'HRD+']
+    },
+    'niraparib': {
+        'name': 'Niraparib',
+        'class': 'PARP_inhibitor',
+        'target_genes': ['PARP1', 'PARP2'],
+        'pathways': ['DDR', 'HRR'],
+        'mechanism': 'PARP inhibition (works regardless of BRCA status in maintenance)',
+        'indications': ['ovarian_cancer'],
+        'biomarker_required': []  # Approved regardless of BRCA
+    },
+    
+    # Platinum
+    'carboplatin': {
+        'name': 'Carboplatin',
+        'class': 'platinum',
+        'target_genes': [],  # DNA crosslinks
+        'pathways': ['DDR'],
+        'mechanism': 'DNA crosslinks → DDR-mediated cell death',
+        'indications': ['ovarian_cancer', 'lung_cancer', 'breast_cancer'],
+        'biomarker_required': []
+    },
+    
+    # Checkpoint Inhibitors
+    'pembrolizumab': {
+        'name': 'Pembrolizumab',
+        'class': 'checkpoint_inhibitor',
+        'target_genes': ['PDCD1'],  # PD-1
+        'pathways': ['IO'],
+        'mechanism': 'PD-1 blockade → T cell activation',
+        'indications': ['melanoma', 'lung_cancer', 'msi_high_any'],
+        'biomarker_required': ['TMB-H', 'MSI-H', 'PD-L1']
+    },
+    
+    # Targeted therapies
+    'vemurafenib': {
+        'name': 'Vemurafenib',
+        'class': 'BRAF_inhibitor',
+        'target_genes': ['BRAF'],
+        'pathways': ['MAPK'],
+        'mechanism': 'BRAF V600 inhibition → MAPK pathway blockade',
+        'indications': ['melanoma'],
+        'biomarker_required': ['BRAF_V600']
+    },
+    
+    # Anti-VEGF
+    'bevacizumab': {
+        'name': 'Bevacizumab',
+        'class': 'anti_VEGF',
+        'target_genes': ['VEGFA'],
+        'pathways': ['VEGF'],
+        'mechanism': 'VEGF-A neutralization → anti-angiogenesis',
+        'indications': ['ovarian_cancer', 'colorectal_cancer', 'lung_cancer'],
+        'biomarker_required': []
+    }
+}
+
+def get_drugs_for_disease(disease: str) -> List[Dict]:
+    """Get candidate drugs for a disease."""
+    disease_lower = disease.lower().replace(' ', '_')
+    
+    candidates = []
+    for drug_id, drug in DRUG_CATALOG.items():
+        for indication in drug['indications']:
+            if indication in disease_lower or disease_lower in indication:
+                candidates.append({**drug, 'id': drug_id})
+                break
+    
+    return candidates
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+### Phase 1: Sequence Scorer
+- [ ] Integrate with existing `/api/evo/score_variant_multi`
+- [ ] Handle Evo2 API errors gracefully
+- [ ] Normalize delta scores to 0-1
+- [ ] Unit tests
+
+### Phase 2: Pathway Scorer
+- [ ] Create drug-pathway mapping
+- [ ] Calculate pathway burden alignment
+- [ ] Integrate with resistance agent pathways
+- [ ] Unit tests
+
+### Phase 3: Evidence Scorer
+- [ ] Integrate with existing `/api/evidence/literature`
+- [ ] Add ClinVar lookup
+- [ ] Score evidence quality
+- [ ] Unit tests
+
+### Phase 4: Integration
+- [ ] Create DrugEfficacyAgent class
+- [ ] Implement S/P/E formula
+- [ ] Add tier classification
+- [ ] Build 7D mechanism vector
+- [ ] Integration tests
+
+---
+
+## 📡 API ENDPOINT
+
+```yaml
+POST /api/agents/drugs
+Content-Type: application/json
+
+Request:
+  patient_id: string
+  mutations: Mutation[]
+  disease: string
+  biomarker_profile: BiomarkerProfile  # optional
+  resistance_prediction: ResistancePrediction  # optional
+  drug_classes: string[]  # optional filter
+
+Response:
+  drug_efficacy_result: DrugEfficacyResult
+  calculation_time_ms: number
+```
+
+---
+
+## ✅ ACCEPTANCE CRITERIA
+
+1. ✅ S/P/E formula correctly implemented
+2. ✅ Evo2 integration for sequence scoring
+3. ✅ Pathway alignment calculated
+4. ✅ Evidence from literature integrated
+5. ✅ Drugs ranked by efficacy
+6. ✅ Tiers assigned (I/II/III/Research)
+7. ✅ 7D mechanism vector built
+8. ✅ Rationale generated for each drug
+9. ✅ Unit test coverage >80%
+
+---
+
+---
+
+## 🎯 MISSION
+
+Build a drug efficacy agent that can:
+1. Score drugs using the S/P/E framework (validated in Multiple Myeloma)
+2. Integrate Evo2 sequence scoring (S)
+3. Calculate pathway burden alignment (P)
+4. Synthesize literature evidence (E)
+5. Rank drugs with confidence tiers (I/II/III/Research)
+
+---
+
+## 📊 VALIDATED FRAMEWORK
+
+### S/P/E Formula
+
+```
+efficacy_score = 0.3*S + 0.4*P + 0.3*E + clinvar_prior
+```
+
+Where:
+- **S (Sequence):** Evo2 variant impact (0.0 - 1.0)
+- **P (Pathway):** Drug-pathway alignment (0.0 - 1.0)
+- **E (Evidence):** Literature + ClinVar support (0.0 - 1.0)
+- **clinvar_prior:** ClinVar pathogenicity boost (0.0 - 0.1)
+
+### Existing Implementation
+
+**Location:** `api/routers/efficacy.py`
+
+**Key Endpoints:**
+- `POST /api/efficacy/predict` - Full S/P/E scoring
+- `POST /api/evo/score_variant_multi` - Evo2 sequence scoring
+- `POST /api/insights/predict_protein_functionality_change` - Functionality proxy
+
+---
+
+## 📥 INPUTS
+
+### From Previous Agents
+
+```python
+# From Module 01 (Data Extraction)
+patient_profile: PatientProfile
+mutations: List[Mutation]
+disease: str
+
+# From Module 02 (Biomarker)
+biomarker_profile: BiomarkerProfile
+tmb: float
+msi_status: str
+hrd_status: str
+io_eligible: bool
+parp_eligible: bool
+
+# From Module 03 (Resistance)
+resistance_prediction: ResistancePrediction
+pathway_analyses: List[PathwayAnalysis]
+```
+
+---
+
+## 📤 OUTPUTS
+
+### DrugRanking Schema
+
+```python
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from enum import Enum
+
+class EvidenceTier(Enum):
+    TIER_I = "I"       # On-label, guideline-backed
+    TIER_II = "II"     # Strong evidence, off-label
+    TIER_III = "III"   # Mechanistic support, limited evidence
+    RESEARCH = "Research"
+
+class Confidence(Enum):
+    VERY_HIGH = "very_high"
+    HIGH = "high"
+    MODERATE = "moderate"
+    LOW = "low"
+
+@dataclass
+class SPEBreakdown:
+    sequence_score: float           # S component (0-1)
+    sequence_provenance: Dict       # Evo2 details
+    pathway_score: float            # P component (0-1)
+    pathway_alignment: Dict[str, float]  # Per-pathway scores
+    evidence_score: float           # E component (0-1)
+    evidence_sources: List[Dict]    # Papers, ClinVar
+    clinvar_prior: float            # ClinVar boost
+
+@dataclass
+class DrugRanking:
+    drug_name: str
+    drug_class: str                 # e.g., "PARP_inhibitor"
+    efficacy_score: float           # 0.0 - 1.0
+    spe_breakdown: SPEBreakdown
+    tier: EvidenceTier
+    confidence: Confidence
+    on_label: bool
+    mechanism: str                  # Why this drug works
+    rationale: List[str]            # Supporting reasons
+    contraindications: List[str]    # Reasons against
+    citations: List[Dict]           # Key papers
+
+@dataclass
+class DrugEfficacyResult:
+    patient_id: str
+    disease: str
+    ranked_drugs: List[DrugRanking]
+    top_recommendation: DrugRanking
+    mechanism_vector: List[float]   # 7D vector for trial matching
+    calculation_time_ms: int
+    provenance: Dict[str, any]
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### File Structure
+
+```
+api/services/efficacy/
+├── __init__.py
+├── efficacy_agent.py           # Main agent
+├── sequence_scorer.py          # S: Evo2 integration
+├── pathway_scorer.py           # P: Pathway alignment
+├── evidence_scorer.py          # E: Literature + ClinVar
+├── drug_ranker.py              # Combine S/P/E, rank
+├── tier_classifier.py          # Assign tiers
+├── drug_catalog.py             # Drug metadata
+├── constants.py                # Weights, thresholds
+└── tests/
+    ├── test_spe.py
+    ├── test_ranking.py
+    └── test_integration.py
+```
+
+### Core Agent Implementation
+
+```python
+# api/services/efficacy/efficacy_agent.py
+
+from typing import List, Optional
+from datetime import datetime
+import logging
+
+from .sequence_scorer import SequenceScorer
+from .pathway_scorer import PathwayScorer
+from .evidence_scorer import EvidenceScorer
+from .drug_ranker import DrugRanker
+from .tier_classifier import TierClassifier
+from ..models import (
+    PatientProfile, BiomarkerProfile, ResistancePrediction,
+    DrugEfficacyResult, DrugRanking
+)
+
+logger = logging.getLogger(__name__)
+
+class DrugEfficacyAgent:
+    """
+    Rank drugs using the S/P/E framework.
+    
+    Formula: efficacy = 0.3*S + 0.4*P + 0.3*E + clinvar_prior
+    
+    S = Sequence impact (Evo2)
+    P = Pathway alignment (drug MoA vs patient pathways)
+    E = Evidence (literature + ClinVar)
+    """
+    
+    def __init__(self, api_base: str = "http://127.0.0.1:8000"):
+        self.sequence_scorer = SequenceScorer(api_base)
+        self.pathway_scorer = PathwayScorer()
+        self.evidence_scorer = EvidenceScorer(api_base)
+        self.drug_ranker = DrugRanker()
+        self.tier_classifier = TierClassifier()
+        self.api_base = api_base
+    
+    async def rank_drugs(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile] = None,
+        resistance_prediction: Optional[ResistancePrediction] = None,
+        drug_classes: List[str] = None
+    ) -> DrugEfficacyResult:
+        """
+        Rank drugs by efficacy for a patient.
+        
+        Args:
+            patient_profile: Patient mutations and disease
+            biomarker_profile: TMB, MSI, HRD status
+            resistance_prediction: Pathway analyses
+            drug_classes: Optional filter for drug classes
+        
+        Returns:
+            DrugEfficacyResult with ranked drugs
+        """
+        start_time = datetime.utcnow()
+        logger.info(f"Ranking drugs for {patient_profile.patient_id}")
+        
+        mutations = self._mutations_to_dicts(patient_profile.mutations)
+        disease = patient_profile.disease
+        
+        # Get candidate drugs
+        candidate_drugs = self._get_candidate_drugs(
+            disease=disease,
+            biomarker_profile=biomarker_profile,
+            drug_classes=drug_classes
+        )
+        
+        rankings = []
+        
+        for drug in candidate_drugs:
+            try:
+                # Step 1: Sequence score (S)
+                s_score, s_provenance = await self.sequence_scorer.score(
+                    mutations=mutations,
+                    drug=drug
+                )
+                
+                # Step 2: Pathway score (P)
+                p_score, p_alignment = self.pathway_scorer.score(
+                    mutations=mutations,
+                    drug=drug,
+                    pathways=resistance_prediction.pathways if resistance_prediction else []
+                )
+                
+                # Step 3: Evidence score (E)
+                e_score, e_sources = await self.evidence_scorer.score(
+                    mutations=mutations,
+                    disease=disease,
+                    drug=drug
+                )
+                
+                # Step 4: ClinVar prior
+                clinvar_prior = self._get_clinvar_prior(mutations, drug)
+                
+                # Step 5: Calculate final score
+                efficacy = (
+                    0.3 * s_score +
+                    0.4 * p_score +
+                    0.3 * e_score +
+                    clinvar_prior
+                )
+                
+                # Step 6: Build SPE breakdown
+                spe = SPEBreakdown(
+                    sequence_score=s_score,
+                    sequence_provenance=s_provenance,
+                    pathway_score=p_score,
+                    pathway_alignment=p_alignment,
+                    evidence_score=e_score,
+                    evidence_sources=e_sources,
+                    clinvar_prior=clinvar_prior
+                )
+                
+                # Step 7: Classify tier
+                tier, confidence = self.tier_classifier.classify(
+                    efficacy_score=efficacy,
+                    evidence_score=e_score,
+                    disease=disease,
+                    drug=drug
+                )
+                
+                # Step 8: Generate rationale
+                rationale = self._generate_rationale(
+                    drug=drug,
+                    spe=spe,
+                    biomarker_profile=biomarker_profile
+                )
+                
+                ranking = DrugRanking(
+                    drug_name=drug['name'],
+                    drug_class=drug['class'],
+                    efficacy_score=round(efficacy, 3),
+                    spe_breakdown=spe,
+                    tier=tier,
+                    confidence=confidence,
+                    on_label=self._is_on_label(drug, disease),
+                    mechanism=drug.get('mechanism', ''),
+                    rationale=rationale,
+                    contraindications=self._get_contraindications(drug, mutations),
+                    citations=e_sources[:5]  # Top 5 papers
+                )
+                
+                rankings.append(ranking)
+                
+            except Exception as e:
+                logger.error(f"Error scoring {drug['name']}: {e}")
+                continue
+        
+        # Sort by efficacy
+        rankings.sort(key=lambda x: x.efficacy_score, reverse=True)
+        
+        # Build mechanism vector for trial matching
+        mechanism_vector = self._build_mechanism_vector(
+            pathways=resistance_prediction.pathways if resistance_prediction else [],
+            biomarker_profile=biomarker_profile
+        )
+        
+        elapsed = (datetime.utcnow() - start_time).total_seconds() * 1000
+        
+        return DrugEfficacyResult(
+            patient_id=patient_profile.patient_id,
+            disease=disease,
+            ranked_drugs=rankings,
+            top_recommendation=rankings[0] if rankings else None,
+            mechanism_vector=mechanism_vector,
+            calculation_time_ms=int(elapsed),
+            provenance={
+                'formula': '0.3*S + 0.4*P + 0.3*E + clinvar_prior',
+                'drugs_evaluated': len(candidate_drugs),
+                'drugs_ranked': len(rankings)
+            }
+        )
+    
+    def _build_mechanism_vector(
+        self,
+        pathways: List,
+        biomarker_profile: Optional[BiomarkerProfile]
+    ) -> List[float]:
+        """
+        Build 7D mechanism vector for trial matching.
+        
+        Vector: [DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux]
+        """
+        vector = [0.0] * 7
+        
+        # Map pathway analyses to vector
+        pathway_index = {
+            'DDR': 0, 'MAPK': 1, 'PI3K': 2,
+            'VEGF': 3, 'HER2': 4, 'IO': 5, 'Efflux': 6
+        }
+        
+        for pathway in pathways:
+            if pathway.pathway.upper() in pathway_index:
+                idx = pathway_index[pathway.pathway.upper()]
+                vector[idx] = pathway.burden_score
+        
+        # Add IO from biomarkers
+        if biomarker_profile and biomarker_profile.io_eligible:
+            vector[5] = 1.0  # IO pathway
+        
+        return vector
+```
+
+### Sequence Scorer (Evo2 Integration)
+
+```python
+# api/services/efficacy/sequence_scorer.py
+
+from typing import List, Dict, Tuple
+import httpx
+import logging
+
+logger = logging.getLogger(__name__)
+
+class SequenceScorer:
+    """
+    Score variant impact using Evo2 foundation model.
+    
+    Calls existing Evo2 endpoints:
+    - /api/evo/score_variant_multi (multi-window)
+    - /api/evo/score_variant_exon (exon context)
+    """
+    
+    def __init__(self, api_base: str):
+        self.api_base = api_base
+    
+    async def score(
+        self,
+        mutations: List[Dict],
+        drug: Dict
+    ) -> Tuple[float, Dict]:
+        """
+        Score mutations using Evo2.
+        
+        Returns:
+            Tuple of (score 0-1, provenance dict)
+        """
+        if not mutations:
+            return 0.5, {'method': 'no_mutations'}
+        
+        # Get drug-relevant genes
+        target_genes = drug.get('target_genes', [])
+        
+        # Filter mutations to drug-relevant genes
+        relevant_mutations = [
+            m for m in mutations
+            if m.get('gene', '').upper() in [g.upper() for g in target_genes]
+        ]
+        
+        if not relevant_mutations:
+            # No mutations in drug targets
+            return 0.5, {'method': 'no_target_mutations'}
+        
+        # Score each mutation with Evo2
+        scores = []
+        provenance = {'mutations_scored': []}
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for mut in relevant_mutations[:5]:  # Limit to 5
+                try:
+                    # Call Evo2 multi-window endpoint
+                    response = await client.post(
+                        f"{self.api_base}/api/evo/score_variant_multi",
+                        json={
+                            'chrom': mut.get('chromosome', ''),
+                            'pos': mut.get('position', 0),
+                            'ref': mut.get('ref', ''),
+                            'alt': mut.get('alt', ''),
+                            'build': 'hg38'
+                        }
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        delta = abs(data.get('min_delta', 0))
+                        # Normalize delta to 0-1 (higher delta = more impact)
+                        normalized = min(delta / 5.0, 1.0)
+                        scores.append(normalized)
+                        provenance['mutations_scored'].append({
+                            'gene': mut.get('gene'),
+                            'delta': delta,
+                            'normalized': normalized
+                        })
+                
+                except Exception as e:
+                    logger.warning(f"Evo2 scoring failed for {mut}: {e}")
+        
+        if not scores:
+            return 0.5, {'method': 'evo2_fallback', 'reason': 'no_scores'}
+        
+        # Average across mutations
+        avg_score = sum(scores) / len(scores)
+        provenance['method'] = 'evo2_multi_window'
+        provenance['avg_score'] = avg_score
+        
+        return avg_score, provenance
+```
+
+### Pathway Scorer
+
+```python
+# api/services/efficacy/pathway_scorer.py
+
+from typing import List, Dict, Tuple
+from .constants import DRUG_PATHWAY_MAPPING
+
+class PathwayScorer:
+    """
+    Score drug-pathway alignment.
+    
+    High score = drug targets patient's disrupted pathways
+    """
+    
+    def score(
+        self,
+        mutations: List[Dict],
+        drug: Dict,
+        pathways: List = None
+    ) -> Tuple[float, Dict[str, float]]:
+        """
+        Score pathway alignment between drug MoA and patient pathways.
+        
+        Returns:
+            Tuple of (score 0-1, per-pathway alignment dict)
+        """
+        drug_pathways = drug.get('pathways', [])
+        
+        if not drug_pathways:
+            return 0.5, {}
+        
+        alignment = {}
+        
+        # If we have pathway analyses from resistance agent
+        if pathways:
+            for pathway in pathways:
+                if pathway.pathway in drug_pathways:
+                    alignment[pathway.pathway] = pathway.burden_score
+        
+        # Otherwise, infer from mutations
+        else:
+            mutated_genes = {m.get('gene', '').upper() for m in mutations}
+            
+            for pathway in drug_pathways:
+                pathway_genes = DRUG_PATHWAY_MAPPING.get(pathway, set())
+                overlap = mutated_genes & pathway_genes
+                
+                if pathway_genes:
+                    burden = len(overlap) / len(pathway_genes)
+                    alignment[pathway] = min(burden * 3, 1.0)  # Scale up
+                else:
+                    alignment[pathway] = 0.0
+        
+        # Average alignment across drug's pathways
+        if alignment:
+            avg_alignment = sum(alignment.values()) / len(alignment)
+        else:
+            avg_alignment = 0.5
+        
+        return avg_alignment, alignment
+```
+
+### Drug Catalog
+
+```python
+# api/services/efficacy/drug_catalog.py
+
+DRUG_CATALOG = {
+    # PARP Inhibitors
+    'olaparib': {
+        'name': 'Olaparib',
+        'class': 'PARP_inhibitor',
+        'target_genes': ['PARP1', 'PARP2'],
+        'pathways': ['DDR', 'HRR'],
+        'mechanism': 'PARP inhibition → synthetic lethality with HRD',
+        'indications': ['ovarian_cancer', 'breast_cancer', 'prostate_cancer'],
+        'biomarker_required': ['BRCA1', 'BRCA2', 'HRD+']
+    },
+    'niraparib': {
+        'name': 'Niraparib',
+        'class': 'PARP_inhibitor',
+        'target_genes': ['PARP1', 'PARP2'],
+        'pathways': ['DDR', 'HRR'],
+        'mechanism': 'PARP inhibition (works regardless of BRCA status in maintenance)',
+        'indications': ['ovarian_cancer'],
+        'biomarker_required': []  # Approved regardless of BRCA
+    },
+    
+    # Platinum
+    'carboplatin': {
+        'name': 'Carboplatin',
+        'class': 'platinum',
+        'target_genes': [],  # DNA crosslinks
+        'pathways': ['DDR'],
+        'mechanism': 'DNA crosslinks → DDR-mediated cell death',
+        'indications': ['ovarian_cancer', 'lung_cancer', 'breast_cancer'],
+        'biomarker_required': []
+    },
+    
+    # Checkpoint Inhibitors
+    'pembrolizumab': {
+        'name': 'Pembrolizumab',
+        'class': 'checkpoint_inhibitor',
+        'target_genes': ['PDCD1'],  # PD-1
+        'pathways': ['IO'],
+        'mechanism': 'PD-1 blockade → T cell activation',
+        'indications': ['melanoma', 'lung_cancer', 'msi_high_any'],
+        'biomarker_required': ['TMB-H', 'MSI-H', 'PD-L1']
+    },
+    
+    # Targeted therapies
+    'vemurafenib': {
+        'name': 'Vemurafenib',
+        'class': 'BRAF_inhibitor',
+        'target_genes': ['BRAF'],
+        'pathways': ['MAPK'],
+        'mechanism': 'BRAF V600 inhibition → MAPK pathway blockade',
+        'indications': ['melanoma'],
+        'biomarker_required': ['BRAF_V600']
+    },
+    
+    # Anti-VEGF
+    'bevacizumab': {
+        'name': 'Bevacizumab',
+        'class': 'anti_VEGF',
+        'target_genes': ['VEGFA'],
+        'pathways': ['VEGF'],
+        'mechanism': 'VEGF-A neutralization → anti-angiogenesis',
+        'indications': ['ovarian_cancer', 'colorectal_cancer', 'lung_cancer'],
+        'biomarker_required': []
+    }
+}
+
+def get_drugs_for_disease(disease: str) -> List[Dict]:
+    """Get candidate drugs for a disease."""
+    disease_lower = disease.lower().replace(' ', '_')
+    
+    candidates = []
+    for drug_id, drug in DRUG_CATALOG.items():
+        for indication in drug['indications']:
+            if indication in disease_lower or disease_lower in indication:
+                candidates.append({**drug, 'id': drug_id})
+                break
+    
+    return candidates
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+### Phase 1: Sequence Scorer
+- [ ] Integrate with existing `/api/evo/score_variant_multi`
+- [ ] Handle Evo2 API errors gracefully
+- [ ] Normalize delta scores to 0-1
+- [ ] Unit tests
+
+### Phase 2: Pathway Scorer
+- [ ] Create drug-pathway mapping
+- [ ] Calculate pathway burden alignment
+- [ ] Integrate with resistance agent pathways
+- [ ] Unit tests
+
+### Phase 3: Evidence Scorer
+- [ ] Integrate with existing `/api/evidence/literature`
+- [ ] Add ClinVar lookup
+- [ ] Score evidence quality
+- [ ] Unit tests
+
+### Phase 4: Integration
+- [ ] Create DrugEfficacyAgent class
+- [ ] Implement S/P/E formula
+- [ ] Add tier classification
+- [ ] Build 7D mechanism vector
+- [ ] Integration tests
+
+---
+
+## 📡 API ENDPOINT
+
+```yaml
+POST /api/agents/drugs
+Content-Type: application/json
+
+Request:
+  patient_id: string
+  mutations: Mutation[]
+  disease: string
+  biomarker_profile: BiomarkerProfile  # optional
+  resistance_prediction: ResistancePrediction  # optional
+  drug_classes: string[]  # optional filter
+
+Response:
+  drug_efficacy_result: DrugEfficacyResult
+  calculation_time_ms: number
+```
+
+---
+
+## ✅ ACCEPTANCE CRITERIA
+
+1. ✅ S/P/E formula correctly implemented
+2. ✅ Evo2 integration for sequence scoring
+3. ✅ Pathway alignment calculated
+4. ✅ Evidence from literature integrated
+5. ✅ Drugs ranked by efficacy
+6. ✅ Tiers assigned (I/II/III/Research)
+7. ✅ 7D mechanism vector built
+8. ✅ Rationale generated for each drug
+9. ✅ Unit test coverage >80%
+
+---
+
+---
+
+## 🎯 MISSION
+
+Build a drug efficacy agent that can:
+1. Score drugs using the S/P/E framework (validated in Multiple Myeloma)
+2. Integrate Evo2 sequence scoring (S)
+3. Calculate pathway burden alignment (P)
+4. Synthesize literature evidence (E)
+5. Rank drugs with confidence tiers (I/II/III/Research)
+
+---
+
+## 📊 VALIDATED FRAMEWORK
+
+### S/P/E Formula
+
+```
+efficacy_score = 0.3*S + 0.4*P + 0.3*E + clinvar_prior
+```
+
+Where:
+- **S (Sequence):** Evo2 variant impact (0.0 - 1.0)
+- **P (Pathway):** Drug-pathway alignment (0.0 - 1.0)
+- **E (Evidence):** Literature + ClinVar support (0.0 - 1.0)
+- **clinvar_prior:** ClinVar pathogenicity boost (0.0 - 0.1)
+
+### Existing Implementation
+
+**Location:** `api/routers/efficacy.py`
+
+**Key Endpoints:**
+- `POST /api/efficacy/predict` - Full S/P/E scoring
+- `POST /api/evo/score_variant_multi` - Evo2 sequence scoring
+- `POST /api/insights/predict_protein_functionality_change` - Functionality proxy
+
+---
+
+## 📥 INPUTS
+
+### From Previous Agents
+
+```python
+# From Module 01 (Data Extraction)
+patient_profile: PatientProfile
+mutations: List[Mutation]
+disease: str
+
+# From Module 02 (Biomarker)
+biomarker_profile: BiomarkerProfile
+tmb: float
+msi_status: str
+hrd_status: str
+io_eligible: bool
+parp_eligible: bool
+
+# From Module 03 (Resistance)
+resistance_prediction: ResistancePrediction
+pathway_analyses: List[PathwayAnalysis]
+```
+
+---
+
+## 📤 OUTPUTS
+
+### DrugRanking Schema
+
+```python
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from enum import Enum
+
+class EvidenceTier(Enum):
+    TIER_I = "I"       # On-label, guideline-backed
+    TIER_II = "II"     # Strong evidence, off-label
+    TIER_III = "III"   # Mechanistic support, limited evidence
+    RESEARCH = "Research"
+
+class Confidence(Enum):
+    VERY_HIGH = "very_high"
+    HIGH = "high"
+    MODERATE = "moderate"
+    LOW = "low"
+
+@dataclass
+class SPEBreakdown:
+    sequence_score: float           # S component (0-1)
+    sequence_provenance: Dict       # Evo2 details
+    pathway_score: float            # P component (0-1)
+    pathway_alignment: Dict[str, float]  # Per-pathway scores
+    evidence_score: float           # E component (0-1)
+    evidence_sources: List[Dict]    # Papers, ClinVar
+    clinvar_prior: float            # ClinVar boost
+
+@dataclass
+class DrugRanking:
+    drug_name: str
+    drug_class: str                 # e.g., "PARP_inhibitor"
+    efficacy_score: float           # 0.0 - 1.0
+    spe_breakdown: SPEBreakdown
+    tier: EvidenceTier
+    confidence: Confidence
+    on_label: bool
+    mechanism: str                  # Why this drug works
+    rationale: List[str]            # Supporting reasons
+    contraindications: List[str]    # Reasons against
+    citations: List[Dict]           # Key papers
+
+@dataclass
+class DrugEfficacyResult:
+    patient_id: str
+    disease: str
+    ranked_drugs: List[DrugRanking]
+    top_recommendation: DrugRanking
+    mechanism_vector: List[float]   # 7D vector for trial matching
+    calculation_time_ms: int
+    provenance: Dict[str, any]
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### File Structure
+
+```
+api/services/efficacy/
+├── __init__.py
+├── efficacy_agent.py           # Main agent
+├── sequence_scorer.py          # S: Evo2 integration
+├── pathway_scorer.py           # P: Pathway alignment
+├── evidence_scorer.py          # E: Literature + ClinVar
+├── drug_ranker.py              # Combine S/P/E, rank
+├── tier_classifier.py          # Assign tiers
+├── drug_catalog.py             # Drug metadata
+├── constants.py                # Weights, thresholds
+└── tests/
+    ├── test_spe.py
+    ├── test_ranking.py
+    └── test_integration.py
+```
+
+### Core Agent Implementation
+
+```python
+# api/services/efficacy/efficacy_agent.py
+
+from typing import List, Optional
+from datetime import datetime
+import logging
+
+from .sequence_scorer import SequenceScorer
+from .pathway_scorer import PathwayScorer
+from .evidence_scorer import EvidenceScorer
+from .drug_ranker import DrugRanker
+from .tier_classifier import TierClassifier
+from ..models import (
+    PatientProfile, BiomarkerProfile, ResistancePrediction,
+    DrugEfficacyResult, DrugRanking
+)
+
+logger = logging.getLogger(__name__)
+
+class DrugEfficacyAgent:
+    """
+    Rank drugs using the S/P/E framework.
+    
+    Formula: efficacy = 0.3*S + 0.4*P + 0.3*E + clinvar_prior
+    
+    S = Sequence impact (Evo2)
+    P = Pathway alignment (drug MoA vs patient pathways)
+    E = Evidence (literature + ClinVar)
+    """
+    
+    def __init__(self, api_base: str = "http://127.0.0.1:8000"):
+        self.sequence_scorer = SequenceScorer(api_base)
+        self.pathway_scorer = PathwayScorer()
+        self.evidence_scorer = EvidenceScorer(api_base)
+        self.drug_ranker = DrugRanker()
+        self.tier_classifier = TierClassifier()
+        self.api_base = api_base
+    
+    async def rank_drugs(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile] = None,
+        resistance_prediction: Optional[ResistancePrediction] = None,
+        drug_classes: List[str] = None
+    ) -> DrugEfficacyResult:
+        """
+        Rank drugs by efficacy for a patient.
+        
+        Args:
+            patient_profile: Patient mutations and disease
+            biomarker_profile: TMB, MSI, HRD status
+            resistance_prediction: Pathway analyses
+            drug_classes: Optional filter for drug classes
+        
+        Returns:
+            DrugEfficacyResult with ranked drugs
+        """
+        start_time = datetime.utcnow()
+        logger.info(f"Ranking drugs for {patient_profile.patient_id}")
+        
+        mutations = self._mutations_to_dicts(patient_profile.mutations)
+        disease = patient_profile.disease
+        
+        # Get candidate drugs
+        candidate_drugs = self._get_candidate_drugs(
+            disease=disease,
+            biomarker_profile=biomarker_profile,
+            drug_classes=drug_classes
+        )
+        
+        rankings = []
+        
+        for drug in candidate_drugs:
+            try:
+                # Step 1: Sequence score (S)
+                s_score, s_provenance = await self.sequence_scorer.score(
+                    mutations=mutations,
+                    drug=drug
+                )
+                
+                # Step 2: Pathway score (P)
+                p_score, p_alignment = self.pathway_scorer.score(
+                    mutations=mutations,
+                    drug=drug,
+                    pathways=resistance_prediction.pathways if resistance_prediction else []
+                )
+                
+                # Step 3: Evidence score (E)
+                e_score, e_sources = await self.evidence_scorer.score(
+                    mutations=mutations,
+                    disease=disease,
+                    drug=drug
+                )
+                
+                # Step 4: ClinVar prior
+                clinvar_prior = self._get_clinvar_prior(mutations, drug)
+                
+                # Step 5: Calculate final score
+                efficacy = (
+                    0.3 * s_score +
+                    0.4 * p_score +
+                    0.3 * e_score +
+                    clinvar_prior
+                )
+                
+                # Step 6: Build SPE breakdown
+                spe = SPEBreakdown(
+                    sequence_score=s_score,
+                    sequence_provenance=s_provenance,
+                    pathway_score=p_score,
+                    pathway_alignment=p_alignment,
+                    evidence_score=e_score,
+                    evidence_sources=e_sources,
+                    clinvar_prior=clinvar_prior
+                )
+                
+                # Step 7: Classify tier
+                tier, confidence = self.tier_classifier.classify(
+                    efficacy_score=efficacy,
+                    evidence_score=e_score,
+                    disease=disease,
+                    drug=drug
+                )
+                
+                # Step 8: Generate rationale
+                rationale = self._generate_rationale(
+                    drug=drug,
+                    spe=spe,
+                    biomarker_profile=biomarker_profile
+                )
+                
+                ranking = DrugRanking(
+                    drug_name=drug['name'],
+                    drug_class=drug['class'],
+                    efficacy_score=round(efficacy, 3),
+                    spe_breakdown=spe,
+                    tier=tier,
+                    confidence=confidence,
+                    on_label=self._is_on_label(drug, disease),
+                    mechanism=drug.get('mechanism', ''),
+                    rationale=rationale,
+                    contraindications=self._get_contraindications(drug, mutations),
+                    citations=e_sources[:5]  # Top 5 papers
+                )
+                
+                rankings.append(ranking)
+                
+            except Exception as e:
+                logger.error(f"Error scoring {drug['name']}: {e}")
+                continue
+        
+        # Sort by efficacy
+        rankings.sort(key=lambda x: x.efficacy_score, reverse=True)
+        
+        # Build mechanism vector for trial matching
+        mechanism_vector = self._build_mechanism_vector(
+            pathways=resistance_prediction.pathways if resistance_prediction else [],
+            biomarker_profile=biomarker_profile
+        )
+        
+        elapsed = (datetime.utcnow() - start_time).total_seconds() * 1000
+        
+        return DrugEfficacyResult(
+            patient_id=patient_profile.patient_id,
+            disease=disease,
+            ranked_drugs=rankings,
+            top_recommendation=rankings[0] if rankings else None,
+            mechanism_vector=mechanism_vector,
+            calculation_time_ms=int(elapsed),
+            provenance={
+                'formula': '0.3*S + 0.4*P + 0.3*E + clinvar_prior',
+                'drugs_evaluated': len(candidate_drugs),
+                'drugs_ranked': len(rankings)
+            }
+        )
+    
+    def _build_mechanism_vector(
+        self,
+        pathways: List,
+        biomarker_profile: Optional[BiomarkerProfile]
+    ) -> List[float]:
+        """
+        Build 7D mechanism vector for trial matching.
+        
+        Vector: [DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux]
+        """
+        vector = [0.0] * 7
+        
+        # Map pathway analyses to vector
+        pathway_index = {
+            'DDR': 0, 'MAPK': 1, 'PI3K': 2,
+            'VEGF': 3, 'HER2': 4, 'IO': 5, 'Efflux': 6
+        }
+        
+        for pathway in pathways:
+            if pathway.pathway.upper() in pathway_index:
+                idx = pathway_index[pathway.pathway.upper()]
+                vector[idx] = pathway.burden_score
+        
+        # Add IO from biomarkers
+        if biomarker_profile and biomarker_profile.io_eligible:
+            vector[5] = 1.0  # IO pathway
+        
+        return vector
+```
+
+### Sequence Scorer (Evo2 Integration)
+
+```python
+# api/services/efficacy/sequence_scorer.py
+
+from typing import List, Dict, Tuple
+import httpx
+import logging
+
+logger = logging.getLogger(__name__)
+
+class SequenceScorer:
+    """
+    Score variant impact using Evo2 foundation model.
+    
+    Calls existing Evo2 endpoints:
+    - /api/evo/score_variant_multi (multi-window)
+    - /api/evo/score_variant_exon (exon context)
+    """
+    
+    def __init__(self, api_base: str):
+        self.api_base = api_base
+    
+    async def score(
+        self,
+        mutations: List[Dict],
+        drug: Dict
+    ) -> Tuple[float, Dict]:
+        """
+        Score mutations using Evo2.
+        
+        Returns:
+            Tuple of (score 0-1, provenance dict)
+        """
+        if not mutations:
+            return 0.5, {'method': 'no_mutations'}
+        
+        # Get drug-relevant genes
+        target_genes = drug.get('target_genes', [])
+        
+        # Filter mutations to drug-relevant genes
+        relevant_mutations = [
+            m for m in mutations
+            if m.get('gene', '').upper() in [g.upper() for g in target_genes]
+        ]
+        
+        if not relevant_mutations:
+            # No mutations in drug targets
+            return 0.5, {'method': 'no_target_mutations'}
+        
+        # Score each mutation with Evo2
+        scores = []
+        provenance = {'mutations_scored': []}
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for mut in relevant_mutations[:5]:  # Limit to 5
+                try:
+                    # Call Evo2 multi-window endpoint
+                    response = await client.post(
+                        f"{self.api_base}/api/evo/score_variant_multi",
+                        json={
+                            'chrom': mut.get('chromosome', ''),
+                            'pos': mut.get('position', 0),
+                            'ref': mut.get('ref', ''),
+                            'alt': mut.get('alt', ''),
+                            'build': 'hg38'
+                        }
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        delta = abs(data.get('min_delta', 0))
+                        # Normalize delta to 0-1 (higher delta = more impact)
+                        normalized = min(delta / 5.0, 1.0)
+                        scores.append(normalized)
+                        provenance['mutations_scored'].append({
+                            'gene': mut.get('gene'),
+                            'delta': delta,
+                            'normalized': normalized
+                        })
+                
+                except Exception as e:
+                    logger.warning(f"Evo2 scoring failed for {mut}: {e}")
+        
+        if not scores:
+            return 0.5, {'method': 'evo2_fallback', 'reason': 'no_scores'}
+        
+        # Average across mutations
+        avg_score = sum(scores) / len(scores)
+        provenance['method'] = 'evo2_multi_window'
+        provenance['avg_score'] = avg_score
+        
+        return avg_score, provenance
+```
+
+### Pathway Scorer
+
+```python
+# api/services/efficacy/pathway_scorer.py
+
+from typing import List, Dict, Tuple
+from .constants import DRUG_PATHWAY_MAPPING
+
+class PathwayScorer:
+    """
+    Score drug-pathway alignment.
+    
+    High score = drug targets patient's disrupted pathways
+    """
+    
+    def score(
+        self,
+        mutations: List[Dict],
+        drug: Dict,
+        pathways: List = None
+    ) -> Tuple[float, Dict[str, float]]:
+        """
+        Score pathway alignment between drug MoA and patient pathways.
+        
+        Returns:
+            Tuple of (score 0-1, per-pathway alignment dict)
+        """
+        drug_pathways = drug.get('pathways', [])
+        
+        if not drug_pathways:
+            return 0.5, {}
+        
+        alignment = {}
+        
+        # If we have pathway analyses from resistance agent
+        if pathways:
+            for pathway in pathways:
+                if pathway.pathway in drug_pathways:
+                    alignment[pathway.pathway] = pathway.burden_score
+        
+        # Otherwise, infer from mutations
+        else:
+            mutated_genes = {m.get('gene', '').upper() for m in mutations}
+            
+            for pathway in drug_pathways:
+                pathway_genes = DRUG_PATHWAY_MAPPING.get(pathway, set())
+                overlap = mutated_genes & pathway_genes
+                
+                if pathway_genes:
+                    burden = len(overlap) / len(pathway_genes)
+                    alignment[pathway] = min(burden * 3, 1.0)  # Scale up
+                else:
+                    alignment[pathway] = 0.0
+        
+        # Average alignment across drug's pathways
+        if alignment:
+            avg_alignment = sum(alignment.values()) / len(alignment)
+        else:
+            avg_alignment = 0.5
+        
+        return avg_alignment, alignment
+```
+
+### Drug Catalog
+
+```python
+# api/services/efficacy/drug_catalog.py
+
+DRUG_CATALOG = {
+    # PARP Inhibitors
+    'olaparib': {
+        'name': 'Olaparib',
+        'class': 'PARP_inhibitor',
+        'target_genes': ['PARP1', 'PARP2'],
+        'pathways': ['DDR', 'HRR'],
+        'mechanism': 'PARP inhibition → synthetic lethality with HRD',
+        'indications': ['ovarian_cancer', 'breast_cancer', 'prostate_cancer'],
+        'biomarker_required': ['BRCA1', 'BRCA2', 'HRD+']
+    },
+    'niraparib': {
+        'name': 'Niraparib',
+        'class': 'PARP_inhibitor',
+        'target_genes': ['PARP1', 'PARP2'],
+        'pathways': ['DDR', 'HRR'],
+        'mechanism': 'PARP inhibition (works regardless of BRCA status in maintenance)',
+        'indications': ['ovarian_cancer'],
+        'biomarker_required': []  # Approved regardless of BRCA
+    },
+    
+    # Platinum
+    'carboplatin': {
+        'name': 'Carboplatin',
+        'class': 'platinum',
+        'target_genes': [],  # DNA crosslinks
+        'pathways': ['DDR'],
+        'mechanism': 'DNA crosslinks → DDR-mediated cell death',
+        'indications': ['ovarian_cancer', 'lung_cancer', 'breast_cancer'],
+        'biomarker_required': []
+    },
+    
+    # Checkpoint Inhibitors
+    'pembrolizumab': {
+        'name': 'Pembrolizumab',
+        'class': 'checkpoint_inhibitor',
+        'target_genes': ['PDCD1'],  # PD-1
+        'pathways': ['IO'],
+        'mechanism': 'PD-1 blockade → T cell activation',
+        'indications': ['melanoma', 'lung_cancer', 'msi_high_any'],
+        'biomarker_required': ['TMB-H', 'MSI-H', 'PD-L1']
+    },
+    
+    # Targeted therapies
+    'vemurafenib': {
+        'name': 'Vemurafenib',
+        'class': 'BRAF_inhibitor',
+        'target_genes': ['BRAF'],
+        'pathways': ['MAPK'],
+        'mechanism': 'BRAF V600 inhibition → MAPK pathway blockade',
+        'indications': ['melanoma'],
+        'biomarker_required': ['BRAF_V600']
+    },
+    
+    # Anti-VEGF
+    'bevacizumab': {
+        'name': 'Bevacizumab',
+        'class': 'anti_VEGF',
+        'target_genes': ['VEGFA'],
+        'pathways': ['VEGF'],
+        'mechanism': 'VEGF-A neutralization → anti-angiogenesis',
+        'indications': ['ovarian_cancer', 'colorectal_cancer', 'lung_cancer'],
+        'biomarker_required': []
+    }
+}
+
+def get_drugs_for_disease(disease: str) -> List[Dict]:
+    """Get candidate drugs for a disease."""
+    disease_lower = disease.lower().replace(' ', '_')
+    
+    candidates = []
+    for drug_id, drug in DRUG_CATALOG.items():
+        for indication in drug['indications']:
+            if indication in disease_lower or disease_lower in indication:
+                candidates.append({**drug, 'id': drug_id})
+                break
+    
+    return candidates
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+### Phase 1: Sequence Scorer
+- [ ] Integrate with existing `/api/evo/score_variant_multi`
+- [ ] Handle Evo2 API errors gracefully
+- [ ] Normalize delta scores to 0-1
+- [ ] Unit tests
+
+### Phase 2: Pathway Scorer
+- [ ] Create drug-pathway mapping
+- [ ] Calculate pathway burden alignment
+- [ ] Integrate with resistance agent pathways
+- [ ] Unit tests
+
+### Phase 3: Evidence Scorer
+- [ ] Integrate with existing `/api/evidence/literature`
+- [ ] Add ClinVar lookup
+- [ ] Score evidence quality
+- [ ] Unit tests
+
+### Phase 4: Integration
+- [ ] Create DrugEfficacyAgent class
+- [ ] Implement S/P/E formula
+- [ ] Add tier classification
+- [ ] Build 7D mechanism vector
+- [ ] Integration tests
+
+---
+
+## 📡 API ENDPOINT
+
+```yaml
+POST /api/agents/drugs
+Content-Type: application/json
+
+Request:
+  patient_id: string
+  mutations: Mutation[]
+  disease: string
+  biomarker_profile: BiomarkerProfile  # optional
+  resistance_prediction: ResistancePrediction  # optional
+  drug_classes: string[]  # optional filter
+
+Response:
+  drug_efficacy_result: DrugEfficacyResult
+  calculation_time_ms: number
+```
+
+---
+
+## ✅ ACCEPTANCE CRITERIA
+
+1. ✅ S/P/E formula correctly implemented
+2. ✅ Evo2 integration for sequence scoring
+3. ✅ Pathway alignment calculated
+4. ✅ Evidence from literature integrated
+5. ✅ Drugs ranked by efficacy
+6. ✅ Tiers assigned (I/II/III/Research)
+7. ✅ 7D mechanism vector built
+8. ✅ Rationale generated for each drug
+9. ✅ Unit test coverage >80%
+
+---
+
+---
+
+## 🎯 MISSION
+
+Build a drug efficacy agent that can:
+1. Score drugs using the S/P/E framework (validated in Multiple Myeloma)
+2. Integrate Evo2 sequence scoring (S)
+3. Calculate pathway burden alignment (P)
+4. Synthesize literature evidence (E)
+5. Rank drugs with confidence tiers (I/II/III/Research)
+
+---
+
+## 📊 VALIDATED FRAMEWORK
+
+### S/P/E Formula
+
+```
+efficacy_score = 0.3*S + 0.4*P + 0.3*E + clinvar_prior
+```
+
+Where:
+- **S (Sequence):** Evo2 variant impact (0.0 - 1.0)
+- **P (Pathway):** Drug-pathway alignment (0.0 - 1.0)
+- **E (Evidence):** Literature + ClinVar support (0.0 - 1.0)
+- **clinvar_prior:** ClinVar pathogenicity boost (0.0 - 0.1)
+
+### Existing Implementation
+
+**Location:** `api/routers/efficacy.py`
+
+**Key Endpoints:**
+- `POST /api/efficacy/predict` - Full S/P/E scoring
+- `POST /api/evo/score_variant_multi` - Evo2 sequence scoring
+- `POST /api/insights/predict_protein_functionality_change` - Functionality proxy
+
+---
+
+## 📥 INPUTS
+
+### From Previous Agents
+
+```python
+# From Module 01 (Data Extraction)
+patient_profile: PatientProfile
+mutations: List[Mutation]
+disease: str
+
+# From Module 02 (Biomarker)
+biomarker_profile: BiomarkerProfile
+tmb: float
+msi_status: str
+hrd_status: str
+io_eligible: bool
+parp_eligible: bool
+
+# From Module 03 (Resistance)
+resistance_prediction: ResistancePrediction
+pathway_analyses: List[PathwayAnalysis]
+```
+
+---
+
+## 📤 OUTPUTS
+
+### DrugRanking Schema
+
+```python
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from enum import Enum
+
+class EvidenceTier(Enum):
+    TIER_I = "I"       # On-label, guideline-backed
+    TIER_II = "II"     # Strong evidence, off-label
+    TIER_III = "III"   # Mechanistic support, limited evidence
+    RESEARCH = "Research"
+
+class Confidence(Enum):
+    VERY_HIGH = "very_high"
+    HIGH = "high"
+    MODERATE = "moderate"
+    LOW = "low"
+
+@dataclass
+class SPEBreakdown:
+    sequence_score: float           # S component (0-1)
+    sequence_provenance: Dict       # Evo2 details
+    pathway_score: float            # P component (0-1)
+    pathway_alignment: Dict[str, float]  # Per-pathway scores
+    evidence_score: float           # E component (0-1)
+    evidence_sources: List[Dict]    # Papers, ClinVar
+    clinvar_prior: float            # ClinVar boost
+
+@dataclass
+class DrugRanking:
+    drug_name: str
+    drug_class: str                 # e.g., "PARP_inhibitor"
+    efficacy_score: float           # 0.0 - 1.0
+    spe_breakdown: SPEBreakdown
+    tier: EvidenceTier
+    confidence: Confidence
+    on_label: bool
+    mechanism: str                  # Why this drug works
+    rationale: List[str]            # Supporting reasons
+    contraindications: List[str]    # Reasons against
+    citations: List[Dict]           # Key papers
+
+@dataclass
+class DrugEfficacyResult:
+    patient_id: str
+    disease: str
+    ranked_drugs: List[DrugRanking]
+    top_recommendation: DrugRanking
+    mechanism_vector: List[float]   # 7D vector for trial matching
+    calculation_time_ms: int
+    provenance: Dict[str, any]
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### File Structure
+
+```
+api/services/efficacy/
+├── __init__.py
+├── efficacy_agent.py           # Main agent
+├── sequence_scorer.py          # S: Evo2 integration
+├── pathway_scorer.py           # P: Pathway alignment
+├── evidence_scorer.py          # E: Literature + ClinVar
+├── drug_ranker.py              # Combine S/P/E, rank
+├── tier_classifier.py          # Assign tiers
+├── drug_catalog.py             # Drug metadata
+├── constants.py                # Weights, thresholds
+└── tests/
+    ├── test_spe.py
+    ├── test_ranking.py
+    └── test_integration.py
+```
+
+### Core Agent Implementation
+
+```python
+# api/services/efficacy/efficacy_agent.py
+
+from typing import List, Optional
+from datetime import datetime
+import logging
+
+from .sequence_scorer import SequenceScorer
+from .pathway_scorer import PathwayScorer
+from .evidence_scorer import EvidenceScorer
+from .drug_ranker import DrugRanker
+from .tier_classifier import TierClassifier
+from ..models import (
+    PatientProfile, BiomarkerProfile, ResistancePrediction,
+    DrugEfficacyResult, DrugRanking
+)
+
+logger = logging.getLogger(__name__)
+
+class DrugEfficacyAgent:
+    """
+    Rank drugs using the S/P/E framework.
+    
+    Formula: efficacy = 0.3*S + 0.4*P + 0.3*E + clinvar_prior
+    
+    S = Sequence impact (Evo2)
+    P = Pathway alignment (drug MoA vs patient pathways)
+    E = Evidence (literature + ClinVar)
+    """
+    
+    def __init__(self, api_base: str = "http://127.0.0.1:8000"):
+        self.sequence_scorer = SequenceScorer(api_base)
+        self.pathway_scorer = PathwayScorer()
+        self.evidence_scorer = EvidenceScorer(api_base)
+        self.drug_ranker = DrugRanker()
+        self.tier_classifier = TierClassifier()
+        self.api_base = api_base
+    
+    async def rank_drugs(
+        self,
+        patient_profile: PatientProfile,
+        biomarker_profile: Optional[BiomarkerProfile] = None,
+        resistance_prediction: Optional[ResistancePrediction] = None,
+        drug_classes: List[str] = None
+    ) -> DrugEfficacyResult:
+        """
+        Rank drugs by efficacy for a patient.
+        
+        Args:
+            patient_profile: Patient mutations and disease
+            biomarker_profile: TMB, MSI, HRD status
+            resistance_prediction: Pathway analyses
+            drug_classes: Optional filter for drug classes
+        
+        Returns:
+            DrugEfficacyResult with ranked drugs
+        """
+        start_time = datetime.utcnow()
+        logger.info(f"Ranking drugs for {patient_profile.patient_id}")
+        
+        mutations = self._mutations_to_dicts(patient_profile.mutations)
+        disease = patient_profile.disease
+        
+        # Get candidate drugs
+        candidate_drugs = self._get_candidate_drugs(
+            disease=disease,
+            biomarker_profile=biomarker_profile,
+            drug_classes=drug_classes
+        )
+        
+        rankings = []
+        
+        for drug in candidate_drugs:
+            try:
+                # Step 1: Sequence score (S)
+                s_score, s_provenance = await self.sequence_scorer.score(
+                    mutations=mutations,
+                    drug=drug
+                )
+                
+                # Step 2: Pathway score (P)
+                p_score, p_alignment = self.pathway_scorer.score(
+                    mutations=mutations,
+                    drug=drug,
+                    pathways=resistance_prediction.pathways if resistance_prediction else []
+                )
+                
+                # Step 3: Evidence score (E)
+                e_score, e_sources = await self.evidence_scorer.score(
+                    mutations=mutations,
+                    disease=disease,
+                    drug=drug
+                )
+                
+                # Step 4: ClinVar prior
+                clinvar_prior = self._get_clinvar_prior(mutations, drug)
+                
+                # Step 5: Calculate final score
+                efficacy = (
+                    0.3 * s_score +
+                    0.4 * p_score +
+                    0.3 * e_score +
+                    clinvar_prior
+                )
+                
+                # Step 6: Build SPE breakdown
+                spe = SPEBreakdown(
+                    sequence_score=s_score,
+                    sequence_provenance=s_provenance,
+                    pathway_score=p_score,
+                    pathway_alignment=p_alignment,
+                    evidence_score=e_score,
+                    evidence_sources=e_sources,
+                    clinvar_prior=clinvar_prior
+                )
+                
+                # Step 7: Classify tier
+                tier, confidence = self.tier_classifier.classify(
+                    efficacy_score=efficacy,
+                    evidence_score=e_score,
+                    disease=disease,
+                    drug=drug
+                )
+                
+                # Step 8: Generate rationale
+                rationale = self._generate_rationale(
+                    drug=drug,
+                    spe=spe,
+                    biomarker_profile=biomarker_profile
+                )
+                
+                ranking = DrugRanking(
+                    drug_name=drug['name'],
+                    drug_class=drug['class'],
+                    efficacy_score=round(efficacy, 3),
+                    spe_breakdown=spe,
+                    tier=tier,
+                    confidence=confidence,
+                    on_label=self._is_on_label(drug, disease),
+                    mechanism=drug.get('mechanism', ''),
+                    rationale=rationale,
+                    contraindications=self._get_contraindications(drug, mutations),
+                    citations=e_sources[:5]  # Top 5 papers
+                )
+                
+                rankings.append(ranking)
+                
+            except Exception as e:
+                logger.error(f"Error scoring {drug['name']}: {e}")
+                continue
+        
+        # Sort by efficacy
+        rankings.sort(key=lambda x: x.efficacy_score, reverse=True)
+        
+        # Build mechanism vector for trial matching
+        mechanism_vector = self._build_mechanism_vector(
+            pathways=resistance_prediction.pathways if resistance_prediction else [],
+            biomarker_profile=biomarker_profile
+        )
+        
+        elapsed = (datetime.utcnow() - start_time).total_seconds() * 1000
+        
+        return DrugEfficacyResult(
+            patient_id=patient_profile.patient_id,
+            disease=disease,
+            ranked_drugs=rankings,
+            top_recommendation=rankings[0] if rankings else None,
+            mechanism_vector=mechanism_vector,
+            calculation_time_ms=int(elapsed),
+            provenance={
+                'formula': '0.3*S + 0.4*P + 0.3*E + clinvar_prior',
+                'drugs_evaluated': len(candidate_drugs),
+                'drugs_ranked': len(rankings)
+            }
+        )
+    
+    def _build_mechanism_vector(
+        self,
+        pathways: List,
+        biomarker_profile: Optional[BiomarkerProfile]
+    ) -> List[float]:
+        """
+        Build 7D mechanism vector for trial matching.
+        
+        Vector: [DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux]
+        """
+        vector = [0.0] * 7
+        
+        # Map pathway analyses to vector
+        pathway_index = {
+            'DDR': 0, 'MAPK': 1, 'PI3K': 2,
+            'VEGF': 3, 'HER2': 4, 'IO': 5, 'Efflux': 6
+        }
+        
+        for pathway in pathways:
+            if pathway.pathway.upper() in pathway_index:
+                idx = pathway_index[pathway.pathway.upper()]
+                vector[idx] = pathway.burden_score
+        
+        # Add IO from biomarkers
+        if biomarker_profile and biomarker_profile.io_eligible:
+            vector[5] = 1.0  # IO pathway
+        
+        return vector
+```
+
+### Sequence Scorer (Evo2 Integration)
+
+```python
+# api/services/efficacy/sequence_scorer.py
+
+from typing import List, Dict, Tuple
+import httpx
+import logging
+
+logger = logging.getLogger(__name__)
+
+class SequenceScorer:
+    """
+    Score variant impact using Evo2 foundation model.
+    
+    Calls existing Evo2 endpoints:
+    - /api/evo/score_variant_multi (multi-window)
+    - /api/evo/score_variant_exon (exon context)
+    """
+    
+    def __init__(self, api_base: str):
+        self.api_base = api_base
+    
+    async def score(
+        self,
+        mutations: List[Dict],
+        drug: Dict
+    ) -> Tuple[float, Dict]:
+        """
+        Score mutations using Evo2.
+        
+        Returns:
+            Tuple of (score 0-1, provenance dict)
+        """
+        if not mutations:
+            return 0.5, {'method': 'no_mutations'}
+        
+        # Get drug-relevant genes
+        target_genes = drug.get('target_genes', [])
+        
+        # Filter mutations to drug-relevant genes
+        relevant_mutations = [
+            m for m in mutations
+            if m.get('gene', '').upper() in [g.upper() for g in target_genes]
+        ]
+        
+        if not relevant_mutations:
+            # No mutations in drug targets
+            return 0.5, {'method': 'no_target_mutations'}
+        
+        # Score each mutation with Evo2
+        scores = []
+        provenance = {'mutations_scored': []}
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for mut in relevant_mutations[:5]:  # Limit to 5
+                try:
+                    # Call Evo2 multi-window endpoint
+                    response = await client.post(
+                        f"{self.api_base}/api/evo/score_variant_multi",
+                        json={
+                            'chrom': mut.get('chromosome', ''),
+                            'pos': mut.get('position', 0),
+                            'ref': mut.get('ref', ''),
+                            'alt': mut.get('alt', ''),
+                            'build': 'hg38'
+                        }
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        delta = abs(data.get('min_delta', 0))
+                        # Normalize delta to 0-1 (higher delta = more impact)
+                        normalized = min(delta / 5.0, 1.0)
+                        scores.append(normalized)
+                        provenance['mutations_scored'].append({
+                            'gene': mut.get('gene'),
+                            'delta': delta,
+                            'normalized': normalized
+                        })
+                
+                except Exception as e:
+                    logger.warning(f"Evo2 scoring failed for {mut}: {e}")
+        
+        if not scores:
+            return 0.5, {'method': 'evo2_fallback', 'reason': 'no_scores'}
+        
+        # Average across mutations
+        avg_score = sum(scores) / len(scores)
+        provenance['method'] = 'evo2_multi_window'
+        provenance['avg_score'] = avg_score
+        
+        return avg_score, provenance
+```
+
+### Pathway Scorer
+
+```python
+# api/services/efficacy/pathway_scorer.py
+
+from typing import List, Dict, Tuple
+from .constants import DRUG_PATHWAY_MAPPING
+
+class PathwayScorer:
+    """
+    Score drug-pathway alignment.
+    
+    High score = drug targets patient's disrupted pathways
+    """
+    
+    def score(
+        self,
+        mutations: List[Dict],
+        drug: Dict,
+        pathways: List = None
+    ) -> Tuple[float, Dict[str, float]]:
+        """
+        Score pathway alignment between drug MoA and patient pathways.
+        
+        Returns:
+            Tuple of (score 0-1, per-pathway alignment dict)
+        """
+        drug_pathways = drug.get('pathways', [])
+        
+        if not drug_pathways:
+            return 0.5, {}
+        
+        alignment = {}
+        
+        # If we have pathway analyses from resistance agent
+        if pathways:
+            for pathway in pathways:
+                if pathway.pathway in drug_pathways:
+                    alignment[pathway.pathway] = pathway.burden_score
+        
+        # Otherwise, infer from mutations
+        else:
+            mutated_genes = {m.get('gene', '').upper() for m in mutations}
+            
+            for pathway in drug_pathways:
+                pathway_genes = DRUG_PATHWAY_MAPPING.get(pathway, set())
+                overlap = mutated_genes & pathway_genes
+                
+                if pathway_genes:
+                    burden = len(overlap) / len(pathway_genes)
+                    alignment[pathway] = min(burden * 3, 1.0)  # Scale up
+                else:
+                    alignment[pathway] = 0.0
+        
+        # Average alignment across drug's pathways
+        if alignment:
+            avg_alignment = sum(alignment.values()) / len(alignment)
+        else:
+            avg_alignment = 0.5
+        
+        return avg_alignment, alignment
+```
+
+### Drug Catalog
+
+```python
+# api/services/efficacy/drug_catalog.py
+
+DRUG_CATALOG = {
+    # PARP Inhibitors
+    'olaparib': {
+        'name': 'Olaparib',
+        'class': 'PARP_inhibitor',
+        'target_genes': ['PARP1', 'PARP2'],
+        'pathways': ['DDR', 'HRR'],
+        'mechanism': 'PARP inhibition → synthetic lethality with HRD',
+        'indications': ['ovarian_cancer', 'breast_cancer', 'prostate_cancer'],
+        'biomarker_required': ['BRCA1', 'BRCA2', 'HRD+']
+    },
+    'niraparib': {
+        'name': 'Niraparib',
+        'class': 'PARP_inhibitor',
+        'target_genes': ['PARP1', 'PARP2'],
+        'pathways': ['DDR', 'HRR'],
+        'mechanism': 'PARP inhibition (works regardless of BRCA status in maintenance)',
+        'indications': ['ovarian_cancer'],
+        'biomarker_required': []  # Approved regardless of BRCA
+    },
+    
+    # Platinum
+    'carboplatin': {
+        'name': 'Carboplatin',
+        'class': 'platinum',
+        'target_genes': [],  # DNA crosslinks
+        'pathways': ['DDR'],
+        'mechanism': 'DNA crosslinks → DDR-mediated cell death',
+        'indications': ['ovarian_cancer', 'lung_cancer', 'breast_cancer'],
+        'biomarker_required': []
+    },
+    
+    # Checkpoint Inhibitors
+    'pembrolizumab': {
+        'name': 'Pembrolizumab',
+        'class': 'checkpoint_inhibitor',
+        'target_genes': ['PDCD1'],  # PD-1
+        'pathways': ['IO'],
+        'mechanism': 'PD-1 blockade → T cell activation',
+        'indications': ['melanoma', 'lung_cancer', 'msi_high_any'],
+        'biomarker_required': ['TMB-H', 'MSI-H', 'PD-L1']
+    },
+    
+    # Targeted therapies
+    'vemurafenib': {
+        'name': 'Vemurafenib',
+        'class': 'BRAF_inhibitor',
+        'target_genes': ['BRAF'],
+        'pathways': ['MAPK'],
+        'mechanism': 'BRAF V600 inhibition → MAPK pathway blockade',
+        'indications': ['melanoma'],
+        'biomarker_required': ['BRAF_V600']
+    },
+    
+    # Anti-VEGF
+    'bevacizumab': {
+        'name': 'Bevacizumab',
+        'class': 'anti_VEGF',
+        'target_genes': ['VEGFA'],
+        'pathways': ['VEGF'],
+        'mechanism': 'VEGF-A neutralization → anti-angiogenesis',
+        'indications': ['ovarian_cancer', 'colorectal_cancer', 'lung_cancer'],
+        'biomarker_required': []
+    }
+}
+
+def get_drugs_for_disease(disease: str) -> List[Dict]:
+    """Get candidate drugs for a disease."""
+    disease_lower = disease.lower().replace(' ', '_')
+    
+    candidates = []
+    for drug_id, drug in DRUG_CATALOG.items():
+        for indication in drug['indications']:
+            if indication in disease_lower or disease_lower in indication:
+                candidates.append({**drug, 'id': drug_id})
+                break
+    
+    return candidates
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+### Phase 1: Sequence Scorer
+- [ ] Integrate with existing `/api/evo/score_variant_multi`
+- [ ] Handle Evo2 API errors gracefully
+- [ ] Normalize delta scores to 0-1
+- [ ] Unit tests
+
+### Phase 2: Pathway Scorer
+- [ ] Create drug-pathway mapping
+- [ ] Calculate pathway burden alignment
+- [ ] Integrate with resistance agent pathways
+- [ ] Unit tests
+
+### Phase 3: Evidence Scorer
+- [ ] Integrate with existing `/api/evidence/literature`
+- [ ] Add ClinVar lookup
+- [ ] Score evidence quality
+- [ ] Unit tests
+
+### Phase 4: Integration
+- [ ] Create DrugEfficacyAgent class
+- [ ] Implement S/P/E formula
+- [ ] Add tier classification
+- [ ] Build 7D mechanism vector
+- [ ] Integration tests
+
+---
+
+## 📡 API ENDPOINT
+
+```yaml
+POST /api/agents/drugs
+Content-Type: application/json
+
+Request:
+  patient_id: string
+  mutations: Mutation[]
+  disease: string
+  biomarker_profile: BiomarkerProfile  # optional
+  resistance_prediction: ResistancePrediction  # optional
+  drug_classes: string[]  # optional filter
+
+Response:
+  drug_efficacy_result: DrugEfficacyResult
+  calculation_time_ms: number
+```
+
+---
+
+## ✅ ACCEPTANCE CRITERIA
+
+1. ✅ S/P/E formula correctly implemented
+2. ✅ Evo2 integration for sequence scoring
+3. ✅ Pathway alignment calculated
+4. ✅ Evidence from literature integrated
+5. ✅ Drugs ranked by efficacy
+6. ✅ Tiers assigned (I/II/III/Research)
+7. ✅ 7D mechanism vector built
+8. ✅ Rationale generated for each drug
+9. ✅ Unit test coverage >80%
+
+---

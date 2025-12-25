@@ -1,0 +1,250 @@
+# ⚠️ MODULE 16: TOXICITY RISK ASSESSMENT AGENT
+
+**Purpose:** Germline-based toxicity risk prediction for precision safety  
+**Priority:** 🔴 CRITICAL | **Dependencies:** 01_DATA_EXTRACTION | **Consumers:** 07_CARE_PLAN  
+**Status:** ⬜ TODO  
+**Owner:** TBD
+
+---
+
+## 🎯 MISSION
+
+Build a toxicity risk assessment agent that can:
+1. Assess toxicity risks for recommended drugs based on germline variants
+2. Detect pharmacogene variants (DPYD, TPMT, UGT1A1, CYP2D6, etc.)
+3. Calculate pathway overlap (DNA repair, inflammation, cardiometabolic)
+4. Provide mitigating foods recommendations (THE MOAT)
+5. Return risk scores, risk levels, and contributing factors
+
+---
+
+## 📊 VALIDATED CAPABILITIES (USE THESE)
+
+### Safety Service - ALREADY VALIDATED ✅
+
+**Location:** `api/services/safety_service.py`
+
+**Capabilities:**
+- ✅ Three-factor toxicity risk model (pharmacogene, pathway, tissue)
+- ✅ 30+ pharmacogene detection
+- ✅ 11 MoA patterns mapped
+- ✅ 3 toxicity pathways (DNA repair, inflammation, cardiometabolic)
+- ✅ Mitigating foods mapping (THE MOAT)
+
+**Key Code:**
+```python
+# From api/services/safety_service.py
+async def compute_toxicity_risk(
+    self,
+    request: ToxicityRiskRequest
+) -> ToxicityRiskResponse:
+    """
+    Compute toxicity risk using three-factor model:
+    1. Pharmacogene variants (G signal)
+    2. MoA → Toxicity pathway overlap (P signal)
+    3. Tissue-specific factors (T signal)
+    """
+    # Factor 1: Pharmacogene detection
+    # Factor 2: Pathway overlap
+    # Factor 3: Tissue context
+    # Combine: risk_score = weighted sum
+    # Return: ToxicityRiskResponse with mitigating_foods
+```
+
+---
+
+## 📥 INPUTS
+
+### From PatientProfile (Module 01) & Drug Ranking (Module 04)
+
+```python
+# Required inputs
+patient_id: str
+germline_variants: List[GermlineVariant]  # From Module 01
+drugs_to_assess: List[str]                 # From Module 04 (drug ranking) OR patient profile
+
+# Optional inputs
+disease: str                                # e.g., "ovarian_cancer"
+treatment_line: int                        # e.g., 1, 2, 3
+tissue: str                                 # e.g., "ovary"
+```
+
+---
+
+## 📤 OUTPUTS
+
+### ToxicityAssessments Schema
+
+```python
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from enum import Enum
+
+class RiskLevel(Enum):
+    HIGH = "HIGH"        # risk_score >= 0.5
+    MODERATE = "MODERATE"  # risk_score >= 0.3
+    LOW = "LOW"          # risk_score < 0.3
+
+@dataclass
+class ToxicityAssessment:
+    drug_name: str
+    drug_moa: str
+    risk_score: float              # 0.0 - 1.0
+    risk_level: RiskLevel
+    confidence: float              # 0.0 - 1.0
+    reason: str                    # Plain-English explanation
+    factors: List[Dict]            # Contributing factors
+    mitigating_foods: List[Dict]   # THE MOAT - foods that help
+    provenance: Dict
+
+@dataclass
+class ToxicityAssessments:
+    patient_id: str
+    toxicity_assessments: List[ToxicityAssessment]
+    summary: {
+        'total_assessed': int,
+        'high_risk_count': int,
+        'moderate_risk_count': int,
+        'low_risk_count': int,
+        'pharmacogene_flags': List[str]  # DPYD, TPMT, etc.
+    }
+    provenance: Dict
+```
+
+---
+
+## 🏗️ IMPLEMENTATION
+
+### File Structure
+
+```
+api/services/orchestrator/
+├── toxicity_agent.py          # Main agent (NEW)
+└── orchestrator.py            # Wire to pipeline (UPDATE)
+
+api/services/safety_service.py  # ✅ Already exists - reuse
+api/services/toxicity_pathway_mappings.py  # ✅ Already exists - reuse
+```
+
+### Core Agent Implementation
+
+```python
+# api/services/orchestrator/toxicity_agent.py
+
+from typing import Dict, List, Any, Optional
+from datetime import datetime
+import logging
+
+from api.services.safety_service import get_safety_service
+from api.schemas.safety import (
+    ToxicityRiskRequest, PatientContext, GermlineVariant,
+    TherapeuticCandidate, ClinicalContext
+)
+from api.services.toxicity_pathway_mappings import get_drug_moa
+
+logger = logging.getLogger(__name__)
+
+
+class ToxicityRiskAgent:
+    """
+    Agent for assessing toxicity risks.
+    
+    Follows orchestrator pattern:
+    - Direct service imports (no HTTP)
+    - Returns dict matching output schema
+    - Handles errors gracefully
+    """
+    
+    def __init__(self):
+        """Initialize with safety service."""
+        self.safety_service = get_safety_service()
+    
+    async def assess_toxicity_risks(
+        self,
+        patient_id: str,
+        germline_variants: List[Dict],
+        drugs_to_assess: List[str],
+        disease: str = 'cancer',
+        options: Dict = None
+    ) -> Dict[str, Any]:
+        """
+        Assess toxicity risks for multiple drugs.
+        
+        Returns dict matching orchestrator output schema.
+        """
+        # Implementation from integration plan
+        # ...
+```
+
+---
+
+## 🔄 INTEGRATION
+
+### Orchestrator Wiring
+
+**File:** `api/services/orchestrator/orchestrator.py`
+
+**Location:** Phase 2 - ANALYZING (parallel execution)
+
+**Pattern:**
+```python
+# In _run_analysis_phase:
+if 'toxicity_risk' not in skip_agents:
+    tasks.append(self._run_toxicity_risk_agent(state))
+    task_names.append('toxicity_risk')
+
+# In results handling:
+elif name == 'toxicity_risk':
+    state.toxicity_assessments = result
+```
+
+### PatientState Update
+
+**File:** `api/services/orchestrator/state.py`
+
+**Add field:**
+```python
+toxicity_assessments: Optional[Dict] = None  # From 16_TOXICITY_RISK
+```
+
+### Care Plan Integration
+
+**File:** `api/services/orchestrator/orchestrator.py` (care plan method)
+
+**Auto-consume:**
+```python
+if state.toxicity_assessments:
+    sections.append({
+        'title': 'Toxicity Risk Assessment',
+        'content': state.toxicity_assessments
+    })
+```
+
+---
+
+## ✅ SUCCESS CRITERIA
+
+- [ ] Returns dict matching output schema
+- [ ] Wired to orchestrator (Phase 2 - ANALYZING)
+- [ ] Populates `state.toxicity_assessments`
+- [ ] Uses direct service imports (no HTTP calls)
+- [ ] Handles missing germline variants gracefully
+- [ ] Assesses multiple drugs (from drug ranking or current medications)
+- [ ] Includes mitigating foods (THE MOAT)
+- [ ] Unit tests with >80% coverage
+- [ ] Integration test with orchestrator
+
+---
+
+## 🔗 REFERENCES
+
+- **Integration Plan:** `.cursor/MOAT/orchestration/16_TOXICITY_RISK_AGENT_INTEGRATION_PLAN.md`
+- **Frontend Audit:** `.cursor/lectures/drugDevelopment/TOXICITY_RISK_FRONTEND_AUDIT.md`
+- **Source of Truth:** `.cursor/MOAT/ADVANCED_CARE_PLAN_TOXCITY.md`
+- **Backend Service:** `api/services/safety_service.py`
+- **Implementation Guide:** `.cursor/MOAT/orchestration/agent-implementation-guide.mdc`
+
+---
+
+**Last Updated:** January 28, 2025  
+**Status:** ⬜ TODO - Ready for Implementation

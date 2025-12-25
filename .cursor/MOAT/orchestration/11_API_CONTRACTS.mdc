@@ -1,0 +1,445 @@
+# 📡 MODULE 11: API CONTRACTS
+
+**Purpose:** Define all API endpoints for the orchestration system  
+**Priority:** 🔴 CRITICAL | **Dependencies:** All agents | **Consumers:** Frontend, External
+
+---
+
+## 🎯 MISSION
+
+Define comprehensive API contracts for:
+1. Master orchestration endpoint
+2. Individual agent endpoints
+3. Event trigger endpoint
+4. State query endpoints
+5. Webhook callbacks
+
+---
+
+## 📡 ENDPOINT DEFINITIONS
+
+### Master Orchestration
+
+```yaml
+POST /api/orchestrate/full
+Description: Run complete end-to-end pipeline
+Content-Type: multipart/form-data
+
+Request:
+  file: binary              # NGS PDF, VCF, MAF, JSON
+  file_type: string         # pdf, vcf, maf, json
+  patient_id: string        # optional - auto-generated if not provided
+  options:
+    run_async: boolean      # default: true
+    notify_on_complete: boolean
+    webhook_url: string     # optional callback
+
+Response (202 Accepted):
+  job_id: string
+  patient_id: string
+  status: "started"
+  estimated_time_seconds: number
+  status_url: string        # /api/orchestrate/status/{patient_id}
+  webhook_registered: boolean
+
+---
+GET /api/orchestrate/status/{patient_id}
+Description: Get pipeline status
+
+Response:
+  patient_id: string
+  phase: string             # initialized, extracting, analyzing, etc.
+  progress_percent: number  # 0-100
+  current_agent: string     # Currently running agent
+  completed_agents: string[]
+  alerts: Alert[]
+  errors: string[]
+  
+  # Available when complete
+  care_plan: CarePlan       # Full care plan
+  summary:
+    mutations_found: number
+    drugs_ranked: number
+    trials_matched: number
+    alerts_generated: number
+```
+
+### Individual Agent Endpoints
+
+```yaml
+POST /api/agents/extract
+Description: Extract data from uploaded file
+Content-Type: multipart/form-data
+
+Request:
+  file: binary
+  file_type: string
+  metadata: json            # optional: lab, date, patient_id
+
+Response:
+  patient_profile: PatientProfile
+  extraction_time_ms: number
+  warnings: string[]
+
+---
+POST /api/agents/biomarkers
+Description: Calculate biomarkers from mutations
+
+Request:
+  patient_id: string
+  mutations: Mutation[]
+  options:
+    exome_size_mb: number   # default: 38.0
+    tmb_threshold: number   # default: 10.0
+    myriad_hrd_score: number  # optional
+
+Response:
+  biomarker_profile: BiomarkerProfile
+  calculation_time_ms: number
+
+---
+POST /api/agents/resistance
+Description: Predict drug resistance
+
+Request:
+  patient_id: string
+  mutations: Mutation[]
+  current_treatment: string # optional
+  hrd_status: string        # optional
+
+Response:
+  resistance_prediction: ResistancePrediction
+  calculation_time_ms: number
+
+---
+POST /api/agents/drugs
+Description: Rank drugs by S/P/E efficacy
+
+Request:
+  patient_id: string
+  mutations: Mutation[]
+  disease: string
+  biomarker_profile: BiomarkerProfile  # optional
+  drug_classes: string[]    # optional filter
+
+Response:
+  drug_efficacy_result: DrugEfficacyResult
+  calculation_time_ms: number
+
+---
+POST /api/agents/trials
+Description: Match patient to clinical trials
+
+Request:
+  patient_id: string
+  mutations: Mutation[]
+  disease: string
+  mechanism_vector: float[7]
+  biomarker_profile: BiomarkerProfile  # optional
+  max_results: number       # default: 10
+
+Response:
+  trial_matching_result: TrialMatchingResult
+  search_time_ms: number
+
+---
+POST /api/agents/nutrition
+Description: Generate nutrition plan
+
+Request:
+  patient_id: string
+  treatment: string
+  germline_mutations: string[]  # optional
+
+Response:
+  nutrition_plan: NutritionPlan
+  generation_time_ms: number
+
+---
+POST /api/agents/care-plan
+Description: Generate unified care plan
+
+Request:
+  patient_id: string
+  # Or provide all agent outputs
+  patient_profile: PatientProfile
+  biomarker_profile: BiomarkerProfile
+  resistance_prediction: ResistancePrediction
+  drug_ranking: DrugRanking[]
+  trial_matches: TrialMatch[]
+  nutrition_plan: NutritionPlan
+
+Response:
+  care_plan: UnifiedCarePlan
+  generation_time_ms: number
+```
+
+### Event Triggers
+
+```yaml
+POST /api/events/trigger
+Description: Process an incoming event
+
+Request:
+  event_type: string        # resistance_detected, tmb_high, etc.
+  patient_id: string
+  data:
+    # Event-specific data
+    ca125: number           # for resistance
+    tmb: number             # for tmb_high
+    ngs_report: object      # for ngs_results
+
+Response:
+  trigger_result: TriggerResult
+  actions_taken: string[]
+  notifications_sent: Notification[]
+
+---
+POST /api/events/webhook
+Description: Register a webhook for events
+
+Request:
+  patient_id: string
+  event_types: string[]     # Which events to notify
+  webhook_url: string
+  secret: string            # For signature verification
+
+Response:
+  webhook_id: string
+  registered: boolean
+```
+
+### State Queries
+
+```yaml
+GET /api/patients/{patient_id}
+Description: Get full patient state
+
+Response:
+  patient_state: PatientState
+  last_updated: datetime
+
+---
+GET /api/patients/{patient_id}/care-plan
+Description: Get just the care plan
+
+Response:
+  care_plan: UnifiedCarePlan
+
+---
+GET /api/patients/{patient_id}/history
+Description: Get state change history
+
+Response:
+  history: StateChange[]
+  total_changes: number
+
+---
+GET /api/patients
+Description: List all patients
+
+Query:
+  phase: string             # Filter by phase
+  limit: number             # default: 50
+  offset: number
+
+Response:
+  patients: PatientState[]
+  total: number
+```
+
+---
+
+## 📦 DATA SCHEMAS
+
+### PatientProfile
+
+```typescript
+interface PatientProfile {
+  patient_id: string;
+  disease: string;
+  mutations: Mutation[];
+  germline_panel?: GermlinePanel;
+  clinical_data?: ClinicalData;
+  demographics?: Demographics;
+  data_quality_flags: string[];
+  extraction_provenance: {
+    source: string;
+    lab?: string;
+    extraction_method: string;
+    confidence: number;
+  };
+  created_at: string;  // ISO datetime
+}
+
+interface Mutation {
+  gene: string;
+  variant: string;
+  hgvs_c?: string;
+  hgvs_p?: string;
+  chromosome?: string;
+  position?: number;
+  ref?: string;
+  alt?: string;
+  vaf?: number;
+  coverage?: number;
+  zygosity: 'heterozygous' | 'homozygous' | 'hemizygous' | 'unknown';
+  source: 'ngs' | 'ihc' | 'fish' | 'pcr' | 'inferred';
+  classification?: string;
+}
+```
+
+### BiomarkerProfile
+
+```typescript
+interface BiomarkerProfile {
+  patient_id: string;
+  tmb: {
+    value: number;
+    classification: 'TMB-H' | 'TMB-L';
+    threshold_used: number;
+    mutation_count: number;
+    exome_size_mb: number;
+    validation: {
+      method: string;
+      ground_truth: string;
+      pearson_r: number;
+      accuracy: number;
+    };
+  };
+  msi: {
+    status: 'MSI-H' | 'MSI-L' | 'MSS' | 'unknown';
+    dmmr_genes_mutated: string[];
+    method: string;
+    confidence: number;
+  };
+  hrd: {
+    status: 'HRD+' | 'HRD-' | 'HRD-INFERRED' | 'unknown';
+    score?: number;
+    mechanism?: string;
+    genes_mutated: string[];
+    confidence: number;
+  };
+  io_eligible: boolean;
+  io_eligibility_reason: string;
+  parp_eligible: boolean;
+  parp_eligibility_reason: string;
+}
+```
+
+### DrugRanking
+
+```typescript
+interface DrugRanking {
+  drug_name: string;
+  drug_class: string;
+  efficacy_score: number;  // 0.0 - 1.0
+  spe_breakdown: {
+    sequence_score: number;
+    pathway_score: number;
+    evidence_score: number;
+    clinvar_prior: number;
+  };
+  tier: 'I' | 'II' | 'III' | 'Research';
+  confidence: 'very_high' | 'high' | 'moderate' | 'low';
+  on_label: boolean;
+  mechanism: string;
+  rationale: string[];
+  contraindications: string[];
+  citations: Citation[];
+}
+```
+
+### TrialMatch
+
+```typescript
+interface TrialMatch {
+  nct_id: string;
+  title: string;
+  brief_summary: string;
+  phase: string;
+  status: string;
+  mechanism_fit_score: number;
+  eligibility_score: number;
+  combined_score: number;
+  trial_moa: {
+    ddr: number;
+    mapk: number;
+    pi3k: number;
+    vegf: number;
+    her2: number;
+    io: number;
+    efflux: number;
+  };
+  eligibility: {
+    meets_criteria: boolean;
+    score: number;
+    matched: string[];
+    unmatched: string[];
+  };
+  mechanism_alignment: Record<string, number>;
+  why_matched: string;
+  url: string;
+  locations: Location[];
+  sponsor: string;
+}
+```
+
+---
+
+## 🔐 AUTHENTICATION
+
+```yaml
+# All endpoints require authentication
+Headers:
+  Authorization: Bearer <jwt_token>
+  X-API-Key: <api_key>  # Alternative for service-to-service
+
+# Rate limiting
+Limits:
+  /api/orchestrate/full: 10/minute per user
+  /api/agents/*: 60/minute per user
+  /api/events/*: 100/minute per user
+  /api/patients/*: 100/minute per user
+```
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+- [ ] FastAPI router definitions
+- [ ] Pydantic request/response models
+- [ ] Authentication middleware
+- [ ] Rate limiting
+- [ ] Error handling
+- [ ] OpenAPI documentation
+- [ ] Unit tests for each endpoint
+- [ ] Integration tests
+
+---
+
+## 🏗️ FILE STRUCTURE
+
+```
+api/routers/
+├── orchestrate.py          # /api/orchestrate/*
+├── agents.py               # /api/agents/*
+├── events.py               # /api/events/*
+├── patients.py             # /api/patients/*
+└── webhooks.py             # Webhook handling
+
+api/schemas/
+├── patient.py              # PatientProfile, Mutation
+├── biomarker.py            # BiomarkerProfile
+├── resistance.py           # ResistancePrediction
+├── efficacy.py             # DrugRanking, DrugEfficacyResult
+├── trials.py               # TrialMatch, TrialMatchingResult
+├── nutrition.py            # NutritionPlan
+├── care_plan.py            # UnifiedCarePlan
+└── events.py               # TriggerResult, Alert
+```
+
+---
+
+**Module Status:** ⬜ TODO  
+**Estimated Time:** 2-3 days

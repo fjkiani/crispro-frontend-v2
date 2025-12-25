@@ -185,3 +185,70 @@ BRCA cohort likely will **not** have platinum response labels, so A3 AUROC won�
 - DDR_bin distribution
 - survival association patterns (exploratory)
 
+
+---
+
+## Preflight / safety protocol (do this every time)
+
+### 0) Set service URL (Modal)
+
+```bash
+export SAE_SERVICE_URL='https://crispro--sae-service-saeservice-api.modal.run'
+```
+
+### 1) Preflight-only (cost: ~1–2 variant calls)
+
+This writes `extract_preflight.json` with:
+- `resolved_assembly` (auto-detected)
+- `sample_call_seconds`
+
+```bash
+python3 oncology-coPilot/oncology-backend-minimal/scripts/validation/extract_true_sae_cohort_from_cbioportal.py \
+  --cbioportal_dataset data/benchmarks/cbioportal_trial_datasets_latest.json \
+  --study_id <STUDY_ID> \
+  --out_cohort /tmp/preflight_smoke.json \
+  --out_dir /tmp/preflight_logs \
+  --max_patients 1 --max_variants_per_patient 1 \
+  --preflight_only
+
+cat /tmp/preflight_logs/extract_preflight.json
+```
+
+### 2) Estimate-only (cost: zero variant calls; just counts cache misses)
+
+```bash
+python3 oncology-coPilot/oncology-backend-minimal/scripts/validation/extract_true_sae_cohort_from_cbioportal.py \
+  --cbioportal_dataset data/benchmarks/cbioportal_trial_datasets_latest.json \
+  --study_id <STUDY_ID> \
+  --out_cohort /tmp/estimate.json \
+  --out_dir /tmp/estimate_logs \
+  --max_patients 200 --max_variants_per_patient 50 \
+  --estimate_only
+
+cat /tmp/estimate_logs/extract_estimate.json
+```
+
+### 3) Pilot run (hard budget + checkpointing)
+
+```bash
+python3 oncology-coPilot/oncology-backend-minimal/scripts/validation/extract_true_sae_cohort_from_cbioportal.py \
+  --cbioportal_dataset data/benchmarks/cbioportal_trial_datasets_latest.json \
+  --study_id <STUDY_ID> \
+  --out_cohort <COHORT_PATH.json> \
+  --out_dir <OUT_DIR> \
+  --max_patients 20 --max_variants_per_patient 50 \
+  --concurrency 4 \
+  --checkpoint_every 5 \
+  --budget_seconds 600 \
+  --max_errors 20000
+```
+
+### 4) Full run (resume + checkpoint)
+
+Same command, increase `--max_patients` and `--budget_seconds`. Resume is automatic.
+
+### What failures mean (so you don’t panic)
+
+- **"Reference allele mismatch" (HTTP 400)**: expected for a minority of variants (coordinate/ref mismatch). Logged to `extract_errors.jsonl` and skipped.
+- **Ensembl/X errors**: mitigated by chromosome normalization (23→X) in the extractor.
+

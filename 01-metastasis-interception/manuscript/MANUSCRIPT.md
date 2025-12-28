@@ -1,6 +1,6 @@
 # Metastasis Interception: Stage-Specific CRISPR Guide Design with Multi-Modal AI and Complete Structural Validation
 
-**Authors:** Fahad Kiani¹*, Ridwaan Jhetam¹
+**Authors:** Fahad Kiani¹*
 
 **Affiliations:**  
 ¹CrisPRO.ai, United States

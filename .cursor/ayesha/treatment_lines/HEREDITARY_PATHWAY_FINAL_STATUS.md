@@ -109,7 +109,7 @@ test_phase3_integration.py ......................... 9/9 ✅
 ```
 
 ### **Key Test Cases**
-- ✅ Ayesha's case: L2 post-platinum → Olaparib (confidence: 0.72)
+- ✅ Ovarian L2 case: L2 post-platinum → Olaparib (confidence: 0.72)
 - ✅ Dr. Lustberg's case: L3 post-T-DXd → Tucatinib (confidence: 0.78)
 - ✅ First-line: No penalty applied
 - ✅ Confidence floor: Never drops below 0.0
@@ -250,7 +250,7 @@ Based on BRCA1 S1655F and treatment history (L2 post-platinum):
 ## 🎯 NEXT BATTLES
 
 ### **Immediate (P0): Demo & Test**
-- ⏳ **Test Ayesha's case end-to-end** with CoPilot
+- ⏳ **Test Ovarian L2 case end-to-end** with CoPilot
 - ⏳ **Capture screenshots** of provenance + SAE chips
 - ⏳ **Create demo video** showing full workflow
 

@@ -30,7 +30,7 @@ OVARIAN_L1_CASE: Dict[str, Any] = {
 }
 
 OVARIAN_L2_POST_PLATINUM_CASE: Dict[str, Any] = {
-    "name": "Ovarian 2nd Line Post-Platinum (Ayesha's Case)",
+    "name": "Ovarian 2nd Line Post-Platinum",
     "disease": "ovarian_cancer",
     "treatment_history": {
         "current_line": 2,

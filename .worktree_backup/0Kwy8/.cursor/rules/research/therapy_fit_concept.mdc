@@ -1,0 +1,488 @@
+---
+alwaysApply: false
+description: Therapy Fit – Drug Efficacy Ranking using S/P/E Framework. Core capabilities and implementation.
+globs: 
+---
+
+export const coPilotDetailsData: Record<string, CoPilotDetailContent> = {
+  "therapy-fit": {
+    slug: "therapy-fit",
+    pageTitle: "Therapy Fit: Drug Efficacy Ranking",
+    heroSubtitle: "Ranks drugs by efficacy using Sequence/Pathway/Evidence scoring. Provides confidence, evidence tiers, badges, and transparent rationale.",
+    vision: "Transform patient mutations into ranked drug recommendations with transparent S/P/E scoring.",
+
+    valueProps: [
+      {
+        audience: 'For Medical Oncologists',
+        icon: 'ListChecks',
+        points: [
+          'Ranked drug list with efficacy scores and confidence.',
+          'Transparent S/P/E breakdown (Sequence, Pathway, Evidence).',
+          'Evidence tiers and badges (RCT, Guideline, ClinVar-Strong, PathwayAligned).'
+        ]
+      },
+      {
+        audience: 'For Researchers',
+        icon: 'Beaker',
+        points: [
+          'Complete provenance tracking (run ID, profile, methods).',
+          'S/P/E framework with 30% S, 40% P, 30% E weights.',
+          'Insights integration (functionality, chromatin, essentiality, regulatory).'
+        ]
+      }
+    ],
+
+    buildsOn: "Core Capabilities",
+    buildsOnStackPoints: [
+      "**S/P/E Framework:** Sequence (Evo2) + Pathway (gene-to-pathway mapping) + Evidence (literature + ClinVar).",
+      "**Insights Integration:** Functionality, chromatin, essentiality, regulatory chips with confidence lifts.",
+      "**Sporadic Cancer Support:** Tumor context integration for somatic-only patients."
+    ],
+
+    kpis: [
+      { label: 'S/P/E Weights', value: '30% S, 40% P, 30% E' },
+      { label: 'Evidence Tiers', value: '3 (Supported, Consider, Insufficient)' },
+      { label: 'Badges', value: '4 (RCT, Guideline, ClinVar-Strong, PathwayAligned)' },
+      { label: 'Insights Chips', value: '4 (Functionality, Chromatin, Essentiality, Regulatory)' }
+    ],
+
+    observedOutcomes: [
+      {
+        title: "S/P/E Framework",
+        keyMetric: "✅ Built",
+        description: "Full Sequence/Pathway/Evidence scoring. Evo2 sequence scoring, pathway aggregation, literature + ClinVar evidence.",
+        icon: "Activity",
+        color: "blue"
+      },
+      {
+        title: "Drug Ranking",
+        keyMetric: "Confidence-based",
+        description: "Drugs ranked by confidence with efficacy scores, evidence tiers, badges, and rationale breakdown.",
+        icon: "ListChecks",
+        color: "green"
+      },
+      {
+        title: "Insights Integration",
+        keyMetric: "4 chips",
+        description: "Functionality, chromatin, essentiality, regulatory chips provide confidence lifts when thresholds met.",
+        icon: "TrendingUp",
+        color: "purple"
+      },
+      {
+        title: "Provenance Tracking",
+        keyMetric: "✅ Complete",
+        description: "Full audit trail with run ID, profile, methods, flags, and confidence breakdown.",
+        icon: "Fingerprint",
+        color: "orange"
+      }
+    ],
+
+    genomicInsightsOverview: "Drug efficacy ranking using S/P/E framework. Ranks drugs by confidence with transparent Sequence, Pathway, and Evidence breakdown.",
+    coreProblemIntro: "Need mechanism-based drug ranking with transparent scoring and confidence assessment.",
+    coreProblemPoints: [
+      "Multiple drugs to consider, unclear which fit patient's biology.",
+      "Need transparent scoring methodology.",
+      "Require confidence assessment and evidence backing."
+    ],
+
+    genomicUseCasesGrid: [
+      { label: "Drug ranking", iconName: "ListChecks", color: "text-blue-400" },
+      { label: "S/P/E breakdown", iconName: "Activity", color: "text-green-400" },
+      { label: "Confidence & tiers", iconName: "Gauge", color: "text-purple-400" },
+      { label: "Evidence badges", iconName: "Award", color: "text-orange-400" }
+    ],
+
+    keyCapabilities: [
+      {
+        title: "S/P/E Drug Ranking",
+        technical: {
+          title: "Implementation",
+          keyMetric: "30% S, 40% P, 30% E",
+          description: "Ranks drugs using Sequence (Evo2 disruption), Pathway (gene-to-pathway alignment), and Evidence (literature + ClinVar). Formula: efficacy_score = 0.3×S + 0.4×P + 0.3×E + ClinVar_prior.",
+          icon: "Activity",
+          color: "blue",
+          components: [
+            {
+              title: "Sequence (S)",
+              subtitle: "Evo2 adaptive multi-window scoring with gene-specific calibration",
+              iconName: "Dna",
+              color: "blue"
+            },
+            {
+              title: "Pathway (P)",
+              subtitle: "Gene-to-pathway mapping with drug-pathway alignment (40% weight)",
+              iconName: "Map",
+              color: "teal"
+            },
+            {
+              title: "Evidence (E)",
+              subtitle: "Literature search (PubMed/OpenAlex/S2) + ClinVar classification (30% weight)",
+              iconName: "BookOpen",
+              color: "indigo"
+            }
+          ]
+        },
+        scientific: {
+          title: "Foundation",
+          keyMetric: "Multi-Modal",
+          description: "Combines sequence disruption signals, pathway burden, and published evidence for comprehensive drug efficacy prediction.",
+          icon: "Microscope",
+          color: "teal",
+          components: [
+            {
+              title: "Sequence Signals",
+              subtitle: "Evo2 delta scores measure variant impact on protein function",
+              iconName: "Dna",
+              color: "blue"
+            },
+            {
+              title: "Pathway Alignment",
+              subtitle: "Drug mechanism matches patient's pathway disruptions",
+              iconName: "Target",
+              color: "teal"
+            },
+            {
+              title: "Evidence Synthesis",
+              subtitle: "RCTs, guidelines, ClinVar classifications provide clinical backing",
+              iconName: "FileText",
+              color: "indigo"
+            }
+          ]
+        },
+        business: {
+          title: "Value",
+          keyMetric: "Transparent Ranking",
+          description: "Provides ranked drug list with transparent scoring methodology. Confidence and evidence tiers enable informed decision-making.",
+          icon: "Target",
+          color: "indigo",
+          components: [
+            {
+              title: "Ranked List",
+              subtitle: "Drugs sorted by confidence with efficacy scores",
+              iconName: "ListChecks",
+              color: "blue"
+            },
+            {
+              title: "Transparent Scoring",
+              subtitle: "S/P/E breakdown shows why each drug ranks where it does",
+              iconName: "Eye",
+              color: "teal"
+            },
+            {
+              title: "Evidence Backing",
+              subtitle: "Badges and tiers indicate strength of supporting evidence",
+              iconName: "Award",
+              color: "indigo"
+            }
+          ]
+        },
+        genomicUseCasesParagraph: "**Built:** Full S/P/E framework with 30% S, 40% P, 30% E weights. Evo2 sequence scoring, pathway aggregation, literature + ClinVar evidence."
+      },
+      {
+        title: "Confidence & Evidence Tiers",
+        technical: {
+          title: "Implementation",
+          keyMetric: "3 Tiers",
+          description: "Confidence computed from evidence tier, badges, and insights lifts. Tiers: Supported (≥0.6), Consider (≥0.3), Insufficient (<0.3).",
+          icon: "Gauge",
+          color: "blue",
+          components: [
+            {
+              title: "Evidence Tiers",
+              subtitle: "Supported/Consider/Insufficient based on S/P/E scores and evidence strength",
+              iconName: "Layers",
+              color: "blue"
+            },
+            {
+              title: "Confidence Computation",
+              subtitle: "Tier-based confidence with insights lifts (functionality, chromatin, essentiality, regulatory)",
+              iconName: "Gauge",
+              color: "teal"
+            },
+            {
+              title: "Badges",
+              subtitle: "RCT, Guideline, ClinVar-Strong, PathwayAligned badges indicate evidence quality",
+              iconName: "Award",
+              color: "indigo"
+            }
+          ]
+        },
+        scientific: {
+          title: "Foundation",
+          keyMetric: "Tier-Based",
+          description: "Evidence tiers reflect strength of supporting data. Confidence modulated by insights chips when thresholds met.",
+          icon: "Shield",
+          color: "teal",
+          components: [
+            {
+              title: "Supported Tier",
+              subtitle: "Strong literature evidence (≥0.7) OR ClinVar-Strong + pathway alignment",
+              iconName: "CheckCircle",
+              color: "blue"
+            },
+            {
+              title: "Consider Tier",
+              subtitle: "Moderate evidence strength with some pathway alignment",
+              iconName: "AlertCircle",
+              color: "teal"
+            },
+            {
+              title: "Insufficient Tier",
+              subtitle: "Low sequence, pathway, and evidence scores",
+              iconName: "XCircle",
+              color: "indigo"
+            }
+          ]
+        },
+        business: {
+          title: "Value",
+          keyMetric: "Decision Support",
+          description: "Confidence scores and evidence tiers help clinicians prioritize drugs. Badges provide quick evidence quality indicators.",
+          icon: "Target",
+          color: "indigo",
+          components: [
+            {
+              title: "Confidence Scores",
+              subtitle: "0-1 confidence indicates prediction reliability",
+              iconName: "Gauge",
+              color: "blue"
+            },
+            {
+              title: "Evidence Tiers",
+              subtitle: "Supported/Consider/Insufficient guide clinical decision-making",
+              iconName: "Layers",
+              color: "teal"
+            },
+            {
+              title: "Badges",
+              subtitle: "Quick visual indicators of evidence quality (RCT, Guideline, etc.)",
+              iconName: "Award",
+              color: "indigo"
+            }
+          ]
+        },
+        genomicUseCasesParagraph: "**Built:** 3 evidence tiers (Supported/Consider/Insufficient). Confidence computation with insights lifts. 4 badges (RCT, Guideline, ClinVar-Strong, PathwayAligned)."
+      },
+      {
+        title: "Insights Integration",
+        technical: {
+          title: "Implementation",
+          keyMetric: "4 Chips",
+          description: "Functionality, chromatin, essentiality, regulatory chips provide confidence lifts when thresholds exceeded. Lifts: +0.05 (functionality≥0.6), +0.04 (chromatin≥0.5), +0.07 (essentiality≥0.7), +0.02 (regulatory≥0.6).",
+          icon: "TrendingUp",
+          color: "blue",
+          components: [
+            {
+              title: "Functionality Chip",
+              subtitle: "Protein function change prediction (threshold: 0.6, lift: +0.05)",
+              iconName: "Activity",
+              color: "blue"
+            },
+            {
+              title: "Essentiality Chip",
+              subtitle: "Gene dependency scoring (threshold: 0.7, lift: +0.07)",
+              iconName: "Dna",
+              color: "teal"
+            },
+            {
+              title: "Chromatin Chip",
+              subtitle: "Regulatory impact assessment (threshold: 0.5, lift: +0.04)",
+              iconName: "Layers",
+              color: "indigo"
+            },
+            {
+              title: "Regulatory Chip",
+              subtitle: "Splicing and non-coding impact (threshold: 0.6, lift: +0.02)",
+              iconName: "Settings",
+              color: "purple"
+            }
+          ]
+        },
+        scientific: {
+          title: "Foundation",
+          keyMetric: "Modest Lifts",
+          description: "Insights chips provide modest confidence boosts when biological signals exceed thresholds. Not primary drivers, but supportive evidence.",
+          icon: "Microscope",
+          color: "teal",
+          components: [
+            {
+              title: "Supportive Evidence",
+              subtitle: "Insights strengthen confidence when primary S/P/E signals are present",
+              iconName: "TrendingUp",
+              color: "blue"
+            },
+            {
+              title: "Threshold-Based",
+              subtitle: "Lifts only applied when chip scores exceed defined thresholds",
+              iconName: "Gauge",
+              color: "teal"
+            }
+          ]
+        },
+        business: {
+          title: "Value",
+          keyMetric: "Confidence Enhancement",
+          description: "Insights chips provide additional confidence when biological signals align. Helps differentiate drugs with similar S/P/E scores.",
+          icon: "Target",
+          color: "indigo",
+          components: [
+            {
+              title: "Confidence Lifts",
+              subtitle: "Modest boosts (+0.02 to +0.07) when thresholds met",
+              iconName: "TrendingUp",
+              color: "blue"
+            },
+            {
+              title: "Differentiation",
+              subtitle: "Helps rank drugs with similar S/P/E scores",
+              iconName: "BarChart3",
+              color: "teal"
+            }
+          ]
+        },
+        genomicUseCasesParagraph: "**Built:** 4 insights chips (functionality, chromatin, essentiality, regulatory) with threshold-based confidence lifts."
+      }
+    ],
+
+    valuePropositionSections: [
+      {
+        audience: "For Medical Oncologists",
+        points: [
+          "Ranked drug list with efficacy scores and confidence.",
+          "Transparent S/P/E breakdown shows why each drug ranks where it does.",
+          "Evidence tiers and badges indicate strength of supporting data."
+        ]
+      }
+    ],
+
+    conclusion: "Drug efficacy ranking using S/P/E framework. Ranks drugs by confidence with transparent Sequence, Pathway, and Evidence breakdown. Evidence tiers, badges, and insights integration provide comprehensive decision support.",
+
+    inSilicoOverview: {
+      coreConcepts: [
+        {
+          icon: "Activity",
+          title: "S/P/E Framework",
+          description: "Sequence (Evo2) + Pathway (gene-to-pathway) + Evidence (literature + ClinVar) with 30%/40%/30% weights.",
+          color: "blue"
+        },
+        {
+          icon: "Gauge",
+          title: "Confidence & Tiers",
+          description: "Evidence tiers (Supported/Consider/Insufficient) with confidence scores and badges.",
+          color: "teal"
+        },
+        {
+          icon: "TrendingUp",
+          title: "Insights Integration",
+          description: "4 insights chips (functionality, chromatin, essentiality, regulatory) provide confidence lifts.",
+          color: "purple"
+        }
+      ],
+      valuePropositions: [
+        {
+          icon: "ListChecks",
+          title: "Ranked Drug List",
+          description: "Drugs sorted by confidence with transparent S/P/E scoring",
+          metric: "S/P/E framework",
+          color: "blue"
+        },
+        {
+          icon: "Gauge",
+          title: "Confidence Assessment",
+          description: "Evidence tiers and confidence scores guide decision-making",
+          metric: "3 tiers",
+          color: "teal"
+        },
+        {
+          icon: "Award",
+          title: "Evidence Badges",
+          description: "RCT, Guideline, ClinVar-Strong, PathwayAligned badges indicate evidence quality",
+          metric: "4 badges",
+          color: "indigo"
+        }
+      ],
+      deliverables: [
+        {
+          icon: "ListChecks",
+          title: "Ranked Drug List",
+          description: "Drugs sorted by confidence with efficacy scores, evidence tiers, and badges"
+        },
+        {
+          icon: "Activity",
+          title: "S/P/E Breakdown",
+          description: "Transparent Sequence, Pathway, and Evidence contribution to each drug score"
+        },
+        {
+          icon: "FileText",
+          title: "Rationale & Citations",
+          description: "Detailed rationale breakdown and literature citations for each drug"
+        }
+      ]
+    }
+  },
+};
+
+# Therapy Fit – Drug Efficacy Ranking (S/P/E Framework)
+
+## Core Capability
+
+**Drug efficacy ranking using S/P/E framework:**
+- **Sequence (S):** Evo2 adaptive multi-window scoring (30% weight)
+- **Pathway (P):** Gene-to-pathway mapping with drug-pathway alignment (40% weight)
+- **Evidence (E):** Literature search + ClinVar classification (30% weight)
+
+**Formula:** `efficacy_score = 0.3 × Sequence_Percentile + 0.4 × Pathway_Percentile + 0.3 × Evidence_Strength + ClinVar_Prior`
+
+## Output
+
+Ranked drug list with:
+- `efficacy_score` (0-1)
+- `confidence` (0-1)
+- `evidence_tier` (Supported/Consider/Insufficient)
+- `badges` (RCT, Guideline, ClinVar-Strong, PathwayAligned)
+- `insights` (functionality, chromatin, essentiality, regulatory)
+- `rationale` (S/P/E breakdown)
+- `citations` (literature PMIDs)
+- `provenance` (run ID, profile, methods)
+
+## Implementation
+
+**Endpoint:** `POST /api/efficacy/predict`
+
+**Location:**
+- Orchestrator: `api/services/efficacy_orchestrator/orchestrator.py`
+- Router: `api/routers/efficacy/router.py`
+- Sequence: `api/services/efficacy_orchestrator/sequence_processor.py`
+- Drug Scoring: `api/services/efficacy_orchestrator/drug_scorer.py`
+
+**Example:**
+```bash
+curl -X POST http://127.0.0.1:8000/api/efficacy/predict \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "mutations": [{"gene": "BRAF", "hgvs_p": "V600E", "chrom": "7", "pos": 140453136, "ref": "T", "alt": "A"}],
+    "disease": "melanoma",
+    "model_id": "evo2_1b",
+    "options": {"adaptive": true}
+  }'
+```
+
+## Evidence Tiers
+
+- **Supported:** Strong evidence (≥0.7) OR ClinVar-Strong + pathway alignment
+- **Consider:** Moderate evidence (≥0.3)
+- **Insufficient:** Low scores (<0.3)
+
+**Confidence:** Computed from tier, badges, and insights lifts
+
+**Badges:** RCT, Guideline, ClinVar-Strong, PathwayAligned
+
+## Insights Integration
+
+**4 Chips with confidence lifts:**
+- Functionality (threshold: 0.6, lift: +0.05)
+- Chromatin (threshold: 0.5, lift: +0.04)
+- Essentiality (threshold: 0.7, lift: +0.07)
+- Regulatory (threshold: 0.6, lift: +0.02)
+
+**Purpose:** Modest confidence boosts when biological signals align

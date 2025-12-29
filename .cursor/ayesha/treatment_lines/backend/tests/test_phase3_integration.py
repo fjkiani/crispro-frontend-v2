@@ -21,9 +21,9 @@ from backend.services.treatment_line_integration import (
 from backend.schemas.treatment_history import TreatmentHistory
 
 
-def test_ayesha_olaparib_l2_post_platinum():
+def test_ovarian_l2_olaparib_post_platinum():
     """
-    Test Ayesha's case: Ovarian L2 post-platinum → olaparib
+    Test Ovarian L2 case: post-platinum → olaparib
     
     Expected:
     - Line appropriateness: 1.0 (NCCN Cat 1)
@@ -63,11 +63,11 @@ def test_ayesha_olaparib_l2_post_platinum():
     assert abs(modulated_confidence - expected_confidence) < 0.01, \
         f"Expected {expected_confidence:.2f}, got {modulated_confidence:.2f}"
     assert 0.70 <= modulated_confidence <= 0.75, \
-        "Ayesha's olaparib confidence should drop to ~0.72"
+        "Ovarian L2 olaparib confidence should drop to ~0.72"
     assert "cross-resistance" in rationale.lower(), \
         "Rationale should mention cross-resistance"
     
-    print("\n✅ AYESHA CASE (Ovarian L2 post-platinum → olaparib):")
+    print("\n✅ OVARIAN L2 CASE (post-platinum → olaparib):")
     print(f"  Line Appropriateness: {features['line_appropriateness']:.2f}")
     print(f"  NCCN Category: {features['nccn_category']}")
     print(f"  Cross-Resistance Risk: {features['cross_resistance_risk']:.2f}")
@@ -200,7 +200,7 @@ if __name__ == "__main__":
     print("PHASE 3 INTEGRATION TEST: Treatment Line → Efficacy Orchestrator")
     print("=" * 70)
     
-    test_ayesha_olaparib_l2_post_platinum()
+    test_ovarian_l2_olaparib_post_platinum()
     test_dr_lustberg_tucatinib_l3_post_tdxd()
     test_first_line_no_penalty()
     test_confidence_floor()

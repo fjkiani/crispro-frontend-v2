@@ -1,0 +1,571 @@
+# 🧬 PATHWAY VALIDATION DATA REQUIREMENTS
+
+**Version**: 1.0  
+**Date**: November 28, 2024  
+**Owner**: Manager Agent  
+**Purpose**: Define ALL data needed to validate ALL 7 pathways across ALL relevant cancer types
+
+---
+
+## 🎯 MISSION
+
+Validate mechanism-based predictions for:
+1. **Trial matching** - Match patient pathways to trial drug mechanisms
+2. **Resistance prediction** - Predict who will develop treatment resistance
+3. **Sensitivity prediction** - Predict who will respond to specific therapies
+
+**Core Focus**: Ovarian cancer and its closest ancestors (gynecological cancers)  
+**Extended Scope**: All major solid tumors where our 7 pathways are clinically relevant
+
+---
+
+## 📊 THE 7 PATHWAYS WE MUST VALIDATE
+
+| Index | Pathway | Key Genes | Clinical Relevance |
+|-------|---------|-----------|-------------------|
+| 0 | **DDR** | BRCA1, BRCA2, ATM, ATR, PALB2, RAD51, CHEK2 | PARP inhibitors, platinum sensitivity |
+| 1 | **MAPK** | BRAF, KRAS, NRAS, NF1, MEK1/2 | BRAF/MEK inhibitors, resistance |
+| 2 | **PI3K** | PIK3CA, PTEN, AKT1, MTOR | PI3K inhibitors (alpelisib) |
+| 3 | **VEGF** | VEGFA, VHL, HIF1A, KDR | Anti-angiogenics (bevacizumab) |
+| 4 | **HER2** | ERBB2/HER2, ERBB3 | Trastuzumab, T-DXd |
+| 5 | **IO** | CD274/PD-L1, TMB, MSI, POLE | Checkpoint inhibitors |
+| 6 | **Efflux** | ABCB1/MDR1, ABCC1, ABCG2 | Multi-drug resistance |
+
+---
+
+## 🔬 CANCER TYPE PRIORITIES
+
+### TIER 1: CORE FOCUS (Gynecological)
+
+| Cancer | TCGA Code | Priority | Why |
+|--------|-----------|----------|-----|
+| **Ovarian (HGSOC)** | TCGA-OV | P0 | Primary focus, have 469 patients |
+| **Endometrial** | TCGA-UCEC | P1 | Sister cancer, high PI3K/MSI |
+| **Cervical** | TCGA-CESC | P1 | Sister cancer, HPV-related |
+
+### TIER 2: PATHWAY VALIDATION (High Signal)
+
+| Cancer | TCGA Code | Priority | Primary Pathway |
+|--------|-----------|----------|-----------------|
+| **Breast** | TCGA-BRCA | P2 | DDR (BRCA), HER2, PI3K |
+| **Melanoma** | TCGA-SKCM | P2 | MAPK (BRAF), IO |
+| **Lung Adeno** | TCGA-LUAD | P2 | MAPK (KRAS), IO |
+| **Colorectal** | TCGA-COAD | P2 | MAPK (KRAS/BRAF) |
+
+### TIER 3: COMPLETE COVERAGE
+
+| Cancer | TCGA Code | Priority | Primary Pathway |
+|--------|-----------|----------|-----------------|
+| **Kidney Clear Cell** | TCGA-KIRC | P3 | VEGF (VHL) |
+| **Pancreatic** | TCGA-PAAD | P3 | DDR, MAPK (KRAS) |
+| **Prostate** | TCGA-PRAD | P3 | DDR (BRCA2) |
+| **Gastric** | TCGA-STAD | P3 | HER2, MSI |
+| **Bladder** | TCGA-BLCA | P3 | IO (TMB) |
+
+---
+
+## 📁 DATA REQUIREMENTS PER CANCER TYPE
+
+### For EACH cancer type, we need:
+
+```yaml
+cancer_type:
+  tcga_code: "TCGA-XX"
+  
+  # REQUIRED: Mutation Data
+  mutations:
+    source: "cBioPortal or TCGA GDC"
+    format: "MAF or JSON"
+    fields:
+      - patient_id
+      - gene
+      - hgvs_p (protein change)
+      - hgvs_c (cDNA change)
+      - variant_classification
+      - chromosome
+      - position
+      - ref_allele
+      - alt_allele
+    min_patients: 100
+    
+  # REQUIRED: Treatment Response Data
+  treatment_response:
+    source: "TCGA clinical, cBioPortal, or trial data"
+    format: "JSON or TSV"
+    fields:
+      - patient_id
+      - treatment_type (chemo, targeted, IO)
+      - drug_name
+      - response (CR, PR, SD, PD)
+      - response_category (sensitive, resistant, refractory)
+      - pfs_months (if available)
+      - os_months (if available)
+    min_patients_with_response: 50
+    
+  # OPTIONAL: Biomarker Data
+  biomarkers:
+    fields:
+      - hrd_score
+      - tmb_score
+      - msi_status
+      - pd_l1_expression
+    source: "TCGA or computed from mutations"
+    
+  # OPTIONAL: Copy Number Data
+  copy_number:
+    fields:
+      - gene
+      - cn_status (amplification, deletion, neutral)
+      - log2_ratio
+    source: "TCGA GISTIC or cBioPortal"
+```
+
+---
+
+## 📋 SPECIFIC DATA REQUESTS BY CANCER TYPE
+
+### 1. OVARIAN CANCER (TCGA-OV) - ✅ HAVE PARTIAL
+
+**Current Status**: 469 patients with mutations + platinum response
+
+**What We Have**:
+- ✅ Mutations for 469 patients
+- ✅ Platinum response (sensitive/resistant/refractory)
+- ❌ Missing: HRD scores
+- ❌ Missing: PARP inhibitor response
+- ❌ Missing: Bevacizumab response
+
+**Additional Data Needed**:
+```yaml
+ovarian_additional:
+  hrd_scores:
+    source: "TCGA HRD paper or Myriad-style computation"
+    patients_needed: 469 (match existing)
+    fields: [genomic_loh_score, tai_score, lst_score, hrd_sum]
+    
+  parp_response:
+    source: "ARIEL trials, PRIMA trial, or real-world data"
+    fields: [patient_id, parp_drug, response, pfs_months]
+    min_patients: 50
+    
+  io_response:
+    source: "KEYNOTE trials, IMagyn050"
+    fields: [patient_id, io_drug, response, pfs_months]
+    min_patients: 30
+```
+
+### 2. ENDOMETRIAL CANCER (TCGA-UCEC) - ⏸️ NEED
+
+**Why Important**: 
+- High PI3K mutation rate (40% PIK3CA)
+- High MSI rate (30%) - IO validation
+- Sister cancer to ovarian
+
+**Data Needed**:
+```yaml
+endometrial:
+  mutations:
+    source: "cBioPortal TCGA-UCEC"
+    expected_patients: 500+
+    key_genes: [PIK3CA, PTEN, KRAS, TP53, ARID1A, POLE]
+    
+  msi_status:
+    source: "TCGA molecular subtypes"
+    categories: [MSI-H, MSS, POLE-ultramutated]
+    
+  treatment_response:
+    source: "TCGA clinical or PORTEC trials"
+    treatments: [platinum, taxane, checkpoint_inhibitor]
+    
+  validation_targets:
+    - PI3K pathway vs response
+    - MSI-H vs IO response
+    - POLE vs IO response
+```
+
+### 3. CERVICAL CANCER (TCGA-CESC) - ⏸️ NEED
+
+**Why Important**:
+- HPV-related (different biology)
+- IO increasingly used
+- Sister cancer to ovarian
+
+**Data Needed**:
+```yaml
+cervical:
+  mutations:
+    source: "cBioPortal TCGA-CESC"
+    expected_patients: 300+
+    key_genes: [PIK3CA, PTEN, KRAS, STK11, FBXW7]
+    
+  hpv_status:
+    source: "TCGA"
+    categories: [HPV+, HPV-]
+    
+  treatment_response:
+    source: "GOG trials, KEYNOTE-826"
+    treatments: [platinum, paclitaxel, pembrolizumab, bevacizumab]
+```
+
+### 4. BREAST CANCER (TCGA-BRCA) - ⏸️ NEED
+
+**Why Important**:
+- Highest BRCA1/2 frequency (validate DDR)
+- HER2+ subset (validate HER2)
+- PIK3CA common (validate PI3K)
+
+**Data Needed**:
+```yaml
+breast:
+  mutations:
+    source: "cBioPortal TCGA-BRCA"
+    expected_patients: 1000+
+    key_genes: [BRCA1, BRCA2, PIK3CA, ERBB2, TP53, CDH1]
+    
+  subtypes:
+    source: "TCGA PAM50"
+    categories: [Luminal_A, Luminal_B, HER2_enriched, Basal, Normal]
+    
+  her2_status:
+    source: "TCGA clinical"
+    categories: [HER2+, HER2-]
+    
+  treatment_response:
+    source: "I-SPY, CALGB, or cBioPortal clinical"
+    treatments:
+      - neoadjuvant_chemo (pCR yes/no)
+      - trastuzumab (HER2+ response)
+      - parp_inhibitor (BRCA+ response)
+      - alpelisib (PIK3CA+ response)
+      
+  validation_targets:
+    - BRCA1/2 vs platinum/PARP response
+    - HER2 amp vs trastuzumab response
+    - PIK3CA vs alpelisib response
+```
+
+### 5. MELANOMA (TCGA-SKCM) - ⏸️ NEED
+
+**Why Important**:
+- BRAF V600E 50% (validate MAPK)
+- IO standard of care (validate IO)
+- High TMB (validate IO)
+
+**Data Needed**:
+```yaml
+melanoma:
+  mutations:
+    source: "cBioPortal TCGA-SKCM"
+    expected_patients: 400+
+    key_genes: [BRAF, NRAS, NF1, KIT, CDKN2A]
+    
+  braf_status:
+    source: "TCGA or derived from mutations"
+    categories: [V600E, V600K, other_BRAF, BRAF_WT]
+    
+  tmb_score:
+    source: "Computed from mutations"
+    threshold: 10 mut/Mb for TMB-high
+    
+  treatment_response:
+    source: "CheckMate, KEYNOTE, coBRIM trials"
+    treatments:
+      - braf_inhibitor (vemurafenib, dabrafenib)
+      - mek_inhibitor (trametinib, cobimetinib)
+      - anti_pd1 (nivolumab, pembrolizumab)
+      - anti_ctla4 (ipilimumab)
+      
+  validation_targets:
+    - BRAF V600 vs BRAF inhibitor response
+    - TMB-high vs IO response
+    - NF1 vs MAPK inhibitor resistance
+```
+
+### 6. LUNG ADENOCARCINOMA (TCGA-LUAD) - ⏸️ NEED
+
+**Why Important**:
+- KRAS mutations common (30%)
+- IO standard of care
+- EGFR mutations (Asian populations)
+
+**Data Needed**:
+```yaml
+lung_adeno:
+  mutations:
+    source: "cBioPortal TCGA-LUAD"
+    expected_patients: 500+
+    key_genes: [KRAS, EGFR, ALK, ROS1, BRAF, STK11, KEAP1]
+    
+  pd_l1_expression:
+    source: "TCGA or trial data"
+    categories: [high_≥50%, low_1-49%, negative_<1%]
+    
+  tmb_score:
+    source: "Computed from mutations"
+    
+  treatment_response:
+    source: "KEYNOTE-024, CheckMate-227"
+    treatments:
+      - platinum_doublet
+      - anti_pd1 (pembrolizumab, nivolumab)
+      - egfr_tki (for EGFR+)
+      - kras_g12c (sotorasib for KRAS G12C)
+      
+  validation_targets:
+    - KRAS vs KRAS inhibitor response
+    - TMB-high vs IO response
+    - STK11 vs IO resistance
+```
+
+### 7. COLORECTAL CANCER (TCGA-COAD) - ⏸️ NEED
+
+**Why Important**:
+- KRAS/BRAF common (validate MAPK)
+- MSI-H subset (validate IO)
+- Anti-EGFR therapy stratification
+
+**Data Needed**:
+```yaml
+colorectal:
+  mutations:
+    source: "cBioPortal TCGA-COAD + TCGA-READ"
+    expected_patients: 600+
+    key_genes: [KRAS, NRAS, BRAF, PIK3CA, APC, TP53]
+    
+  msi_status:
+    source: "TCGA molecular subtypes"
+    categories: [MSI-H, MSS]
+    
+  treatment_response:
+    source: "CALGB, KEYNOTE-177"
+    treatments:
+      - folfox
+      - folfiri
+      - anti_egfr (cetuximab - only RAS WT)
+      - anti_vegf (bevacizumab)
+      - anti_pd1 (MSI-H only)
+      
+  validation_targets:
+    - KRAS/NRAS vs anti-EGFR resistance
+    - BRAF V600E vs poor prognosis
+    - MSI-H vs IO response
+```
+
+### 8. KIDNEY CLEAR CELL (TCGA-KIRC) - ⏸️ NEED
+
+**Why Important**:
+- VHL mutations 80% (validate VEGF)
+- Anti-VEGF standard of care
+- IO combinations
+
+**Data Needed**:
+```yaml
+kidney:
+  mutations:
+    source: "cBioPortal TCGA-KIRC"
+    expected_patients: 500+
+    key_genes: [VHL, PBRM1, SETD2, BAP1, KDM5C]
+    
+  treatment_response:
+    source: "CheckMate-214, KEYNOTE-426"
+    treatments:
+      - sunitinib
+      - pazopanib
+      - cabozantinib
+      - nivolumab_ipilimumab
+      - pembrolizumab_axitinib
+      
+  validation_targets:
+    - VHL mutation vs TKI response
+    - BAP1 vs poor prognosis
+    - PBRM1 vs IO response
+```
+
+---
+
+## 📥 DATA SOURCES
+
+### Primary Sources (Free, Public)
+
+| Source | URL | Data Type |
+|--------|-----|-----------|
+| **cBioPortal** | https://www.cbioportal.org/ | Mutations, clinical, CNA |
+| **GDC Data Portal** | https://portal.gdc.cancer.gov/ | TCGA raw data |
+| **ICGC** | https://dcc.icgc.org/ | International cancer genomes |
+| **EGA** | https://ega-archive.org/ | European trial data |
+
+### cBioPortal API for Programmatic Access
+
+```python
+# Example: Download TCGA-BRCA mutations
+import requests
+
+base_url = "https://www.cbioportal.org/api"
+study_id = "brca_tcga_pan_can_atlas_2018"
+
+# Get mutations
+mutations_url = f"{base_url}/studies/{study_id}/mutations"
+response = requests.get(mutations_url)
+mutations = response.json()
+```
+
+### Trial Data Sources
+
+| Trial | Cancer | Pathway | Data Availability |
+|-------|--------|---------|-------------------|
+| ARIEL2/3 | Ovarian | DDR | Request from Clovis |
+| PRIMA | Ovarian | DDR | Request from GSK |
+| SOLAR-1 | Breast | PI3K | cBioPortal |
+| BOLERO-2 | Breast | PI3K | cBioPortal |
+| CheckMate-067 | Melanoma | IO | Request from BMS |
+| KEYNOTE-006 | Melanoma | IO | Request from Merck |
+
+---
+
+## 🎯 VALIDATION MATRIX
+
+### What We Need to Prove for Each Pathway
+
+| Pathway | Validation Goal | Metric | Target |
+|---------|-----------------|--------|--------|
+| **DDR** | BRCA → platinum/PARP response | Sensitivity rate difference | >10% |
+| **MAPK** | BRAF → BRAF-i response | ORR difference | >30% |
+| **MAPK** | NF1 → resistance | Resistance enrichment | >2x |
+| **PI3K** | PIK3CA → alpelisib response | PFS difference | >2 months |
+| **VEGF** | VHL → TKI response | Response rate | >50% |
+| **HER2** | HER2+ → trastuzumab response | pCR rate | >40% |
+| **IO** | TMB-high → IO response | ORR difference | >20% |
+| **IO** | MSI-H → IO response | ORR | >40% |
+| **Efflux** | MDR1 high → resistance | Resistance rate | >2x baseline |
+
+---
+
+## 📊 MINIMUM VIABLE DATASET
+
+### To claim pathway validation, we need:
+
+```yaml
+minimum_requirements:
+  patients_per_group: 30  # Min 30 in each arm
+  
+  for_sensitivity_validation:
+    - mutation_positive: 30+ patients
+    - mutation_negative: 30+ patients
+    - treatment_response: binary (responder/non-responder)
+    
+  for_resistance_validation:
+    - resistant_patients: 30+ patients
+    - sensitive_patients: 30+ patients
+    - mutation_data: complete
+    
+  statistical_threshold:
+    - p_value: <0.05
+    - relative_risk: >1.5 or <0.67
+    - confidence_interval: 95%
+```
+
+---
+
+## 🚀 AGENT INSTRUCTIONS
+
+### For Data Acquisition Agents:
+
+1. **Start with cBioPortal** - Easiest programmatic access
+2. **Download mutation + clinical data together** - They must be linkable by patient_id
+3. **Prioritize treatment response data** - This is the hardest to find
+4. **Document data provenance** - Source, date, version
+5. **Save in standardized JSON format** - See schema below
+
+### Standard Output Format:
+
+```json
+{
+  "cancer_type": "TCGA-BRCA",
+  "source": "cBioPortal",
+  "download_date": "2024-11-28",
+  "patients": [
+    {
+      "patient_id": "TCGA-XX-XXXX",
+      "mutations": [
+        {
+          "gene": "BRCA1",
+          "hgvs_p": "p.E1685*",
+          "variant_classification": "Nonsense_Mutation"
+        }
+      ],
+      "treatment_response": {
+        "treatment": "platinum",
+        "response": "sensitive",
+        "pfs_months": 18.5
+      },
+      "biomarkers": {
+        "hrd_score": 42,
+        "tmb": 3.2,
+        "msi_status": "MSS"
+      }
+    }
+  ],
+  "summary": {
+    "total_patients": 1084,
+    "patients_with_response": 523,
+    "pathway_mutations": {
+      "BRCA1": 45,
+      "BRCA2": 32,
+      "PIK3CA": 341
+    }
+  }
+}
+```
+
+---
+
+## ✅ SUCCESS CRITERIA
+
+### Phase 1: Gynecological Cancers (2 weeks)
+- [ ] Ovarian: DDR, MAPK, VEGF validated
+- [ ] Endometrial: PI3K, IO validated  
+- [ ] Cervical: IO validated
+
+### Phase 2: High-Signal Cancers (2 weeks)
+- [ ] Breast: DDR, HER2, PI3K validated
+- [ ] Melanoma: MAPK, IO validated
+- [ ] Lung: MAPK, IO validated
+
+### Phase 3: Complete Coverage (2 weeks)
+- [ ] All 7 pathways validated in at least 2 cancer types each
+- [ ] Cross-cancer validation (same pathway, different cancers)
+- [ ] Resistance prediction validated in 3+ cancers
+
+### Final Deliverable
+- Validation matrix: 7 pathways × 10+ cancer types
+- Real metrics (not synthetic): Relative risk, sensitivity lift, AUC
+- Production-ready pathway weights per cancer type
+
+---
+
+## 📞 SUPPORT NEEDED
+
+### From Data Agents:
+1. Download cBioPortal datasets for each cancer type
+2. Extract treatment response where available
+3. Compute derived biomarkers (HRD, TMB)
+4. Link mutations to outcomes
+
+### From Validation Agents:
+1. Run statistical tests per pathway × cancer
+2. Calculate relative risk, sensitivity/specificity
+3. Identify which pathways work in which cancers
+4. Build cancer-specific pathway weights
+
+### From Manager:
+1. Coordinate data acquisition
+2. Review validation results
+3. Update this document with findings
+4. Report honest metrics only
+
+---
+
+**End of Data Requirements Document**
+
+**Status**: ACTIVE - Awaiting agent execution  
+**Next Step**: Agents begin data acquisition from cBioPortal

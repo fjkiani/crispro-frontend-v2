@@ -1,8 +1,17 @@
 # 📚 SAE Resistance Prediction: Publication Materials
 
 **Status:** ✅ **CONSOLIDATED** (December 24, 2025)  
-**Target Venue:** bioRxiv (preprint) → Nature Communications / Cell Reports Medicine  
+**Target Venue:** `bioRxiv` (preprint) → Nature Communications / Cell Reports Medicine  
 **Location:** `.cursor/MOAT/CLINICAL_TRIALS/publication/SAE_RESISTANCE/`
+
+---
+
+## ⚠️ IMPORTANT (Read First)
+
+This folder contains multiple analysis threads created under **different cohort/label contracts**.
+
+- **Canonical truth table / what is safe to claim**: see `ERRATA.md`
+- **Externally validated platinum resistance biomarker**: **MFAP4 (AUROC 0.763, GSE63885)** (see `VALIDATION_SUMMARY_FINAL.md`)
 
 ---
 

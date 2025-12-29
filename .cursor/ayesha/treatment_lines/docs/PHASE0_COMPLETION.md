@@ -86,7 +86,7 @@
 
 **6 Comprehensive Test Cases**:
 1. ✅ Ovarian L1 (platinum preference)
-2. ✅ Ovarian L2 post-platinum (Ayesha's case - PARP with 0.4 cross-resistance)
+2. ✅ Ovarian L2 post-platinum (Ovarian L2 case - PARP with 0.4 cross-resistance)
 3. ✅ Breast HER2+ L1 (T/P/taxane preference)
 4. ✅ Breast HER2+ L2 post-trastuzumab (T-DXd appropriateness)
 5. ✅ Breast HER2+ L3 post-T-DXd (Dr. Lustberg's case - tucatinib sequencing)
@@ -124,7 +124,7 @@ pytest test_cross_resistance.py -v
 
 ### Test Case Examples
 
-**Example 1: Ayesha's Case (Ovarian L2 Post-Platinum)**
+**Example 1: Ovarian L2 Case (Post-Platinum)**
 ```python
 from services.cross_resistance_map import calculate_aggregate_cross_resistance
 

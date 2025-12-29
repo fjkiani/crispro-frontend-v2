@@ -88,12 +88,12 @@ class DrugPanelEntry:
 
 ## 🎯 VALIDATION
 
-### Smoke Test: Ayesha's Case (Ovarian L2 Post-Platinum)
+### Smoke Test: Ovarian L2 Case (Post-Platinum)
 
 ```python
 from backend.services.panel_config import calculate_line_appropriateness
 
-# Ayesha is on 2nd line, considering PARP inhibitor
+# Patient is on 2nd line, considering PARP inhibitor
 score, rationale = calculate_line_appropriateness(
     drug_name="olaparib",
     disease="ovarian_cancer",

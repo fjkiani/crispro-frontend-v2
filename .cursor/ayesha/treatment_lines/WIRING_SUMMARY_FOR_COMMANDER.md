@@ -43,7 +43,7 @@ http://localhost:3000/myeloma-digital-twin
    - Prior therapies checkboxes
 
 2. **Variant Input** (unchanged)
-   - Enter BRCA1 p.Gln1756fs (Ayesha's mutation)
+   - Enter BRCA1 p.Gln1756fs (example mutation)
 
 3. **Run Analysis Button** (unchanged)
 
@@ -101,7 +101,7 @@ http://localhost:3000/myeloma-digital-twin
 - ✅ SAE chips reflect treatment history
 
 ### **Clinical**
-- ✅ Ayesha's case validated (L1 → L2 → L3)
+- ✅ AK's case validated (L1 → L2 → L3)
 - ✅ Cross-resistance logic correct (DNA repair pathway)
 - ✅ Rationale matches clinical expectations
 
@@ -115,7 +115,7 @@ http://localhost:3000/myeloma-digital-twin
 - Add SAE chips to evidence panel
 
 ### **P1: End-to-End Demo** (5 min - READY NOW)
-- Run Ayesha's L1 → L2 → L3 journey
+- Run L1 → L2 → L3 journey
 - Capture screenshots/video
 - Prepare for stakeholder demo
 
@@ -131,7 +131,7 @@ http://localhost:3000/myeloma-digital-twin
 
 ### **Immediate (NOW)**
 1. ✅ **Open browser**: `http://localhost:3000/myeloma-digital-twin`
-2. ✅ **Test Ayesha's case**: L1 → L2 → L3 progression
+2. ✅ **Test Ovarian L2 case**: L1 → L2 → L3 progression
 3. ✅ **Verify confidence drops**: 0.80 → 0.72 → 0.68
 4. ✅ **Check provenance display**: All fields present and accurate
 
@@ -196,7 +196,7 @@ http://localhost:3000/myeloma-digital-twin
 ║     Backend:  ✅ 29/29 tests passing                     ║
 ║     Frontend: ✅ 0 linter errors                         ║
 ║     Wiring:   ✅ Complete (60 lines, 3 components)       ║
-║     Demo:     ✅ Ready for Ayesha's L1→L2→L3 journey    ║
+║     Demo:     ✅ Ready for L1→L2→L3 journey    ║
 ║                                                          ║
 ║     What you get:                                        ║
 ║     - Treatment history input form                       ║
@@ -225,7 +225,7 @@ http://localhost:3000/myeloma-digital-twin
 **Status**: ✅ **READY FOR COMMANDER'S TESTING**
 
 **Next Orders Awaited**:
-- Option A: Test Ayesha's case now (5 min)
+- Option A: Test Ovarian L2 case now (5 min)
 - Option B: Wire CoPilot integration (30 min)
 - Option C: Proceed to Sporadic pathway (3-4 hours)
 

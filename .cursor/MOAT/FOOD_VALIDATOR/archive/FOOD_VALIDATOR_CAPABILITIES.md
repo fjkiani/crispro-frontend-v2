@@ -481,7 +481,3 @@ def resolve_food_to_compounds(self, food_name: str) -> List[str]:
 
 
 
-
-
-
-

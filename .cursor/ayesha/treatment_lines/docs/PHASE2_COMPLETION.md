@@ -64,7 +64,7 @@
 
 **Test Coverage** (11 tests):
 - ✅ Feature computation without history
-- ✅ Ayesha's case (ovarian L2 post-platinum)
+- ✅ Ovarian L2 case (post-platinum)
 - ✅ Dr. Lustberg's case (breast L3 post-T-DXd)
 - ✅ First-line therapy (no prior therapies)
 - ✅ Confidence modulation without penalty
@@ -77,10 +77,10 @@
 
 ## 🎯 VALIDATION
 
-### Ayesha's Case: Ovarian L2 Post-Platinum → Olaparib
+### Ovarian L2 Case: Post-Platinum → Olaparib
 
 ```bash
-✅ AYESHA CASE (Ovarian L2 post-platinum → olaparib):
+✅ OVARIAN L2 CASE (post-platinum → olaparib):
   Line Appropriateness: 1.00  # Perfect (NCCN Cat 1)
   NCCN Category: 1
   Cross-Resistance Risk: 0.40  # Moderate (DNA repair overlap)
@@ -159,7 +159,7 @@
 - **New SAE Features**: 3
 - **Test Cases**: 11
 - **Functions**: 2 core
-- **Integration Tests**: 2 (Ayesha + Dr. Lustberg)
+- **Integration Tests**: 2 (Ovarian L2 + Dr. Lustberg)
 
 ---
 
@@ -186,7 +186,7 @@
 
 ### Test Coverage ✅
 - [X] All 11 unit tests passing
-- [X] Ayesha's case validated
+- [X] Ovarian L2 case validated
 - [X] Dr. Lustberg's case validated
 - [X] Edge cases covered
 
@@ -222,11 +222,11 @@ SAE Features → Frontend Display
 2. Update orchestrator to compute treatment line features per drug
 3. Apply confidence modulation using `modulate_confidence_with_treatment_line()`
 4. Add treatment line provenance to response
-5. Test end-to-end with Ayesha's case
+5. Test end-to-end with Ovarian L2 case
 
 **Expected Outcome**:
 ```python
-# Ayesha: olaparib L2 post-platinum
+# Ovarian L2: olaparib post-platinum
 {
     "drug_name": "olaparib",
     "efficacy_score": 0.85,
@@ -255,7 +255,7 @@ SAE features operational:
 - ✅ Real data from panel_config + cross_resistance_map
 - ✅ Proper impact classification and thresholds
 - ✅ Confidence modulation formula ready
-- ✅ Ayesha's case: 1.0 line fit, 0.4 cross-res, 0.6 sequencing
+- ✅ Ovarian L2 case: 1.0 line fit, 0.4 cross-res, 0.6 sequencing
 - ✅ Dr. Lustberg's case: 1.0 line fit, 0.2 cross-res, 0.8 sequencing
 
 **STATUS**: Ready for Phase 3 (Confidence Integration)

@@ -103,7 +103,7 @@ echo ""
 # ===========================================================================
 
 run_test \
-    "Baseline - Ayesha BRCA1 Q356* without treatment history" \
+    "Baseline - BRCA1 Q356* without treatment history" \
     "/api/efficacy/predict" \
     '{
         "mutations": [
@@ -125,11 +125,11 @@ run_test \
     1.00
 
 # ===========================================================================
-# TEST 2: AYESHA CASE (Ovarian L2 Post-Platinum → Olaparib)
+# TEST 2: OVARIAN L2 CASE (Post-Platinum → Olaparib)
 # ===========================================================================
 
 run_test \
-    "Ayesha - Ovarian L2 post-platinum (expect ~8% penalty)" \
+    "Ovarian L2 post-platinum (expect ~8% penalty)" \
     "/api/efficacy/predict" \
     '{
         "mutations": [

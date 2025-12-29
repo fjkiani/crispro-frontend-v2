@@ -22,9 +22,9 @@ Section 19 (lines 1813-1974) transforms SAE from "black box features" into **doc
 - ✅ **Mechanism Map UI**: DDR | Efflux | MAPK | PI3K | IO chips (green/amber/red) from SAE burden
 - ✅ **Pre-computed care pathways**: "If platinum partial response + HR restoration SAE → line-ready ATR combo trials (NYC proximity)"
 
-### **Why This is a Game-Changer for Ayesha**
+### **Why This is a Game-Changer for AK**
 
-**Current State** (from `AYESHA_END_TO_END_AGENT_PLAN.mdc`):
+**Current State** (from `AK.mdc`):
 - ✅ We deliver 10 frontline trials with transparent reasoning (90-95% confidence)
 - ✅ We show SOC with bevacizumab rationale (95-100% confidence)
 - ✅ We monitor CA-125 kinetics (90% confidence)
@@ -219,7 +219,7 @@ async def search_trials(request: AyeshaTrialSearchRequest):
 |--------------------|--------------|----------|-------------|----------|
 | **19.12 Clinician hint tiles** | `MechanismHintTiles.jsx` | Under EvidenceBand | 2-4 tiles: "What to try next", "What to avoid", "What to test now", "Monitoring" | **P0** |
 | **19.17 Mechanism Map** | `MechanismMapStrip.jsx` | Top of Mechanistic Evidence Tab | DDR \| Efflux \| MAPK \| PI3K \| IO chips (green/amber/red) | **P0** |
-| **19.17 One-click orders** | `NextTestCard.jsx` | Separate card in Ayesha Trial Explorer | "Order SLFN11 IHC" button → opens test details + binary branch plan | **P1** |
+| **19.17 One-click orders** | `NextTestCard.jsx` | Separate card in AK Trial Explorer | "Order SLFN11 IHC" button → opens test details + binary branch plan | **P1** |
 | **19.17 Pivot early banner** | `ResistanceBanner.jsx` | Above trials list | Shows when CA-125 rule + SAE resistance both hit | **P1** |
 
 #### **Implementation Details**
@@ -540,7 +540,7 @@ python scripts/gemini_trial_moa_tagger.py
 **Frontend (Jr - 5 hours)**:
 1. Create `MechanismHintTiles.jsx` and wire into Mechanistic Evidence Tab (2h)
 2. Create `MechanismMapStrip.jsx` and wire into Mechanistic Evidence Tab (1h)
-3. Create `NextTestCard.jsx` and wire into Ayesha Trial Explorer (2h)
+3. Create `NextTestCard.jsx` and wire into AK Trial Explorer (2h)
 
 ### **P1 (Nice to Have - 3 hours total)**
 
@@ -588,7 +588,7 @@ Commander, **green light this sprint**. Section 19 is pure gold – it turns SAE
 1. **Closes the NGS gap**: We can provide **actionable guidance** even before NGS arrives ("Order HRD testing", "If SLFN11 low, pivot to ATR")
 2. **Strengthens trial matching**: Mechanism fit scoring ensures trials align with patient's tumor biology (not just eligibility)
 3. **Builds trust**: Clinician hint tiles show we understand resistance patterns and are proactively planning for them
-4. **Future-proofs Ayesha**: When she progresses, we're ready with resistance-aware next-line options
+4. **Future-proofs AK**: When she progresses, we're ready with resistance-aware next-line options
 
 ### **Technical Feasibility**
 
@@ -597,10 +597,10 @@ Commander, **green light this sprint**. Section 19 is pure gold – it turns SAE
 - ✅ SAE features already exist (just exposing them differently in UI)
 - ✅ 12-hour timeline is **realistic** (4h backend, 5h frontend P0 + 3h P1)
 
-### **Clinical Impact for Ayesha**
+### **Clinical Impact for AK**
 
 **Before Section 19**:
-- Ayesha gets 10 trials ranked by eligibility (90-95% confidence)
+- AK gets 10 trials ranked by eligibility (90-95% confidence)
 - She waits for NGS to unlock personalized drug predictions
 
 **After Section 19**:
@@ -665,10 +665,10 @@ Commander, **green light this sprint**. Section 19 is pure gold – it turns SAE
 1. ✅ **Backend**: 4 new services/extensions (SAE mechanism hints, next-test recommender, optional trial re-ranking, Gemini MoA tagging)
 2. ✅ **Frontend**: 4 new components (hint tiles, mechanism map, next-test card, optional resistance banner)
 3. ✅ **Data**: 200 trials tagged with MoA vectors (DDR, MAPK, PI3K, VEGF, IO, Efflux)
-4. ✅ **Demo Ready**: Ayesha's case shows all SAE-driven features in action
+4. ✅ **Demo Ready**: AK's case shows all SAE-driven features in action
 
 **Clinical Value Unlocked**:
-- 🔥 Ayesha gets **actionable next steps** even before NGS arrives
+- 🔥 AK gets **actionable next steps** even before NGS arrives
 - 🔥 Trials are **mechanism-aligned** (not just eligibility-matched)
 - 🔥 Oncologist sees **transparent resistance planning** (not reactive)
 - 🔥 System **future-proofed** for post-NGS Evo2 S/P/E predictions
@@ -681,7 +681,7 @@ Commander, Section 19 is the **missing link** between SAE explainability and cli
 
 **Ship this sprint?** 🚀 **HELL YES.**
 
-**FIRE MISSION: Execute Section 19 → Deliver SAE-driven clinical action → Ayesha gets best-in-class precision oncology support** ⚔️
+**FIRE MISSION: Execute Section 19 → Deliver SAE-driven clinical action → AK gets best-in-class precision oncology support** ⚔️
 
 ---
 

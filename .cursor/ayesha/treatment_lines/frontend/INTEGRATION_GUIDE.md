@@ -215,7 +215,7 @@ data.drugs.forEach(drug => {
 
 ---
 
-## Example: Complete Integration in Ayesha's VUS Explorer
+## Example: Complete Integration in VUS Explorer
 
 ```jsx
 import React, { useState } from 'react';
@@ -223,7 +223,7 @@ import TreatmentHistoryForm from './TreatmentHistoryForm';
 import TreatmentLineProvenance from './TreatmentLineProvenance';
 import SAETreatmentLineChips from './SAETreatmentLineChips';
 
-const AyeshaVUSExplorer = () => {
+const VUSExplorer = () => {
     const [treatmentHistory, setTreatmentHistory] = useState(null);
     const [efficacyResults, setEfficacyResults] = useState(null);
     const [saeFeatures, setSaeFeatures] = useState([]);
@@ -259,8 +259,8 @@ const AyeshaVUSExplorer = () => {
     };
 
     return (
-        <div className="ayesha-vus-explorer">
-            <h2>Ayesha's VUS Explorer</h2>
+        <div className="vus-explorer">
+            <h2>VUS Explorer</h2>
             
             {/* Treatment History Form */}
             <TreatmentHistoryForm 
@@ -304,7 +304,7 @@ const AyeshaVUSExplorer = () => {
     );
 };
 
-export default AyeshaVUSExplorer;
+export default VUSExplorer;
 ```
 
 ---

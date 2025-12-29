@@ -86,7 +86,7 @@ drugs_out.append(drug_dict)
 **File**: `.cursor/ayesha/treatment_lines/backend/tests/test_phase3_integration.py`
 
 **Test Coverage** (4 tests, all passing):
-- ✅ Ayesha's case (ovarian L2 post-platinum → olaparib)
+- ✅ Ovarian L2 case (post-platinum → olaparib)
 - ✅ Dr. Lustberg's case (breast HER2+ L3 post-T-DXd → tucatinib combo)
 - ✅ First-line therapy (no prior therapies → no cross-resistance penalty)
 - ✅ Confidence floor enforcement (never negative)
@@ -102,7 +102,7 @@ drugs_out.append(drug_dict)
 PHASE 3 INTEGRATION TEST: Treatment Line → Efficacy Orchestrator
 ======================================================================
 
-✅ AYESHA CASE (Ovarian L2 post-platinum → olaparib):
+✅ OVARIAN L2 CASE (post-platinum → olaparib):
   Line Appropriateness: 1.00
   NCCN Category: 1
   Cross-Resistance Risk: 0.40
@@ -135,7 +135,7 @@ PHASE 3 INTEGRATION TEST: Treatment Line → Efficacy Orchestrator
 ======================================================================
 ```
 
-### Ayesha's Case: Before vs After
+### Ovarian L2 Case: Before vs After
 
 **Without Treatment Line Integration:**
 ```json
@@ -204,7 +204,7 @@ PHASE 3 INTEGRATION TEST: Treatment Line → Efficacy Orchestrator
 
 ### Test Coverage ✅
 - [X] All 4 integration tests passing
-- [X] Ayesha's case: 0.80 → 0.72 (-8% penalty)
+- [X] Ovarian L2 case: 0.80 → 0.72 (-8% penalty)
 - [X] Dr. Lustberg's case: 0.85 → 0.81 (-4% penalty)
 - [X] First-line: no cross-resistance penalty
 - [X] Confidence floor test: never negative
@@ -256,7 +256,7 @@ Frontend Display (shows confidence penalty + rationale)
    - Show provenance in dev mode
 
 ### Phase 5: Testing & Docs (1h)
-1. End-to-end smoke test (Ayesha case)
+1. End-to-end smoke test (Ovarian L2 case)
 2. Document before/after confidence scores
 3. Create HEREDITARY_PATHWAY_COMPLETE.md
 4. Archive hereditary work with completion summary
@@ -270,7 +270,7 @@ Frontend Display (shows confidence penalty + rationale)
 Confidence modulation operational:
 - ✅ Treatment line features integrated into orchestrator
 - ✅ Confidence penalty formula working (cross_res × 0.2, max -20%)
-- ✅ Ayesha's case: olaparib 0.80 → 0.72 (-8% penalty)
+- ✅ Ovarian L2 case: olaparib 0.80 → 0.72 (-8% penalty)
 - ✅ Dr. Lustberg's case: tucatinib 0.85 → 0.81 (-4% penalty)
 - ✅ First-line: no cross-resistance penalty applied
 - ✅ Confidence floor enforced (never negative)

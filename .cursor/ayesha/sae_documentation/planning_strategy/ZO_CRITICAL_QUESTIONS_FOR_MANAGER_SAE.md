@@ -17,7 +17,7 @@ Commander, I've read Section 19 three times. The manager's vision is **brilliant
 - I need to know: **Which rules? Which thresholds? Which edge cases?**
 
 **What's at stake**:
-- If I guess wrong → we hallucinate recommendations → Ayesha's oncologist loses trust
+- If I guess wrong → we hallucinate recommendations → AK's oncologist loses trust
 - If I ask now → we codify precise rules → 90%+ confidence maintained
 
 **My approach**:

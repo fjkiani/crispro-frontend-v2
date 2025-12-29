@@ -3,7 +3,7 @@
 **Purpose:** Explain what the validated resistance prediction capability means for clinical use  
 **For:** Anyone who wants to understand how we predict drug resistance  
 **Date:** January 28, 2025  
-**Last Updated:** January 28, 2025 *(MM + OV Resistance Prediction MOAT validated ✅)*
+**Last Updated:** December 26, 2025 *(MM resistance prediction validated ✅; OV mutation-only associations exist but must be cited with the exact label contract + receipts)*
 
 ---
 
@@ -11,13 +11,20 @@
 
 ### WHAT WE ACTUALLY VALIDATED (With Real Data)
 
+#### Multiple Myeloma (MMRF CoMMpass) ✅
+
 | Cancer | Marker | Relative Risk | p-value | N | Status |
 |--------|--------|--------------|---------|---|--------|
-| **Ovarian** | MAPK pathway | 1.97 | < 0.05 | 35/469 | ✅ **SIGNIFICANT** |
-| **Ovarian** | NF1 mutation | 2.10 | < 0.05 | 26/469 | ✅ **SIGNIFICANT** |
-| **Ovarian** | PI3K pathway | 1.39 | 0.02 | 108/469 | ✅ **SIGNIFICANT** |
 | **Myeloma** | DIS3 mutation | **2.08** | **0.0145** | 38/219 | ✅ **SIGNIFICANT** |
 | **Myeloma** | TP53 mutation | 1.90 | 0.11 | 16/219 | ⚠️ **TREND** |
+
+#### Ovarian (TCGA-OV, mutation-only association; label contract must be explicit) ⚠️
+
+| Cancer | Marker | Effect | Receipt | Status |
+|--------|--------|--------|---------|--------|
+| **Ovarian** | MAPK pathway altered | RR(resistant+refractory vs sensitive) ≈ **1.97** | `data/validation/reports/ddr_platinum_validation.json` | ✅ *Supported (mutation-only; needs external replication)* |
+| **Ovarian** | NF1 mutation | RR(resistant+refractory vs sensitive) ≈ **2.10** | `data/validation/reports/ddr_platinum_validation.json` | ✅ *Supported (mutation-only; needs external replication)* |
+| **Ovarian** | PI3K pathway | — | *(no pinned receipt in this doc yet)* | ⚠️ *Not locked — remove or cite exact artifact before claiming* |
 
 ### WHAT WE COULD NOT VALIDATE (Honest Gaps)
 
@@ -35,10 +42,11 @@
 | Component | Status | Result |
 |-----------|--------|--------|
 | **TRUE SAE Service** | ✅ Deployed on Modal | Evo2 7B → 32K features |
-| **TRUE SAE Extraction** | ✅ 149 OV patients | 11 features with large effect sizes |
-| **TRUE SAE Statistical Power** | ❌ Insufficient | 0 features significant after FDR correction |
-| **Proxy SAE (Gene-Level)** | ✅ **PRODUCTION READY** | DIS3 p=0.0145, MAPK RR=1.97 |
-| **Decision** | **Proxy SAE for production** | TRUE SAE can be enhancement later |
+| **TRUE SAE Extraction** | ✅ Extracted on OV Tier-3 | 149 patients; label contract `resistant + refractory` vs `sensitive` (internal cohort) |
+| **TRUE SAE Predictive Validation (platinum response)** | ❌ Not externally validated | DDR_bin fails under TCGA-style platinum labels; Tier-3 signal is internal/contract-specific and confounding-sensitive |
+| **Externally validated platinum resistance biomarker (non-SAE, expression)** | ✅ Validated | MFAP4 AUROC = 0.763 on GSE63885 |
+| **Proxy SAE (Gene-Level)** | ✅ **PRODUCTION READY (MM)** | DIS3 p=0.0145; TP53 trend |
+| **Decision** | **Proxy SAE for production** | TRUE SAE remains an R&D enhancement pending replication + confound controls |
 
 ---
 
@@ -50,20 +58,25 @@
 
 | Before | After |
 |--------|-------|
-| "We'll monitor and see." | **OV:** "Your tumor has MAPK mutations → 2x higher platinum resistance risk." |
+| "We'll monitor and see." | **OV:** "MAPK pathway alterations are associated with a higher resistant+refractory rate in TCGA-OV (mutation-only; contract-specific; not an externally validated predictive biomarker)." |
 | | **MM:** "DIS3 mutation detected → 2.08x higher mortality risk on current therapy." |
 
 ### Validated Predictions
 
-**Ovarian Cancer (TCGA-OV, n=469):**
-- MAPK mutations → 2x platinum resistance risk (RR=1.97, p<0.05) ✅
-- NF1 mutations → 2.1x platinum resistance risk (RR=2.10, p<0.05) ✅
-- PI3K mutations → 1.4x platinum resistance risk (RR=1.39, p=0.02) ✅
+**Ovarian (TCGA-OV, n=469; mutation-only associations):**
+- MAPK pathway altered → RR(resistant+refractory vs sensitive) ≈ 1.97 ✅ *(see `data/validation/reports/ddr_platinum_validation.json`)*
+- NF1 mutated → RR(resistant+refractory vs sensitive) ≈ 2.10 ✅ *(see same receipt)*
+- PI3K pathway → ⚠️ *not pinned here; cite exact artifact before claiming*
 
 **Multiple Myeloma (MMRF CoMMpass, n=995):**
 - DIS3 mutations → 2.08x mortality risk (p=0.0145) ✅
 - TP53 mutations → 1.90x mortality risk (p=0.11, clinical trend) ⚠️
 - RAS mutations → No signal (RR=0.93) - different biology in MM ❌
+
+**Platinum resistance biomarker publication status (separate from this module):**
+- External predictive signal in-repo: **MFAP4 AUROC 0.763** on **GSE63885**.
+- DDR_bin / TRUE SAE: internal Tier-3 signal exists, but is **not** externally validated and is vulnerable to **coverage/variant-count confounding**.
+- Canonical story + receipts live in `.cursor/MOAT/SAE_INTELLIGENCE/Publication-1/SAE_RESISTANCE/`.
 
 ---
 
@@ -153,7 +166,7 @@ POST /api/resistance/predict
 | Metric | Value |
 |--------|-------|
 | Total patients | 469 |
-| With platinum response | 469 (100%) |
+| Label contract (this module) | resistant+refractory vs sensitive (mutation-only analysis; see receipt) |
 | Sensitive | 396 (84.4%) |
 | Resistant + Refractory | 73 (15.6%) |
 | MAPK mutated | 35 (7.5%) |
@@ -240,8 +253,9 @@ ACTIONS:
 
 | Component | Status | Evidence |
 |-----------|--------|----------|
-| OV MAPK resistance (RR=1.97) | ✅ Validated | TCGA-OV n=469 |
-| OV PI3K resistance (RR=1.39) | ✅ Validated | TCGA-OV n=469 |
+| OV MAPK association (RR≈1.97) | ✅ Supported | `data/validation/reports/ddr_platinum_validation.json` |
+| OV NF1 association (RR≈2.10) | ✅ Supported | `data/validation/reports/ddr_platinum_validation.json` |
+| OV PI3K association | ⚠️ Not locked | Add exact receipt or remove from claims |
 | MM DIS3 resistance (RR=2.08) | ✅ Validated | MMRF n=995, p=0.0145 |
 | MM TP53 resistance (RR=1.90) | ⚠️ Trend | p=0.11, clinically relevant |
 | ResistanceProphetService | ✅ Production | 1,525 lines |
@@ -278,8 +292,7 @@ ACTIONS:
 
 1. **Gene-level (Proxy SAE) resistance prediction works:**
    - DIS3 → 2.08x mortality (MM, p=0.0145)
-   - MAPK → 2x platinum resistance (OV, p<0.05)
-   - PI3K → 1.4x platinum resistance (OV, p=0.02)
+   - OV mutation-only associations exist (MAPK RR≈1.97; NF1 RR≈2.10) but must be framed as **contract-specific** and **not externally validated predictive biomarkers**
 
 2. **TRUE SAE not required for production:**
    - Deployed and tested (149 OV patients)
@@ -320,8 +333,12 @@ AFTER:  "Your DIS3 mutation predicts 2.08x mortality risk.
 | `ResistancePanel.jsx` | Frontend component |
 | `data/validation/mmrf_commpass_*.json` | MM cohort data |
 | `data/validation/tcga_ov_*.json` | OV cohort data |
+| `data/validation/reports/ddr_platinum_validation.json` | TCGA-OV mutation-only RR receipt for MAPK/NF1 |
 | `MM_RESISTANCE_PREDICTION_VALIDATED.md` | MM validation results |
+
+**Publication / platinum resistance biomarker canonical folder:**
+- `.cursor/MOAT/SAE_INTELLIGENCE/Publication-1/SAE_RESISTANCE/`
 
 ---
 
-**⚔️ RESISTANCE PREDICTION MOAT: VALIDATED WITH REAL DATA. DIS3 + MAPK = ACTIONABLE SIGNALS. ⚔️**
+**⚔️ RESISTANCE PREDICTION MOAT: VALIDATED WITH REAL DATA. `DIS3` + `MAPK` = ACTIONABLE SIGNALS. ⚔️**

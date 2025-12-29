@@ -16,6 +16,7 @@
 - **[03_MECHANISM_TRIAL_MATCHING.md](03_MECHANISM_TRIAL_MATCHING.md)** - Mechanism-based trial matching
 - **[04_LLM_PERSONALIZATION.md](04_LLM_PERSONALIZATION.md)** - LLM-powered personalization
 - **[05_CLINICAL_DOSSIER.mdc](05_CLINICAL_DOSSIER.mdc)** - Clinical dossier generation
+- **[06_AUDIT_REPORT.md](06_AUDIT_REPORT.md)** - Comprehensive audit report with E2E testing plan
 
 ### **Archived:**
 - See `archive/` for old versions

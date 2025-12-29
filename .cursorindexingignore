@@ -1,3 +1,91 @@
-
 # Don't index SpecStory auto-save files, but allow explicit context inclusion via @ references
 .specstory/**
+
+# Virtual environments (1.2GB + nested venvs = ~2.8GB total)
+venv/
+env/
+ENV/
+.venv/
+**/venv/
+**/env/
+**/.venv/
+
+# Python cache and build artifacts
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.Python
+**/.pytest_cache/
+**/.mypy_cache/
+**/.tox/
+
+# Frontend dependencies and builds (1.9GB node_modules)
+**/node_modules/
+**/dist/
+**/build/
+**/.next/
+**/.nuxt/
+
+# Git internals (large objects ~100MB+ each)
+**/.git/
+
+# Large data directories (13GB data/, 846MB models, 123MB backend data)
+data/
+results/
+models/
+**/embedding_models/
+**/backend/data/*.db
+**/backend/data/chroma_data/
+
+# Model and binary files (96 large files >100MB)
+**/*.safetensors
+**/*.onnx
+**/*.bin
+**/*.h5
+**/*.model
+**/*.joblib
+**/*.pkl
+**/*.pt
+**/*.pth
+**/*.weights
+
+# Database files
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+
+# Large genome/reference files
+**/*.fasta
+**/*.fa
+**/*.fai
+**/*.gz
+**/*.vcf
+**/*.bam
+**/*.bai
+**/*.mmi
+**/*.dict
+**/*.2bit
+**/*.bt2
+**/*.gtf
+
+# Archive files
+**/*.zip
+**/*.tar
+**/*.tar.gz
+**/*.tgz
+
+# Large JSON files (36K+ JSON files, mostly in node_modules)
+**/node_modules/**/*.json
+**/package-lock.json
+
+# Build artifacts and minified files (can cause lag when opened)
+**/dist/**/*.js
+**/build/**/*.js
+**/*.min.js
+**/_build/
+
+# Git worktrees and branches (14GB+ of duplicate code)
+**/.cursor/worktrees/
+~/.cursor/worktrees/
+**/worktrees/

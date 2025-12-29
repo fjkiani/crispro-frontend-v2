@@ -266,7 +266,7 @@ CoPilot displays results with treatment_line_provenance
 - ⏳ **End-to-end demo** - READY TO TEST
 
 ### **Near-term (P1):**
-- Test Ayesha's case end-to-end with CoPilot
+- Test Ovarian L2 case end-to-end with CoPilot
 - Verify confidence modulation appears in responses
 - Screenshot CoPilot showing treatment line provenance
 
@@ -313,7 +313,7 @@ CoPilot displays results with treatment_line_provenance
 - **Seamless UX** - no manual configuration required
 
 **Next Battle:**
-- Demo Ayesha's case end-to-end with CoPilot assistance
+- Demo Ovarian L2 case end-to-end with CoPilot assistance
 - Move forward to Sporadic pathway (germline vs. somatic)
 
 ---

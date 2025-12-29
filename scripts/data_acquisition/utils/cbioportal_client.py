@@ -111,6 +111,13 @@ class CBioportalClient:
         endpoint = f"/studies/{study_id}/patients"
         params = {"pageSize": 10000}
         return self._make_request("GET", endpoint, params=params)
+
+    def list_studies(self) -> List[Dict]:
+        """List available studies in cBioPortal."""
+        endpoint = "/studies"
+        params = {"pageSize": 10000}
+        result = self._make_request("GET", endpoint, params=params)
+        return result if isinstance(result, list) else []
     
     def get_study_samples(self, study_id: str) -> List[Dict]:
         """Fetch all samples for a study."""
@@ -122,6 +129,40 @@ class CBioportalClient:
         """Fetch all molecular profiles for a study."""
         endpoint = f"/studies/{study_id}/molecular-profiles"
         return self._make_request("GET", endpoint)
+
+    def get_discrete_cna_profile_id(self, study_id: str) -> Optional[str]:
+        """
+        Best-effort: find a discrete CNA profile ID for a study.
+        Many studies expose profiles like *_gistic, *_cna, *_cna_gistic, etc.
+        """
+        profiles = self.get_molecular_profiles(study_id)
+        candidates: List[str] = []
+        for profile in profiles:
+            profile_id = profile.get("molecularProfileId", "")
+            if not profile_id:
+                continue
+            pid = profile_id.lower()
+            if "gistic" in pid or pid.endswith("_cna") or "cna" in pid:
+                candidates.append(profile_id)
+        # Prefer gistic if present
+        for c in candidates:
+            if "gistic" in c.lower():
+                return c
+        return candidates[0] if candidates else None
+
+    def get_discrete_copy_number_for_samples(self, profile_id: str, sample_ids: List[str]) -> List[Dict]:
+        """
+        Best-effort: fetch discrete CNA calls for a set of samples.
+        If the endpoint is not supported for a profile, this will raise/404 and caller should skip.
+        """
+        endpoint = f"/molecular-profiles/{profile_id}/discrete-copy-number"
+        params = {
+            "sampleIds": sample_ids,
+            "projection": "DETAILED",
+            "pageSize": 10000
+        }
+        result = self._make_request("GET", endpoint, params=params)
+        return result if isinstance(result, list) else []
     
     def get_mutation_profile_id(self, study_id: str) -> Optional[str]:
         """Get mutation profile ID for a study (cached)."""

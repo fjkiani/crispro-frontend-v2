@@ -32,8 +32,8 @@ def test_compute_features_no_history():
     assert features["prior_therapies"] == []
 
 
-def test_compute_features_ayesha_case():
-    """Test Ayesha's case: Ovarian L2 post-platinum → olaparib"""
+def test_compute_features_ovarian_l2_case():
+    """Test Ovarian L2 case: post-platinum → olaparib"""
     history = TreatmentHistory(
         current_line=2,
         prior_therapies=["carboplatin", "paclitaxel"]

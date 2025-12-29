@@ -175,39 +175,5 @@ export const clinicalTrialsData: CoPilotDetailContent = {
       }
     ],
 
-    drugDevelopmentContribution: {
-      title: "Contributing to Drug Development Success",
-      phase: "Clinical Research (Phase 1, 2, 3)",
-      problem: "Phase 2 success rate: 28.9% (lowest). Trials fail because they enroll patients who won't respond. Generic eligibility misses mechanism alignment.",
-      ourContribution: {
-        title: "Mechanism-Based Patient Selection",
-        description: "Match patients to trials by pathway alignment. DDR-high patients → PARP trials. MAPK-driven → MEK/RAF trials. Mechanism-aligned patients respond better.",
-        impact: [
-          {
-            metric: "Better Patient Selection",
-            description: "Enroll patients whose pathways match trial drug mechanisms. DDR burden (0.88) → PARP+ATR trials (0.92 fit). Higher response rates.",
-            evidence: "Mechanism fit predicts response better than eligibility alone."
-          },
-          {
-            metric: "Faster Enrollment",
-            description: "60-65% time reduction. Mechanism-based matching finds right trials faster. Same-day enrollment.",
-            evidence: "50+ trials → 5-12 mechanism-aligned trials."
-          },
-          {
-            metric: "Improved Trial Success",
-            description: "Phase 2 success (28.9%) improves by enrolling responders. Better Phase 2 → higher Phase 3 success (57.8%).",
-            evidence: "Pathway matching identifies responders before enrollment."
-          }
-        ]
-      },
-      howItWorks: [
-        "Compute patient pathway burden (7D: DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux)",
-        "Match to trial drug mechanisms via cosine similarity",
-        "Rank by 0.7×eligibility + 0.3×mechanism_fit",
-        "Enroll mechanism-aligned patients"
-      ],
-      bottomLine: "We find the RIGHT trials for the RIGHT patients. Mechanism-based matching improves trial success by enrolling patients whose tumors have the pathway vulnerabilities the drug targets."
-    },
-
     conclusion: "Mechanism-based trial matching. Your pathway burden matched to trial drug mechanisms—not keywords. Ranked by mechanism fit. Action-ready dossiers for same-day enrollment."
 };

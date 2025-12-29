@@ -12,7 +12,7 @@
 
 ## ✅ MANAGER ANSWERS (APPROVED FOR EXECUTION)
 
-**Q1 (Disease Panels)**: A — Ovarian + Breast only. Focus on Ayesha + HER2 playbook first.  
+**Q1 (Disease Panels)**: A — Ovarian + Breast only. Focus on Ovarian L2 + HER2 playbook first.  
 **Q2 (Treatment History)**: A — User manual input for P0 (structured fields).  
 **Q3 (Cross-Resistance)**: A now; add C (genomic resistance markers) in P1.  
 **Q4 (NCCN Enforcement)**: C (display only, RUO); add D (user filter) in P1.  
@@ -32,7 +32,7 @@
 **Context**: Manager approved "A - Simple MoA overlap" for Q3, but I need to clarify implementation approach.
 
 **Example Scenario**:
-- Ayesha receives "carboplatin + paclitaxel" (1st line)
+- AK receives "carboplatin + paclitaxel" (1st line)
 - Now considering "olaparib" (PARP inhibitor, 2nd line)
 - Both affect DNA repair → cross-resistance risk
 
@@ -129,9 +129,9 @@ def get_cross_resistance_risk(prior_drug: str, candidate_drug: str) -> float:
 4. **Easy to Test**: Deterministic, no ambiguity
 5. **Upgrade Path**: Can migrate to Option B (tags) in P1 when we add more drugs
 
-**Implementation for Ayesha's Case**:
+**Implementation for Ovarian L2 Case**:
 ```python
-# Ayesha: Prior platinum, considering PARP
+# Ovarian L2 case: Prior platinum, considering PARP
 prior = "carboplatin"  # maps to "platinum_agent"
 candidate = "olaparib"  # maps to "PARP_inhibitor"
 
@@ -172,12 +172,12 @@ cross_resistance_risk = get_cross_resistance_risk(prior, candidate)
 **Question**: Which disease panels should I prioritize?
 
 **Options**:
-- **A) Ovarian + Breast only** (Ayesha's case + Dr. Lustberg's work)
+- **A) Ovarian + Breast only** (Ovarian L2 case + Dr. Lustberg's work)
 - **B) Ovarian + Breast + Lung** (top 3 solid tumors)
 - **C) Ovarian + Breast + Multiple Myeloma** (leverage existing MM work)
 - **D) Other priority?**
 
-**My Recommendation**: **A) Ovarian + Breast only** (ship fast, validate with Ayesha's case, expand later)
+**My Recommendation**: **A) Ovarian + Breast only** (ship fast, validate with Ovarian L2 case, expand later)
 
 ---
 
@@ -231,7 +231,7 @@ cross_resistance_risk = get_cross_resistance_risk(prior, candidate)
 
 ### **Q5: Prior Therapy Outcomes Impact** 🤔
 
-**Context**: If Ayesha had 8 months PFS on platinum (partial response), should this affect PARP confidence?
+**Context**: If a patient had 8 months PFS on platinum (partial response), should this affect PARP confidence?
 
 **Question**: Should we factor prior therapy outcomes into confidence?
 
@@ -321,7 +321,7 @@ cross_resistance_risk = get_cross_resistance_risk(prior, candidate)
 **Question**: What test cases should I prioritize?
 
 **Options**:
-- **A) Ayesha's case** (ovarian, BRCA2, 2nd line post-platinum)
+- **A) Ovarian L2 case** (ovarian, BRCA2, 2nd line post-platinum)
 - **B) Dr. Lustberg's case** (breast, HER2+, 3rd line post-T-DXd)
 - **C) Edge cases** (1st line vs 4th line, conflicting prior therapies)
 - **D) All of the above**
@@ -485,7 +485,7 @@ provenance.treatment_line = {
 
 **Phase 5: Testing & Documentation** (1-2h)
 - Write 6 smoke tests
-- Update ayesha_plan.mdc
+- Update treatment_line_plan.mdc
 - Generate final completion report
 
 ---

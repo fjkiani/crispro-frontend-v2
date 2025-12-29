@@ -1,4 +1,4 @@
-# Mission: Multiple Myeloma Resistance Prediction
+# Mission: Multiple `Myeloma` Resistance Prediction
 
 > **Priority**: HIGH | **Estimated Time**: 3-4 weeks | **Type**: Full-Stack Feature with Validation
 
@@ -17,22 +17,35 @@ Build and validate **production-ready resistance prediction for Multiple Myeloma
 | Component | Status | Location |
 |-----------|--------|----------|
 | Basic resistance router | ✅ Exists | `api/routers/resistance.py` |
-| PSMB5 mutations (PI) | ✅ Defined | Known resistance mutations |
-| CRBN mutations (IMiDs) | ✅ Defined | Known resistance mutations |
+| Resistance prophet service | ✅ Exists | `api/services/resistance_prophet_service.py` |
+| Treatment line adjustment | ✅ Implemented | `ResistanceProphetService._adjust_risk_for_treatment_line()` |
+| MM pathway service | ✅ Exists | `api/services/mm_pathway_service.py` |
+| PSMB5 mutations (PI) | ✅ Defined | `MM_RESISTANCE_MUTATIONS["proteasome_inhibitor"]` |
+| CRBN mutations (IMiDs) | ✅ Defined | `MM_RESISTANCE_MUTATIONS["imid"]` *(SNV-only; CNV loss not covered)* |
 | MM doctrine | ✅ Exists | `.cursor/rules/MM/mm_drug_response_doctrine.mdc` |
 | Evo2 integration | ✅ Working | Delta scoring via `/api/evo/score_variant_multi` |
-| Frontend | ✅ Exists | `MyelomaDigitalTwin.jsx`, `MyelomaResponseDisplay.jsx` |
+| Frontend | ✅ Exists | `MMResistancePanel.jsx`, `MyelomaDigitalTwin.jsx`, `MyelomaResponseDisplay.jsx` |
+| MM cohort artifacts (MMRF CoMMpass) | ✅ Present | `data/validation/mm_cohort/mmrf_commpass_*.json` |
 
 ### ❌ What's Missing
 
 | Gap | Impact | Priority |
 |-----|--------|----------|
-| **No MM patient cohort** | Can't validate | 🔴 Critical |
-| **Limited mechanisms** | Only PSMB5/CRBN | 🔴 Critical |
-| **No drug class coverage** | Only PI/IMiD basics | 🔴 Critical |
-| **No TRUE SAE features** | Using proxy | 🟡 High |
-| **No treatment line context** | Ignores prior therapy | 🟡 High |
-| **No high-risk cytogenetics** | Missing t(4;14), del(17p) | 🟡 High |
+| **Drug-class specific validation is underpowered** | PSMB5/CRBN are too rare for robust per-drug RR | 🔴 Critical |
+| **CNV-level resistance markers** | CRBN loss (CNV), del(17p), 1q gain require CNV/FISH inputs | 🔴 Critical |
+| **High-risk cytogenetics from data** | We can accept user-provided FISH, but automated extraction not complete | 🟡 High |
+| **MM TRUE SAE extraction** | No MM-specific TRUE SAE cohort/diamonds validated | 🟡 High |
+| **Endpoint mismatch vs doc** | Mission references `/api/mm/resistance/predict`; canonical endpoint is `/api/resistance/predict` | 🟡 High |
+
+#### Reality check (based on what we have on disk)
+
+From `data/validation/mm_cohort/mmrf_commpass_cohort.json`:
+- `psmb5_mutated` = 3
+- `crbn_mutated` = 6
+- `tp53_mutated` = 46
+- `ras_mutated` = 393
+
+So we *can* ship a production-grade **risk stratification and playbook** now, but we should be honest that **drug-class specific “resistance prediction”** for PI/IMiD via PSMB5/CRBN is likely **power-limited** without CNV/FISH and/or additional cohorts.
 
 ---
 
@@ -111,6 +124,8 @@ Build and validate **production-ready resistance prediction for Multiple Myeloma
 | **TCGA (DLBCL as proxy)** | Limited MM-like cases | Public |
 
 **Primary Target**: MMRF CoMMpass (gold standard for MM)
+
+**Status update:** cohort artifacts are now present in-repo at `data/validation/mm_cohort/`.
 
 #### 1.2 Data Extraction Tasks
 
@@ -398,80 +413,21 @@ VALIDATION_TESTS = [
 
 ### Phase 4: Production Integration (Week 3-4)
 
-#### 4.1 Backend Service Enhancement
+#### 4.1 Backend Service (current architecture)
 
-**File**: `oncology-coPilot/oncology-backend-minimal/api/services/mm_resistance_service.py`
+**Canonical service:** `oncology-coPilot/oncology-backend-minimal/api/services/resistance_prophet_service.py`  
+**Canonical endpoint:** `POST /api/resistance/predict`
 
 ```python
 """
-MM Resistance Service - Production Implementation
+Multiple Myeloma resistance prediction (current implementation).
 
-Integrates:
-- Known resistance mutations (PSMB5, CRBN, etc.)
-- Evo2 variant scoring
-- Pathway burden computation
-- High-risk cytogenetics
-- Treatment line context
+This is implemented as part of ResistanceProphetService and currently supports:
+- Known resistance mutations (PSMB5/CRBN/CD38 buckets) [power-limited]
+- Validated cohort markers (e.g., DIS3) [stronger]
+- Treatment line context adjustment
+- Optional user-provided cytogenetics inputs (literature-weighted)
 """
-
-class MMResistanceService:
-    
-    async def predict_resistance(
-        self,
-        mutations: List[Dict],
-        drug_class: str,
-        cytogenetics: Optional[Dict] = None,
-        treatment_line: int = 1,
-        prior_therapies: Optional[List[str]] = None
-    ) -> MMResistancePrediction:
-        """
-        Predict MM drug resistance with full context.
-        
-        Args:
-            mutations: Somatic mutations
-            drug_class: PI, IMiD, CD38, BCMA
-            cytogenetics: FISH results (t(4;14), del(17p), 1q)
-            treatment_line: Current line of therapy
-            prior_therapies: Previous drug classes
-        
-        Returns:
-            Comprehensive resistance prediction
-        """
-        signals = []
-        
-        # Signal 1: Known resistance mutations
-        known_resistance = self._check_known_mutations(mutations, drug_class)
-        if known_resistance:
-            signals.append(known_resistance)
-        
-        # Signal 2: Pathway burden
-        pathway_burden = self._compute_pathway_burden(mutations, drug_class)
-        signals.append(pathway_burden)
-        
-        # Signal 3: High-risk cytogenetics
-        if cytogenetics:
-            cyto_risk = self._assess_cytogenetics(cytogenetics)
-            signals.append(cyto_risk)
-        
-        # Signal 4: Prior therapy cross-resistance
-        if prior_therapies:
-            cross_resistance = self._check_cross_resistance(drug_class, prior_therapies)
-            signals.append(cross_resistance)
-        
-        # Signal 5: Evo2 variant scoring
-        evo2_signal = await self._score_with_evo2(mutations)
-        signals.append(evo2_signal)
-        
-        # Aggregate signals → risk level
-        risk_level = self._stratify_risk(signals)
-        
-        return MMResistancePrediction(
-            drug_class=drug_class,
-            risk_level=risk_level,
-            signals=signals,
-            recommended_alternatives=self._get_alternatives(drug_class, risk_level),
-            rationale=self._build_rationale(signals)
-        )
 ```
 
 #### 4.2 Frontend Component
@@ -503,7 +459,8 @@ export default function MMResistancePanel({
       const results = {};
       
       for (const drugClass of drugClasses) {
-        const response = await fetch('/api/mm/resistance/predict', {
+        // Note: canonical backend endpoint is /api/resistance/predict
+        const response = await fetch('/api/resistance/predict', {
           method: 'POST',
           body: JSON.stringify({
             mutations,
@@ -558,16 +515,17 @@ export default function MMResistancePanel({
 ## Deliverables Checklist
 
 ### Phase 1: Data Acquisition
-- [ ] Download MMRF CoMMpass or alternative MM cohort
-- [ ] Extract mutations, cytogenetics, treatment response
-- [ ] Create `data/validation/mm_cohort/` with structured data
-- [ ] Document data sources and limitations
+- [x] Download / stage MMRF CoMMpass cohort artifacts
+- [x] Create `data/validation/mm_cohort/` with structured data (`mmrf_commpass_*.json`)
+- [ ] Extract/normalize per-line treatment response (if needed for drug-class specific validation)
+- [ ] Add CNV/FISH inputs or ingestion path (CRBN loss, del(17p), 1q gain)
+- [ ] Document data sources and limitations (power limits for PSMB5/CRBN SNVs)
 
 ### Phase 2: Mechanism Expansion
-- [ ] Expand `RESISTANCE_MUTATIONS` with all MM mechanisms
-- [ ] Create `mm_pathway_service.py`
-- [ ] Add high-risk cytogenetics logic
-- [ ] Add treatment line context
+- [x] Expand `MM_RESISTANCE_MUTATIONS` / marker dictionaries (in `resistance_prophet_service.py`)
+- [x] Create `mm_pathway_service.py`
+- [x] Add treatment line context (implemented)
+- [ ] Add CNV-aware resistance markers (CRBN loss, del(17p), 1q gain) with explicit evidence levels
 
 ### Phase 3: Validation
 - [ ] Create `validate_mm_resistance.py`
@@ -579,9 +537,9 @@ export default function MMResistancePanel({
 - [ ] Document validation results in `.cursor/MOAT/`
 
 ### Phase 4: Production
-- [ ] Create `mm_resistance_service.py`
-- [ ] Create API endpoint `/api/mm/resistance/predict`
-- [ ] Create `MMResistancePanel.jsx`
+- [x] Use `ResistanceProphetService` (production path)
+- [x] Canonical API endpoint exists: `/api/resistance/predict`
+- [x] `MMResistancePanel.jsx` exists (verify it targets the canonical endpoint)
 - [ ] Integrate with existing MyelomaDigitalTwin
 - [ ] End-to-end test
 
@@ -1278,8 +1236,8 @@ EITHER WAY: We gain CERTAINTY about SAE value.
 
 **What makes this better than existing MM tools:**
 
-1. **Multi-modal**: Mutations + Cytogenetics + Prior therapy + Evo2
-2. **Drug-class specific**: Not generic "high risk" - specific PI vs IMiD vs CD38
+1. **Multi-modal**: Mutations + `Cytogenetics` + Prior therapy + `Evo2`
+2. **Drug-class specific**: Not generic "high risk" - specific PI vs `IMiD` vs `CD38`
 3. **Treatment line aware**: Resistance evolves with lines
 4. **Validated**: Against real MM patient cohort
 5. **Actionable**: Specific alternative recommendations

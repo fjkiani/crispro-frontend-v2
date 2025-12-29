@@ -163,6 +163,45 @@ Remaining for top-tier confidence:
 
 ---
 
+
+---
+
+## 🧪 External replication (A8) — in progress
+
+
+### TCGA-OV External (with platinum response labels) — COMPLETE ✅
+- **TRUE-SAE cohort file:** `oncology-coPilot/oncology-backend-minimal/data/validation/sae_cohort/checkpoints/OV_PLATINUM_TRUE_SAE_cohort.json`
+- **Validator output dir:** `oncology-coPilot/oncology-backend-minimal/scripts/validation/out/ddr_bin_ov_platinum_external/`
+
+**Replication status (n=161 linked):**
+- **Platinum Response AUROC = 0.517** (predicting resistant/refractory vs sensitive; TCGA-OV TRUE-SAE v2)
+  - **Interpretation:** essentially random; DDR_bin (as currently defined) does **not** discriminate platinum response in this cohort.
+  - **Root cause of prior 0.663 claim:** earlier cohort had **0 variants for all patients** => constant DDR_bin; non-tie-safe AUROC ranking produced a spurious 0.663. After tie-safe AUROC, constant-score AUROC = 0.5.
+- OS Spearman ρ: **0.252** (p=0.0013) on TRUE-SAE v2 (note: this is OS correlation, not platinum-response discrimination)
+
+**Interpretation:**
+- **This cohort does NOT replicate A3** (AUROC ~0.517 ≈ random).
+- Treat this as a **failed external replication** for A3 under the current DDR_bin definition + mapping.
+- OS signal in this run is **not interpretable** for A3; prioritize fixing A3 or reframing claim.
+
+**Gate check (updated):**
+- Gate 1 (exploratory A3 signal): **FAIL ❌** (0.517 < 0.65)
+- Gate 2 (external replication): **FAIL ❌**
+
+
+### TCGA-BRCA (PanCan Atlas) — partial run (resumable)
+- **TRUE-SAE cohort file:** `oncology-coPilot/oncology-backend-minimal/data/validation/sae_cohort/checkpoints/BRCA_TCGA_TRUE_SAE_cohort.json`
+- **Validator output dir:** `oncology-coPilot/oncology-backend-minimal/scripts/validation/out/ddr_bin_brca_tcga/`
+
+**Current replication status (partial, n linked=60):**
+- PFS Spearman ρ = 0.067 (p=0.610)
+- OS Spearman ρ = 0.017 (p=0.899)
+- Platinum AUROC: N/A (no labels in BRCA cohort)
+
+**Notes:**
+- This is an *engineering and generalization* check. True platinum-response replication still requires an ovarian external cohort with response labels (ICGC-OV or partner data).
+- Once BRCA extraction finishes (target n≈200), re-run the validator to update these numbers.
+
 ## 📂 Artifact index (copy/paste)
 
 Directory: `oncology-coPilot/oncology-backend-minimal/scripts/validation/out/ddr_bin_tcga_ov/`

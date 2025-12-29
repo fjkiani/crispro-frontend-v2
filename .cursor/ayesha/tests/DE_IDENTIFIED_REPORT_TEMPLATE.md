@@ -274,6 +274,3 @@ If using statistical method (45 CFR 164.514(b)(1)):
 
 
 
-
-
-

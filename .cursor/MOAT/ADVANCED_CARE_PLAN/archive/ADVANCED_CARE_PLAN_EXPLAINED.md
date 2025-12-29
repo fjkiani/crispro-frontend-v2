@@ -2,28 +2,7 @@
 
 **Purpose:** Explain what the advanced care plan features mean in plain language  
 **For:** Anyone who wants to understand how we're building a complete cancer care system  
-**Date:** January 13, 2025  
-**Last Updated:** January 28, 2025 *(Toxicity MOAT implemented)*
-**Last Updated:** January 2025 *(Universalization MOAT ✅ COMPLETE)*
-
-
----
-
-## 🏆 WHAT WE JUST BUILT: THE PATIENT MOAT
-
-> **The question nobody was answering:** "What should I eat to protect myself during treatment?"
-
-| Before | After |
-|--------|-------|
-| "Eat healthy. Stay hydrated." | "Your carboplatin + BRCA1 = DNA repair stress. NAC helps. Here's when." |
-
-**We connected two systems that never talked:**
-- **Toxicity Detection** → Knows your drug damages DNA repair pathways
-- **Food Validation** → Knows NAC supports DNA repair
-
-**Now they're connected:** When you validate NAC, the system checks your drugs, your genes, and tells you if NAC specifically helps protect against your specific toxicity.
-
-**Tested and working:** `bash test_e2e_toxicity_moat.sh` → All passing ✅
+**Date:** January 13, 2025
 
 ---
 
@@ -35,16 +14,13 @@ Right now, our platform can:
 - ✅ Recommend individual drugs (WIWFM - "Will It Work For Me")
 - ✅ Find clinical trials
 - ✅ Validate food/supplements
-- ✅ **NEW: Connect toxicity to nutrition** → "What foods protect ME from MY drug's side effects?"
 
-**What's still missing:**
+**But it's missing:**
 - ❌ What happens when cancer becomes resistant?
 - ❌ How to combine drugs for better results?
 - ❌ When to switch therapies?
 - ❌ How to monitor if treatment is working?
-
-**What we just built (THE MOAT):**
-- ✅ Toxicity pathway detection → Mitigating foods → Personalized timing
+- ❌ How to prevent dangerous drug reactions?
 
 ### **The Solution: A Complete, Adaptive Care Plan**
 
@@ -56,6 +32,93 @@ We're building a system that:
 5. **Adapts to progression** - Generates new plans when cancer evolves
 
 **Think of it like:** A GPS navigation system for cancer treatment - it doesn't just tell you where to go, it predicts traffic (resistance), suggests alternate routes (combinations), warns about road hazards (toxicity), and recalculates when you take a wrong turn (progression).
+
+---
+
+## ⚔️ BATTLEFIELD REPORT: VALIDATED CAPABILITIES & UNFAIR ADVANTAGE
+
+**For:** Clinical commanders on the front lines of cancer care  
+**Date:** January 2025  
+**Status:** Operational, validated, ready for deployment
+
+### **Mission Recap**
+
+We built a precision oncology platform that provides **mechanism-based drug recommendations** when standard guidelines fail. Our core capability: **identify drugs that biologically target disrupted pathways** in tumors, especially for rare genetic combinations where evidence-based guidelines don't exist.
+
+### **What We've Validated** ✅
+
+**1. Drug Ranking Accuracy: 100% Top-5 (Validated)**
+- **Benchmark**: 17/17 patients - system recommends clinically appropriate drugs in top 5
+- **What this means**: When we say "olaparib is #1 for this patient," it's in the top tier of clinically sound options
+- **Clinical impact**: Saves hours of literature review for rare cases
+
+**2. Mechanism Alignment for Rare Cases (Validated)**
+- **Example**: MBD4 germline + TP53 somatic - no NCCN guidelines exist
+- **What we deliver**: Pathway-based analysis (DDR burden: 1.0, TP53: 0.8) → PARP inhibitors ranked #1-3, Platinum #4
+- **Clinical impact**: Provides evidence-backed options when guidelines are silent
+
+**3. Frontend Clinical Dossier (Complete)**
+- **Sprints 1-3**: Variant analysis, drug recommendations, pathway visualization, trial matching
+- **What we deliver**: Interactive, exportable clinical dossier that clinicians can use in tumor boards
+- **Clinical impact**: Transforms genomic data into actionable treatment plans
+
+### **What We Haven't Validated** ⚠️
+
+**Outcome Prediction: NOT VALIDATED**
+- **Benchmark**: r=0.037 correlation with progression-free survival (essentially random)
+- **What this means**: We can't predict "this patient will respond to olaparib" - we can only say "olaparib targets the disrupted pathways"
+- **Clinical impact**: We provide biological plausibility, not validated outcome probabilities
+
+**Pathway → Outcome Link: NOT VALIDATED**
+- **Status**: No validation that high DDR pathway burden → PARP response
+- **What this means**: Pathway scores are descriptive (what's disrupted), not predictive (what will work)
+- **Clinical impact**: Mechanism alignment is a starting point, not a guarantee
+
+### **The Unfair Advantage for Clinicians** 🎯
+
+**For Rare Cases (MBD4+TP53, rare germline mutations, novel combinations):**
+
+1. **Guidelines Don't Exist → We Provide Options**
+   - Standard approach: "No guidelines, consider clinical trial"
+   - Our approach: "Pathway analysis shows DDR burden 1.0 → PARP inhibitors align with mechanism"
+   - **Result**: Clinicians have evidence-backed options to discuss with patients
+
+2. **Time Savings: Hours → Minutes**
+   - Standard approach: Literature review, pathway analysis, drug selection (4-6 hours)
+   - Our approach: Upload variants → Get ranked drugs with mechanism alignment scores (2 minutes)
+   - **Result**: More time for patient care, less time on research
+
+3. **Transparent Biological Rationale**
+   - Standard approach: "This drug is FDA-approved for this biomarker"
+   - Our approach: "This drug targets DDR pathway (score: 0.88), patient has DDR burden (1.0) → Mechanism alignment: 0.88"
+   - **Result**: Clinicians understand WHY, not just WHAT
+
+4. **Adaptive Intelligence**
+   - Standard approach: Static guidelines updated annually
+   - Our approach: Real-time pathway analysis, mechanism fit scoring, resistance prediction
+   - **Result**: Treatment plans evolve with tumor biology
+
+### **Strategic Limitations (Honest Assessment)**
+
+**What We CAN Say:**
+- "Based on pathway analysis, PARP inhibitors align with disrupted mechanisms (DDR burden: 1.0)"
+- "This drug targets the pathways disrupted in this tumor"
+- "These recommendations are biologically plausible options to discuss with your oncology team"
+
+**What We CANNOT Say:**
+- "This patient has 85% probability of responding to olaparib" ❌
+- "Olaparib will extend progression-free survival by 6 months" ❌
+- "This is the best drug for this patient" ❌
+
+### **Battlefield Translation**
+
+**For the clinician treating a rare case:**
+
+> **Before our platform**: "I have a patient with MBD4 germline + TP53 somatic. No guidelines. I'll need to research pathways, literature, and clinical trials. This will take 4-6 hours."
+
+> **After our platform**: "I uploaded the variants. The system shows DDR pathway burden 1.0, ranks PARP inhibitors #1-3 with mechanism alignment scores, finds 12 matching clinical trials, and provides a complete dossier I can use in tumor board. Time: 2 minutes."
+
+**The unfair advantage**: We turn rare cases from "no options" into "evidence-backed options" in minutes, not hours.
 
 ---
 
@@ -203,16 +266,15 @@ Adjusts recommendations based on WHEN the drug is used (first-line vs second-lin
 
 ---
 
-### **4. Toxicity & Pharmacogenomics** ⚠️ ✅ **MOAT IMPLEMENTED**
+### **4. Toxicity & Pharmacogenomics** ⚠️
 
 **What It Means:**
-Flags genetic variants that cause severe drug reactions BEFORE prescribing, preventing life-threatening toxicity. **AND NOW: Recommends specific foods that mitigate YOUR drug's toxicity for YOUR germline profile.**
+Flags genetic variants that cause severe drug reactions BEFORE prescribing, preventing life-threatening toxicity.
 
 **Why This Matters:**
 - Some people have genetic variants that make them unable to break down certain drugs
 - When these drugs build up, they cause severe toxicity (diarrhea, low white blood cells, even death)
 - We screen for these variants BEFORE prescribing and adjust doses or recommend alternatives
-- **NEW:** We now tell patients WHAT TO EAT to protect against specific drug toxicities
 
 **How It Works:**
 
@@ -231,24 +293,15 @@ Flags genetic variants that cause severe drug reactions BEFORE prescribing, prev
 - **Moderate risk:** Reduce dose by 50-90%
 - **Low risk:** Proceed with standard dose
 
-**🆕 Step 4: Recommend Mitigating Foods (THE MOAT)**
-
-We now connect toxicity pathways to protective foods:
-
-| Drug MoA | Toxicity Pathway | Mitigating Foods | Timing |
-|----------|-----------------|------------------|--------|
-| Platinum (carboplatin) | DNA repair stress | NAC, Vitamin D, Folate | Post-chemo |
-| Anthracycline (doxorubicin) | Cardiotoxicity | CoQ10, L-Carnitine, Magnesium | Continuous |
-| Checkpoint inhibitor | Inflammation (iRAEs) | Omega-3, Curcumin, EGCG | Post-infusion |
-
-**This is the MOAT:** No competitor answers "What should I eat to protect myself from carboplatin?"
+**Drug-Drug Interactions:**
+- **SSRIs + tamoxifen:** SSRIs block CYP2D6 → Tamoxifen doesn't work
+- **Antifungals + chemotherapy:** Antifungals block drug breakdown → Increased toxicity
 
 **Output:**
 - Risk chips: Red (high risk), yellow (moderate), green (low)
 - Dose adjustments: "Reduce 5-FU dose by 50%"
 - Alternative regimens: "Use alternative drug if variant present"
-- **🆕 Mitigating foods:** "NAC helps protect against carboplatin DNA repair stress"
-- **🆕 Personalized timing:** "Take after infusion, not during"
+- Trial suitability: "Exclude from trials requiring full-dose 5-FU"
 
 ---
 
@@ -352,63 +405,37 @@ Strengthens recommendations with real-world data from patients similar to Ayesha
 
 ---
 
-### **7. Nutraceutical Synergy/Antagonism** 🥗 ✅ **MOAT IMPLEMENTED**
+### **7. Nutraceutical Synergy/Antagonism** 🥗
 
 **What It Means:**
-Food Validator timing guide - when to take supplements relative to chemotherapy. **NOW CONNECTED to toxicity detection: System knows YOUR drugs and recommends foods that specifically protect against THEIR toxicities.**
+Food Validator timing guide - when to take supplements relative to chemotherapy.
 
 **Why This Matters:**
 - Supplements can help or hurt depending on timing
 - Some supplements interfere with chemotherapy if taken at wrong time
 - Timing matters for maximum benefit
-- **NEW:** Recommendations are now drug-specific and germline-aware
 
-**How It Works (IMPLEMENTED):**
+**How It Works:**
 
-When you validate a food, the system now checks:
-1. What drugs are you on?
-2. What's your germline profile?
-3. What toxicity pathways are stressed?
-4. Does this food help those pathways?
+**Antioxidants (Vitamin C, E, NAC)**
+- **During ROS-dependent chemo (platinum):** Avoid - interferes with chemotherapy mechanism
+- **After chemo:** Use - helps recovery from oxidative damage
+- **Why:** Platinum relies on ROS to kill cancer → Antioxidants can interfere
 
-**Example: Ayesha on Carboplatin with BRCA1**
+**Omega-3 Fatty Acids**
+- **Timing:** Post-chemo inflammation control
+- **Why:** Reduces inflammation after chemotherapy
+- **When:** After each cycle, not during
 
-```
-Input: "Is NAC good for me?"
+**Vitamin D**
+- **Timing:** HRD context repletion (DNA repair support)
+- **Why:** Supports DNA repair pathways (relevant for HRD-high tumors)
+- **When:** Continuous, but especially important during PARP therapy
 
-System thinks:
-├── Drug: Carboplatin → platinum_agent
-├── Germline: BRCA1 → DNA repair gene
-├── Toxicity: DNA repair pathway stressed (score: 1.0)
-├── NAC mechanism: Glutathione precursor → DNA repair support
-└── Match: YES
-
-Output:
-{
-  "compound": "NAC",
-  "toxicity_mitigation": {
-    "mitigates": true,
-    "target_drug": "carboplatin",
-    "pathway": "DNA repair support",
-    "timing": "post-chemo (not during infusion)",
-    "mechanism": "Glutathione precursor, supports DNA repair enzymes"
-  }
-}
-```
-
-**Three Pathway Categories (Built):**
-
-| Pathway | Drugs That Stress It | Foods That Help |
-|---------|---------------------|-----------------|
-| **DNA Repair** | Platinum, PARP inhibitors | NAC, Vitamin D, Folate |
-| **Inflammation** | Checkpoint inhibitors | Omega-3, Curcumin, EGCG |
-| **Cardiometabolic** | Anthracyclines | CoQ10, L-Carnitine, Magnesium |
-
-**Output (Now Live):**
-- ✅ Timing guidance: "Take NAC after platinum, not during"
-- ✅ Drug-specific recommendations: "NAC mitigates carboplatin DNA repair stress"
-- ✅ Germline-aware: "Your BRCA1 increases DNA repair pathway stress"
-- ✅ Frontend badge: Shows mitigation chip on food cards
+**Output:**
+- Timing table: "Take NAC after platinum, not during"
+- Combo guide: "Which supplements to prefer/avoid per treatment line"
+- Safety warnings: "Avoid antioxidants during ROS-dependent chemo"
 
 ---
 
@@ -601,18 +628,15 @@ A backend service that generates monitoring schedules.
 - **Re-biopsy on progression** → See how cancer evolved
 - **Why:** Early detection = better outcomes
 
-**5. Toxicity + Mitigating Foods (THE MOAT):** ✅ **IMPLEMENTED**
+**5. Toxicity:**
 - **DPYD screened** → Avoid 5-FU if variant present
 - **Dose adjustments flagged** → Prevent life-threatening toxicity
-- **🆕 Carboplatin + BRCA1 detected** → NAC recommended (DNA repair support)
-- **🆕 Personalized timing** → "Take NAC post-chemo, not during"
-- **Why:** Not just avoiding toxicity - actively protecting against it
+- **Why:** Proactive safety, not reactive damage control
 
-**6. Food (Now Drug-Aware):** ✅ **IMPLEMENTED**
-- **NAC post-platinum** → Specifically mitigates carboplatin DNA repair stress
+**6. Food:**
+- **NAC post-platinum** → Reduces oxidative stress
 - **Vitamin D for HRD context** → DNA repair support
-- **🆕 Shows WHY this food for THIS drug** → "Glutathione precursor supports DNA repair"
-- **Why:** Personalized nutrition, not generic advice
+- **Why:** Supplements can help or hurt depending on timing
 
 **7. Trials:**
 - **Biomarker-aligned trials** → HRD-high, MSI-H, germline-negative
@@ -626,88 +650,139 @@ System adapts when biology adapts. Response isn't lost. Toxicity prevented. Comp
 
 ## 📊 SUMMARY: WHAT THIS ALL MEANS
 
-### **Before (January 2025):**
+### **Before (Current Platform):**
 - ✅ Recommends individual drugs
 - ✅ Finds clinical trials
-- ✅ Validates food/supplements (generic)
-- ❌ Missing: Toxicity-aware nutrition, resistance management, combinations, monitoring
+- ✅ Validates food/supplements
+- ❌ Missing: Resistance management, combinations, monitoring, toxicity prevention
 
-### **After (January 28, 2025 - MOAT COMPLETE):**
+### **After (Advanced Care Plan):**
 - ✅ Recommends individual drugs
-- ✅ Finds clinical trials
-- ✅ **🆕 Toxicity-aware nutrition** → "NAC mitigates YOUR carboplatin toxicity" *(IMPLEMENTED)*
-- ✅ **🆕 Drug-specific food timing** → "Take post-chemo, not during" *(IMPLEMENTED)*
-- ✅ **🆕 Germline-aware recommendations** → "Your BRCA1 increases DNA repair stress" *(IMPLEMENTED)*
-- ⏳ Resistance management (Phase 2)
-- ⏳ Smart combinations (Phase 2)
-- ⏳ Monitoring schedules (Phase 2)
+- ✅ Recommends smart combinations
+- ✅ Predicts resistance and prepares backup plans
+- ✅ Generates monitoring schedules
+- ✅ Prevents toxicity with pharmacogene screening
+- ✅ Adapts to progression with new plans
+- ✅ Complete, integrated care plan
 
-### **The MOAT (What No Competitor Has):**
-
-```
-Patient asks: "What should I eat during carboplatin treatment?"
-
-Generic AI: "Eat healthy. Stay hydrated. Avoid grapefruit."
-
-Our System: "You're on carboplatin (DNA repair stress) with BRCA1 (sensitive).
-             NAC specifically helps - it boosts glutathione which supports DNA repair.
-             Take 600mg twice daily AFTER infusion, not during.
-             Here's why this matters for YOU."
-```
-
-**That's the difference.** Not generic advice. Precision nutrition for precision oncology.
+### **The Difference:**
+- **Before:** Isolated recommendations (one drug at a time)
+- **After:** Complete, adaptive care plan (resistance-aware, combination-ready, monitoring-guided, toxicity-protected)
 
 ### **Why It Matters:**
-- **For Patients:** Finally answers "What can I do to help myself?"
-- **For Doctors:** Mechanism-aligned recommendations they can discuss with patients
-- **For Platform:** First-in-class toxicity-aware nutrition - no competitor has this
+- **For Patients:** Better outcomes, fewer side effects, longer survival
+- **For Doctors:** Complete care plan, not just drug recommendations
+- **For Platform:** Competitive advantage - first-in-class adaptive care planning
 
 ---
 
-## 🚀 IMPLEMENTATION STATUS
+## 📊 PRODUCTION STATUS AUDIT (January 2025)
 
-### ✅ **COMPLETED (Toxicity MOAT - January 28, 2025)**
+**Purpose:** Audit what's actually deployed vs. what's planned  
+**Date:** January 2025  
+**Status:** Mixed - Core features operational, some gaps remain
 
-| Component | Status | Location |
-|-----------|--------|----------|
-| Toxicity pathway detection | ✅ Done | `toxicity_pathway_mappings.py` |
-| Drug → MoA lookup | ✅ Done | `get_drug_moa()` |
-| Mitigating foods mapping | ✅ Done | `get_mitigating_foods()` |
-| Food validation integration | ✅ Done | `validate_food_dynamic` |
-| Frontend toxicity badge | ✅ Done | `FoodRankingPanel.jsx` |
-| End-to-end tests | ✅ Passing | `test_e2e_toxicity_moat.sh` |
+### **✅ IMPLEMENTED & OPERATIONAL**
 
-### ⏳ **IN PROGRESS (LLM Enhancement)**
+**1. Resistance Playbook** ✅ **PRODUCTION**
+- **Backend**: `POST /api/care/resistance_playbook` - Fully operational
+- **Service**: `api/services/resistance_playbook_service.py` (702 lines)
+- **Integration**: Auto-called in `ayesha_orchestrator_v2.py` and `complete_care_universal.py`
+- **Features**: 5 detection rules, 7 combo strategies, 6 next-line switches
+- **Test Coverage**: 19/19 tests passing
+- **Status**: Operational, validated, ready for use
 
-| Component | Status | Description |
-|-----------|--------|-------------|
-| LLM rationale generation | 🔜 Phase 3 | Personalized explanations |
-| Toxicity nutrition dossier | 🔜 Phase 4 | Complete clinical documents |
-| Frontend dossier view | 🔜 Phase 5 | Display and export |
+**2. Frontend Clinical Dossier** ✅ **PRODUCTION**
+- **Components**: Sprints 1-3 complete (variant analysis, drug recommendations, pathway visualization, trial matching)
+- **Location**: `oncology-frontend/src/components/ClinicalDossier/`
+- **Features**: Interactive dossier, exportable, mechanism alignment scores, disclaimers
+- **Status**: Complete and operational
 
-### 📋 **PLANNED (Advanced Care Plan)**
+**3. Combination Strategies** ✅ **PRODUCTION**
+- **Implementation**: Via resistance playbook service
+- **Examples**: PARP+ATR, PARP+Bevacizumab, IO+PARP combos
+- **Status**: Operational through resistance playbook endpoint
 
-| Component | Status | Description |
-|-----------|--------|-------------|
-| ResistancePlaybook | ⏳ Planned | Predict resistance, prepare backups |
-| MonitoringPlan | ⏳ Planned | MRD cadence, re-biopsy triggers |
-| Combination strategies | ⏳ Planned | Smart drug pairs |
+**4. Treatment Line Intelligence** ✅ **PRODUCTION**
+- **Implementation**: Part of drug efficacy/WIWFM framework
+- **Features**: L1/L2/L3 context awareness, platinum sensitivity logic
+- **Status**: Operational in drug ranking
+
+**5. Toxicity & Pharmacogenomics** ⚠️ **PARTIAL**
+- **Backend**: PharmGKB endpoints exist at `/api/pharmgkb/*` (metabolizer_status, drug_interaction)
+- **Frontend**: `usePharmGKB.js` hook exists in ClinicalGenomicsCommandCenter
+- **Missing**: Unified `/api/care/pharmacogene_detect` endpoint (marked as "not_implemented")
+- **Status**: Functional but not unified - PharmGKB endpoints work independently
+
+### **❌ NOT IMPLEMENTED**
+
+**1. Monitoring Plan Generator** ❌ **NOT IMPLEMENTED**
+- **Status**: Marked as "not_implemented" in `api/routers/care.py`
+- **Endpoint**: `/api/care/monitoring_plan` - Does not exist
+- **Gap**: No automated MRD cadence, re-biopsy triggers, imaging schedules
+- **Workaround**: Manual monitoring guidance in documentation only
+
+**2. Unified Pharmacogene Detection** ❌ **NOT IMPLEMENTED**
+- **Status**: PharmGKB endpoints exist but not unified under `/api/care/pharmacogene_detect`
+- **Gap**: No single endpoint for comprehensive PGx screening
+- **Workaround**: Use individual PharmGKB endpoints (`/api/pharmgkb/metabolizer_status`, `/api/pharmgkb/drug_interaction`)
+
+### **🔗 CONNECTION TO BATTLE MAP FRAMEWORK**
+
+**Pillar 2: Genomic Evolution** ✅ **STRONG**
+- Resistance Playbook operational → Detects resistance mechanisms
+- Drug Efficacy (S/P/E) operational → Pathway disruption scores
+- Mechanism-based trial matching operational → 7D mechanism vectors
+- **Status**: Well-covered, production-ready
+
+**Pillar 6: Toxicity/Tolerance** ⚠️ **PARTIAL**
+- PharmGKB endpoints operational → Individual gene-drug interactions work
+- Missing unified endpoint → No comprehensive screening workflow
+- **Status**: Functional but fragmented - needs unification
+
+**Pillar 1: Tumor Burden** ✅ **STRONG** (via Battle Map)
+- CA-125 Intelligence operational → Biomarker tracking
+- Trigger system operational → Resistance detection
+- **Status**: Well-covered (separate from Advanced Care Plan)
+
+**Missing Integration Points:**
+- ❌ Monitoring Plan → No automated MRD/imaging cadence (Pillar 1 gap)
+- ⚠️ Pharmacogene Detection → Fragmented (Pillar 6 gap)
+
+### **📋 PRODUCTION READINESS SUMMARY**
+
+| Feature | Backend | Frontend | Integration | Status |
+|---------|---------|----------|-------------|--------|
+| Resistance Playbook | ✅ | ⚠️ Partial | ✅ | **Production** |
+| Clinical Dossier | ✅ | ✅ | ✅ | **Production** |
+| Combination Strategies | ✅ | ⚠️ Partial | ✅ | **Production** |
+| Treatment Line Intelligence | ✅ | ✅ | ✅ | **Production** |
+| Pharmacogenomics | ⚠️ Fragmented | ⚠️ Partial | ❌ | **Partial** |
+| Monitoring Plan | ❌ | ❌ | ❌ | **Not Implemented** |
+
+**Key Gaps:**
+1. **Monitoring Plan**: No automated MRD/imaging cadence generation
+2. **Unified PGx**: PharmGKB works but needs unified endpoint
+3. **Frontend Integration**: Resistance playbook exists but needs UI components
 
 ---
 
-## 🎯 THE PATIENT MOAT
+## 🚀 NEXT STEPS
 
-The toxicity-aware nutrition system answers the question every cancer patient asks:
+**Immediate Priorities (P0):**
+1. **Monitoring Plan Endpoint** - Build `/api/care/monitoring_plan` (1-2 weeks)
+2. **Unified PGx Endpoint** - Create `/api/care/pharmacogene_detect` wrapper (1 week)
+3. **Frontend Integration** - Add resistance playbook UI components (1 week)
 
-> **"What can I do to help myself during treatment?"**
+**Medium-Term (P1):**
+4. **Frontend Integration** - UI cards for monitoring plan, PGx flags
+5. **Care Plan Export** - PDF/Markdown export with all components
+6. **Testing & Validation** - Test with Ayesha's profile, validate predictions
 
-Before: "Eat healthy."  
-After: "Your carboplatin + BRCA1 = DNA repair stress. NAC helps. Take it after infusion. Here's why."
-
-**That's not technology for technology's sake. That's finally answering the question.**
+**Timeline:** 3-4 weeks (backend + frontend + testing)  
+**Priority:** P0 for monitoring plan, P1 for unified PGx
 
 ---
 
-**⚔️ THE MOAT IS BUILT. NOW WE'RE MAKING IT SMARTER WITH LLM AND DEEPER WITH DOSSIERS. ⚔️**
-
+**⚔️ THIS IS HOW WE BUILD A COMPLETE CANCER CARE SYSTEM - NOT JUST DRUG RECOMMENDATIONS, BUT ADAPTIVE, RESISTANCE-AWARE, TOXICITY-PROTECTED CARE PLANS THAT EVOLVE WITH THE PATIENT ⚔️**
 

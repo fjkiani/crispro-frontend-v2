@@ -1023,4 +1023,3 @@ MOAT_Advantage = (
 
 
 
-

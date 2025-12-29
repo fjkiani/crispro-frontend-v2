@@ -1,12 +1,12 @@
 # ⚔️ BEFORE vs AFTER: Treatment Line Integration Impact
 
 **Comparison Date**: October 31, 2024  
-**Use Case**: Ayesha's Ovarian Cancer Case (BRCA1 Q356* Nonsense Mutation)  
+**Use Case**: Ovarian Cancer Case - Second-Line Post-Platinum (BRCA1 Q356* Nonsense Mutation)  
 **Scenario**: Second-line therapy selection post-platinum failure
 
 ---
 
-## 📊 SCENARIO: Ayesha's Case
+## 📊 SCENARIO: Ovarian L2 Post-Platinum Case
 
 **Patient Context**:
 - **Diagnosis**: Ovarian cancer with germline BRCA1 Q356* (nonsense mutation)

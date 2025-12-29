@@ -617,4 +617,3 @@ assert 'moat_analysis' in result
 
 
 
-

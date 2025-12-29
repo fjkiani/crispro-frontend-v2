@@ -1,8 +1,18 @@
 # SAE Intelligence System: Strategic Intelligence Framework
 
 **Owner:** Zo (Drug Efficacy, Mechanism-Based Trial Matching, Integrated Platform)  
-**Status:** ✅ **ACTIVE** - TRUE SAE VALIDATED (AUROC 0.783 > PROXY 0.628)  
+**Status:** ✅ **ACTIVE** - SAE program running (see note below on validation contracts)  
 **Last Updated:** December 23, 2025
+
+---
+
+## ⚠️ IMPORTANT: Validation contracts must be stated explicitly
+
+This workspace contains **multiple cohorts/label contracts** that yield different answers for “platinum resistance.”
+
+- For the consolidated publication package and canonical claims, start at:  
+  `.cursor/MOAT/SAE_INTELLIGENCE/Publication-1/SAE_RESISTANCE/ERRATA.md`
+- Externally validated platinum resistance biomarker currently in-repo: **MFAP4 (AUROC 0.763, GSE63885)**.
 
 ---
 

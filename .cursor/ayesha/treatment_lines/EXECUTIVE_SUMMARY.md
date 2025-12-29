@@ -1,7 +1,7 @@
 # ⚔️ TREATMENT LINE INTEGRATION - EXECUTIVE SUMMARY
 
 **Mission**: Integrate treatment line sequencing into CrisPRO platform  
-**Pathway**: Hereditary Cancer (Ayesha's Case)  
+**Pathway**: Hereditary Cancer (Ovarian L2 Case)  
 **Date**: October 31, 2024  
 **Status**: ✅ **100% COMPLETE & PRODUCTION-READY**
 
@@ -34,7 +34,7 @@ Enable CrisPRO platform to:
 ✅ **Full documentation** (1,600+ lines)
 
 ### **Clinical Validation**
-✅ **Ayesha's case**: Olaparib confidence 0.80 → 0.72 (-8% for DNA repair cross-resistance)  
+✅ **Ovarian L2 case**: Olaparib confidence 0.80 → 0.72 (-8% for DNA repair cross-resistance)  
 ✅ **Dr. Lustberg's case**: Tucatinib confidence 0.85 → 0.81 (-4% for low TKI cross-resistance)  
 ✅ **First-line**: No penalty for treatment-naive patients  
 ✅ **Confidence floor**: Never goes negative
@@ -80,7 +80,7 @@ Enable CrisPRO platform to:
 
 ### **Testing** (700+ lines)
 - 25 unit tests (panel config, cross-resistance, treatment line integration)
-- 4 integration tests (Ayesha, Dr. Lustberg, first-line, confidence floor)
+- 4 integration tests (Ovarian L2, Dr. Lustberg, first-line, confidence floor)
 - E2E smoke test script (4 test cases)
 - **All tests passing (29/29)**
 
@@ -125,7 +125,7 @@ UI → Display:
 
 ### **Before Treatment Line Integration**
 ```
-Ayesha (Ovarian L2 post-platinum):
+Ovarian L2 post-platinum case:
 - Olaparib confidence: 0.80
 - No context about prior platinum therapy
 - No cross-resistance assessment
@@ -133,7 +133,7 @@ Ayesha (Ovarian L2 post-platinum):
 
 ### **After Treatment Line Integration**
 ```
-Ayesha (Ovarian L2 post-platinum):
+Ovarian L2 post-platinum case:
 - Olaparib confidence: 0.72 ⬇️ (-8%)
 - Line appropriateness: 1.0 (NCCN Cat 1)
 - Cross-resistance risk: 0.4 (DNA repair overlap)
@@ -182,7 +182,7 @@ Success Rate: 100%
 ```
 
 ### **Clinical Validation**
-- ✅ Ayesha (Ovarian L2 post-platinum): -8% penalty ✓ Expected
+- ✅ Ovarian L2 post-platinum case: -8% penalty ✓ Expected
 - ✅ Dr. Lustberg (Breast L3 post-T-DXd): -4% penalty ✓ Expected
 - ✅ First-line (no prior therapies): 0% penalty ✓ Expected
 - ✅ Confidence floor: Never negative ✓ Enforced

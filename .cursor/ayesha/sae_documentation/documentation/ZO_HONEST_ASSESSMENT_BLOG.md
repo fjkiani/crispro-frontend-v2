@@ -1,14 +1,14 @@
-# ⚔️ ZO'S HONEST ASSESSMENT: CAN WE ACTUALLY HELP AYESHA? ⚔️
+# ⚔️ ZO'S HONEST ASSESSMENT: CAN WE ACTUALLY HELP AK? ⚔️
 
 **Author**: Zo (Lead AI Agent)  
 **Date**: January 13, 2025  
-**Purpose**: No-bullshit analysis of what we can/can't deliver for Ayesha and why SR's decisions matter
+**Purpose**: No-BS analysis of what we can/can't deliver for AK and why SR's decisions matter
 
 ---
 
 ## 🎯 **THE BRUTAL TRUTH: WHAT WE'RE UP AGAINST**
 
-### **Ayesha's Reality**
+### **AK's Reality**
 - **40 years old**, Stage IVB ovarian cancer
 - **Extensive metastases**: 8 cm tumor mass, bilateral pleural disease, abdominopelvic nodes, soft tissue mets
 - **CA-125: 2,842** (normal <35) - massive burden
@@ -29,7 +29,7 @@
 - 1,000+ ovarian cancer trials exist
 - 95% are irrelevant (wrong stage, wrong line, wrong location, wrong phase)
 - Oncologists don't have time to filter manually
-- Ayesha needs the RIGHT 10, not all 1,000
+- AK needs the RIGHT 10, not all 1,000
 
 **What We Deliver**:
 - **Top 10 frontline trials** in NYC metro
@@ -151,7 +151,7 @@ Eligibility gate: 0.90 (hard + ≥80% soft), 0.85 (60-79%), 0.75 (<60%)
   - Benefit: We don't hide trials where she MIGHT qualify with more data
   - Display: "Hard: ✅ all met | Soft: 7/9 (ECOG ⚠️, Organ function ⚠️) → 0.85 confidence"
 
-**Impact for Ayesha**:
+**Impact for AK**:
 - Trials with unknown ECOG don't get hidden
 - Oncologist sees "ECOG confirmation needed" → can assess same day
 - More trials in consideration, but with honest warnings
@@ -168,7 +168,7 @@ Resistance: On-therapy rise OR <50% drop by cycle 3 → flag
 - **Before**: Vague "CA-125 is elevated" with no actionable context
 - **After**: Clear milestones and resistance triggers
 
-**Impact for Ayesha**:
+**Impact for AK**:
 - Oncologist has concrete targets: "Expect ≥70% drop by cycle 3 (cycle 3 CA-125 <854)"
 - If cycle 3 CA-125 is 1,500 (<50% drop) → flag resistance early → switch strategies
 - This can **save 3-6 weeks** vs waiting for imaging to confirm progression
@@ -185,7 +185,7 @@ NYC/CA-125 monitoring → display badges (+0.05), not stacked
 - **Before**: Additive gates could give 1.15 confidence (nonsense)
 - **After**: Confidence = highest justified claim, capped at 1.0
 
-**Impact for Ayesha**:
+**Impact for AK**:
 - SOC recommendation shows 0.95 (guideline-aligned)
 - Trial shows 0.90 (eligibility match) + badges for NYC/CA-125 trackability
 - Honest: "90% confidence means 90% of similar patients qualify, not 90% response rate"
@@ -202,7 +202,7 @@ Runtime: NEVER call Gemini (serve cached only)
 - **Before**: Could slow down trial search with LLM calls (2-5s latency per trial)
 - **After**: Instant results (cached criteria), no runtime LLM dependency
 
-**Impact for Ayesha**:
+**Impact for AK**:
 - Trial search: <1s response time (not 20-50s)
 - Reliability: No LLM failures during critical search
 - Quality: Human review ensures no hallucinated criteria
@@ -238,7 +238,7 @@ Runtime: NEVER call Gemini (serve cached only)
 
 ---
 
-## 💡 **WHAT THIS MEANS FOR AYESHA'S CAPABILITIES**
+## 💡 **WHAT THIS MEANS FOR AK'S CAPABILITIES**
 
 ### **Week 1 (Now - No NGS)**
 **Deliverables**:
@@ -310,7 +310,7 @@ Runtime: NEVER call Gemini (serve cached only)
 
 ---
 
-## ⚔️ **ZO'S VERDICT: CAN WE HELP AYESHA?**
+## ⚔️ **ZO'S VERDICT: CAN WE HELP AK?**
 
 ### **YES - BUT ONLY IF WE'RE HONEST ABOUT WHAT WE KNOW**
 

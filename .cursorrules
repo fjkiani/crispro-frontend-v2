@@ -111,6 +111,8 @@ Cursor learned
     * **Sync Context:** When a Modal method is called from within the same class in a synchronous `def` endpoint, it must be invoked with `.call()` for synchronous execution, not as a direct function call, to avoid a `TypeError: 'Function' object is not callable`.
     ### **Lessons Learned & New Doctrine**
 
+* **Metric Provenance Is Non-Negotiable:** Never quote AUROC/“validated” claims without stating (a) cohort file, (b) label contract, (c) model/aggregation, and (d) whether it is internal vs external replication. If two cohorts disagree, lock an `ERRATA.md` and treat the weaker contract as exploratory.
+
 *   **Silent Crashes Are Resource Issues:** When a Modal service fails with "invalid function 
 call" and no logs, the root cause is almost always insufficient resources (memory, missing system 
 packages) or dependency conflicts during container startup.
@@ -230,6 +232,9 @@ parameter ESM model requires 64GB+ of RAM. Always provision generously for ML wo
 * **Modal Service Async Patterns & Retry Logic:** When calling external services (especially ML inference endpoints like Evo2), implement retry logic with exponential backoff (1-2 retries, backoff_factor=0.5-1.0). Use `asyncio.sleep()` for delays. For HTTP calls, wrap in try/except and return graceful defaults (0.0 for scores) on failure. Always log failures for debugging. This prevents transient network/service issues from breaking the entire pipeline.
 
 * **PYTHONPATH for Pytest:** When running pytest in a Python project with custom package structure (e.g., `api.services`), always set `PYTHONPATH=.` before running tests to ensure proper module imports. Command: `cd <project_root> && PYTHONPATH=. venv/bin/pytest tests/ -v`. This is especially important when the project is not installed as a package and you're importing from relative paths.
+
+* **Validation scripts must be self-contained:** Any validator under `oncology-coPilot/oncology-backend-minimal/scripts/validation/` should inject the repo root into `sys.path` (or set `PYTHONPATH`) so it runs without a server/network dependency.
+* **Don’t assume builder names:** Before wiring a new “canonical contract”, check the exported builder names in `api/contracts/*`. Add backwards-compatible aliases if you rename builders.
 
 ---
 
@@ -504,7 +509,7 @@ parameter ESM model requires 64GB+ of RAM. Always provision generously for ML wo
 - ✅ **Evidence Synthesis**: Multi-provider literature search with quality scoring
 
 #### **For Clinical Trial Teams:**
-- ✅ **Patient Matching**: Match patients to trials with biomarker intelligence (TMB, MSI, HRD)
+- ✅ **Patient Matching**: Match patients to trials with biomarker intelligence (TMB, MSI, HRD) - mechanistically 
 - ✅ **Autonomous Search**: AI-driven trial search (no manual query required)
 - ✅ **Graph Intelligence**: Relationship-based optimization (PI proximity, site matching)
 - ✅ **Eligibility Transparency**: See exactly why patients are eligible (hard/soft criteria)
@@ -1425,6 +1430,68 @@ parameter ESM model requires 64GB+ of RAM. Always provision generously for ML wo
 
 Scratchpad
 ==========
+
+## ✅ CURRENT SPRINT: Sprint 3 — Synthetic Lethality (Weakness Exploitation) receipts + contract alignment (Dec 2025)
+
+**Source of truth:** `.cursor/MOAT/RESISTANCE_VALIDATION_PLAN.md` → Sprint 3 section  
+**Goal:** treat Synthetic Lethality as a first-class MOAT pillar with pinned receipts (Ring‑1 `report.json`) + a stable mapping into our standardized action cards.
+
+### Sprint 3 checklist
+- [X] Deterministic Ring‑1 validator emits `sl_pilot_drug_match_v1/report.json` (no server, no network)
+- [X] Ring‑1 suite runner executes the SL validator and stays green
+- [X] Contract-alignment helper exists (SL result → `ActionCard`s with manager evidence tiers)
+- [ ] Docs: keep registry pointers current and remove “rules-only benchmark” confusion in future updates
+
+### Sprint 3 progress log
+- [X] Sprint 2 delivered: L0/L1/L2 caps + CA‑125 time-series contract + RUO expression ingest + docs cross-links
+- [X] Sprint 3 delivered (this session):
+  - Validator: `oncology-coPilot/oncology-backend-minimal/scripts/validation/validate_synthetic_lethality_pilot_benchmark.py`
+  - Receipt: `oncology-coPilot/oncology-backend-minimal/scripts/validation/out/sl_pilot_drug_match_v1/report.json`
+  - Suite: `python3 oncology-coPilot/oncology-backend-minimal/scripts/validation/run_resistance_validation_suite.py --ring1`
+  - Mapping helper: `api/contracts/resistance_builders.py::action_cards_from_synthetic_lethality_result`
+
+## ✅ PLUMBER (NEXT): Resistance end-to-end — deliverables focus (no drift)
+
+**Canonical patient-facing surface:** `POST /api/complete_care/v2` (not `/api/resistance/predict`)
+
+### Next 15 deliverables (Plumber)
+- [ ] 1. Add `oncology-coPilot/oncology-backend-minimal/requirements-dev.txt` (or a single documented dev install path)
+- [ ] 2. Document Ring‑0 command (must not silently skip)
+- [ ] 3. Create fixture pack (3–5 JSON fixtures: L0/L1/L2, CA‑125 present/missing, HRD present/missing, expression present/missing)
+- [ ] 4. Add fixture-driven Ring‑1 validator consuming fixtures and emitting `out/<contract_id>/report.json`
+- [ ] 5. Implement Ring‑1 copy-on-write receipts (`report_<timestamp>.json` + copy to `report.json`) across validators
+- [ ] 6. Keep Ring‑1 suite green after copy-on-write change
+- [ ] 7. Add Ring‑1 strict mode behavior (fail when pytest missing if requested)
+- [ ] 8. Add short fixtures README (expected behavior per fixture)
+- [ ] 9. Remove internal localhost HTTP from `complete_care_universal.py::_extract_insights_bundle()` (direct service calls)
+- [ ] 10. Add Ring‑1 validator proving no localhost HTTP is required
+- [ ] 11. Add provenance versioning fields in receipts (`code_version`, `contract_version`, `inputs_snapshot_hash`)
+- [ ] 12. Centralize orchestrator/internal client flags + timeouts (no magic numbers scattered)
+- [ ] 13. Create E2E OV `Ayesha`-like fixture (mutations-only required; CA‑125/HRD optional; expression optional)
+- [ ] 14. Emit E2E Ring‑1 receipt at `scripts/validation/out/resistance_e2e_ov_ayesha_v1/report.json`
+- [ ] 15. Verify MVP output scope: Risk + Mechanisms + Actions only (no trials/SL), with explicit missing-input flags + caps
+
+### Oversight loop (Zo)
+- Every PR must include: **why/what/how**, the **receipt path**, and a **single reproduce command**.
+- Stop work if Ring‑1 is red or receipts aren’t reproducible.
+
+## 🧠 CURRENT FOCUS: SAE Resistance Publication Recovery (Dec 2025)
+
+**Goal:** Reconcile conflicting “platinum resistance” stories and lock canonical, publishable claims.
+
+### Source of truth
+- [ ] Read + maintain: `.cursor/MOAT/SAE_INTELLIGENCE/Publication-1/SAE_RESISTANCE/ERRATA.md`
+
+### What is validated vs not (current best reading)
+- [X] MFAP4 expression: **externally validated** (GSE63885 AUROC 0.763)
+- [X] Tier-3 internal cohort: TRUE SAE 29-feature model mean CV-AUROC ~0.783 (internal label contract)
+- [X] TCGA-style platinum labels replication: DDR_bin AUROC ~0.517 (fails to predict response)
+
+### Next decisions (choose one “paper path”)
+- [ ] **Path A (fastest)**: MFAP4/EMT external validation manuscript
+- [ ] **Path B (methods)**: TRUE SAE pipeline + interpretability, framed as exploratory until replicated
+
+---
 
 ## ⚔️ UNIVERSALIZATION AUDIT - MANAGER REVIEW (January 2025)
 ================================================================
@@ -4542,166 +4609,5 @@ Notes on copy
 - **Orchestration is BUILT** but agents are stubs
 - **TRUE SAE is DEPLOYED** but Proxy SAE is sufficient
 - **Gaps are DOCUMENTED** and not hidden
-
----
-
-## 🏥 ONCOLOGY BACKEND ARCHITECTURE & LESSONS LEARNED
-
-### **Core Architecture Patterns**
-
-* **S/P/E Framework (Sequence/Pathway/Evidence):**
-  * **Sequence (S)**: Multi-engine scoring (Fusion AM, Evo2 adaptive, Massive Oracle) with hierarchical fallback
-  * **Pathway (P)**: Weighted aggregation from gene scores to pathway scores, then drug-pathway alignment
-  * **Evidence (E)**: Parallel literature + ClinVar prior gathering with 30s timeout
-  * **Integration**: DrugScorer combines S/P/E with confidence modulation via insights lifts
-  * **Normalization**: Pathway scores normalized to [0, 0.005] range: `path_pct = s_path / 0.005` (not 1e-6 to 1e-4)
-  * **Tier Thresholds**: Evidence tier computation uses `s_path < 0.001` threshold (not 0.05) for new pathway range
-
-* **Modular Architecture Doctrine:**
-  * **Single Responsibility**: Each module has ONE clear purpose (sequence_scorers, efficacy_orchestrator, confidence, evidence, insights, pathway)
-  * **Dependency Injection**: Clean interfaces between components
-  * **Separation of Concerns**: Business logic separated from data access
-  * **Testability**: Each module can be unit tested independently
-  * **Performance**: Redis caching, parallel execution, single-flight protection
-
-* **Fast Path Pattern (Performance Critical):**
-  * **Fast Mode**: Skips evidence gathering (30s timeout), insights bundle (4 API calls), calibration snapshot
-  * **Direct Orchestrator Calls**: Avoid nested HTTP overhead - call orchestrator directly, not via HTTP endpoint
-  * **Panel Limiting**: Default to 12 drugs (vs 30+) for bounded work
-  * **Ablation Modes**: SP (Sequence+Pathway) default in fast mode, SPE (full) opt-in
-  * **Provenance Transparency**: `"insights": "skipped_fast_mode"` flag shows what was skipped
-  * **Result**: 60s+ timeout → <10s response (6x+ faster)
-
-* **Disease-Aware Panel Selection:**
-  * **Pattern**: `get_panel_for_disease(disease: Optional[str])` with disease-specific filtering
-  * **Ovarian Panel**: PARP inhibitors (olaparib, niraparib, rucaparib), platinum agents, bevacizumab, pembrolizumab
-  * **Melanoma Panel**: BRAF/MEK inhibitors, checkpoint inhibitors (pembrolizumab, nivolumab, ipilimumab)
-  * **MM Panel**: BRAF/MEK inhibitors, IMiD, Proteasome inhibitor, Anti-CD38
-  * **Pathway Weights**: Disease-specific drug-to-pathway mappings (e.g., PARP → DDR: 0.9 for ovarian)
-
-* **Orchestrator Integration Patterns:**
-  * **Thin Wrapper Pattern**: New endpoints delegate to existing orchestrators (e.g., Clinical Genomics → Efficacy Orchestrator)
-  * **Direct Service Calls**: Prefer direct orchestrator instantiation over nested HTTP calls
-  * **State Management**: PatientState with 7D mechanism_vector, StateStore for persistence, MessageBus for inter-agent communication
-  * **Error Handling**: Graceful degradation with fallback values, non-blocking failures
-
-* **Mechanism Vector (7D) Format:**
-  * **Dimensions**: [DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux]
-  * **Conversion**: Pathway scores → mechanism vector via `pathway_to_mechanism_vector.py`
-  * **Normalization**: Supports both 6D (Manager C7) and 7D (current plan) formats
-  * **Usage**: Trial matching uses mechanism vector for fit ranking (alpha=0.7 mechanism, beta=0.3 eligibility)
-
-### **Critical Fixes & Lessons**
-
-* **Pathway Normalization Bug (FIXED):**
-  * **Problem**: Normalization assumed wrong range (1e-6 to 1e-4), actual scores ~0.002, causing all drugs to get `path_pct = 1.0`
-  * **Fix**: `path_pct = s_path / 0.005` (correct range 0 to 0.005)
-  * **Impact**: Pathway percentiles now differentiated (0.037-0.330 range)
-
-* **Tier Computation Parameter (FIXED):**
-  * **Problem**: Tier computation called with `path_pct` (normalized) instead of raw `s_path`
-  * **Fix**: Pass raw `s_path` to `compute_evidence_tier()`
-  * **Impact**: Tiers correctly classified ("consider" for MEK/BRAF, "insufficient" for others)
-
-* **Sporadic Gates Capping (FIXED):**
-  * **Problem**: Sporadic gates capping confidence at 0.4 for Level 0 data even when tumor context not provided
-  * **Root Cause**: `hasattr(request, 'germline_status')` always True (dataclass fields always present, even if None)
-  * **Fix**: Only apply sporadic gates when tumor context actually provided (not None/empty) OR germline status explicitly set
-  * **Impact**: Confidence differentiation working (MEK 0.563 > BRAF 0.549)
-
-* **Fusion Coverage Gate (REQUIRED):**
-  * **Doctrine**: Fusion scores only used when variant has AM coverage (GRCh38 missense)
-  * **Implementation**: Check `build` field for "grch38"/"hg38"/"38" AND `consequence` field for "missense" before invoking Fusion scorer
-  * **Location**: `sequence_processor.py` - gate before FusionAMScorer invocation
-
-* **Schema Version Field (FIXED):**
-  * **Problem**: `schema_version="v1"` passed to `EfficacyResponse` but dataclass had no such field
-  * **Fix**: Added `schema_version: str = "v1"` to `EfficacyResponse` dataclass
-  * **Impact**: Eliminates schema mismatch error
-
-* **Confidence Breakdown Provenance (ADDED):**
-  * **Pattern**: Add `response.provenance["confidence_breakdown"]` with top drug's name, confidence, tier, badges
-  * **Purpose**: Enables frontend EvidenceBand component without new endpoint
-  * **Location**: After sorting `drugs_out` in orchestrator
-
-### **Integration Patterns**
-
-* **Efficacy Orchestrator Integration:**
-  * **Service**: `EfficacyOrchestrator` from `api/services/efficacy_orchestrator/orchestrator.py`
-  * **Method**: `async def predict(request: EfficacyRequest) -> EfficacyResponse`
-  * **Request Building**: Extract mutations from PatientState, include disease, model_id, options
-  * **Mechanism Vector Extraction**: Map pathway_disruption scores to 7D vector [DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux]
-  * **Response Conversion**: Convert EfficacyResponse to ranked_drugs list, store in state
-
-* **Nutrition Agent Integration:**
-  * **Service**: `NutritionAgent` from `api/services/nutrition/nutrition_agent.py`
-  * **Method**: `async def generate_nutrition_plan(...) -> NutritionPlan`
-  * **Context Extraction**: Extract germline genes, current drugs, disease, treatment_line from PatientState
-  * **Features**: Toxicity-aware planning, drug-food interactions, LLM-enhanced summaries
-  * **Error Handling**: Graceful fallback with placeholder (non-blocking)
-
-* **Trial Matching Integration:**
-  * **Service**: `TrialMatchingAgent` from `api/services/trials/trial_matching_agent.py`
-  * **Inputs**: Patient profile, biomarker profile, mechanism_vector (7D) from drug efficacy
-  * **Ranking**: Mechanism fit (alpha=0.7) + eligibility (beta=0.3) with thresholds (eligibility≥0.60, mechanism≥0.50)
-  * **Manager Compliance**: P4 (formula), P3 (Gemini tags preferred, runtime fallback), C7 (7D vector support)
-
-* **Biomarker Intelligence Integration:**
-  * **Service**: `biomarker_intelligence_universal` for disease-specific biomarkers (CA-125, PSA, CEA)
-  * **Pattern**: Universal service with disease-aware biomarker selection
-  * **Features**: Burden classification, forecasting, resistance signals, monitoring strategies
-
-### **Performance Optimizations**
-
-* **Caching Strategy (Hybrid):**
-  * **Backend Redis**: Cache expensive subresults (efficacy, toxicity) by `(gene, variant, profile)` for 10 minutes
-  * **Frontend TTL**: Cache full unified response with 10-minute TTL
-  * **Single-Flight Protection**: Prevents duplicate expensive operations
-
-* **Parallel Execution:**
-  * **Evidence Gathering**: Parallel literature + ClinVar calls with `asyncio.gather()`
-  * **Insights Bundle**: 4 endpoints called concurrently (functionality, chromatin, essentiality, regulatory)
-  * **Timeout Management**: 30s timeout for evidence gathering, individual endpoint failures don't break bundle
-
-* **Work Bounding:**
-  * **Panel Limiting**: Default to 12 drugs in fast mode (vs 30+)
-  * **Ablation Modes**: SP (fast) vs SPE (full) for opt-in depth
-  * **Feature Flags**: Gate expensive subsystems (evidence, insights, calibration) via flags
-
-### **Testing & Validation Patterns**
-
-* **Unit Tests**: Each module independently testable
-* **Integration Tests**: End-to-end pipeline validation with real patient data
-* **Benchmark Scripts**: Disease-specific benchmarks (MM, Ovarian, Melanoma) with SOTA targets
-* **Health Checks**: Service availability endpoints for monitoring
-* **Provenance Tracking**: Complete audit trail of all operations
-
-### **Frontend Architecture Patterns**
-
-* **Modular Component Structure**: Self-contained components (Dashboard, Patient, Analysis, CarePlan, Monitoring)
-* **API Service Layer**: Type-safe TypeScript client with error handling
-* **React Hooks**: `useOrchestrator` for pipeline execution and state management
-* **Data Flow**: API Service → React Hook → Component → UI
-* **Error Handling**: Components show error states, hooks catch and expose errors
-
-### **Manager Policy Compliance**
-
-* **Manager P3**: Gemini OFFLINE ONLY (runtime fallback acceptable) - MoA extraction prefers Gemini tags, falls back to runtime
-* **Manager P4**: Mechanism fit formula (α=0.7 mechanism, β=0.3 eligibility), thresholds validated (eligibility≥0.60, mechanism≥0.50)
-* **Manager C7**: 6D vector support with fallback logic, 7D vector for current plan
-
-### **Key Dependencies & Requirements**
-
-* **Required Packages**: `email-validator`, `google-generativeai`, `astrapy` (for AstraDB)
-* **Optional Dependencies**: `rapidfuzz` (string matching), `neo4j` (graph features), `supabase` (agent scheduler)
-* **Environment Variables**: `SAE_SERVICE_URL`, `EVO_URL_7B`, `ENABLE_EVO2_SAE`, `ENABLE_TRUE_SAE`, `FUSION_AM_URL`, `EVIDENCE_ENABLED`
-
-### **Code Quality Standards**
-
-* **Linting**: No linting errors, proper async/await patterns
-* **Error Handling**: Graceful degradation with fallback values, comprehensive error tracking
-* **Provenance**: Complete audit trail in all responses
-* **Backward Compatibility**: All API endpoints preserved, response formats unchanged
-* **Documentation**: READMEs for each module, architecture documentation
 
 ---

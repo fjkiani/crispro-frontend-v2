@@ -413,7 +413,7 @@
     [ ] Display TreatmentLineProvenance in results
     [ ] Display SAETreatmentLineChips in results
 
-[ ] Test Ayesha's case end-to-end
+[ ] Test Ovarian L2 case end-to-end
     [ ] L1: No prior therapies → confidence 0.80-0.85
     [ ] L2: Post-carboplatin+paclitaxel → olaparib confidence 0.72 (-8%)
     [ ] L3: Post-olaparib → topotecan confidence 0.68 (-12%)
@@ -452,7 +452,7 @@ Demo Flow:
 3. Add state management
 4. Wire to API payload
 5. Display provenance in results
-6. Test with Ayesha's case
+6. Test with Ovarian L2 case
 
 ### **P1: Integrate CoPilot (30 min)**
 1. Open `oncology-coPilot/oncology-frontend/src/components/CoPilot/CoPilotLogic.jsx`

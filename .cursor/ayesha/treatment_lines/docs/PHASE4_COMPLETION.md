@@ -152,7 +152,7 @@ User Flow:
 
 ## 📊 EXAMPLE OUTPUT
 
-### Ayesha's Case: Ovarian L2 Post-Platinum → Olaparib
+### Ovarian L2 Case: Post-Platinum → Olaparib
 
 **Treatment History Form Input:**
 ```javascript
@@ -256,7 +256,7 @@ Treatment Line Features:
 ### Phase 5: Testing & Documentation (1h)
 
 **Tasks**:
-1. Create end-to-end smoke test (Ayesha case)
+1. Create end-to-end smoke test (Ovarian L2 case)
 2. Document before/after confidence comparison
 3. Create HEREDITARY_PATHWAY_COMPLETE.md
 4. Archive hereditary work with completion summary

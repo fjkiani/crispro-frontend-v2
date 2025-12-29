@@ -1,7 +1,7 @@
 # 🎯 MOAT ORCHESTRATION - SCOPE SYNTHESIS
 
 **Purpose:** Complete understanding of what we're building, what's done, and what's next  
-**Date:** January 2025  
+**Date:** December 2025  
 **Status:** Foundation Complete ✅ | Agents In Progress ⏳
 
 ---
@@ -115,7 +115,7 @@ A patient's genomic data enters the system once. From that moment, an agentic sw
 | # | Component | Status | Priority |
 |---|-----------|--------|----------|
 | 09 | **Trigger System** | ⬜ TODO | 🟡 HIGH |
-| 12 | **UI Dashboard** | ⏳ IN PROGRESS | 🟡 HIGH |
+| 12 | **UI Dashboard** | ⬜ TODO | 🟢 MEDIUM |
 | 13 | **Security/Compliance** | ⬜ TODO | 🟡 HIGH |
 | 14 | **Synthetic Lethality** | ⏳ PENDING | 🟡 HIGH |
 
@@ -278,20 +278,11 @@ A patient's genomic data enters the system once. From that moment, an agentic sw
    - **Why:** Enables continuous monitoring
    - **Complexity:** Medium (4-6 hours)
 
-### 🟡 HIGH PRIORITY (Updated)
+### 🟢 MEDIUM PRIORITY
 
 5. **12_UI_DASHBOARD** - Frontend integration
-   - **Why:** User-facing interface, blocks user adoption
-   - **Complexity:** High (9-13 days total across 4 phases)
-   - **Status:** ⏳ IN PROGRESS - Universal pages audit complete, deliverables defined
-   - **See:** `.cursor/MOAT/UNIVERSAL_PAGES_AUDIT_AND_DELIVERABLES.md` for complete plan
-   - **Deliverables:**
-     - **Phase 1:** Complete Missing Components (Resistance Playbook, SAE Features) - 2-3 days
-     - **Phase 2:** Orchestrator Integration - 3-4 days
-     - **Phase 3:** Testing & Validation - 2-3 days
-     - **Phase 4:** Enhancements - 2-3 days
-     - **Total:** 9-13 days
-   - **Priority:** 🟡 HIGH (moved from MEDIUM - critical for user adoption)
+   - **Why:** User-facing interface
+   - **Complexity:** High (8-10 hours)
 
 6. **13_SECURITY_COMPLIANCE** - Security hardening
    - **Why:** Production readiness
@@ -421,7 +412,6 @@ A patient's genomic data enters the system once. From that moment, an agentic sw
 - **ORCHESTRATION_IMPLEMENTATION_STATUS.md** - What's built
 - **ORCHESTRATOR_FOUNDATION_REVIEW.md** - Foundation review
 - **agent-implementation-guide.mdc** - ⭐ **CRITICAL:** Implementation patterns & examples
-- **UNIVERSAL_PAGES_AUDIT_AND_DELIVERABLES.md** - ⭐ **UI DASHBOARD:** Complete audit and 4-phase deliverables plan
 
 ### Module Documents (in `.cursor/MOAT/orchestration/`)
 
@@ -437,7 +427,6 @@ A patient's genomic data enters the system once. From that moment, an agentic sw
 - `10_STATE_MANAGEMENT.mdc` - State management specs ✅
 - `11_API_CONTRACTS.mdc` - API specs ✅
 - `12_UI_DASHBOARD.mdc` - UI specs
-- **UNIVERSAL_PAGES_AUDIT_AND_DELIVERABLES.md** - Complete audit and deliverables plan for Universal pages (4 phases, 9-13 days)
 - `13_SECURITY_COMPLIANCE.mdc` - Security specs
 - `14_SYNTHETIC_LETHALITY_ESSENTIALITY_AGENT.mdc` - SL/Essentiality specs
 
@@ -512,38 +501,24 @@ async def _run_YOUR_agent(self, state: PatientState) -> Dict:
    - Connect to `_run_nutrition_agent()`
    - Test end-to-end
 
-4. **Universal Pages Frontend Integration (Phase 1)**
-   - Complete missing components (Resistance Playbook, SAE Features)
-   - See: `.cursor/MOAT/UNIVERSAL_PAGES_AUDIT_AND_DELIVERABLES.md`
-   - **Priority:** 🟡 HIGH - Blocks user adoption
-   - **Time:** 2-3 days
-
 ### Short Term (Next 2 Weeks)
 
-5. **Build Trigger System**
+4. **Build Trigger System**
    - Event detection logic
    - Automated action routing
    - Alert generation
 
-6. **Universal Pages Frontend Integration (Phase 2)**
-   - Orchestrator integration
-   - File upload capability
-   - Status polling and real-time updates
-   - See: `.cursor/MOAT/UNIVERSAL_PAGES_AUDIT_AND_DELIVERABLES.md`
-   - **Time:** 3-4 days
-
-7. **End-to-End Testing**
+5. **End-to-End Testing**
    - Test complete pipeline
    - Performance benchmarks
    - Error handling validation
 
 ### Medium Term (Next Month)
 
-8. **Universal Pages Frontend Integration (Phases 3-4)**
-   - Testing & Validation (Phase 3)
-   - Enhancements (Phase 4)
-   - See: `.cursor/MOAT/UNIVERSAL_PAGES_AUDIT_AND_DELIVERABLES.md`
-   - **Time:** 4-6 days
+6. **UI Dashboard**
+   - Frontend integration
+   - Real-time status updates
+   - Alert display
 
 7. **Security Hardening**
    - Authentication/authorization
@@ -560,9 +535,9 @@ async def _run_YOUR_agent(self, state: PatientState) -> Dict:
 Foundation:        ████████████████████ 100% ✅
 Core Agents:       ████████████░░░░░░░░  60% ⏳
 Advanced Features: ████░░░░░░░░░░░░░░░░  20% ⏳
-UI/UX:             ████░░░░░░░░░░░░░░░░  20% ⏳ (Universal pages audit complete, 4-phase plan ready)
+UI/UX:             ░░░░░░░░░░░░░░░░░░░░   0% ⬜
 
-Overall:           ██████████░░░░░░░░░░  50% ⏳
+Overall:           █████████░░░░░░░░░░░  45% ⏳
 ```
 
 ### Module Completion
@@ -578,7 +553,7 @@ Overall:           ██████████░░░░░░░░░░ 
 - ⏳ **04_DRUG_EFFICACY** - 80% (framework exists, needs wiring)
 - ⏳ **06_NUTRITION** - 70% (services exist, needs wiring)
 - ⬜ **09_TRIGGER_SYSTEM** - 0% (not started)
-- ⏳ **12_UI_DASHBOARD** - 30% (Universal pages audit complete, deliverables defined)
+- ⬜ **12_UI_DASHBOARD** - 0% (not started)
 - ⬜ **13_SECURITY_COMPLIANCE** - 0% (not started)
 - ⏳ **14_SYNTHETIC_LETHALITY** - 0% (MDC complete, implementation pending)
 
@@ -601,13 +576,10 @@ Overall:           ██████████░░░░░░░░░░ 
 ### The Path Forward 🚀
 
 1. **Week 1:** Build data extraction + wire Drug Efficacy
-2. **Week 2:** Wire Nutrition + Universal Pages Phase 1 (missing components)
-3. **Week 3:** Universal Pages Phase 2 (orchestrator integration) + build trigger system
-4. **Week 4:** Universal Pages Phases 3-4 (testing, enhancements) + security
+2. **Week 2:** Wire Nutrition + build trigger system
+3. **Week 3-4:** Testing, UI dashboard, security
 
-**Estimated Time to MVP:** 4 weeks of focused development
-
-**Universal Pages Deliverables:** See `.cursor/MOAT/UNIVERSAL_PAGES_AUDIT_AND_DELIVERABLES.md` for complete 4-phase plan (9-13 days total)
+**Estimated Time to MVP:** 3-4 weeks of focused development
 
 ---
 

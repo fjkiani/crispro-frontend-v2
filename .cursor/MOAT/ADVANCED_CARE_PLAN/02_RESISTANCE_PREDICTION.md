@@ -3,7 +3,9 @@
 **Purpose:** Explain what the validated resistance prediction capability means for clinical use  
 **For:** Anyone who wants to understand how we predict drug resistance  
 **Date:** January 28, 2025  
-**Last Updated:** January 28, 2025 *(MM + OV Resistance Prediction MOAT validated ✅)*
+**Last Updated:** January 29, 2025 *(MAPK PENDING REVALIDATION - see RESISTANCE_PROPHET_PRODUCTION_AUDIT.md)*
+**Source of Truth:** `.cursor/MOAT/RESISTANCE_PROPHET_PRODUCTION_AUDIT.md`
+**Mode:** Baseline-Only (RUO until CA-125 kinetics ✅)*
 
 ---
 
@@ -13,7 +15,7 @@
 
 | Cancer | Marker | Relative Risk | p-value | N | Status |
 |--------|--------|--------------|---------|---|--------|
-| **Ovarian** | MAPK pathway | 1.97 | < 0.05 | 35/469 | ✅ **SIGNIFICANT** |
+| **Ovarian** | MAPK pathway | PENDING | PENDING | - | PENDING REVALIDATION (was hard-coded) |
 | **Ovarian** | NF1 mutation | 2.10 | < 0.05 | 26/469 | ✅ **SIGNIFICANT** |
 | **Ovarian** | PI3K pathway | 1.39 | 0.02 | 108/469 | ✅ **SIGNIFICANT** |
 | **Myeloma** | DIS3 mutation | **2.08** | **0.0145** | 38/219 | ✅ **SIGNIFICANT** |
@@ -37,7 +39,7 @@
 | **TRUE SAE Service** | ✅ Deployed on Modal | Evo2 7B → 32K features |
 | **TRUE SAE Extraction** | ✅ 149 OV patients | 11 features with large effect sizes |
 | **TRUE SAE Statistical Power** | ❌ Insufficient | 0 features significant after FDR correction |
-| **Proxy SAE (Gene-Level)** | ✅ **PRODUCTION READY** | DIS3 p=0.0145, MAPK RR=1.97 |
+| **Proxy SAE (Gene-Level)** | ✅ **PRODUCTION READY** | DIS3 p=0.0145, NF1 RR=2.10 (MAPK PENDING) |
 | **Decision** | **Proxy SAE for production** | TRUE SAE can be enhancement later |
 
 ---
@@ -50,13 +52,13 @@
 
 | Before | After |
 |--------|-------|
-| "We'll monitor and see." | **OV:** "Your tumor has MAPK mutations → 2x higher platinum resistance risk." |
+| "We'll monitor and see." | **OV:** "NF1 mutation detected → 2.1x higher platinum resistance risk." (Baseline risk only) |
 | | **MM:** "DIS3 mutation detected → 2.08x higher mortality risk on current therapy." |
 
 ### Validated Predictions
 
 **Ovarian Cancer (TCGA-OV, n=469):**
-- MAPK mutations → 2x platinum resistance risk (RR=1.97, p<0.05) ✅
+- MAPK pathway → ⚠️ PENDING REVALIDATION (was hard-coded RR=1.97)
 - NF1 mutations → 2.1x platinum resistance risk (RR=2.10, p<0.05) ✅
 - PI3K mutations → 1.4x platinum resistance risk (RR=1.39, p=0.02) ✅
 
@@ -240,7 +242,7 @@ ACTIONS:
 
 | Component | Status | Evidence |
 |-----------|--------|----------|
-| OV MAPK resistance (RR=1.97) | ✅ Validated | TCGA-OV n=469 |
+| OV MAPK resistance | ⚠️ PENDING | Was hard-coded, needs revalidation |
 | OV PI3K resistance (RR=1.39) | ✅ Validated | TCGA-OV n=469 |
 | MM DIS3 resistance (RR=2.08) | ✅ Validated | MMRF n=995, p=0.0145 |
 | MM TP53 resistance (RR=1.90) | ⚠️ Trend | p=0.11, clinically relevant |
@@ -278,7 +280,7 @@ ACTIONS:
 
 1. **Gene-level (Proxy SAE) resistance prediction works:**
    - DIS3 → 2.08x mortality (MM, p=0.0145)
-   - MAPK → 2x platinum resistance (OV, p<0.05)
+   - MAPK → ⚠️ PENDING REVALIDATION (NF1 only validated: RR=2.10)
    - PI3K → 1.4x platinum resistance (OV, p=0.02)
 
 2. **TRUE SAE not required for production:**
@@ -324,4 +326,4 @@ AFTER:  "Your DIS3 mutation predicts 2.08x mortality risk.
 
 ---
 
-**⚔️ RESISTANCE PREDICTION MOAT: VALIDATED WITH REAL DATA. DIS3 + MAPK = ACTIONABLE SIGNALS. ⚔️**
+**⚔️ RESISTANCE PREDICTION MOAT: VALIDATED WITH REAL DATA. DIS3 + NF1 = VALIDATED SIGNALS (MAPK pending). ⚔️**

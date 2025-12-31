@@ -7,7 +7,7 @@
 
 ## 🔍 WHAT I DISCOVERED
 
-I was working in the **WORKTREE** (`/Users/fahadkiani/.cursor/worktrees/crispr-assistant-main/apd/`) which is a **stripped-down skeleton**.
+I was working in the **WORKTREE** (`/Users/fahadkiani/Users/fahadkiani/Desktop/development/crispr-assistant-main/.cursor/worktrees/crispr-assistant-main/apd/`) which is a **stripped-down skeleton**.
 
 The **MAIN REPO** (`/Users/fahadkiani/Desktop/development/crispr-assistant-main/`) has EVERYTHING:
 
@@ -123,7 +123,7 @@ The code I was looking for already existed. I just needed to wire it up.
 
 ## 🔍 WHAT I DISCOVERED
 
-I was working in the **WORKTREE** (`/Users/fahadkiani/.cursor/worktrees/crispr-assistant-main/apd/`) which is a **stripped-down skeleton**.
+I was working in the **WORKTREE** (`/Users/fahadkiani/Users/fahadkiani/Desktop/development/crispr-assistant-main/.cursor/worktrees/crispr-assistant-main/apd/`) which is a **stripped-down skeleton**.
 
 The **MAIN REPO** (`/Users/fahadkiani/Desktop/development/crispr-assistant-main/`) has EVERYTHING:
 

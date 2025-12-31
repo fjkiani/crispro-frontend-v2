@@ -1,0 +1,89 @@
+# Code Example 4 (yaml)
+
+**Category**: pattern
+**Priority**: P2
+**Source**: Chat log lines 107-188
+
+---
+
+
+AGENT 3 (SCIENTIST):
+  PRIMARY: S4 - Data source mapping (8 hours)
+    - Identify treatment cohorts with serial CA-125
+    - Priority: GOG-218, ICON7, CHIVA, GCIG meta-analysis
+    - Contact info for collaborators (KELIM, Institut Curie)
+    - Draft outreach emails (use D4 protocol templates)
+    - OUTPUT: Ranked list of cohorts + access strategy
+  
+  SECONDARY: S2 completion (6 hours remaining)
+    - Finish pathway-kinetic matrix
+    - 20-30 pairs from literature
+    - Feed into S3 (hypotheses)
+  
+  TIMELINE: 14 hours total (spread over 1-2 weeks)
+  BLOCKING: None (literature-based work)
+
+AGENT 1 (THERAPY FIT):
+  STATUS: On hold (Week 3-4 execution)
+  RATIONALE: 
+    - Agents 2+3 focused on Resistance Prophet infrastructure
+    - WIWFM validation can wait (proven framework, low risk)
+    - Execute when RP infrastructure built (avoid bandwidth split)
+```
+
+
+***
+
+### **Week 2-3 (Jan 10-17): PLCO Approved (Expected)**
+
+DECISION GATE: PLCO approval status
+
+IF PLCO APPROVED (Expected Jan 2-6):
+  
+  AGENT 2 (ENGINEER):
+    A1: Download PLCO data (1 day)
+    A2: Extract serial CA-125 + outcomes (2 days)
+      - ovar_screen.csv → serial CA-125 measurements
+      - ovar.csv → cancer outcomes (72 cases)
+      - Merge by plco_id, compute lead times
+    A3: Validate CA-125 kinetics (3-5 days)
+      - Compute velocity, acceleration, KELIM-like scores
+      - Train models (logistic regression, random forest)
+      - Evaluate AUROC, sensitivity, specificity
+      - Compare: Baseline vs kinetics vs combined
+    
+    OUTPUT: PLCO Kinetics Validation Report
+      - AUROC for cancer detection (target: 0.65-0.75)
+      - Lead time analysis (how early kinetics detect)
+      - Proof: Kinetics layer works for onset detection
+    
+    TIMELINE: 6-8 days (Jan 10-17)
+  
+  AGENT 3 (SCIENTIST):
+    PARALLEL: Contact collaborators (S4 execution)
+      - Email KELIM developers (biomarker-kinetics.org)
+      - Contact Institut Curie (GCIG meta-analysis)
+      - Reach out to GOG-218/ICON7 trial investigators
+      - Request treatment cohort data
+    
+    DELIVERABLE: Collaborator outreach campaign
+      - 5-10 emails sent
+      - Response tracking (2-4 weeks typical)
+      - Backup plan if all decline (Project Data Sphere)
+    
+    TIMELINE: 2-3 days (Jan 10-12)
+
+IF PLCO NOT APPROVED YET:
+  - Continue building harness (Agent 2)
+  - Continue S4 execution (Agent 3)
+  - Reassess Jan 10-12
+```
+
+
+***
+
+### **Week 3-4 (Jan 17-31): Integration Phase**
+
+```yaml
+SCENARIO A: PLCO Kinetics Validated + Collaborator Data Pending
+

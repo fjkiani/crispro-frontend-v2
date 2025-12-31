@@ -3,7 +3,8 @@
 **Purpose:** Explain what the validated resistance prediction capability means for Ayesha  
 **For:** Anyone who wants to understand how we predict platinum resistance  
 **Date:** January 28, 2025  
-**Last Updated:** January 28, 2025 *(Resistance Prediction MOAT validated ✅)*
+**Last Updated:** January 29, 2025 *(NF1 VALIDATED, MAPK PENDING REVALIDATION - see RESISTANCE_PROPHET_PRODUCTION_AUDIT.md)*
+**Mode:** Baseline-Only (RUO ✅)*
 
 ---
 
@@ -13,10 +14,10 @@
 
 | Before | After |
 |--------|-------|
-| "We'll monitor and see." | "Your tumor has MAPK mutations → 2x higher risk of platinum resistance. Here's what to watch for." |
+| "We'll monitor and see." | "NF1 mutation detected → 2x higher risk of platinum resistance. Here's what to watch for." |
 
 **We validated a predictive capability that works:**
-- **MAPK Pathway Mutations** → Predict platinum resistance (RR = 1.97)
+- **MAPK Pathway Mutations** → ⚠️ PENDING REVALIDATION (RR=1.97 was hard-coded)
 - **NF1 Mutations** → Predict platinum resistance (RR = 2.10)
 
 **Validated on real data:** 469 TCGA ovarian cancer patients with platinum response outcomes ✅
@@ -25,7 +26,7 @@
 
 ## 🔬 VALIDATION RESULTS (January 28, 2025)
 
-### ✅ MAPK/NF1 Resistance Prediction - VALIDATED
+### NF1 VALIDATED / MAPK PENDING
 
 ```
 Dataset: 469 TCGA-OV patients with platinum response data
@@ -47,13 +48,13 @@ NF1 Mutations (Specifically):
 
 ### What This Means for Ayesha:
 
-**If Ayesha has MAPK/NF1 mutations:**
+**If AK has MAPK/NF1 mutations:**
 - She has **2x higher risk** of developing platinum resistance
 - We should consider **early PARP inhibitor maintenance** to bypass resistance
 - We should monitor **more frequently** for signs of progression
 - Clinical trials targeting MAPK pathway should be prioritized
 
-**If Ayesha does NOT have MAPK/NF1 mutations:**
+**If AK does NOT have MAPK/NF1 mutations:**
 - Her baseline resistance risk is **14.5%** (lower than mutation carriers)
 - Standard monitoring schedule is appropriate
 - Focus on HRD status for PARP eligibility
@@ -70,7 +71,7 @@ Right now, when a patient starts platinum chemotherapy:
 - ❌ No actionable markers predict resistance upfront
 
 **What we validated:**
-- ✅ MAPK/NF1 mutations predict 2x resistance risk
+- ✅ NF1 mutations predict 2.1x resistance risk (MAPK PENDING)
 - ✅ Tested on 469 real ovarian cancer patients
 - ✅ Clinically actionable (RR ≥ 1.5, p < 0.05)
 
@@ -82,7 +83,7 @@ We predict resistance based on **tumor pathway biology**, not just waiting to se
 Patient Profile → Mutation Analysis → Resistance Risk Score → Actionable Recommendations
 ```
 
-**For Ayesha specifically:**
+**For AK specifically:**
 1. **Analyze her mutation profile** - Check for MAPK pathway genes (KRAS, NRAS, BRAF, NF1)
 2. **Calculate resistance risk** - If MAPK mutated → 2x higher risk
 3. **Adjust treatment strategy** - Earlier switch to PARP, more frequent monitoring

@@ -135,7 +135,7 @@ Variants change proteins → that strains pathways → we pick nutrients whose M
 - Separate harmless passengers from probable drivers using calibrated signals.  
 - Summarize: “High‑impact in DNA repair” vs “Low‑impact, monitor only.”
 
-**Example (Ayesha’s ovarian cancer):**
+**Example (AK ovarian cancer):**
 ```
 BRCA1 loss‑of‑function pattern detected
 Interpretation: DNA repair fragility likely; downstream inflammation more costly

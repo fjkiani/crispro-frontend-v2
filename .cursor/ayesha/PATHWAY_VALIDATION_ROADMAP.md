@@ -274,7 +274,7 @@ for patient in patients:
 | Data Location | `data/validation/` |
 | Scripts Location | `scripts/data_acquisition/` |
 
-**DO NOT USE**: `/Users/fahadkiani/.cursor/worktrees/crispr-assistant-main/apd/` (worktree has missing files)
+**DO NOT USE**: `/Users/fahadkiani/Users/fahadkiani/Desktop/development/crispr-assistant-main/.cursor/worktrees/crispr-assistant-main/apd/` (worktree has missing files)
 
 ---
 

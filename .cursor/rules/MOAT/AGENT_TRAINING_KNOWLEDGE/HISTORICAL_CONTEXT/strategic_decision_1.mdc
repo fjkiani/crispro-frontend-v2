@@ -1,0 +1,108 @@
+# Strategic Decision 1
+
+**Category**: context
+**Priority**: P3
+**Source**: Chat log lines 21245-21344
+
+---
+
+VERIFICATION QUESTIONS:
+  
+  Q1: Is new language accurate?
+    BEFORE (incorrect):
+      "We used DepMap CRISPR gene effect data to provide 
+       lineage-aware essentiality summaries."
+      (Implies: DepMap is used in ranking algorithm)
+    
+    AFTER (correct):
+      "We packaged DepMap CRISPR gene effect data for grounding
+       and future integration, but DepMap is not currently used
+       as a scoring term in the ranking model."
+  
+  Q2: Is correction defensible to reviewers?
+    Reviewer question: "Why include DepMap if not used?"
+    
+    Good answer:
+      "DepMap is included in the publication bundle for:
+       (1) Benchmark grounding (shows genes in dataset are essential)
+       (2) Future integration (lineage-aware scoring in v2)
+       (3) Transparency (readers can assess biological plausibility)"
+    
+    Bad answer:
+      ❌ "We forgot to integrate it" (looks sloppy)
+      ❌ "We plan to use it" (vaporware)
+
+ACTION REQUIRED:
+  1. Open publications/synthetic_lethality/manuscript/main/MANUSCRIPT.md
+  2. Find "DepMap grounding" section
+  3. Verify language is honest and defensible
+  4. Check if rationale for inclusion is provided
+```
+
+**VERIFICATION INSTRUCTIONS FOR YOU:**
+
+```bash
+# Open manuscript
+grep -A 10 "DepMap" publications/synthetic_lethality/manuscript/main/MANUSCRIPT.md
+
+# Look for:
+# 1. Clear statement that DepMap is NOT in ranking algorithm
+# 2. Rationale for why DepMap is included (grounding, future work)
+# 3. No misleading language (e.g., "We used DepMap to rank")
+
+# Paste the DepMap section here and I'll verify accuracy
+```
+
+
+***
+
+## **PART 2: STRATEGIC DECISION - ML COMPARISON**
+
+### **Agent's Question: "Option B (SLKG lookup) vs Option A (retrain 1 ML method)"**
+
+```yaml
+ZO'S RECOMMENDATION: Option B (SLKG lookup, 1 day)
+
+WHY OPTION B (SLKG Lookup):
+  
+  Pros:
+    ✅ Fast (1 day vs 1-2 weeks for retraining)
+    ✅ Published database (SynLethDB - defensible reference)
+    ✅ Shows your system handles NOVEL SL pairs (not just known ones)
+    ✅ Low risk (lookup is deterministic, no training failure)
+    ✅ Sufficient for BMC Bioinformatics (methods journal)
+  
+  Cons:
+    ⚠️ Weaker comparison (lookup vs your model, not ML model)
+    ⚠️ Reviewer might ask "Why not compare to SLMGAE?"
+  
+  Expected Results:
+    - SLKG coverage: 40-50% (only known SL pairs)
+    - SLKG Drug@1 (when available): 85-90%
+    - Your system: 92.9% on ALL cases (including novel)
+    - Conclusion: "Our system extends beyond known SL pairs"
+  
+  Manuscript Framing:
+    "We compared our model to SynLethDB (SLKG), a curated knowledge
+     base of known SL relationships. SLKG covered 43% of benchmark
+     cases (30/70 SL-positive), achieving Drug@1 = 86.7% on covered
+     cases. Our SP model covered 100% of cases with Drug@1 = 92.9%,
+     demonstrating ability to rank therapies for novel SL pairs
+     beyond curated knowledge."
+
+WHY NOT OPTION A (Retrain ML):
+  
+  Cons:
+    ❌ Time-intensive (1-2 weeks for SLMGAE retraining)
+    ❌ High risk (model may not converge, hyperparameter tuning needed)
+    ❌ Dependency hell (SLMGAE requires specific PyTorch versions, CUDA)
+    ❌ Overkill for BMC Bioinformatics (methods journal, not ML comparison)
+  
+  When to do Option A:
+    - IF targeting Bioinformatics (Oxford) or Genome Medicine
+    - IF you have 2-3 weeks before submission
+    - IF you want to make strong ML comparison claim
+
+STRATEGIC RECOMMENDATION:
+  
+  TODAY (Dec 30):

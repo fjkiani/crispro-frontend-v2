@@ -1,0 +1,232 @@
+# Dosing Guidance Contribution
+## Pharmacogenomics-Based Personalized Dosing
+
+**Status:** ✅ IMPLEMENTED (Jan 2025)  
+**Integration:** Therapy Fit → Toxicity Risk → Dosing Guidance  
+**Evidence Level:** CPIC Level A/B recommendations
+
+---
+
+## 🎯 What This MOAT Does
+
+Provides **personalized drug dosing recommendations** based on:
+1. **Pharmacogenomics** - Metabolizer phenotype from germline variants
+2. **Toxicity Risk** - Pharmacogene-MoA pathway overlap
+3. **Cumulative Toxicity** - Prior therapy exposure (anthracyclines, platinum, taxanes)
+4. **Treatment History** - Cross-resistance and sequencing context
+
+---
+
+## 🔬 Core Components
+
+### 1. Pharmacogene Coverage (Oncology-Focused)
+
+| Gene | Drug Examples | Clinical Impact |
+|------|---------------|-----------------|
+| **DPYD** | 5-FU, Capecitabine | Fatal toxicity in poor metabolizers |
+| **UGT1A1** | Irinotecan | Severe neutropenia in *28/*28 |
+| **TPMT** | 6-MP, Azathioprine | Myelosuppression risk |
+| **CYP2D6** | Tamoxifen, Ondansetron | Reduced efficacy/increased toxicity |
+| **CYP2C19** | Cyclophosphamide | Altered activation |
+
+### 2. Dose Adjustment Logic
+
+```python
+# From api/services/dosing_guidance_service.py
+def compute_adjusted_dose(standard_dose, phenotype, drug):
+    """
+    CPIC-aligned dose adjustments:
+    - Poor Metabolizer (DPYD *2A/*2A): 0% of standard (CONTRAINDICATED)
+    - Intermediate Metabolizer: 50% of standard
+    - Normal Metabolizer: 100% of standard
+    - Rapid/Ultrarapid: May need higher doses
+    """
+```
+
+### 3. Cumulative Toxicity Tracking
+
+| Drug Class | Cumulative Risk | Threshold |
+|------------|-----------------|-----------|
+| **Anthracyclines** | Cardiotoxicity | >450 mg/m² doxorubicin-equivalent |
+| **Platinum agents** | Nephrotoxicity, Ototoxicity | Cumulative platinum exposure |
+| **Taxanes** | Neuropathy | Grade ≥2 prior neuropathy |
+
+---
+
+## 📡 API Endpoints
+
+### Primary Endpoint
+```
+POST /api/dosing/guidance
+```
+
+### Request Schema
+```json
+{
+  "patient_id": "AYESHA-001",
+  "drug_name": "5-fluorouracil",
+  "germline_variants": [
+    {"gene": "DPYD", "hgvs": "c.1905+1G>A", "zygosity": "heterozygous"}
+  ],
+  "treatment_history": [
+    {"drug": "epirubicin", "dose": "100 mg/m²", "cycles": 4}
+  ]
+}
+```
+
+### Response Schema
+```json
+{
+  "patient_id": "AYESHA-001",
+  "drug_name": "5-fluorouracil",
+  "recommendations": [
+    {
+      "gene": "DPYD",
+      "phenotype": "Intermediate Metabolizer",
+      "cpic_level": "A",
+      "standard_dose": "400 mg/m²",
+      "recommended_dose": "200 mg/m²",
+      "adjustment_factor": 0.5,
+      "adjustment_type": "REDUCE",
+      "rationale": "DPYD Intermediate Metabolizer - reduce dose by 50%",
+      "monitoring": ["Weekly CBC", "DPD activity monitoring"],
+      "alternatives": ["Capecitabine (with same reduction)"]
+    }
+  ],
+  "cumulative_toxicity_alert": {
+    "anthracycline_exposure": true,
+    "platinum_exposure": false,
+    "taxane_exposure": false,
+    "recommendation": "Monitor for cardiotoxicity - prior anthracycline exposure"
+  }
+}
+```
+
+---
+
+## 🔗 Integration Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    THERAPY FIT (S/P/E)                          │
+│  "This drug might work for your mutation profile"               │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│                    TOXICITY RISK                                 │
+│  "Watch out for these pharmacogene risks"                       │
+│  • Pharmacogene detection (DPYD, UGT1A1, TPMT)                 │
+│  • MoA-pathway overlap scoring                                  │
+│  • Risk level: HIGH/MODERATE/LOW                                │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│                    DOSING GUIDANCE (NEW)                         │
+│  "Give this much, monitor this way"                             │
+│  • Metabolizer phenotype → dose adjustment                      │
+│  • Cumulative toxicity alerts                                   │
+│  • CPIC evidence levels                                         │
+│  • Alternative drug suggestions                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🧪 Validation Results (Jan 2025)
+
+### Unit Tests
+| Test | Status | Description |
+|------|--------|-------------|
+| DPYD *2A/*2A → 5-FU | ✅ PASS | Contraindicated (0% dose) |
+| DPYD *1/*2A → 5-FU | ✅ PASS | 50% dose reduction |
+| UGT1A1 *28/*28 → Irinotecan | ✅ PASS | 30% dose reduction |
+| TPMT *3A/*3A → 6-MP | ✅ PASS | Contraindicated |
+| Cumulative anthracycline alert | ✅ PASS | Cardiotoxicity warning |
+
+### Integration Tests
+| Test | Status | Description |
+|------|--------|-------------|
+| Full pipeline (variants → dose) | ✅ PASS | End-to-end flow |
+| No variants → normal dosing | ✅ PASS | Default handling |
+| Multiple pharmacogenes | ✅ PASS | Combined recommendations |
+
+---
+
+## 📊 Frontend Components
+
+### ToxicityChip
+- Location: `oncology-frontend/src/components/vus/ToxicityChip.jsx`
+- Displays: Risk level chip with tooltip
+- Integrates: Real-time toxicity risk from `/api/safety/toxicity_risk`
+
+### DosingGuidanceCard
+- Location: `oncology-frontend/src/components/dosing/DosingGuidanceCard.jsx`
+- Displays: 
+  - Dose adjustment recommendations
+  - CPIC evidence level badges
+  - Monitoring requirements
+  - Alternative drug suggestions
+  - Cumulative toxicity alerts
+
+---
+
+## 📚 Evidence Sources
+
+1. **CPIC Guidelines** - Clinical Pharmacogenetics Implementation Consortium
+   - DPYD: PharmGKB PA166104963
+   - UGT1A1: PharmGKB PA166104967
+   - TPMT: PharmGKB PA166104965
+
+2. **PharmGKB** - Pharmacogenomics Knowledgebase
+   - Gene-drug associations
+   - Variant annotations
+   - Dosing recommendations
+
+3. **FDA Labels** - Drug-specific pharmacogenomics warnings
+
+---
+
+## ⚠️ Limitations & RUO Disclaimer
+
+**RESEARCH USE ONLY (RUO)**
+
+This system provides in-silico dosing guidance based on:
+- Published CPIC guidelines
+- PharmGKB annotations
+- Computational predictions
+
+**NOT intended for clinical use without:**
+- Licensed clinical pharmacist review
+- Institutional protocol validation
+- Patient-specific clinical judgment
+
+---
+
+## 🔮 Future Enhancements
+
+1. **Real-time PharmGKB API** - Live annotation lookup
+2. **Drug-drug interactions** - CYP450 inhibitor/inducer tracking
+3. **Organ function adjustment** - Renal/hepatic dosing
+4. **Population-specific calibration** - Ancestry-aware defaults
+5. **Clinical decision support alerts** - EHR integration
+
+---
+
+## 📁 Code Locations
+
+| Component | Path |
+|-----------|------|
+| Dosing Service | `api/services/dosing_guidance_service.py` |
+| Dosing Router | `api/routers/dosing.py` |
+| Dosing Schemas | `api/schemas/dosing.py` |
+| PharmGKB Router | `api/routers/pharmgkb.py` |
+| Safety Service | `api/services/safety_service.py` |
+| ToxicityChip | `oncology-frontend/src/components/vus/ToxicityChip.jsx` |
+| DosingGuidanceCard | `oncology-frontend/src/components/dosing/DosingGuidanceCard.jsx` |
+| Validation Tests | `scripts/validation/test_dosing_guidance.py` |
+
+---
+
+**Last Updated:** January 2025  
+**Author:** Zo (Agent)  
+**Reviewed By:** Alpha (Commander)

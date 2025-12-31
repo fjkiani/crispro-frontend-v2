@@ -1,0 +1,89 @@
+# Correction/Reminder 9
+
+**Category**: context
+**Priority**: P3
+**Source**: Chat log lines 4846-4925
+**Related**: Mission Discipline Doctrine
+
+---
+
+```javascript
+efficacy_score = 0.3 × Sequence + 0.4 × Pathway + 0.3 × Evidence + ClinVar_prior
+```
+
+**Components**:
+
+- **Sequence (S)**: 30% - Evo2 adaptive multi-window scoring (4096, 8192, 16384, 25000 bp windows)
+- **Pathway (P)**: 40% - Gene-to-pathway mapping (HIGHEST WEIGHT - mechanism alignment importance)
+- **Evidence (E)**: 30% - Literature + ClinVar classification
+- **ClinVar_prior**: Additive boost [-0.2, +0.2]
+
+**Key Finding**: Pathway (P) component is **ESSENTIAL** — 100% accuracy with P, 40% without (validated ablation study).
+
+### Insight Chips System
+
+**Four Chips with Threshold-Based Lifts**:| Chip | Threshold | Lift (Legacy) | Lift (V2) | Purpose ||------|-----------|---------------|-----------|---------|| **Functionality** | ≥0.6 | +0.05 | +0.04 | Protein function change prediction || **Chromatin** | ≥0.5 | +0.03 | +0.04 | Regulatory impact assessment || **Essentiality** | ≥0.7 | +0.07 | +0.02 | Gene dependency scoring || **Regulatory** | ≥0.6 | +0.02 | +0.02 | Splicing and non-coding impact |**Total lifts capped at +0.08** (V2 only, proportionally scaled if exceeded).**Implementation**:
+
+- Location: `api/services/confidence/insights_lifts.py`
+- Chips computed via: `/api/insights/predict_protein_functionality_change`, `/api/insights/predict_chromatin_accessibility`, `/api/insights/predict_gene_essentiality`, `/api/insights/predict_splicing_regulatory`
+
+---
+
+## Part 2: Validation Strategy - The 7 Pathways
+
+### The 7 Pathways We Must Validate
+
+| Index | Pathway | Key Genes | Clinical Relevance | Therapy Fit Validation ||-------|---------|-----------|-------------------|----------------------|| 0 | **DDR** | BRCA1, BRCA2, ATM, ATR, PALB2, RAD51, CHEK2 | PARP inhibitors, platinum sensitivity | Validate: DDR-high → PARP inhibitors ranked \#1-3 || 1 | **MAPK** | BRAF, KRAS, NRAS, NF1, MEK1/2 | BRAF/MEK inhibitors, resistance | Validate: BRAF V600E → BRAF inhibitor (0.85 confidence) || 2 | **PI3K** | PIK3CA, PTEN, AKT1, MTOR | PI3K inhibitors (alpelisib) | Validate: PIK3CA → alpelisib ranked high || 3 | **VEGF** | VEGFA, VHL, HIF1A, KDR | Anti-angiogenics (bevacizumab) | Validate: VHL → TKI ranked high || 4 | **HER2** | ERBB2/HER2, ERBB3 | Trastuzumab, T-DXd | Validate: HER2+ → trastuzumab ranked \#1 || 5 | **IO** | CD274/PD-L1, TMB, MSI, POLE | Checkpoint inhibitors | Validate: TMB-high/MSI-H → IO ranked high || 6 | **Efflux** | ABCB1/MDR1, ABCC1, ABCG2 | Multi-drug resistance | Validate: MDR1 high → resistance prediction |---
+
+## Part 3: Cancer Type Priorities for Validation
+
+### TIER 1: CORE FOCUS (Gynecological) - P0
+
+| Cancer | TCGA Code | Priority | Therapy Fit Validation Targets ||--------|-----------|----------|-------------------------------|| **Ovarian (HGSOC)** | TCGA-OV | P0 | ✅ Have 469 patients - Validate DDR → PARP, MAPK → MEK, VEGF → bevacizumab || **Endometrial** | TCGA-UCEC | P1 | Validate PI3K → alpelisib, MSI-H → IO || **Cervical** | TCGA-CESC | P1 | Validate IO → pembrolizumab |
+
+### TIER 2: PATHWAY VALIDATION (High Signal) - P2
+
+| Cancer | TCGA Code | Priority | Therapy Fit Validation Targets ||--------|-----------|----------|-------------------------------|| **Breast** | TCGA-BRCA | P2 | Validate DDR (BRCA) → PARP, HER2 → trastuzumab, PI3K → alpelisib || **Melanoma** | TCGA-SKCM | P2 | Validate MAPK (BRAF) → BRAF inhibitor, IO → checkpoint inhibitors || **Lung Adeno** | TCGA-LUAD | P2 | Validate MAPK (KRAS) → KRAS inhibitor, IO → checkpoint inhibitors || **Colorectal** | TCGA-COAD | P2 | Validate MAPK (KRAS/BRAF) → targeted therapy, MSI-H → IO |
+
+### TIER 3: COMPLETE COVERAGE - P3
+
+| Cancer | TCGA Code | Priority | Therapy Fit Validation Targets ||--------|-----------|----------|-------------------------------|| **Kidney Clear Cell** | TCGA-KIRC | P3 | Validate VEGF (VHL) → TKI || **Pancreatic** | TCGA-PAAD | P3 | Validate DDR, MAPK (KRAS) || **Prostate** | TCGA-PRAD | P3 | Validate DDR (BRCA2) || **Gastric** | TCGA-STAD | P3 | Validate HER2, MSI || **Bladder** | TCGA-BLCA | P3 | Validate IO (TMB) |---
+
+## Part 4: Validation Matrix - What We Need to Prove
+
+### S/P/E Framework Validation Goals
+
+| Pathway | Validation Goal | Metric | Target | Therapy Fit Specific ||---------|----------------|--------|--------|---------------------|| **DDR** | BRCA → platinum/PARP response | Sensitivity rate difference | >10% | DDR-high patients: PARP inhibitors ranked \#1-3 with ≥0.80 efficacy || **MAPK** | BRAF → BRAF-i response | ORR difference | >30% | BRAF V600E: BRAF inhibitor ranked \#1 with ≥0.85 confidence || **MAPK** | KRAS → MEK-i response | Pathway alignment | 100% | KRAS G12D: MEK inhibitor ranked \#1 with PathwayAligned badge || **PI3K** | PIK3CA → alpelisib response | PFS difference | >2 months | PIK3CA mutation: alpelisib ranked high with ≥0.70 efficacy || **VEGF** | VHL → TKI response | Response rate | >50% | VHL mutation: TKI ranked \#1 with PathwayAligned badge || **HER2** | HER2+ → trastuzumab response | pCR rate | >40% | HER2 amplification: trastuzumab ranked \#1 with Guideline badge || **IO** | TMB-high → IO response | ORR difference | >20% | TMB-high: Checkpoint inhibitor ranked high with IO pathway alignment || **IO** | MSI-H → IO response | ORR | >40% | MSI-H: Checkpoint inhibitor ranked \#1 with PathwayAligned badge || **Efflux** | MDR1 high → resistance | Resistance rate | >2x baseline | MDR1 high: Lower efficacy scores for affected drugs |
+
+### Insight Chips Validation Goals
+
+| Chip | Validation Goal | Metric | Target ||------|----------------|--------|--------|| **Functionality** | High functionality → higher confidence | Confidence lift correlation | Functionality ≥0.6 → +0.05 lift improves ranking || **Chromatin** | High chromatin → higher confidence | Confidence lift correlation | Chromatin ≥0.5 → +0.04 lift improves ranking || **Essentiality** | High essentiality → higher confidence | Confidence lift correlation | Essentiality ≥0.7 → +0.07 lift improves ranking || **Regulatory** | High regulatory → higher confidence | Confidence lift correlation | Regulatory ≥0.6 → +0.02 lift improves ranking |**Validation Method**: Compare drug rankings with vs. without insight chips lifts. Chips should help differentiate drugs with similar S/P/E scores.---
+
+## Part 5: Data Requirements Per Cancer Type
+
+### For EACH cancer type, we need:
+
+```yaml
+cancer_type:
+  tcga_code: "TCGA-XX"
+  
+  # REQUIRED: Mutation Data
+  mutations:
+    source: "cBioPortal or TCGA GDC"
+    format: "MAF or JSON"
+    fields:
+            - patient_id
+            - gene
+            - hgvs_p (protein change)
+            - hgvs_c (cDNA change)
+            - variant_classification
+            - chromosome
+            - position
+            - ref_allele
+            - alt_allele
+    min_patients: 100
+    
+  # REQUIRED: Treatment Response Data (CRITICAL FOR VALIDATION)
+  treatment_response:
+    source: "TCGA clinical, cBioPortal, or trial data"
+    format: "JSON or TSV"

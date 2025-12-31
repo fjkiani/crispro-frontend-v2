@@ -1,0 +1,86 @@
+# Code Example 3 (yaml)
+
+**Category**: pattern
+**Priority**: P2
+**Source**: Chat log lines 61-139
+
+---
+
+  ✅ 7 pathways framework (DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux)
+  ✅ TCGA-OV dataset (469 patients, baseline mutations)
+  ✅ Ovarian cancer focus (initial validation)
+
+DIFFERENT VALIDATION NEEDS:
+  WIWFM:
+    - Baseline mutations → Drug rankings
+    - Endpoint: Treatment response (sensitive vs resistant)
+    - Data: TCGA-OV mutations + platinum response ✅ HAVE
+    - Timeline: Can execute now (Week 3-4)
+  
+  Resistance Prophet:
+    - Baseline + kinetics → Resistance timing
+    - Endpoint: Time to resistance (weeks 6-18)
+    - Data: Serial CA-125 + mutations ❌ DON'T HAVE (yet)
+    - Timeline: 3-7 weeks (waiting on PLCO or collaborators)
+
+ALIGNMENT QUESTION:
+  Do we execute sequentially (RP first, then WIWFM)?
+  Or parallel (both at once)?
+  Or opportunistic (WIWFM now, RP when data arrives)?
+```
+
+
+***
+
+## **RECOMMENDED ALIGNMENT: HYBRID PARALLEL**
+
+### **Week 1-2 (Now - Jan 10): PLCO Wait Period**
+
+AGENT 2 (ENGINEER):
+  PRIMARY: Build validation harness (D3)
+    - Data ingestion pipeline (CSV → kinetics computation)
+    - KELIM computation module (velocity, acceleration, slopes)
+    - Model training framework (logistic regression, random forest)
+    - Validation metrics (AUROC, sensitivity, specificity, lead time)
+    - Output: Ready-to-run harness for PLCO data when arrives
+  
+  SECONDARY: Synthetic validation (proof-of-concept)
+    - Use existing synthetic CA-125 generator
+    - Validate harness works (AUROC 1.0 on synthetic = sanity check)
+    - Debug any infrastructure issues
+  
+  TIMELINE: 8-12 hours (spread over 1-2 weeks)
+  BLOCKING: PLCO approval (can't validate on real data yet)
+
+AGENT 3 (SCIENTIST):
+  PRIMARY: S4 - Data source mapping (8 hours)
+    - Identify treatment cohorts with serial CA-125
+    - Priority: GOG-218, ICON7, CHIVA, GCIG meta-analysis
+    - Contact info for collaborators (KELIM, Institut Curie)
+    - Draft outreach emails (use D4 protocol templates)
+    - OUTPUT: Ranked list of cohorts + access strategy
+  
+  SECONDARY: S2 completion (6 hours remaining)
+    - Finish pathway-kinetic matrix
+    - 20-30 pairs from literature
+    - Feed into S3 (hypotheses)
+  
+  TIMELINE: 14 hours total (spread over 1-2 weeks)
+  BLOCKING: None (literature-based work)
+
+AGENT 1 (THERAPY FIT):
+  STATUS: On hold (Week 3-4 execution)
+  RATIONALE: 
+    - Agents 2+3 focused on Resistance Prophet infrastructure
+    - WIWFM validation can wait (proven framework, low risk)
+    - Execute when RP infrastructure built (avoid bandwidth split)
+```
+
+
+***
+
+### **Week 2-3 (Jan 10-17): PLCO Approved (Expected)**
+
+```yaml
+DECISION GATE: PLCO approval status
+

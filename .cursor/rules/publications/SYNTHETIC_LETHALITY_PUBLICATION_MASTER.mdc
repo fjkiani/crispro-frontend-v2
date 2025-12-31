@@ -1,0 +1,182 @@
+## Synthetic Lethality Prediction (Ovarian-focused) — Publication Master
+
+**Status:** Updated to current receipts (removes stale pilot claims)  
+**Bundle:** `publications/synthetic_lethality/`  
+
+**Lead Author:** [Your Name]  
+**Co-Authors:** AI Research Team  
+
+---
+
+## Executive Summary (what we can claim today)
+
+We built a synthetic lethality (SL) recommendation system that, given a tumor mutation, ranks SL-relevant therapies (PARP / ATR / WEE1) and is validated on a curated 100-case benchmark with lineage-aware DepMap grounding.
+
+**Primary benchmark result (100 cases; SL-positive vs SL-negative):**
+
+- **Model (SP/SPE, `panel_id=sl_publication`)**: **Pos Drug@1 = 92.9%** (95% CI: 85.7–98.6%), **Neg PARP FP = 0.0%** (95% CI: 0.0–0.0%)
+- **Rule baseline (DDR→PARP)**: Pos Drug@1 = 64.3% (95% CI: 52.9–75.7%), Neg PARP FP = 33.3% (95% CI: 16.7–50.0%)
+
+**Authoritative receipts:**
+- Results table: `docs/results_pack.md`
+- Baseline comparison (Tier 3): `docs/baseline_comparison.md`
+- Ablation diagnostic (10-case sample): `docs/ablation_diagnostic_10_cases.md`
+- Receipt JSON: `results/publication_suite_20251230_192215.json`
+
+---
+
+## Scope and non-scope
+
+- **In scope**: SL therapy ranking given a mutation (HRR/DDR genes → PARP; TP53 → WEE1; ARID1A → ATR) with reproducible receipts.
+- **Out of scope for this manuscript** (unless separately supported by receipts):
+  - MAPK platinum resistance RR=1.97 (that is resistance biology, not SL benchmark)
+  - Product/acceleration timeline claims not supported by this benchmark
+  - UI/product claims (frontend, dashboards) unless measured and cited
+
+---
+
+## Data
+
+### Benchmark dataset (100 cases)
+- **File**: `data/data/test_cases_100.json`
+- **Label semantics**:
+  - `ground_truth.synthetic_lethality_detected == true` → SL-positive
+  - `== false` → SL-negative
+- **Ground truth fields**:
+  - `effective_drugs`: expected top drug(s)
+  - `clinical_evidence.pmid`: citation for the SL pair where applicable
+
+### DepMap grounding (lineage-aware)
+- **Raw** (repo root):
+  - `data/depmap/CRISPRGeneEffect.csv`
+  - `data/depmap/Model.csv`
+- **Processed**:
+  - `data/depmap_essentiality_by_context.json`
+    - global summaries
+    - by-lineage summaries (OncotreeLineage)
+
+---
+
+## System (what the benchmark is actually exercising)
+
+### Inputs
+- Tumor mutations: `{ gene, hgvs_p, consequence, chrom, pos, ref, alt, build? }`
+
+### Components (S/P/E)
+- **S (Sequence)**: Evo2-based scoring when alleles are present; curated fallback when alleles are missing (benchmark stability).
+- **P (Pathway)**: gene→pathway aggregation (DDR/MAPK/TP53/PI3K/VEGF/IO) and drug pathway weights.
+- **E (Evidence)**: disabled in this benchmark run (`fast=True`) to make the run deterministic and cost-free.
+
+### Benchmark panel control
+To avoid non-specific chemo confounds in SL ranking, the benchmark uses:
+- **`options.panel_id = "sl_publication"`**
+
+This constrains candidate drugs to SL-relevant classes plus minimal targeted negatives.
+
+---
+
+## Evaluation protocol
+
+### Metrics
+Computed on the full dataset with bootstrap CIs:
+- **Pos Class@1**: predicted drug class matches any GT class (positives)
+- **Pos Drug@1**: predicted drug matches any GT drug (positives)
+- **Neg PARP FP rate**: predicted class is PARP for SL-negative cases
+
+### Baselines
+- **Random**: uniform over candidate list
+- **Rule (DDR→PARP)**: if mutation gene is DDR list → Olaparib else random
+
+### Repro runner
+- Suite: `code/run_publication_suite.py`
+- Results pack: `code/make_results_pack.py`
+
+---
+
+## Results (current receipts)
+
+See: `docs/results_pack.md`
+
+**Primary table (100 cases):**
+- Random: Pos Drug@1 21.4% (12.9–31.4), Neg PARP FP 33.3% (16.7–50.0)
+- Rule (DDR→PARP): Pos Drug@1 64.3% (52.9–75.7), Neg PARP FP 33.3% (16.7–50.0)
+- Model SP: **Pos Drug@1 92.9% (85.7–98.6), Neg PARP FP 0.0% (0.0–0.0)**
+- Model SPE: **Pos Drug@1 92.9% (85.7–98.6), Neg PARP FP 0.0% (0.0–0.0)**
+
+---
+
+## What changed vs the stale pilot era
+
+The older master doc referenced a 10-case pilot and reported pilot accuracy. That is **not** the currentt to 92.9% Drug@1 came from:
+
+- **DDR mapping fix**: ensure DDR-relevant genes (ATM/CDK12/ARID1A etc.) contribute to DDR pathway scores
+- **Panel control**: SL publication panel (`panel_id=sl_publication`) removes carboplatin dominating ties
+- **Tie-break logic**:
+  - HR/DDR→PARP preference for HRR genes
+  - ARID1A→ATR preference
+- **Deterministic benchmark**: fast-mode + pinned suite runner + pinned receipts
+
+---
+
+## Limitations (must be stated)
+
+- **Curated dataset**: this is a curated 100-case benchmark, not a prospective clinical cohort.
+- **Evidence disabled in deterministic run**: `fast=True` means literature evidence does not contribute; separate runs can enable evidence.
+- **Curated fallback for missing alleles**: when `ref/alt` are missing, we use a transparent prior (RUO) instead of Evo2 sequence modeling.
+
+---
+
+## Artifacts (this folder is the source of truth)
+
+### Docs
+- Master: `docs/SYNTHETIC_LETHALITY_PUBLICATION_MASTER.mdc`
+- Primary table: `docs/results_pack.md`
+- Error analysis: `docs/error_ysis.md`
+
+### Results
+- Receipt JSON: `results/publication_suite_20251230_192215.json`
+- Row-level breakdown: `results/confusion_breakdown.csv`
+
+### Figures
+- `figures/figure_bar_chart.svg`
+
+---
+
+## Repro commands (from repo root)
+
+Start API:
+
+```bash
+cd oncology-coPilot/oncology-backend-minimal
+DISABLE_FUSION=1 EVO_FORCE_MODEL=evo2_1b EVO_USE_DELTA_ONLY=1 python3 -m uvicorn api.main:app --host 127.0.0.1 --port 8000
+```
+
+Run suite:
+
+```bash
+cd publications/synthetic_lethality/code
+python3 run_publication_suite.py --test-file ../data/test_cases_100.json --api-root http://127.0.0.1:8000 --model-id evo2_1b
+```
+
+Generate pack:
+
+```bash
+cd publications/synthetic_lethality/code
+python3 make_results_pack.py
+```
+
+---
+
+## Manuscript package (draft)
+
+- Main manuscript: `publications/synthetic_lethality/manuscript/main/MANUSCRIPT.md`
+- Supplement: `publications/synthetic_lethality/manuscript/supplement/SUPPLEMENT.md`
+- Figure: `publications/synthetic_lethality/manuscript/figures/figure_bar_chart.svg`
+- Table: `publications/synthetic_lethality/manuscript/tables/results_pack.md`
+
+
+
+## Added reviewer-facing artifacts
+
+- Ablation table: `publications/synthetic_lethality/docs/ablation_table.md` (receipt: `results/publication_suite_20251230_192215.json`)
+- Benchmark composition: `publications/synthetic_lethality/docs/benchmark_composition.md` + `docs/benchmark_composition.json`

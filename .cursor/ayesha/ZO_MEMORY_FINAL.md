@@ -143,7 +143,7 @@ But I should NOT have been hardcoding in guidance.py. The REAL agent exists at `
 | Location | Files |
 |----------|-------|
 | **Main** (`/Users/fahadkiani/Desktop/development/crispr-assistant-main/`) | Full codebase |
-| **Worktree** (`/Users/fahadkiani/.cursor/worktrees/crispr-assistant-main/apd/`) | Stripped skeleton |
+| **Worktree** (`/Users/fahadkiani/Users/fahadkiani/Desktop/development/crispr-assistant-main/.cursor/worktrees/crispr-assistant-main/apd/`) | Stripped skeleton |
 
 | Component | Main | Worktree |
 |-----------|------|----------|
@@ -312,7 +312,7 @@ But I should NOT have been hardcoding in guidance.py. The REAL agent exists at `
 | Location | Files |
 |----------|-------|
 | **Main** (`/Users/fahadkiani/Desktop/development/crispr-assistant-main/`) | Full codebase |
-| **Worktree** (`/Users/fahadkiani/.cursor/worktrees/crispr-assistant-main/apd/`) | Stripped skeleton |
+| **Worktree** (`/Users/fahadkiani/Users/fahadkiani/Desktop/development/crispr-assistant-main/.cursor/worktrees/crispr-assistant-main/apd/`) | Stripped skeleton |
 
 | Component | Main | Worktree |
 |-----------|------|----------|

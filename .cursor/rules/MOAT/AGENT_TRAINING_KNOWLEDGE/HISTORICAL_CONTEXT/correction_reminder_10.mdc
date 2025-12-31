@@ -1,0 +1,89 @@
+# Correction/Reminder 10
+
+**Category**: context
+**Priority**: P3
+**Source**: Chat log lines 12467-12546
+**Related**: Mission Discipline Doctrine
+
+---
+
+  
+  "adoption_barriers": [
+    "Cost ($500-1000 vs $200 for PD-L1 IHC)",
+    "Turnaround (1 week vs 2 days for IHC)",
+    "Expertise (bioinformatics required)",
+    "Sample quality (fresh/frozen required)",
+    "Standardization (no consensus protocol)",
+    "Reimbursement (not covered by insurance)"
+  ],
+  
+  "crispro_opportunity": {
+    "use_case": "Phase 1C multi-modal integration (scRNA-seq + MAPK + KELIM)",
+    "timeline": "Week 17+ (after treatment cohort acquisition)",
+    "data_requirement": "Treatment cohort with scRNA-seq + serial CA-125 + resistance outcomes",
+    "integration_method": "Extract resistant cell signatures, project to bulk RNA-seq, combine with MAPK + KELIM",
+    "expected_lift": "AUROC +0.05-0.10 vs genetics alone (adds TME signal)"
+  }
+}
+```
+
+
+***
+
+## **PART 5: HONEST RECOMMENDATION**
+
+### **What to Do With Scanpy (PHASED APPROACH)**
+
+```yaml
+IMMEDIATE (Weeks 1-16): DO NOT BUILD SCANPY INTEGRATION
+  Why: Data doesn't exist yet (need treatment cohort from S4)
+  Focus: Phase 1A (baseline genetics) + Phase 1B (KELIM if PLCO approved)
+  
+  Scanpy Action: ADD TO GRAVEYARD INTELLIGENCE DATABASE
+    - Document as validated-but-buried biomarker
+    - Evidence: 88/100
+    - Burial: 72/100 (research-clinical gap)
+    - Actionability: 91/100
+    - Graveyard Value: 84.1 (TOP TIER)
+
+PHASE 1C (Weeks 17-24, IF S4 ACQUIRES DATA):
+  Prerequisite: Treatment cohort with scRNA-seq + serial CA-125
+  
+  Task: Scanpy Proof-of-Concept (4 weeks, NOT 72 hours)
+    Week 1-2: Data acquisition + preprocessing
+      - Download treatment cohort scRNA-seq
+      - QC, normalization, batch correction
+      - Preflight Gate: Data quality validation
+    
+    Week 3: Clustering + annotation
+      - Leiden clustering (tune resolution)
+      - Cell type annotation (immune, malignant)
+      - Validate: Annotation accuracy vs literature
+    
+    Week 4: Signature extraction + integration
+      - Extract resistant cell signatures
+      - Project to bulk RNA-seq (TCGA-OV validation)
+      - Integrate with MAPK + KELIM
+      - Validate: 3-signal model AUROC
+
+PHASE 2 (Weeks 25-36, IF PHASE 1C SUCCEEDS):
+  Task: Production Scanpy Pipeline (12 weeks)
+    Week 25-28: Pipeline development
+      - Standardized QC workflow
+      - Automated cell type annotation
+      - Signature extraction module
+    
+    Week 29-32: Integration with Resistance Prophet
+      - Add scRNA-seq resistance score to API
+      - Multi-modal scoring (MAPK + KELIM + scRNA-seq)
+      - Validation on holdout cohort
+    
+    Week 33-36: Clinical deployment prep
+      - Cost-benefit analysis (is $1000/sample worth it?)
+      - Reimbursement strategy (how to get insurance coverage?)
+      - Protocol standardization (FDA qualification path)
+
+REALISTIC TIMELINE TO PRODUCTION:
+  Best case: 36 weeks (9 months)
+  Likely case: 52+ weeks (12+ months)
+  Blocking: S4 data acquisition (treatment cohort)

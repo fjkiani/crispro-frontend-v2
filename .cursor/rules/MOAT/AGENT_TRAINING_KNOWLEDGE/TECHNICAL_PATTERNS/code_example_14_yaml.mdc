@@ -1,0 +1,75 @@
+# Code Example 14 (yaml)
+
+**Category**: pattern
+**Priority**: P2
+**Source**: Chat log lines 859-926
+
+---
+
+  ✅ Cancer outcomes (72 incident cancers)
+  ✅ Large cohort (78,000 women)
+
+BUT:
+  ⚠️ Screening cohort (healthy → cancer onset)
+  ⚠️ NOT treatment cohort (diagnosed → resistance)
+  ⚠️ Different biological question
+
+WHAT PLCO PROVES:
+  ✅ CA-125 kinetics work for ONSET detection (Layer 2 signal validated)
+  ✅ Infrastructure works (harness, KELIM computation)
+  ✅ Stepping stone to treatment cohorts
+
+WHAT PLCO DOESN'T PROVE:
+  ❌ MAPK + CA-125 for RESISTANCE detection (wrong cohort)
+  ❌ Adaptive resistance timing (no treatment context)
+  ❌ Clinical utility for Resistance Prophet (different endpoint)
+
+VERDICT:
+  PLCO = Proof-of-kinetics (valuable, but not final validation)
+  Treatment cohort = TRUE validation (S4 must find this)
+```
+
+
+***
+
+## **S1 VALIDATION STRATEGY → CURRENT EXECUTION MAP**
+
+### **S1 Proposed 3 Phases:**
+
+PHASE 1A: Baseline-only (MAPK/PI3K/DDR)
+  Goal: Baseline risk stratification (NOT early detection)
+  Data: TCGA-OV mutations + platinum response ✅ HAVE
+  Expected: Modest AUROC (~0.55-0.65)
+  Status: ✅ CAN EXECUTE NOW (this is WIWFM territory)
+  Owner: Agent 1 (Therapy Fit validation)
+
+PHASE 1B: Kinetics-only (KELIM replication)
+  Goal: CA-125 kinetics predicts outcomes
+  Data: Serial CA-125 + outcomes ⏳ PLCO PENDING
+  Expected: AUROC 0.60-0.70 (kinetics alone)
+  Status: ⏳ WAITING ON PLCO APPROVAL (Jan 2-6)
+  Owner: Agent 2 (Engineer - harness + validation)
+
+PHASE 1C: Multi-modal (MAPK + CA-125)
+  Goal: EARLIER detection than either alone
+  Data: Baseline MAPK + serial CA-125 + resistance outcomes
+  Expected: AUROC 0.65-0.75 (combined signals)
+  Status: ❌ NEED TREATMENT COHORT (S4 must acquire)
+  Owner: Agent 3 (Scientist - data source mapping)
+
+PHASE 2: Add ctDNA (restoration/escape)
+  Goal: Mechanistic resistance detection
+  Data: Longitudinal genomics + CA-125 + outcomes
+  Expected: AUROC 0.70-0.80+ (full multi-modal)
+  Status: ❌ LONG-TERM (4-8+ months to acquire)
+  Owner: Future work
+```
+
+
+***
+
+## **HOW S1 CHANGES AGENT PRIORITIES**
+
+### **Before S1:**
+
+```yaml

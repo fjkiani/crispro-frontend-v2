@@ -1,0 +1,89 @@
+# Correction/Reminder 12
+
+**Category**: context
+**Priority**: P3
+**Source**: Chat log lines 14709-14788
+**Related**: Mission Discipline Doctrine
+
+---
+
+  Deliverable:
+    - Agents subscribe to events (e.g., "biomarker_calculated")
+    - Orchestrator chains agents automatically
+    - User uploads data ONCE → full pipeline runs
+  
+  Enables:
+    ✅ Inter-agent communication
+    ✅ Automatic workflow chaining
+    ✅ Asynchronous execution
+```
+
+
+***
+
+### **Phase 2: Validation \& Iteration (Weeks 5-8)**
+
+```yaml
+WEEK 5-6: VALIDATION AGENT
+  Build:
+    - Validation library (per data type: mutations, TMB, trials)
+    - Error detection rules (schema, range, completeness)
+    - Self-correction strategies (retry, alternative parsers, LLM fallback)
+    - Human escalation (flag ambiguous cases)
+  
+  Deliverable:
+    - Data extraction validates mutations (HGVS format, ClinVar check)
+    - Biomarker calculation validates TMB (range 0-100, cohort size check)
+    - Trial matching validates mechanism fit (vector dimensions match)
+  
+  Enables:
+    ✅ Self-correction (70% of errors fixed automatically)
+    ✅ Error transparency (human knows WHY flagged)
+
+WEEK 7-8: ITERATION ENGINE
+  Build:
+    - Evaluation function (quality scoring per task)
+    - Refinement strategy generator (adjust params, switch tools)
+    - Convergence criteria (quality threshold, max iterations)
+    - Improvement tracker (logs scores per iteration)
+  
+  Deliverable:
+    - Trial matching iterates until mechanism fit >0.85 OR 3 iterations
+    - Drug ranking iterates until confidence >0.80 OR no improvement
+  
+  Enables:
+    ✅ Self-improvement (results quality increases 10-20%)
+    ✅ Fewer user corrections needed
+```
+
+
+***
+
+### **Phase 3: Monitoring \& Triggers (Weeks 9-12)**
+
+```yaml
+WEEK 9-10: EVENT TRIGGER SYSTEM
+  Build:
+    - Trigger definitions (YAML config per trigger type)
+    - Trigger evaluator (checks conditions on data updates)
+    - Action executor (sends alerts, re-runs agents)
+    - Notification service (email, SMS, dashboard push)
+  
+  Deliverable:
+    - Trigger: CA-125 >25% rise → Alert oncologist + re-run resistance analysis
+    - Trigger: New trial matches mechanism >0.90 → Notify + add to dashboard
+    - Trigger: TMB-H detected → Update IO eligibility + re-rank drugs
+  
+  Enables:
+    ✅ Proactive monitoring (system watches, doesn't wait for user)
+    ✅ Early alerts (3-6 weeks before clinical progression)
+
+WEEK 11-12: MONITORING AGENTS
+  Build:
+    - CA-125 kinetics monitor (tracks serial CA-125, calculates slopes)
+    - ctDNA monitor (watches for MAPK mutations, ABCB1 upregulation)
+    - Treatment response monitor (RECIST 1.1 classification)
+    - Adverse event monitor (CTCAE grading)
+  
+  Deliverable:
+    - Continuous monitoring dashboard (live updates)

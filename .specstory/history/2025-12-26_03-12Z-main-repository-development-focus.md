@@ -19479,3 +19479,968 @@ Should I kill the backend server, or check its health first?
 
 ---
 
+_**User (2025-12-31 04:49Z)**_
+
+push everything to github 
+
+---
+
+_**Agent (model default, mode Agent)**_
+
+
+
+---
+
+
+Checking git status, then staging, committing, and pushing to GitHub.
+
+
+---
+
+<tool-use data-tool-type="shell" data-tool-name="run_terminal_cmd">
+<details><summary>Tool use: **run_terminal_cmd** • Run command: git status</summary>
+
+```bash
+git status
+```
+
+```
+On branch main
+Your branch is ahead of 'origin/main' by 3 commits.
+  (use "git push" to publish your local commits)
+
+Changes not staged for commit:
+  (use "git add/rm &lt;file&gt;..." to update what will be committed)
+  (use "git restore &lt;file&gt;..." to discard changes in working directory)                                                         
+  (commit or discard the untracked or modified content in submodules)                                                           
+        deleted:    .cursor/ALS_LONGITUDE_PRIZE_OUTREACH_MASTER_PLAN.mdc                                                        
+        modified:   .cursor/MOAT/ADVANCED_CARE_PLAN/02_RESISTANCE_PREDICTION.md                                                 
+        deleted:    .cursor/MOAT/ADVANCED_CARE_PLAN/05_CLINICAL_DOSSIER.mdc                                                     
+        deleted:    .cursor/MOAT/ADVANCED_CARE_PLAN/archive/ADVANCED_CARE_PLAN_CLINICAL_DOSSIER.mdc                             
+        deleted:    .cursor/MOAT/ADVANCED_CARE_PLAN/archive/ADVANCED_CARE_PLAN_EXPLAINED.mdc                                    
+        deleted:    .cursor/MOAT/ADVANCED_CARE_PLAN_CLINICAL_DOSSIER.mdc                                                        
+        deleted:    .cursor/MOAT/ADVANCED_CARE_PLAN_EXPLAINED.mdc                                                               
+        deleted:    .cursor/MOAT/AGENT_ASSIGNMENTS_SUMMARY.mdc
+        deleted:    .cursor/MOAT/ALS.mdc
+        deleted:    .cursor/MOAT/ANTHROPIC_LIFE_SCIENCES_MARKETPLACE.mdc                                                        
+        deleted:    .cursor/MOAT/ARCHON_CRISPRO_INTEGRATION.mdc
+        deleted:    .cursor/MOAT/ARCHON_CRISPRO_INTEGRATION_PLAN.mdc                                                            
+        deleted:    .cursor/MOAT/BRUTAL_DEMO_READINESS_ASSESSMENT_V2.mdc                                                        
+        deleted:    .cursor/MOAT/BRUTAL_DEMO_READINESS_ASSESSMENT_V3.mdc                                                        
+        deleted:    .cursor/MOAT/CLINICAL_TRIALS/00_MISSION.mdc
+        deleted:    .cursor/MOAT/CLINICAL_TRIALS/02_IMPLEMENTATION_STATUS.mdc                                                   
+        deleted:    .cursor/MOAT/CLINICAL_TRIALS/05_TRIAL_MATCHING_AGENT.mdc                                                    
+        deleted:    .cursor/MOAT/CLINICAL_TRIALS/archive/clinical-trials-coPilot.mdc                                            
+        deleted:    .cursor/MOAT/CLINICAL_TRIALS/publication/SAE_RESISTANCE/PUBLICATION_PLAN_PROXY_VS_TRUE_SAE.mdc              
+        deleted:    .cursor/MOAT/CORE_DELIVERABLES/00_MISSION.mdc                                                               
+        modified:   .cursor/MOAT/DELIVERABLES_PROGRESS_UPDATE.md
+        modified:   .cursor/MOAT/DELIVERABLES_REVIEW_SUMMARY.md
+        deleted:    .cursor/MOAT/DEMO_READINESS/00_MISSION.mdc
+        deleted:    .cursor/MOAT/DEMO_READINESS/01_EXECUTION_PLAN.mdc                                                           
+        deleted:    .cursor/MOAT/DEMO_READINESS/02_READINESS_ASSESSMENT.mdc                                                     
+        deleted:    .cursor/MOAT/DEMO_READINESS/archive/BRUTAL_DEMO_READINESS_ASSESSMENT_V3.mdc                                 
+        deleted:    .cursor/MOAT/DEMO_READINESS/archive/DEMO_READINESS_EXECUTION_PLAN.mdc                                       
+        deleted:    .cursor/MOAT/DEMO_READINESS_EXECUTION_PLAN.mdc                                                              
+        deleted:    .cursor/MOAT/DEMO_STATUS.mdc
+        deleted:    .cursor/MOAT/DEMO_TEST_CASES.mdc
+        deleted:    .cursor/MOAT/DEPENDENCY_CHECK_RESULTS.mdc
+        deleted:    .cursor/MOAT/Grounding.mdc
+        deleted:    .cursor/MOAT/MISSION_MM_RESISTANCE_PREDICTION.mdc                                                           
+        deleted:    .cursor/MOAT/MISSION_TMB_DEMO_INTEGRATION.mdc                                                               
+        deleted:    .cursor/MOAT/MISSION_TMB_PRODUCTION_BUILD.mdc                                                               
+        deleted:    .cursor/MOAT/MM/00_MISSION.mdc
+        deleted:    .cursor/MOAT/MM/archive/MISSION_MM_RESISTANCE_PREDICTION.mdc                                                
+        deleted:    .cursor/MOAT/MM_RESISTANCE_IMPLEMENTATION_GUIDE.mdc                                                         
+        deleted:    .cursor/MOAT/NF1_END_TO_END_APPROACH.mdc
+        deleted:    .cursor/MOAT/NYX-v2_LEARNING_CHECKPOINT_BLOG.mdc                                                            
+        deleted:    .cursor/MOAT/PHASE1_VERIFICATION_STATUS.mdc
+        deleted:    .cursor/MOAT/PREVENTION/idea.mdc
+        deleted:    .cursor/MOAT/PUBLICATION_PLAN_PROXY_VS_TRUE_SAE.mdc                                                         
+        deleted:    .cursor/MOAT/SAE_FAILURE_POSTMORTEM.mdc
+        deleted:    .cursor/MOAT/SAE_INTELLIGENCE/00_MISSION.mdc
+        deleted:    .cursor/MOAT/SAE_INTELLIGENCE/01_SAE_SYSTEM_DEBRIEF.mdc                                                     
+        deleted:    .cursor/MOAT/SAE_INTELLIGENCE/03_GENERALS_BATTLE_MAP.mdc                                                    
+        deleted:    .cursor/MOAT/SAE_INTELLIGENCE/Manager.mdc
+        deleted:    .cursor/MOAT/SAE_INTELLIGENCE/PLUMBER_A8_EXTERNAL_REPLICATION.mdc                                           
+        modified:   .cursor/MOAT/SAE_INTELLIGENCE/Publication-1/SAE_RESISTANCE/ERRATA.md                                        
+        deleted:    .cursor/MOAT/SAE_INTELLIGENCE/Publication-1/SAE_RESISTANCE/MANAGER_ROOT_CAUSE_ANALYSIS.mdc                  
+        deleted:    .cursor/MOAT/SAE_INTELLIGENCE/Publication-1/SAE_RESISTANCE/PUBLICATION_PLAN_PROXY_VS_TRUE_SAE.mdc           
+        deleted:    .cursor/MOAT/SAE_INTELLIGENCE/Publication-1/SAE_RESISTANCE/Scrap.mdc                                        
+        deleted:    .cursor/MOAT/SAE_INTELLIGENCE/Testing.mdc
+        deleted:    .cursor/MOAT/SAE_INTELLIGENCE/archive/ZO_SAE_INTELLIGENCE_SYSTEM_DEBRIEF.mdc                                
+        deleted:    .cursor/MOAT/SAE_INTELLIGENCE/test.mdc
+        deleted:    .cursor/MOAT/SAE_INTELLIGENCE_MOAT_EXPLAINED.mdc                                                            
+        deleted:    .cursor/MOAT/SAE_STEERABILITY_DEEP_DIVE.mdc
+        modified:   .cursor/MOAT/THERAPY_FIT_TEST_CASES.md
+        deleted:    .cursor/MOAT/ULTIMATE_MOAT_ORCHESTRATION.mdc
+        modified:   .cursor/MOAT/VERIFICATION_REPORT.md
+        deleted:    .cursor/MOAT/archon.mdc
+        deleted:    .cursor/MOAT/ayesha.moat.mdc
+        deleted:    .cursor/MOAT/clinical-trials-coPilot.mdc
+        deleted:    .cursor/MOAT/moat-1-page-enhanced.mdc
+        deleted:    .cursor/MOAT/moat-1-page.mdc
+        deleted:    .cursor/MOAT/moat-enhanced-presentation.mdc
+        deleted:    .cursor/MOAT/orchestration/00_MASTER_INDEX.mdc                                                              
+        deleted:    .cursor/MOAT/orchestration/00_MISSION.mdc
+        deleted:    .cursor/MOAT/orchestration/01_DATA_EXTRACTION_AGENT.mdc                                                     
+        deleted:    .cursor/MOAT/orchestration/02_BIOMARKER_AGENT.mdc                                                           
+        deleted:    .cursor/MOAT/orchestration/03_RESISTANCE_AGENT.mdc                                                          
+        deleted:    .cursor/MOAT/orchestration/04_DRUG_EFFICACY_AGENT.mdc                                                       
+        deleted:    .cursor/MOAT/orchestration/05_TRIAL_MATCHING_AGENT.mdc                                                      
+        deleted:    .cursor/MOAT/orchestration/06_NUTRITION_AGENT.mdc                                                           
+        deleted:    .cursor/MOAT/orchestration/07_CARE_PLAN_AGENT.mdc                                                           
+        deleted:    .cursor/MOAT/orchestration/08_MONITORING_AGENT.mdc                                                          
+        deleted:    .cursor/MOAT/orchestration/09_TRIGGER_SYSTEM.mdc                                                            
+        deleted:    .cursor/MOAT/orchestration/10_STATE_MANAGEMENT.mdc                                                          
+        deleted:    .cursor/MOAT/orchestration/11_API_CONTRACTS.mdc                                                             
+        deleted:    .cursor/MOAT/orchestration/12_UI_DASHBOARD.mdc                                                              
+        deleted:    .cursor/MOAT/orchestration/13_SECURITY_COMPLIANCE.mdc                                                       
+        deleted:    .cursor/MOAT/orchestration/14_SYNTHETIC_LETHALITY_ESSENTIALITY_AGENT.mdc                                    
+        deleted:    .cursor/MOAT/orchestration/15_ACCESS_ADVOCACY_AGENT.mdc                                                     
+        deleted:    .cursor/MOAT/orchestration/16_TOXICITY_RISK_AGENT.mdc                                                       
+        deleted:    .cursor/MOAT/orchestration/agent-implementation-guide.mdc                                                   
+        deleted:    .cursor/MOAT/product.mdc
+        deleted:    .cursor/MOAT/resume.mdc
+        deleted:    .cursor/MOAT/test.mdc
+        deleted:    .cursor/ayesha.mdc
+        deleted:    .cursor/ayesha/ADVANCED_CARE_PLAN_CLINICAL_DOSSIER.mdc                                                      
+        deleted:    .cursor/ayesha/ADVANCED_CARE_PLAN_EXPLAINED.mdc                                                             
+        modified:   .cursor/ayesha/ADVANCED_CARE_PLAN_RESISTANCE_PREDICTION.md                                                  
+        deleted:    .cursor/ayesha/AYESHA_RESISTANCE_ASSESSMENT.mdc                                                             
+        deleted:    .cursor/ayesha/AYESHA_VUS_DOSSIER_PDGFRA_S755P.mdc                                                          
+        deleted:    .cursor/ayesha/MISSION_JR3_COMPLETE_PATHWAY_RESISTANCE.mdc                                                  
+        deleted:    .cursor/ayesha/MISSION_JR3_DATA_ACQUISITION_STATUS.mdc                                                      
+        deleted:    .cursor/ayesha/MISSION_JR3_EXECUTION_PLAN.mdc                                                               
+        deleted:    .cursor/ayesha/MISSION_JR3_RESULTS_SUMMARY.mdc                                                              
+        deleted:    .cursor/ayesha/MISSION_JR3_REVIEW_AND_QUESTIONS.mdc                                                         
+        deleted:    .cursor/ayesha/MISSION_JR3_STATUS.mdc
+        deleted:    .cursor/ayesha/MISSION_MM_NEXT_ITERATION.mdc
+        deleted:    .cursor/ayesha/MM_SAE_GAP_ANALYSIS.mdc
+        deleted:    .cursor/ayesha/MM_VALIDATION_GROUND_TRUTH.mdc                                                               
+        modified:   .cursor/ayesha/PATHWAY_VALIDATION_ROADMAP.md
+        modified:   .cursor/ayesha/ZO_MEMORY_FINAL.md
+        modified:   .cursor/ayesha/ZO_MEMORY_RESTORATION.md
+        deleted:    .cursor/ayesha/ZO_SAE_INTELLIGENCE_SYSTEM_DEBRIEF.mdc                                                       
+        deleted:    .cursor/ayesha/archive/01_AYESHA_MASTER_PLAN.mdc                                                            
+        deleted:    .cursor/ayesha/archive/AYESHA_END_TO_END_AGENT_PLAN.mdc                                                     
+        deleted:    .cursor/ayesha/archive/AYESHA_PLANS_DOCTRINES_MASTER.mdc                                                    
+        deleted:    .cursor/ayesha/archive/AyeshasGenetics copy.mdc                                                             
+        deleted:    .cursor/ayesha/archive/AyeshasGenetics.mdc
+        deleted:    .cursor/ayesha/archive/SAE_COMPLETION_ROADMAP.mdc                                                           
+        deleted:    .cursor/ayesha/archive/TreatmentLine-Blog.mdc                                                               
+        deleted:    .cursor/ayesha/archive/ayesha_plan.mdc
+        deleted:    .cursor/ayesha/archive/jr3_mission/MISSION_JR3_COMPLETE_PATHWAY_RESISTANCE.mdc                              
+        deleted:    .cursor/ayesha/archive/jr3_mission/MISSION_JR3_DATA_ACQUISITION_STATUS.mdc                                  
+        deleted:    .cursor/ayesha/archive/jr3_mission/MISSION_JR3_EXECUTION_PLAN.mdc                                           
+        deleted:    .cursor/ayesha/archive/jr3_mission/MISSION_JR3_RESULTS_SUMMARY.mdc                                          
+        deleted:    .cursor/ayesha/archive/jr3_mission/MISSION_JR3_REVIEW_AND_QUESTIONS.mdc                                     
+        deleted:    .cursor/ayesha/archive/jr3_mission/MISSION_JR3_STATUS.mdc                                                   
+        deleted:    .cursor/ayesha/archive/jr3_mission/MISSION_MM_NEXT_ITERATION.mdc                                            
+        deleted:    .cursor/ayesha/archive/sae_documentation/SAE_VALIDATION_STRATEGY.mdc                                        
+        deleted:    .cursor/ayesha/archive/sporadic_cancer_strategy_doctrine.mdc                                                
+        deleted:    .cursor/ayesha/archive/zo_sae/ZO_SAE_INTELLIGENCE_SYSTEM_DEBRIEF.mdc                                        
+        deleted:    .cursor/ayesha/archive/zo_sae/ZO_SPE_WIWFM_COMPLETE_KNOWLEDGE.mdc                                           
+        deleted:    .cursor/ayesha/ayesha_plan.mdc
+        modified:   .cursor/ayesha/blog/LONGEVITY_PRECISION_PROTOCOL_BLOG.md                                                    
+        deleted:    .cursor/ayesha/blog/TreatmentLine-Blog.mdc
+        deleted:    .cursor/ayesha/blog/blog_metastasis_interception_framework.mdc                                              
+        deleted:    .cursor/ayesha/blog/blog_metastasis_interception_v2_structural.mdc                                          
+        deleted:    .cursor/ayesha/blog/blog_metastasis_v2_evolution.mdc                                                        
+        deleted:    .cursor/ayesha/blog/blog_mm_synthetic_lethality.mdc                                                         
+        deleted:    .cursor/ayesha/blog/blog_precision_medicine_yes_go.mdc                                                      
+        deleted:    .cursor/ayesha/blog/blog_smoke_tests_precisionrad_copilot.mdc                                               
+        deleted:    .cursor/ayesha/blog/blog_toxicity_risk_story.mdc                                                            
+        deleted:    .cursor/ayesha/blog/blog_two_hit_runx1.mdc
+        deleted:    .cursor/ayesha/blog/blog_wiwfm_confidence_story.mdc                                                         
+        deleted:    .cursor/ayesha/blog/clinical_genomics_command_center_doctrine.mdc                                           
+        deleted:    .cursor/ayesha/blog/complete_platform_evolution_doctrine.mdc                                                
+        deleted:    .cursor/ayesha/blog/decks/mm_slide_deck_content.mdc                                                         
+        deleted:    .cursor/ayesha/blog/mm_slide_deck_content.mdc                                                               
+        deleted:    .cursor/ayesha/blog/sythentic-lethality.mdc
+        deleted:    .cursor/ayesha/blog/tox101-blog.mdc
+        deleted:    .cursor/ayesha/blog/website/website_components_doctrine.mdc                                                 
+        deleted:    .cursor/ayesha/hypothesis_validator/archive/AGENT_JR_FRONTEND_COMPLETE_AUDIT.mdc                            
+        deleted:    .cursor/ayesha/hypothesis_validator/archive/AGENT_JR_MISSION_CONTROL_BUILD_PLAN.mdc                         
+        deleted:    .cursor/ayesha/hypothesis_validator/archive/AGENT_JR_NEXT_ITERATION.mdc                                     
+        deleted:    .cursor/ayesha/hypothesis_validator/archive/AGENT_JR_TCGA_MUTATION_FREQUENCY_EXTRACTION.mdc                 
+        deleted:    .cursor/ayesha/missions/agents247.mdc
+        deleted:    .cursor/ayesha/sae/sae.mdc
+        deleted:    .cursor/ayesha/sae_documentation/documentation/SAE_PHASE3_COMPLETE_DEBRIEF.mdc                              
+        deleted:    .cursor/ayesha/sae_documentation/planning_strategy/SAE_VALIDATION_STRATEGY.mdc                              
+        deleted:    .cursor/ayesha/tests/CT-V1.mdc
+        deleted:    .cursor/ayesha/tests/MBD4.mdc
+        deleted:    .cursor/ayesha/tests/PET-CT-Skul- Base-to-Mid-Thigh.mdc                                                     
+        deleted:    .cursor/ayesha/tests/cyctology-non-gyn.mdc
+        deleted:    .cursor/ayesha/tests/gemomics.mdc
+        deleted:    .cursor/ayesha/treatment.mdc
+        modified:   .cursor/ayesha/treatment_lines/.gitignore
+        modified:   .cursor/ayesha/treatment_lines/LICENSE
+        deleted:    .cursor/ayesha/treatment_lines/TREATMENT_LINE_INTEGRATION_DOCTRINE.mdc                                      
+        deleted:    .cursor/ayesha/treatment_lines/synthetic-lethality.mdc                                                      
+        deleted:    .cursor/concept/1_pager_precision_rad_co_pilot.mdc                                                          
+        deleted:    .cursor/concept/PLATFORM_EVOLUTION_MASTER_PLAN.mdc                                                          
+        deleted:    .cursor/concept/RUNX1.mdc
+        deleted:    .cursor/concept/aar_zeta_oracle_siege.mdc
+        deleted:    .cursor/concept/aar_zeta_oracle_siege_UPDATED.mdc                                                           
+        deleted:    .cursor/concept/evidence/benchmark_plan_doctrine.mdc                                                        
+        deleted:    .cursor/concept/evidence/blog_sota_fusion_engine.mdc                                                        
+        deleted:    .cursor/concept/evidence/copilot_doctrine.mdc                                                               
+        deleted:    .cursor/concept/evidence/doctrine_mm_guidance_v2.mdc                                                        
+        deleted:    .cursor/concept/evidence/evidence_benchmark_plan.mdc                                                        
+        deleted:    .cursor/concept/evidence/evidence_build_doctrine_for_agents.mdc                                             
+        deleted:    .cursor/concept/evidence/evidence_capability_impact_doctrine.mdc                                            
+        deleted:    .cursor/concept/evidence/evidence_doctrine_simple.mdc                                                       
+        deleted:    .cursor/concept/evidence/mm_drug_efficacy_doctrine.mdc                                                      
+        deleted:    .cursor/concept/evidence/mm_drug_response_doctrine.mdc                                                      
+        deleted:    .cursor/concept/evidence/trustworthy_evidence_doctrine.mdc                                                  
+        deleted:    .cursor/concept/evo2_endpoints_design.mdc
+        deleted:    .cursor/concept/jr2_dossier_mission/JR2_DOSSIER_PIPELINE_COMPLETE.mdc                                       
+        deleted:    .cursor/concept/runx1-milestone.mdc
+        deleted:    .cursor/crispro_ai_doctrine_101.mdc
+        deleted:    .cursor/docs.mdc
+        deleted:    .cursor/docs/LoI.mdc
+        deleted:    .cursor/docs/clinicalGenomics.mdc
+        deleted:    .cursor/docs/pharmGKPEndpoints.mdc
+        deleted:    .cursor/lectures/drugDevelopment/dd.mdc
+        deleted:    .cursor/lectures/drugDevelopment/drug_efficacy_contribution.mdc                                             
+        deleted:    .cursor/lectures/drugDevelopment/integrated_platform_contribution.mdc                                       
+        deleted:    .cursor/lectures/drugDevelopment/mechanism_trial_matching_contribution.mdc                                  
+        deleted:    .cursor/lectures/drugDevelopment/sae_intelligence_contribution.mdc                                          
+        deleted:    .cursor/lectures/drugDevelopment/therapy_fit_contribution.mdc                                               
+        deleted:    .cursor/lectures/drugDevelopment/toxicity_risk_contribution.mdc                                             
+        deleted:    .cursor/lectures/drugDevelopment/vus_resolution_contribution.mdc                                            
+        deleted:    .cursor/phd.mdc
+        deleted:    .cursor/plans/MBD4.mdc
+        deleted:    .cursor/plans/MM_DOCTRINES_EXECUTION_DIRECTIVE.mdc                                                          
+        deleted:    .cursor/plans/PATHWAY_VALIDATION_DATA_REQUIREMENTS.mdc                                                      
+        deleted:    .cursor/plans/ayesha_plan copy.mdc
+        deleted:    .cursor/plans/ayesha_plan.mdc
+        deleted:    .cursor/plans/ayeshas-system.mdc
+        deleted:    .cursor/plans/clinical-trials.mdc
+        deleted:    .cursor/plans/sae+wiwfm.mdc
+        deleted:    .cursor/plans/zo2.mdc
+        deleted:    .cursor/resistance_prophet/diseases/mm/MISSION.mdc                                                          
+        deleted:    .cursor/rules/AGENT_JR_FRONTEND_COMPLETE_AUDIT.mdc                                                          
+        deleted:    .cursor/rules/AGENT_JR_MISSION_CONTROL_BUILD_PLAN.mdc                                                       
+        deleted:    .cursor/rules/AGENT_JR_NEXT_ITERATION.mdc
+        deleted:    .cursor/rules/AGENT_JR_TCGA_MUTATION_FREQUENCY_EXTRACTION.mdc                                               
+        deleted:    .cursor/rules/AGENT_MANAGER_OPERATING_SYSTEM.mdc                                                            
+        deleted:    .cursor/rules/AGENT_ROLES_AND_AUTHORITY.mdc
+        deleted:    .cursor/rules/ALS.mdc
+        deleted:    .cursor/rules/AYESHA_SAE_WIWFM_INTEGRATION_PLAN.mdc                                                         
+        deleted:    .cursor/rules/BIOLOGICAL_CURE_DOCTRINE.mdc
+        deleted:    .cursor/rules/CHAT_RESTORATION_EMERGENCY_PROTOCOL.mdc                                                       
+        deleted:    .cursor/rules/CLIENT_DOSSIER_DOCTRINE.mdc
+        deleted:    .cursor/rules/MISSION_CONTROL_DASHBOARD_DESIGN.mdc                                                          
+        deleted:    .cursor/rules/MISSION_CONTROL_DASHBOARD_DOCTRINE.mdc                                                        
+        modified:   .cursor/rules/MM/INDEX.md
+        modified:   .cursor/rules/MM/Organizations/General_Doctrines/README.md                                                  
+        modified:   .cursor/rules/MM/Organizations/Internal/Doctrines/README.md                                                 
+        deleted:    .cursor/rules/MM/Organizations/Internal/Execution_Planning/README.md                                        
+        modified:   .cursor/rules/MM/Organizations/Internal/Publication_Materials/README.md                                     
+        modified:   .cursor/rules/MM/Organizations/Internal/Website_Marketing/README.md                                         
+        modified:   .cursor/rules/MM/Organizations/MD_Anderson/README.md                                                        
+        modified:   .cursor/rules/MM/Organizations/MSK/README.md
+        modified:   .cursor/rules/MM/Organizations/TCF1_Researchers/README.md                                                   
+        modified:   .cursor/rules/MM/README.md
+        deleted:    .cursor/rules/MM_ARCHITECTURE_BLOG.mdc
+        deleted:    .cursor/rules/NYX-v2_LEARNING_CHECKPOINT_BLOG.mdc                                                           
+        deleted:    .cursor/rules/PLATFORM_EVOLUTION_MASTER_PLAN.mdc                                                            
+        deleted:    .cursor/rules/PLATINUM_RESPONSE_DATA_HUNT_BLOG.mdc                                                          
+        deleted:    .cursor/rules/RESISTANCE_PROPHET_TO_MISSION_CONTROL_PLAN.mdc                                                
+        deleted:    .cursor/rules/SAE_BIOMARKER_BLOG_ACCESSIBLE.mdc                                                             
+        deleted:    .cursor/rules/SAE_BIOMARKER_DISCOVERY.mdc
+        deleted:    .cursor/rules/SAE_BIOMARKER_DISCOVERY_EXPLAINED.mdc                                                         
+        deleted:    .cursor/rules/SAE_PRECISION_ONCOLOGY_TECHNICAL_BLOG.mdc                                                     
+        deleted:    .cursor/rules/SAE_TECHNICAL_LESSONS.mdc
+        deleted:    .cursor/rules/SAE_TO_RESISTANCE_PROPHET_PIPELINE.mdc                                                        
+        deleted:    .cursor/rules/SCALABLE_DOSSIER_ARCHITECTURE_PLAN.mdc                                                        
+        deleted:    .cursor/rules/VUS_DDR_DISCOVERY_DATA_HANDOFF.mdc                                                            
+        deleted:    .cursor/rules/VUS_IDENTIFY_DEBUG_HANDOFF.mdc
+        deleted:    .cursor/rules/ZO_CALIBRATION_DOCTRINE.mdc
+        deleted:    .cursor/rules/ZO_CODEBASE_KNOWLEDGE_BASE.mdc
+        deleted:    .cursor/rules/ZO_MASTER_KNOWLEDGE_BASE.mdc
+        modified:   .cursor/rules/aacr-collaborations-repo (modified content)                                                   
+        deleted:    .cursor/rules/ayesha_dossier_dashboard_doctrine.mdc                                                         
+        deleted:    .cursor/rules/boltz.mdc
+        deleted:    .cursor/rules/chat_history_export_restore_doctrine.mdc                                                      
+        deleted:    .cursor/rules/data_extraction_smoke_test.mdc
+        deleted:    .cursor/rules/evo2_brca1_vep_doctrine.mdc
+        deleted:    .cursor/rules/med_gemini_integration_doctrine.mdc                                                           
+        deleted:    .cursor/rules/mission-control-patient.mdc
+        deleted:    .cursor/rules/operation_deep_dive_doctrine.mdc                                                              
+        deleted:    .cursor/rules/patent_strategy_doctrine.mdc
+        modified:   .cursor/rules/research/cohort_context_concept.mdc                                                           
+        deleted:    .cursor/rules/zeta_university_phd_zo_learning_log.mdc                                                       
+        deleted:    .cursor/rules/zo.mdc
+        modified:   .cursorindexingignore
+        modified:   .cursorrules
+        modified:   .specstory/history/2025-12-26_02-47Z-main-branch-work-preference-1.md                                       
+        modified:   .specstory/history/2025-12-26_02-47Z-main-branch-work-preference.md                                         
+        modified:   .specstory/history/2025-12-26_03-12Z-main-repository-development-focus.md                                   
+        modified:   .specstory/history/2025-12-26_03-12Z-resistance-prophet.md                                                  
+        modified:   .specstory/history/2025-12-26_03-23Z-zeta-realm-rules-and-zo-s-role.md                                      
+        modified:   .specstory/history/2025-12-26_22-29Z-cursor-slow-performance-audit.md                                       
+        modified:   .specstory/history/2025-12-27_05-35Z-zeta-realm-rules-and-zo-s-creation.md                                  
+        deleted:    .worktree_backup/0Kwy8/.cursor/MOAT/ayesha.moat.mdc                                                         
+        deleted:    .worktree_backup/0Kwy8/.cursor/MOAT/orchestration/00_MASTER_INDEX.mdc                                       
+        deleted:    .worktree_backup/0Kwy8/.cursor/plans/MBD4.mdc                                                               
+        deleted:    .worktree_backup/0Kwy8/.cursor/plans/PATHWAY_VALIDATION_DATA_REQUIREMENTS.mdc                               
+        deleted:    .worktree_backup/0Kwy8/.cursor/plans/ayesha_plan.mdc                                                        
+        deleted:    .worktree_backup/0Kwy8/.cursor/rules/SAE_TO_RESISTANCE_PROPHET_PIPELINE.mdc                                 
+        deleted:    .worktree_backup/0Kwy8/.cursor/rules/research/therapy_fit_concept.mdc                                       
+        deleted:    .worktree_backup/0Kwy8/.cursor/rules/research/toxicity_risk_concept.mdc                                     
+        modified:   GITHUB_CODE_AUDIT_AND_STRATEGY.md
+        modified:   GITHUB_PUBLICATION_STRATEGY.md
+        modified:   PUBLICATION_INVENTORY.md
+        deleted:    boltz-main/alphafold3-main/src/alphafold3/example.mdc                                                       
+        deleted:    docs/doctrine/alphafold-boltz-operation-forge.mdc                                                           
+        deleted:    docs/doctrine/forge_and_simulate_protocol.mdc                                                               
+        deleted:    docs/doctrine/master_forge_boltz_gauntlet_doctrine.mdc                                                      
+        deleted:    docs/doctrine/myeloma_demo_doctrine.mdc
+        deleted:    external/runx1/core/runx1/docs/RUNX1.mdc
+        deleted:    external/runx1/core/runx1/docs/runx1_implementation_deep_dive.mdc                                           
+        deleted:    external/runx1_workspace/documentation/runx1_implementation_deep_dive.mdc                                   
+        deleted:    external/runx1_workspace/research_docs/RUNX1.mdc                                                            
+        modified:   oncology-coPilot/oncology-backend (modified content, untracked content)                                     
+        modified:   oncology-coPilot/oncology-backend-minimal (modified content, untracked content)                             
+        modified:   oncology-coPilot/oncology-frontend/src/App.jsx                                                              
+        modified:   oncology-coPilot/oncology-frontend/src/components/myeloma/ResistancePanel.jsx                               
+        modified:   oncology-coPilot/oncology-frontend/src/components/sporadic/GermlineStatusBanner.jsx                         
+        modified:   oncology-coPilot/oncology-frontend/src/components/vus/AnalysisResults.jsx                                   
+        modified:   oncology-coPilot/oncology-frontend/src/components/vus/EfficacyModal.jsx                                     
+        modified:   oncology-coPilot/oncology-frontend/src/components/vus/ToxicityChip.jsx                                      
+        modified:   publication/.gitignore
+        modified:   publication/LICENSE
+        modified:   publication/README.md
+        deleted:    publication/explanations/output.mdc
+        deleted:    publication/figures/publication/explanations/output.mdc                                                     
+        modified:   publications (modified content)
+        modified:   scripts/data_acquisition/fetch_cbioportal_mm_cohorts.py                                                     
+        deleted:    shared-agent-plans/zo2.mdc
+        deleted:    src/services/evo_service/MBD4.mdc
+        deleted:    technical_support_benchmark.mdc
+        deleted:    test.mdc
+        deleted:    trial.mdc
+        deleted:    zo2.mdc
+
+Untracked files:
+  (use "git add &lt;file&gt;..." to include in what will be committed)
+        .cursor/METASTASIS_DASHBOARD_ALIGNMENT_REVIEW.md
+        .cursor/MOAT/RESISTANCE_PROPHET_PRODUCTION_PLAN.md
+        .cursor/MOAT/RESISTANCE_PROPHET_PRODUCTION_STATUS.md
+        .cursor/MOAT/SPORADIC_CANCER_FRONTEND_INTEGRATION_COMPLETE.md                                                           
+        .cursor/MOAT/SPORADIC_CANCER_PRODUCTION_AUDIT.md
+        .cursor/MOAT/SPORADIC_CANCER_PRODUCTION_PLAN.md
+        .cursor/MOAT/SPORADIC_CANCER_PRODUCTION_STATUS.md
+        .cursor/MOAT/ZO_CODEBASE_DECODER_PLAN.mdc
+        .cursor/plans/COHORT_FRAMEWORK_DOSING_VALIDATION_INTEGRATION.md                                                         
+        .cursor/plans/DOSING_GUIDANCE_VALIDATION_PLAN.md
+        .cursor/rules/MOAT/
+        .cursor/rules/ORGANIZATION_SUMMARY.md
+        .cursor/rules/agents/
+        .cursor/rules/ayesha/
+        .cursor/rules/concept/
+        .cursor/rules/concepts/
+        .cursor/rules/docs/
+        .cursor/rules/doctrines/
+        .cursor/rules/dossiers/
+        .cursor/rules/index/
+        .cursor/rules/lectures/
+        .cursor/rules/mission_control/
+        .cursor/rules/plans/
+        .cursor/rules/platform/
+        .cursor/rules/projects/
+        .cursor/rules/publications/
+        .cursor/rules/resistance_prophet/
+        .cursor/rules/sae/
+        .cursor/rules/temp/
+        .cursor/rules/testing/
+        .cursor/rules/utilities/
+        .cursor/rules/zo/
+        .cursor/scripts/
+        .specstory/history/2025-12-31_02-55Z-zeta-realm-and-zo-s-rules.md                                                       
+        .specstory/history/2025-12-31_03-22Z-pharma-and-kelim-test-mentions.md                                                  
+        linkedin_post_alternative.md
+        linkedin_post_draft.md
+        oncology-coPilot/oncology-frontend/src/components/dosing/                                                               
+        oncology-coPilot/oncology-frontend/src/components/personalized_outreach/                                                
+        oncology-coPilot/oncology-frontend/src/pages/OutreachDashboard.jsx                                                      
+        scripts/data_acquisition/utils/project_data_sphere_client.py                                                            
+
+no changes added to commit (use "git add" and/or "git commit -a")                                                               
+```
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="shell" data-tool-name="run_terminal_cmd">
+<details><summary>Tool use: **run_terminal_cmd** • Run command: git remote -v</summary>
+
+```bash
+git remote -v
+```
+
+```
+origin  https://github.com/fjkiani/crispro.git (fetch)
+origin  https://github.com/fjkiani/crispro.git (push)
+upstream        https://github.com/ArcInstitute/evo2.git (fetch)
+upstream        https://github.com/ArcInstitute/evo2.git (push)
+```
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Staging all changes, then committing and pushing to GitHub.
+
+
+---
+
+<tool-use data-tool-type="shell" data-tool-name="run_terminal_cmd">
+<details><summary>Tool use: **run_terminal_cmd** • Run command: git add -A</summary>
+
+```bash
+git add -A
+```
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="shell" data-tool-name="run_terminal_cmd">
+<details><summary>Tool use: **run_terminal_cmd** • Run command: git status --short | head -20</summary>
+
+```bash
+git status --short | head -20
+```
+
+```
+A  .cursor/METASTASIS_DASHBOARD_ALIGNMENT_REVIEW.md
+M  .cursor/MOAT/ADVANCED_CARE_PLAN/02_RESISTANCE_PREDICTION.md
+M  .cursor/MOAT/DELIVERABLES_PROGRESS_UPDATE.md
+M  .cursor/MOAT/DELIVERABLES_REVIEW_SUMMARY.md
+A  .cursor/MOAT/PLUMBER_PRE_EXECUTION_PLAN.md
+A  .cursor/MOAT/RESISTANCE_PROPHET_PRODUCTION_PLAN.md
+A  .cursor/MOAT/RESISTANCE_PROPHET_PRODUCTION_STATUS.md
+M  .cursor/MOAT/SAE_INTELLIGENCE/Publication-1/SAE_RESISTANCE/ERRATA.md                                                         
+A  .cursor/MOAT/SPORADIC_CANCER_FRONTEND_INTEGRATION_COMPLETE.md
+A  .cursor/MOAT/SPORADIC_CANCER_PRODUCTION_AUDIT.md
+A  .cursor/MOAT/SPORADIC_CANCER_PRODUCTION_PLAN.md
+A  .cursor/MOAT/SPORADIC_CANCER_PRODUCTION_STATUS.md
+M  .cursor/MOAT/THERAPY_FIT_TEST_CASES.md
+M  .cursor/MOAT/VERIFICATION_REPORT.md
+A  .cursor/MOAT/ZO_CODEBASE_DECODER_PLAN.mdc
+M  .cursor/ayesha/ADVANCED_CARE_PLAN_RESISTANCE_PREDICTION.md
+M  .cursor/ayesha/PATHWAY_VALIDATION_ROADMAP.md
+M  .cursor/ayesha/ZO_MEMORY_FINAL.md
+M  .cursor/ayesha/ZO_MEMORY_RESTORATION.md
+M  .cursor/ayesha/blog/LONGEVITY_PRECISION_PROTOCOL_BLOG.md
+```
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="shell" data-tool-name="run_terminal_cmd">
+<details><summary>Tool use: **run_terminal_cmd** • Run command: git commit -m "Cleanup: Remove archived files and update documentation
+
+- Remove archived MOAT, Ayesha, and doctrine files
+- Update resistance prediction and sporadic cancer documentation
+- Add new MOAT production plans and status documents
+- Reorganize rules directory structure
+- Update frontend components for dosing and outreach features"</summary>
+
+```bash
+git commit -m "Cleanup: Remove archived files and update documentation
+
+- Remove archived MOAT, Ayesha, and doctrine files
+- Update resistance prediction and sporadic cancer documentation
+- Add new MOAT production plans and status documents
+- Reorganize rules directory structure
+- Update frontend components for dosing and outreach features"
+```
+
+```
+[main 8abb86f] Cleanup: Remove archived files and update documentation                                                          
+ 404 files changed, 282288 insertions(+), 88105 deletions(-)
+ create mode 100644 .cursor/METASTASIS_DASHBOARD_ALIGNMENT_REVIEW.md                                                            
+ create mode 100644 .cursor/MOAT/PLUMBER_PRE_EXECUTION_PLAN.md
+ create mode 100644 .cursor/MOAT/RESISTANCE_PROPHET_PRODUCTION_PLAN.md                                                          
+ create mode 100644 .cursor/MOAT/RESISTANCE_PROPHET_PRODUCTION_STATUS.md                                                        
+ create mode 100644 .cursor/MOAT/SPORADIC_CANCER_FRONTEND_INTEGRATION_COMPLETE.md                                               
+ create mode 100644 .cursor/MOAT/SPORADIC_CANCER_PRODUCTION_AUDIT.md                                                            
+ create mode 100644 .cursor/MOAT/SPORADIC_CANCER_PRODUCTION_PLAN.md                                                             
+ create mode 100644 .cursor/MOAT/SPORADIC_CANCER_PRODUCTION_STATUS.md                                                           
+ create mode 100644 .cursor/MOAT/ZO_CODEBASE_DECODER_PLAN.mdc
+ create mode 100644 .cursor/plans/COHORT_FRAMEWORK_DOSING_VALIDATION_INTEGRATION.md                                             
+ create mode 100644 .cursor/plans/DOSING_GUIDANCE_VALIDATION_PLAN.md                                                            
+ delete mode 100644 .cursor/rules/MM/Organizations/Internal/Execution_Planning/README.md                                        
+ rename .cursor/{ =&gt; rules}/MOAT/ADVANCED_CARE_PLAN/05_CLINICAL_DOSSIER.mdc (100%)                                              
+ rename .cursor/{ =&gt; rules}/MOAT/ADVANCED_CARE_PLAN/archive/ADVANCED_CARE_PLAN_CLINICAL_DOSSIER.mdc (100%)                      
+ rename .cursor/{ =&gt; rules}/MOAT/ADVANCED_CARE_PLAN/archive/ADVANCED_CARE_PLAN_EXPLAINED.mdc (100%)                             
+ rename .cursor/{ =&gt; rules}/MOAT/ADVANCED_CARE_PLAN_CLINICAL_DOSSIER.mdc (100%)                                                 
+ rename .cursor/{ =&gt; rules}/MOAT/ADVANCED_CARE_PLAN_EXPLAINED.mdc (100%)                                                        
+ rename .cursor/{ =&gt; rules}/MOAT/AGENT_ASSIGNMENTS_SUMMARY.mdc (100%)                                                           
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/COMPLETE_KNOWLEDGE_BASE.md                                      
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/COMPREHENSIVE_KNOWLEDGE_BASE.md                                 
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/CONSOLIDATION_COMPLETE.md                                       
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/CORE_DOCTRINES/mission_discipline_reminder.mdc                  
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/CORE_DOCTRINES/pharma_suppression_doctrine.mdc                  
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/CORE_DOCTRINES/resistance_framework_doctrine.mdc                
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/EXTRACTION_COMPLETE.md                                          
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/EXTRACTION_SUMMARY.md                                           
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/HISTORICAL_CONTEXT/correction_reminder_1.mdc                    
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/HISTORICAL_CONTEXT/correction_reminder_10.mdc                   
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/HISTORICAL_CONTEXT/correction_reminder_11.mdc                   
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/HISTORICAL_CONTEXT/correction_reminder_12.mdc                   
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/HISTORICAL_CONTEXT/correction_reminder_13.mdc                   
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/HISTORICAL_CONTEXT/correction_reminder_14.mdc                   
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/HISTORICAL_CONTEXT/correction_reminder_15.mdc                   
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/HISTORICAL_CONTEXT/correction_reminder_2.mdc                    
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/HISTORICAL_CONTEXT/correction_reminder_3.mdc                    
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/HISTORICAL_CONTEXT/correction_reminder_4.mdc                    
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/HISTORICAL_CONTEXT/correction_reminder_5.mdc                    
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/HISTORICAL_CONTEXT/correction_reminder_6.mdc                    
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/HISTORICAL_CONTEXT/correction_reminder_7.mdc                    
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/HISTORICAL_CONTEXT/correction_reminder_8.mdc                    
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/HISTORICAL_CONTEXT/correction_reminder_9.mdc                    
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/HISTORICAL_CONTEXT/strategic_decision_1.mdc                     
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/HISTORICAL_CONTEXT/strategic_decision_2.mdc                     
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/HISTORICAL_CONTEXT/strategic_decision_3.mdc                     
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/KNOWLEDGE_INDEX.md                                              
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/README.md                                                       
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/STRATEGIC_FRAMEWORKS/factory_publication_strategy.mdc           
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/TECHNICAL_PATTERNS/code_example_10_yaml.mdc                     
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/TECHNICAL_PATTERNS/code_example_11_yaml.mdc                     
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/TECHNICAL_PATTERNS/code_example_12_yaml.mdc                     
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/TECHNICAL_PATTERNS/code_example_13_yaml.mdc                     
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/TECHNICAL_PATTERNS/code_example_14_yaml.mdc                     
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/TECHNICAL_PATTERNS/code_example_15_yaml.mdc                     
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/TECHNICAL_PATTERNS/code_example_16_yaml.mdc                     
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/TECHNICAL_PATTERNS/code_example_17_yaml.mdc                     
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/TECHNICAL_PATTERNS/code_example_18_yaml.mdc                     
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/TECHNICAL_PATTERNS/code_example_19_yaml.mdc                     
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/TECHNICAL_PATTERNS/code_example_1_yaml.mdc                      
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/TECHNICAL_PATTERNS/code_example_20_yaml.mdc                     
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/TECHNICAL_PATTERNS/code_example_2_yaml.mdc                      
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/TECHNICAL_PATTERNS/code_example_3_yaml.mdc                      
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/TECHNICAL_PATTERNS/code_example_4_yaml.mdc                      
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/TECHNICAL_PATTERNS/code_example_5_yaml.mdc                      
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/TECHNICAL_PATTERNS/code_example_6_yaml.mdc                      
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/TECHNICAL_PATTERNS/code_example_7_yaml.mdc                      
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/TECHNICAL_PATTERNS/code_example_8_yaml.mdc                      
+ create mode 100644 .cursor/rules/MOAT/AGENT_TRAINING_KNOWLEDGE/TECHNICAL_PATTERNS/code_example_9_yaml.mdc                      
+ rename .cursor/{ =&gt; rules}/MOAT/ALS.mdc (100%)
+ rename .cursor/{ =&gt; rules}/MOAT/ANTHROPIC_LIFE_SCIENCES_MARKETPLACE.mdc (100%)                                                 
+ rename .cursor/{ =&gt; rules}/MOAT/ARCHON_CRISPRO_INTEGRATION.mdc (100%)                                                          
+ rename .cursor/{ =&gt; rules}/MOAT/ARCHON_CRISPRO_INTEGRATION_PLAN.mdc (100%)                                                     
+ rename .cursor/{ =&gt; rules}/MOAT/BRUTAL_DEMO_READINESS_ASSESSMENT_V2.mdc (100%)                                                 
+ rename .cursor/{ =&gt; rules}/MOAT/BRUTAL_DEMO_READINESS_ASSESSMENT_V3.mdc (100%)                                                 
+ rename .cursor/{ =&gt; rules}/MOAT/CLINICAL_TRIALS/00_MISSION.mdc (100%)                                                          
+ rename .cursor/{ =&gt; rules}/MOAT/CLINICAL_TRIALS/02_IMPLEMENTATION_STATUS.mdc (100%)                                            
+ rename .cursor/{ =&gt; rules}/MOAT/CLINICAL_TRIALS/05_TRIAL_MATCHING_AGENT.mdc (100%)                                             
+ rename .cursor/{ =&gt; rules}/MOAT/CLINICAL_TRIALS/archive/clinical-trials-coPilot.mdc (100%)                                     
+ rename .cursor/{ =&gt; rules}/MOAT/CLINICAL_TRIALS/publication/SAE_RESISTANCE/PUBLICATION_PLAN_PROXY_VS_TRUE_SAE.mdc (100%)       
+ create mode 100644 .cursor/rules/MOAT/COMPREHENSIVE_EXTRACTION_PLAN.mdc                                                        
+ rename .cursor/{ =&gt; rules}/MOAT/CORE_DELIVERABLES/00_MISSION.mdc (100%)                                                        
+ rename .cursor/{ =&gt; rules}/MOAT/DEMO_READINESS/00_MISSION.mdc (100%)                                                           
+ rename .cursor/{ =&gt; rules}/MOAT/DEMO_READINESS/01_EXECUTION_PLAN.mdc (100%)                                                    
+ rename .cursor/{ =&gt; rules}/MOAT/DEMO_READINESS/02_READINESS_ASSESSMENT.mdc (100%)                                              
+ rename .cursor/{ =&gt; rules}/MOAT/DEMO_READINESS/archive/BRUTAL_DEMO_READINESS_ASSESSMENT_V3.mdc (100%)                          
+ rename .cursor/{ =&gt; rules}/MOAT/DEMO_READINESS/archive/DEMO_READINESS_EXECUTION_PLAN.mdc (100%)                                
+ rename .cursor/{ =&gt; rules}/MOAT/DEMO_READINESS_EXECUTION_PLAN.mdc (100%)                                                       
+ rename .cursor/{ =&gt; rules}/MOAT/DEMO_STATUS.mdc (100%)
+ rename .cursor/{ =&gt; rules}/MOAT/DEMO_TEST_CASES.mdc (100%)
+ rename .cursor/{ =&gt; rules}/MOAT/DEPENDENCY_CHECK_RESULTS.mdc (100%)                                                            
+ rename .cursor/{ =&gt; rules}/MOAT/Grounding.mdc (100%)
+ create mode 100644 .cursor/rules/MOAT/KNOWLEDGE_ORGANIZATION_STRATEGY.mdc                                                      
+ create mode 100644 .cursor/rules/MOAT/KNOWLEDGE_ORGANIZATION_SUMMARY.md                                                        
+ rename .cursor/{ =&gt; rules}/MOAT/MISSION_MM_RESISTANCE_PREDICTION.mdc (100%)                                                    
+ rename .cursor/{ =&gt; rules}/MOAT/MISSION_TMB_DEMO_INTEGRATION.mdc (100%)                                                        
+ rename .cursor/{ =&gt; rules}/MOAT/MISSION_TMB_PRODUCTION_BUILD.mdc (100%)                                                        
+ rename .cursor/{ =&gt; rules}/MOAT/MM/00_MISSION.mdc (100%)
+ rename .cursor/{ =&gt; rules}/MOAT/MM/archive/MISSION_MM_RESISTANCE_PREDICTION.mdc (100%)                                         
+ rename .cursor/{ =&gt; rules}/MOAT/MM_RESISTANCE_IMPLEMENTATION_GUIDE.mdc (100%)                                                  
+ rename .cursor/{ =&gt; rules}/MOAT/NF1_END_TO_END_APPROACH.mdc (100%)                                                             
+ rename .cursor/{ =&gt; rules}/MOAT/NYX-v2_LEARNING_CHECKPOINT_BLOG.mdc (100%)                                                     
+ rename .cursor/{ =&gt; rules}/MOAT/PHASE1_VERIFICATION_STATUS.mdc (100%)                                                          
+ rename .cursor/{ =&gt; rules}/MOAT/PREVENTION/idea.mdc (100%)
+ rename .cursor/{ =&gt; rules}/MOAT/PUBLICATION_PLAN_PROXY_VS_TRUE_SAE.mdc (100%)                                                  
+ create mode 100644 .cursor/rules/MOAT/RESISTANCE_PREDICTION_FRAMEWORK_4_LAYERS.mdc                                             
+ rename .cursor/{ =&gt; rules}/MOAT/SAE_FAILURE_POSTMORTEM.mdc (100%)                                                              
+ rename .cursor/{ =&gt; rules}/MOAT/SAE_INTELLIGENCE/00_MISSION.mdc (100%)                                                         
+ rename .cursor/{ =&gt; rules}/MOAT/SAE_INTELLIGENCE/01_SAE_SYSTEM_DEBRIEF.mdc (100%)                                              
+ rename .cursor/{ =&gt; rules}/MOAT/SAE_INTELLIGENCE/03_GENERALS_BATTLE_MAP.mdc (100%)                                             
+ rename .cursor/{ =&gt; rules}/MOAT/SAE_INTELLIGENCE/Manager.mdc (100%)                                                            
+ rename .cursor/{ =&gt; rules}/MOAT/SAE_INTELLIGENCE/PLUMBER_A8_EXTERNAL_REPLICATION.mdc (100%)                                    
+ rename .cursor/{ =&gt; rules}/MOAT/SAE_INTELLIGENCE/Publication-1/SAE_RESISTANCE/MANAGER_ROOT_CAUSE_ANALYSIS.mdc (100%)           
+ rename .cursor/{ =&gt; rules}/MOAT/SAE_INTELLIGENCE/Publication-1/SAE_RESISTANCE/PUBLICATION_PLAN_PROXY_VS_TRUE_SAE.mdc (100%)    
+ rename .cursor/{ =&gt; rules}/MOAT/SAE_INTELLIGENCE/Publication-1/SAE_RESISTANCE/Scrap.mdc (100%)                                 
+ rename .cursor/{ =&gt; rules}/MOAT/SAE_INTELLIGENCE/Testing.mdc (100%)                                                            
+ rename .cursor/{ =&gt; rules}/MOAT/SAE_INTELLIGENCE/archive/ZO_SAE_INTELLIGENCE_SYSTEM_DEBRIEF.mdc (100%)                         
+ rename .cursor/{ =&gt; rules}/MOAT/SAE_INTELLIGENCE/test.mdc (100%)                                                               
+ rename .cursor/{ =&gt; rules}/MOAT/SAE_INTELLIGENCE_MOAT_EXPLAINED.mdc (100%)                                                     
+ rename .cursor/{ =&gt; rules}/MOAT/SAE_STEERABILITY_DEEP_DIVE.mdc (100%)                                                          
+ rename .cursor/{ =&gt; rules}/MOAT/ULTIMATE_MOAT_ORCHESTRATION.mdc (100%)                                                         
+ create mode 100644 .cursor/rules/MOAT/ZO_CODEBASE_DECODER_PLAN.mdc                                                             
+ rename .cursor/{ =&gt; rules}/MOAT/archon.mdc (100%)
+ rename .cursor/{ =&gt; rules}/MOAT/ayesha.moat.mdc (100%)
+ rename .cursor/{ =&gt; rules}/MOAT/clinical-trials-coPilot.mdc (100%)                                                             
+ rename .cursor/{ =&gt; rules}/MOAT/moat-1-page-enhanced.mdc (100%)
+ rename .cursor/{ =&gt; rules}/MOAT/moat-1-page.mdc (100%)
+ rename .cursor/{ =&gt; rules}/MOAT/moat-enhanced-presentation.mdc (100%)                                                          
+ rename .cursor/{ =&gt; rules}/MOAT/orchestration/00_MASTER_INDEX.mdc (100%)                                                       
+ rename .cursor/{ =&gt; rules}/MOAT/orchestration/00_MISSION.mdc (100%)                                                            
+ rename .cursor/{ =&gt; rules}/MOAT/orchestration/01_DATA_EXTRACTION_AGENT.mdc (100%)                                              
+ rename .cursor/{ =&gt; rules}/MOAT/orchestration/02_BIOMARKER_AGENT.mdc (100%)                                                    
+ rename .cursor/{ =&gt; rules}/MOAT/orchestration/03_RESISTANCE_AGENT.mdc (100%)                                                   
+ rename .cursor/{ =&gt; rules}/MOAT/orchestration/04_DRUG_EFFICACY_AGENT.mdc (100%)                                                
+ rename .cursor/{ =&gt; rules}/MOAT/orchestration/05_TRIAL_MATCHING_AGENT.mdc (100%)                                               
+ rename .cursor/{ =&gt; rules}/MOAT/orchestration/06_NUTRITION_AGENT.mdc (100%)                                                    
+ rename .cursor/{ =&gt; rules}/MOAT/orchestration/07_CARE_PLAN_AGENT.mdc (100%)                                                    
+ rename .cursor/{ =&gt; rules}/MOAT/orchestration/08_MONITORING_AGENT.mdc (100%)                                                   
+ rename .cursor/{ =&gt; rules}/MOAT/orchestration/09_TRIGGER_SYSTEM.mdc (100%)                                                     
+ rename .cursor/{ =&gt; rules}/MOAT/orchestration/10_STATE_MANAGEMENT.mdc (100%)                                                   
+ rename .cursor/{ =&gt; rules}/MOAT/orchestration/11_API_CONTRACTS.mdc (100%)                                                      
+ rename .cursor/{ =&gt; rules}/MOAT/orchestration/12_UI_DASHBOARD.mdc (100%)                                                       
+ rename .cursor/{ =&gt; rules}/MOAT/orchestration/13_SECURITY_COMPLIANCE.mdc (100%)                                                
+ rename .cursor/{ =&gt; rules}/MOAT/orchestration/14_SYNTHETIC_LETHALITY_ESSENTIALITY_AGENT.mdc (100%)                             
+ rename .cursor/{ =&gt; rules}/MOAT/orchestration/15_ACCESS_ADVOCACY_AGENT.mdc (100%)                                              
+ rename .cursor/{ =&gt; rules}/MOAT/orchestration/16_TOXICITY_RISK_AGENT.mdc (100%)                                                
+ rename .cursor/{ =&gt; rules}/MOAT/orchestration/agent-implementation-guide.mdc (100%)                                            
+ rename .cursor/{ =&gt; rules}/MOAT/product.mdc (100%)
+ rename .cursor/{ =&gt; rules}/MOAT/resume.mdc (100%)
+ rename .cursor/{ =&gt; rules}/MOAT/test.mdc (100%)
+ create mode 100644 .cursor/rules/ORGANIZATION_SUMMARY.md
+ rename .cursor/{ayesha/hypothesis_validator/archive =&gt; rules/agents}/AGENT_JR_FRONTEND_COMPLETE_AUDIT.mdc (100%)               
+ rename .cursor/{ayesha/hypothesis_validator/archive =&gt; rules/agents}/AGENT_JR_MISSION_CONTROL_BUILD_PLAN.mdc (100%)            
+ rename .cursor/{ayesha/hypothesis_validator/archive =&gt; rules/agents}/AGENT_JR_NEXT_ITERATION.mdc (100%)                        
+ rename .cursor/{ayesha/hypothesis_validator/archive =&gt; rules/agents}/AGENT_JR_TCGA_MUTATION_FREQUENCY_EXTRACTION.mdc (100%)    
+ rename .cursor/rules/{ =&gt; agents}/AGENT_MANAGER_OPERATING_SYSTEM.mdc (100%)                                                    
+ rename .cursor/rules/{ =&gt; agents}/AGENT_ROLES_AND_AUTHORITY.mdc (100%)                                                         
+ rename .cursor/{ =&gt; rules}/ayesha/ADVANCED_CARE_PLAN_CLINICAL_DOSSIER.mdc (100%)                                               
+ rename .cursor/{ =&gt; rules}/ayesha/ADVANCED_CARE_PLAN_EXPLAINED.mdc (100%)                                                      
+ rename .cursor/{ =&gt; rules}/ayesha/AYESHA_RESISTANCE_ASSESSMENT.mdc (100%)                                                      
+ rename .cursor/rules/{ =&gt; ayesha}/AYESHA_SAE_WIWFM_INTEGRATION_PLAN.mdc (100%)                                                 
+ rename .cursor/{ =&gt; rules}/ayesha/AYESHA_VUS_DOSSIER_PDGFRA_S755P.mdc (100%)                                                   
+ rename .cursor/{ =&gt; rules}/ayesha/MISSION_JR3_COMPLETE_PATHWAY_RESISTANCE.mdc (100%)                                           
+ rename .cursor/{ =&gt; rules}/ayesha/MISSION_JR3_DATA_ACQUISITION_STATUS.mdc (100%)                                               
+ rename .cursor/{ =&gt; rules}/ayesha/MISSION_JR3_EXECUTION_PLAN.mdc (100%)                                                        
+ rename .cursor/{ =&gt; rules}/ayesha/MISSION_JR3_RESULTS_SUMMARY.mdc (100%)                                                       
+ rename .cursor/{ =&gt; rules}/ayesha/MISSION_JR3_REVIEW_AND_QUESTIONS.mdc (100%)                                                  
+ rename .cursor/{ =&gt; rules}/ayesha/MISSION_JR3_STATUS.mdc (100%)
+ rename .cursor/{ =&gt; rules}/ayesha/MISSION_MM_NEXT_ITERATION.mdc (100%)                                                         
+ rename .cursor/{ =&gt; rules}/ayesha/MM_SAE_GAP_ANALYSIS.mdc (100%)                                                               
+ rename .cursor/{ =&gt; rules}/ayesha/MM_VALIDATION_GROUND_TRUTH.mdc (100%)                                                        
+ create mode 100644 .cursor/rules/ayesha/SL_MODEL_IMPROVEMENT_PLAN.mdc                                                          
+ create mode 100644 .cursor/rules/ayesha/SYNTHETIC_LETHALITY_PUBLICATION_MASTER.mdc                                             
+ rename .cursor/{ =&gt; rules}/ayesha/ZO_SAE_INTELLIGENCE_SYSTEM_DEBRIEF.mdc (100%)                                                
+ rename .cursor/{ =&gt; rules}/ayesha/archive/01_AYESHA_MASTER_PLAN.mdc (100%)                                                     
+ rename .cursor/{ =&gt; rules}/ayesha/archive/AYESHA_END_TO_END_AGENT_PLAN.mdc (100%)                                              
+ rename .cursor/{ =&gt; rules}/ayesha/archive/AYESHA_PLANS_DOCTRINES_MASTER.mdc (100%)                                             
+ rename .cursor/{ =&gt; rules}/ayesha/archive/AyeshasGenetics copy.mdc (100%)                                                      
+ rename .cursor/{ =&gt; rules}/ayesha/archive/AyeshasGenetics.mdc (100%)                                                           
+ rename .cursor/{ =&gt; rules}/ayesha/archive/SAE_COMPLETION_ROADMAP.mdc (100%)                                                    
+ rename .cursor/{ =&gt; rules}/ayesha/archive/TreatmentLine-Blog.mdc (100%)                                                        
+ rename .cursor/{ =&gt; rules}/ayesha/archive/ayesha_plan.mdc (100%)                                                               
+ rename .cursor/{ =&gt; rules}/ayesha/archive/jr3_mission/MISSION_JR3_COMPLETE_PATHWAY_RESISTANCE.mdc (100%)                       
+ rename .cursor/{ =&gt; rules}/ayesha/archive/jr3_mission/MISSION_JR3_DATA_ACQUISITION_STATUS.mdc (100%)                           
+ rename .cursor/{ =&gt; rules}/ayesha/archive/jr3_mission/MISSION_JR3_EXECUTION_PLAN.mdc (100%)                                    
+ rename .cursor/{ =&gt; rules}/ayesha/archive/jr3_mission/MISSION_JR3_RESULTS_SUMMARY.mdc (100%)                                   
+ rename .cursor/{ =&gt; rules}/ayesha/archive/jr3_mission/MISSION_JR3_REVIEW_AND_QUESTIONS.mdc (100%)                              
+ rename .cursor/{ =&gt; rules}/ayesha/archive/jr3_mission/MISSION_JR3_STATUS.mdc (100%)                                            
+ rename .cursor/{ =&gt; rules}/ayesha/archive/jr3_mission/MISSION_MM_NEXT_ITERATION.mdc (100%)                                     
+ rename .cursor/{ =&gt; rules}/ayesha/archive/sae_documentation/SAE_VALIDATION_STRATEGY.mdc (100%)                                 
+ rename .cursor/{ =&gt; rules}/ayesha/archive/sporadic_cancer_strategy_doctrine.mdc (100%)                                         
+ rename .cursor/{ =&gt; rules}/ayesha/archive/zo_sae/ZO_SAE_INTELLIGENCE_SYSTEM_DEBRIEF.mdc (100%)                                 
+ rename .cursor/{ =&gt; rules}/ayesha/archive/zo_sae/ZO_SPE_WIWFM_COMPLETE_KNOWLEDGE.mdc (100%)                                    
+ rename .cursor/{ =&gt; rules/ayesha}/ayesha.mdc (100%)
+ rename {.worktree_backup/0Kwy8/.cursor/MOAT =&gt; .cursor/rules/ayesha}/ayesha.moat.mdc (100%)                                    
+ rename .cursor/rules/{ =&gt; ayesha}/ayesha_dossier_dashboard_doctrine.mdc (100%)                                                 
+ rename .cursor/{ =&gt; rules}/ayesha/ayesha_plan.mdc (100%)
+ rename .cursor/{plans/ayesha_plan.mdc =&gt; rules/ayesha/ayesha_plan_root.mdc} (100%)                                             
+ rename .cursor/{ =&gt; rules}/ayesha/blog/TreatmentLine-Blog.mdc (100%)                                                           
+ rename .cursor/{ =&gt; rules}/ayesha/blog/blog_metastasis_interception_framework.mdc (100%)                                       
+ rename .cursor/{ =&gt; rules}/ayesha/blog/blog_metastasis_interception_v2_structural.mdc (100%)                                   
+ rename .cursor/{ =&gt; rules}/ayesha/blog/blog_metastasis_v2_evolution.mdc (100%)                                                 
+ rename .cursor/{ =&gt; rules}/ayesha/blog/blog_mm_synthetic_lethality.mdc (100%)                                                  
+ rename .cursor/{ =&gt; rules}/ayesha/blog/blog_precision_medicine_yes_go.mdc (100%)                                               
+ rename .cursor/{ =&gt; rules}/ayesha/blog/blog_smoke_tests_precisionrad_copilot.mdc (100%)                                        
+ rename .cursor/{ =&gt; rules}/ayesha/blog/blog_toxicity_risk_story.mdc (100%)                                                     
+ rename .cursor/{ =&gt; rules}/ayesha/blog/blog_two_hit_runx1.mdc (100%)                                                           
+ rename .cursor/{ =&gt; rules}/ayesha/blog/blog_wiwfm_confidence_story.mdc (100%)                                                  
+ rename .cursor/{ =&gt; rules}/ayesha/blog/clinical_genomics_command_center_doctrine.mdc (100%)                                    
+ rename .cursor/{ =&gt; rules}/ayesha/blog/complete_platform_evolution_doctrine.mdc (100%)                                         
+ rename .cursor/{ =&gt; rules}/ayesha/blog/decks/mm_slide_deck_content.mdc (100%)                                                  
+ rename .cursor/{ =&gt; rules}/ayesha/blog/mm_slide_deck_content.mdc (100%)                                                        
+ rename .cursor/{ =&gt; rules}/ayesha/blog/sythentic-lethality.mdc (100%)                                                          
+ rename .cursor/{ =&gt; rules}/ayesha/blog/tox101-blog.mdc (100%)
+ rename .cursor/{ =&gt; rules}/ayesha/blog/website/website_components_doctrine.mdc (100%)                                          
+ rename .cursor/rules/{ =&gt; ayesha/hypothesis_validator/archive}/AGENT_JR_FRONTEND_COMPLETE_AUDIT.mdc (100%)                     
+ rename .cursor/rules/{ =&gt; ayesha/hypothesis_validator/archive}/AGENT_JR_MISSION_CONTROL_BUILD_PLAN.mdc (100%)                  
+ rename .cursor/rules/{ =&gt; ayesha/hypothesis_validator/archive}/AGENT_JR_NEXT_ITERATION.mdc (100%)                              
+ rename .cursor/rules/{ =&gt; ayesha/hypothesis_validator/archive}/AGENT_JR_TCGA_MUTATION_FREQUENCY_EXTRACTION.mdc (100%)          
+ rename .cursor/rules/{ =&gt; ayesha}/mission-control-patient.mdc (100%)                                                           
+ rename .cursor/{ =&gt; rules}/ayesha/missions/agents247.mdc (100%)
+ rename .cursor/{ =&gt; rules}/ayesha/sae/sae.mdc (100%)
+ rename .cursor/{ =&gt; rules}/ayesha/sae_documentation/documentation/SAE_PHASE3_COMPLETE_DEBRIEF.mdc (100%)                       
+ rename .cursor/{ =&gt; rules}/ayesha/sae_documentation/planning_strategy/SAE_VALIDATION_STRATEGY.mdc (100%)                       
+ rename .cursor/{ =&gt; rules}/ayesha/tests/CT-V1.mdc (100%)
+ rename .cursor/{ =&gt; rules}/ayesha/tests/MBD4.mdc (100%)
+ rename .cursor/{ =&gt; rules}/ayesha/tests/PET-CT-Skul- Base-to-Mid-Thigh.mdc (100%)                                              
+ rename .cursor/{ =&gt; rules}/ayesha/tests/cyctology-non-gyn.mdc (100%)                                                           
+ rename .cursor/{ =&gt; rules}/ayesha/tests/gemomics.mdc (100%)
+ rename .cursor/{ =&gt; rules}/ayesha/treatment.mdc (100%)
+ rename .cursor/{ =&gt; rules}/ayesha/treatment_lines/TREATMENT_LINE_INTEGRATION_DOCTRINE.mdc (100%)                               
+ rename .cursor/{ =&gt; rules}/ayesha/treatment_lines/synthetic-lethality.mdc (100%)                                               
+ rename .cursor/{ =&gt; rules}/concept/1_pager_precision_rad_co_pilot.mdc (100%)                                                   
+ rename .cursor/{ =&gt; rules}/concept/PLATFORM_EVOLUTION_MASTER_PLAN.mdc (100%)                                                   
+ rename .cursor/{ =&gt; rules}/concept/RUNX1.mdc (100%)
+ rename .cursor/{ =&gt; rules}/concept/aar_zeta_oracle_siege.mdc (100%)                                                            
+ rename .cursor/{ =&gt; rules}/concept/aar_zeta_oracle_siege_UPDATED.mdc (100%)                                                    
+ rename .cursor/{ =&gt; rules}/concept/evidence/benchmark_plan_doctrine.mdc (100%)                                                 
+ rename .cursor/{ =&gt; rules}/concept/evidence/blog_sota_fusion_engine.mdc (100%)                                                 
+ rename .cursor/{ =&gt; rules}/concept/evidence/copilot_doctrine.mdc (100%)                                                        
+ rename .cursor/{ =&gt; rules}/concept/evidence/doctrine_mm_guidance_v2.mdc (100%)                                                 
+ rename .cursor/{ =&gt; rules}/concept/evidence/evidence_benchmark_plan.mdc (100%)                                                 
+ rename .cursor/{ =&gt; rules}/concept/evidence/evidence_build_doctrine_for_agents.mdc (100%)                                      
+ rename .cursor/{ =&gt; rules}/concept/evidence/evidence_capability_impact_doctrine.mdc (100%)                                     
+ rename .cursor/{ =&gt; rules}/concept/evidence/evidence_doctrine_simple.mdc (100%)                                                
+ rename .cursor/{ =&gt; rules}/concept/evidence/mm_drug_efficacy_doctrine.mdc (100%)                                               
+ rename .cursor/{ =&gt; rules}/concept/evidence/mm_drug_response_doctrine.mdc (100%)                                               
+ rename .cursor/{ =&gt; rules}/concept/evidence/trustworthy_evidence_doctrine.mdc (100%)                                           
+ rename .cursor/{ =&gt; rules}/concept/evo2_endpoints_design.mdc (100%)                                                            
+ rename .cursor/{ =&gt; rules}/concept/jr2_dossier_mission/JR2_DOSSIER_PIPELINE_COMPLETE.mdc (100%)                                
+ rename .cursor/{ =&gt; rules}/concept/runx1-milestone.mdc (100%)
+ create mode 100644 .cursor/rules/concepts/pathway.mdc
+ create mode 100644 .cursor/rules/concepts/therapy_fit.mdc
+ rename {.worktree_backup/0Kwy8/.cursor/rules/research =&gt; .cursor/rules/concepts}/therapy_fit_concept.mdc (100%)                
+ rename {.worktree_backup/0Kwy8/.cursor/rules/research =&gt; .cursor/rules/concepts}/toxicity_risk_concept.mdc (100%)              
+ rename .cursor/{ =&gt; rules}/docs/LoI.mdc (100%)
+ rename .cursor/{ =&gt; rules}/docs/clinicalGenomics.mdc (100%)
+ rename .cursor/{ =&gt; rules}/docs/pharmGKPEndpoints.mdc (100%)
+ rename .cursor/rules/{ =&gt; doctrines}/BIOLOGICAL_CURE_DOCTRINE.mdc (100%)                                                       
+ rename .cursor/rules/{ =&gt; doctrines}/CLIENT_DOSSIER_DOCTRINE.mdc (100%)                                                        
+ rename .cursor/rules/{ =&gt; doctrines}/MISSION_CONTROL_DASHBOARD_DOCTRINE.mdc (100%)                                             
+ create mode 100644 .cursor/rules/doctrines/ZETA_DOCTRINE.mdc
+ rename .cursor/rules/{ =&gt; doctrines}/ZO_CALIBRATION_DOCTRINE.mdc (100%)                                                        
+ rename .cursor/rules/{ =&gt; doctrines}/chat_history_export_restore_doctrine.mdc (100%)                                           
+ rename .cursor/{ =&gt; rules/doctrines}/crispro_ai_doctrine_101.mdc (100%)                                                        
+ rename .cursor/rules/{ =&gt; doctrines}/evo2_brca1_vep_doctrine.mdc (100%)                                                        
+ rename {docs/doctrine =&gt; .cursor/rules/doctrines}/master_forge_boltz_gauntlet_doctrine.mdc (100%)                              
+ rename .cursor/rules/{ =&gt; doctrines}/patent_strategy_doctrine.mdc (100%)                                                       
+ rename .cursor/rules/{ =&gt; dossiers}/SCALABLE_DOSSIER_ARCHITECTURE_PLAN.mdc (100%)                                              
+ rename {.worktree_backup/0Kwy8/.cursor/MOAT/orchestration =&gt; .cursor/rules/index}/00_MASTER_INDEX.mdc (100%)                   
+ rename .cursor/{ =&gt; rules}/lectures/drugDevelopment/dd.mdc (100%)                                                              
+ create mode 100644 .cursor/rules/lectures/drugDevelopment/dosing_guidance_contribution.mdc                                     
+ rename .cursor/{ =&gt; rules}/lectures/drugDevelopment/drug_efficacy_contribution.mdc (100%)                                      
+ rename .cursor/{ =&gt; rules}/lectures/drugDevelopment/integrated_platform_contribution.mdc (100%)                                
+ rename .cursor/{ =&gt; rules}/lectures/drugDevelopment/mechanism_trial_matching_contribution.mdc (100%)                           
+ rename .cursor/{ =&gt; rules}/lectures/drugDevelopment/sae_intelligence_contribution.mdc (100%)                                   
+ rename .cursor/{ =&gt; rules}/lectures/drugDevelopment/therapy_fit_contribution.mdc (100%)                                        
+ rename .cursor/{ =&gt; rules}/lectures/drugDevelopment/toxicity_risk_contribution.mdc (100%)                                      
+ rename .cursor/{ =&gt; rules}/lectures/drugDevelopment/vus_resolution_contribution.mdc (100%)                                     
+ rename .cursor/rules/{ =&gt; mission_control}/MISSION_CONTROL_DASHBOARD_DESIGN.mdc (100%)                                         
+ rename .cursor/rules/{ =&gt; mission_control}/RESISTANCE_PROPHET_TO_MISSION_CONTROL_PLAN.mdc (100%)                               
+ rename .cursor/{ =&gt; rules}/plans/MBD4.mdc (100%)
+ rename .cursor/{ =&gt; rules}/plans/MM_DOCTRINES_EXECUTION_DIRECTIVE.mdc (100%)                                                   
+ rename .cursor/{ =&gt; rules}/plans/PATHWAY_VALIDATION_DATA_REQUIREMENTS.mdc (100%)                                               
+ rename .cursor/{ =&gt; rules}/plans/ayesha_plan copy.mdc (100%)
+ rename {.worktree_backup/0Kwy8/.cursor =&gt; .cursor/rules}/plans/ayesha_plan.mdc (100%)                                          
+ rename .cursor/{ =&gt; rules}/plans/ayeshas-system.mdc (100%)
+ rename .cursor/{ =&gt; rules}/plans/clinical-trials.mdc (100%)
+ rename .cursor/{ =&gt; rules}/plans/sae+wiwfm.mdc (100%)
+ rename .cursor/{ =&gt; rules}/plans/zo2.mdc (100%)
+ rename {.worktree_backup/0Kwy8/.cursor/plans =&gt; .cursor/rules/platform}/PATHWAY_VALIDATION_DATA_REQUIREMENTS.mdc (100%)        
+ rename .cursor/rules/{ =&gt; platform}/PLATFORM_EVOLUTION_MASTER_PLAN.mdc (100%)                                                  
+ rename {docs/doctrine =&gt; .cursor/rules/platform}/forge_and_simulate_protocol.mdc (100%)                                        
+ rename .cursor/rules/{ =&gt; platform}/med_gemini_integration_doctrine.mdc (100%)                                                 
+ rename {docs/doctrine =&gt; .cursor/rules/platform}/myeloma_demo_doctrine.mdc (100%)                                              
+ rename .cursor/rules/{ =&gt; platform}/operation_deep_dive_doctrine.mdc (100%)                                                    
+ rename .cursor/rules/{ =&gt; projects}/ALS.mdc (100%)
+ rename .cursor/{ =&gt; rules/projects}/ALS_LONGITUDE_PRIZE_OUTREACH_MASTER_PLAN.mdc (100%)                                        
+ rename {.worktree_backup/0Kwy8/.cursor/plans =&gt; .cursor/rules/projects}/MBD4.mdc (100%)                                        
+ rename {external/runx1/core/runx1/docs =&gt; .cursor/rules/projects}/RUNX1.mdc (100%)                                             
+ rename .cursor/rules/{ =&gt; projects}/VUS_DDR_DISCOVERY_DATA_HANDOFF.mdc (100%)                                                  
+ rename .cursor/rules/{ =&gt; projects}/VUS_IDENTIFY_DEBUG_HANDOFF.mdc (96%)                                                       
+ rename external/runx1_workspace/documentation/runx1_implementation_deep_dive.mdc =&gt; .cursor/rules/projects/documentation_runx1_implementation_deep_dive.mdc (100%)                             
+ rename src/services/evo_service/MBD4.mdc =&gt; .cursor/rules/projects/evo_service_MBD4.mdc (100%)                                 
+ rename external/runx1_workspace/research_docs/RUNX1.mdc =&gt; .cursor/rules/projects/research_docs_RUNX1.mdc (100%)               
+ rename {external/runx1/core/runx1/docs =&gt; .cursor/rules/projects}/runx1_implementation_deep_dive.mdc (100%)                    
+ rename .cursor/rules/{ =&gt; publications}/MM_ARCHITECTURE_BLOG.mdc (100%)                                                        
+ rename .cursor/rules/{ =&gt; publications}/NYX-v2_LEARNING_CHECKPOINT_BLOG.mdc (100%)                                             
+ rename .cursor/rules/{ =&gt; publications}/PLATINUM_RESPONSE_DATA_HUNT_BLOG.mdc (100%)                                            
+ create mode 100644 .cursor/rules/publications/SYNTHETIC_LETHALITY_PUBLICATION_MASTER.mdc                                       
+ rename .cursor/{ =&gt; rules}/resistance_prophet/diseases/mm/MISSION.mdc (100%)                                                   
+ create mode 100644 .cursor/rules/sae/03-sae-resistance_PUBLICATION_PLAN_PROXY_VS_TRUE_SAE.mdc                                  
+ create mode 100644 .cursor/rules/sae/PUBLICATION_PLAN_PROXY_VS_TRUE_SAE.mdc                                                    
+ rename .cursor/rules/{ =&gt; sae}/SAE_BIOMARKER_BLOG_ACCESSIBLE.mdc (100%)                                                        
+ rename .cursor/rules/{ =&gt; sae}/SAE_BIOMARKER_DISCOVERY.mdc (100%)                                                              
+ rename .cursor/rules/{ =&gt; sae}/SAE_BIOMARKER_DISCOVERY_EXPLAINED.mdc (100%)                                                    
+ rename .cursor/rules/{ =&gt; sae}/SAE_PRECISION_ONCOLOGY_TECHNICAL_BLOG.mdc (100%)                                                
+ rename .cursor/rules/{ =&gt; sae}/SAE_TECHNICAL_LESSONS.mdc (100%)
+ rename .cursor/rules/{ =&gt; sae}/SAE_TO_RESISTANCE_PROPHET_PIPELINE.mdc (100%)                                                   
+ rename .worktree_backup/0Kwy8/.cursor/rules/SAE_TO_RESISTANCE_PROPHET_PIPELINE.mdc =&gt; .cursor/rules/sae/rules_SAE_TO_RESISTANCE_PROPHET_PIPELINE.mdc (100%)                                    
+ create mode 100644 .cursor/rules/temp/Scrap.mdc
+ rename {docs/doctrine =&gt; .cursor/rules/temp}/alphafold-boltz-operation-forge.mdc (100%)                                        
+ rename .cursor/rules/{ =&gt; temp}/boltz.mdc (100%)
+ rename .cursor/{ =&gt; rules/temp}/docs.mdc (100%)
+ rename {boltz-main/alphafold3-main/src/alphafold3 =&gt; .cursor/rules/temp}/example.mdc (100%)                                    
+ rename publication/explanations/output.mdc =&gt; .cursor/rules/temp/explanations_output.mdc (100%)                                
+ create mode 100644 .cursor/rules/temp/feedback.mdc
+ create mode 100644 .cursor/rules/temp/graveyard.mdc
+ rename {publication/figures/publication/explanations =&gt; .cursor/rules/temp}/output.mdc (100%)                                  
+ rename .cursor/{ =&gt; rules/temp}/phd.mdc (100%)
+ rename test.mdc =&gt; .cursor/rules/temp/test.mdc (100%)
+ rename trial.mdc =&gt; .cursor/rules/temp/trial.mdc (100%)
+ rename .cursor/rules/{ =&gt; testing}/data_extraction_smoke_test.mdc (100%)                                                       
+ create mode 100644 .cursor/rules/testing/sequence_scorers_test.mdc                                                             
+ rename technical_support_benchmark.mdc =&gt; .cursor/rules/testing/technical_support_benchmark.mdc (100%)                         
+ rename .cursor/rules/{ =&gt; utilities}/CHAT_RESTORATION_EMERGENCY_PROTOCOL.mdc (100%)                                            
+ create mode 100644 .cursor/rules/utilities/MANAGER_ROOT_CAUSE_ANALYSIS.mdc                                                     
+ rename .cursor/rules/{ =&gt; zo}/ZO_CODEBASE_KNOWLEDGE_BASE.mdc (100%)                                                            
+ rename .cursor/rules/{ =&gt; zo}/ZO_MASTER_KNOWLEDGE_BASE.mdc (100%)                                                              
+ rename shared-agent-plans/zo2.mdc =&gt; .cursor/rules/zo/shared-agent-plans_zo2.mdc (100%)                                        
+ rename .cursor/rules/{ =&gt; zo}/zeta_university_phd_zo_learning_log.mdc (100%)                                                   
+ rename .cursor/rules/{ =&gt; zo}/zo.mdc (100%)
+ rename zo2.mdc =&gt; .cursor/rules/zo/zo2.mdc (100%)
+ create mode 100644 .cursor/scripts/comprehensive_knowledge_extraction.py                                                       
+ create mode 100644 .cursor/scripts/consolidate_knowledge.py
+ create mode 100644 .cursor/scripts/dynamic_knowledge_extraction.py                                                             
+ create mode 100644 .cursor/scripts/enhanced_knowledge_extraction.py                                                            
+ create mode 100644 .cursor/scripts/extract_knowledge_from_chat.py                                                              
+ create mode 100644 .cursor/scripts/extract_resistance_framework.py                                                             
+ create mode 100644 .cursor/scripts/full_context_extraction.py
+ create mode 100644 .specstory/history/2025-12-31_02-55Z-zeta-realm-and-zo-s-rules.md                                           
+ create mode 100644 .specstory/history/2025-12-31_03-22Z-pharma-and-kelim-test-mentions.md                                      
+ create mode 100644 linkedin_post_alternative.md
+ create mode 100644 linkedin_post_draft.md
+ create mode 100644 oncology-coPilot/oncology-frontend/src/components/dosing/DosingGuidanceCard.jsx                             
+ create mode 100644 oncology-coPilot/oncology-frontend/src/components/dosing/useDosingGuidance.js                               
+ create mode 100644 oncology-coPilot/oncology-frontend/src/components/personalized_outreach/EmailGenerator.jsx                  
+ create mode 100644 oncology-coPilot/oncology-frontend/src/components/personalized_outreach/IntelligenceExtractor.jsx           
+ create mode 100644 oncology-coPilot/oncology-frontend/src/components/personalized_outreach/TrialSearchForm.jsx                 
+ create mode 100644 oncology-coPilot/oncology-frontend/src/pages/OutreachDashboard.jsx                                          
+ create mode 100755 scripts/data_acquisition/utils/project_data_sphere_client.py                                                
+```
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="shell" data-tool-name="run_terminal_cmd">
+<details><summary>Tool use: **run_terminal_cmd** • Run command: git push origin main</summary>
+
+```bash
+git push origin main
+```
+
+```
+remote: Repository not found.
+fatal: repository 'https://github.com/fjkiani/crispro.git/' not found                                                           
+```
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+
+---
+
+
+Push failed: repository not found or authentication issue. Checking the remote URL and authentication:
+
+
+---
+
+<tool-use data-tool-type="shell" data-tool-name="run_terminal_cmd">
+<details><summary>Tool use: **run_terminal_cmd** • Run command: git remote get-url origin</summary>
+
+```bash
+git remote get-url origin
+```
+
+```
+https://github.com/fjkiani/crispro.git
+```
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="shell" data-tool-name="run_terminal_cmd">
+<details><summary>Tool use: **run_terminal_cmd** • Run command: git log --oneline -5</summary>
+
+```bash
+git log --oneline -5
+```
+
+```
+8abb86f (HEAD -&gt; main) Cleanup: Remove archived files and update documentation                                                  
+6fe8ee4 Update publications submodule (synthetic lethality bundle)                                                              
+edf7ac0 Restore missing worktree files from backup
+6b012e6 Consolidate all work from worktrees into main
+bdb4070 (origin/main) Add completion verification report for Zo's deliverables                                                  
+```
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Commit succeeded. Push failed: repository not found or authentication issue.
+
+## Status
+- Committed: 404 files changed (282,288 insertions, 88,105 deletions)
+- Commit hash: `8abb86f`
+- Push failed: Repository not found or authentication required
+
+## Options
+
+### Option 1: Create the repository on GitHub
+1. Go to https://github.com/new
+2. Create a repository named `crispro`
+3. Then push:
+   ```bash
+   git push origin main
+   ```
+
+### Option 2: Use SSH instead of HTTPS
+If the repository exists but requires authentication:
+```bash
+git remote set-url origin git@github.com:fjkiani/crispro.git
+git push origin main
+```
+
+### Option 3: Check if the repository exists
+The remote URL is: `https://github.com/fjkiani/crispro.git`
+
+If it doesn't exist, either:
+- Create it on GitHub, or
+- Update the remote to point to the correct repository
+
+Your changes are committed locally. Once the remote is set up, you can push.
+
+Should I:
+1. Try SSH authentication?
+2. Help you verify the repository exists?
+3. Wait while you create it on GitHub?
+
+---
+

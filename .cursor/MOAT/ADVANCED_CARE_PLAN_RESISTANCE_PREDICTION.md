@@ -13,7 +13,7 @@
 
 | Cancer | Marker | Relative Risk | p-value | N | Status |
 |--------|--------|--------------|---------|---|--------|
-| **Ovarian** | MAPK pathway | 1.97 | < 0.05 | 35/469 | ✅ **SIGNIFICANT** |
+| **Ovarian** | MAPK pathway |  |  |  | ✅ **Not validated** |
 | **Ovarian** | NF1 mutation | 2.10 | < 0.05 | 26/469 | ✅ **SIGNIFICANT** |
 | **Ovarian** | PI3K pathway | 1.39 | 0.02 | 108/469 | ✅ **SIGNIFICANT** |
 | **Myeloma** | DIS3 mutation | **2.08** | **0.0145** | 38/219 | ✅ **SIGNIFICANT** |

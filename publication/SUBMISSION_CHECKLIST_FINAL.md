@@ -354,3 +354,105 @@ Not applicable. This is a computational study with no human subjects, animal exp
 
 **Ready to proceed?** Just confirm the 4 questions above and I'll create all files for you.
 
+---
+
+## 📝 EXECUTION NOTES (Add Here)
+
+### Gap Analysis & Risks
+
+**Date**: January 31, 2025
+
+**Gaps Found**:
+- [x] **PDF/.docx files missing**: Only 2 PDFs found (one-pager), no compiled manuscript PDF/docx
+- [x] **GitHub repo not created**: README references `https://github.com/crispro-ai/Metastasis-Interception-CRISPR-EVO2-Alphafold` but repo doesn't exist yet
+- [x] **Zenodo DOI placeholder**: README shows `10.5281/zenodo.XXXXXXX` - needs actual DOI
+- [x] **Supplementary Info PDF missing**: Need to compile from existing markdown files
+- [x] **Figure DPI verification**: Figures exist but need to verify all are 300+ DPI (not just check file sizes)
+- [x] **75 CIF files vs 15 claimed**: Found 75 .cif files in structural_validation/ but manuscript claims 15 guides (likely 5 models per guide = 15 guides × 5 = 75 files - need to verify mapping)
+- [x] **Duplicate publication locations**: Both `publication/` and `publications/01-metastasis-interception/` exist - need to consolidate or clarify which is source of truth
+- [x] **CRITICAL: reproduce_all.sh missing**: REPRODUCIBILITY.md claims one-command reproduction but `publication/scripts/reproduce_all.sh` doesn't exist
+- [x] **Scripts directory empty**: `publication/scripts/` appears empty - no reproduction scripts found
+
+**Corner-Cutting Risks**:
+- [ ] **Agent might skip DPI verification**: Just rename files without checking actual resolution
+- [ ] **Agent might create placeholder GitHub repo**: Empty repo with just README, no actual code
+- [ ] **Agent might skip supplementary compilation**: Claim it's done but PDF is incomplete
+- [ ] **Agent might use wrong manuscript version**: Multiple manuscript files exist, might compile wrong one
+- [ ] **Agent might skip structural file verification**: Just zip all .cif files without verifying they match the 15 guides claimed
+
+**Hallucination Risks**:
+- [ ] **Claims "100% ready" but PDF/docx missing**: Status says ready but compiled files don't exist
+- [ ] **Claims "15 mmCIF files" but 75 found**: Need to verify which 15 are the actual validated guides
+- [ ] **Claims "GitHub repo exists" but URL is placeholder**: README references repo that doesn't exist
+- [ ] **Claims "all figures 300+ DPI" but not verified**: Need actual DPI check, not just file size
+- [ ] **Claims "complete reproducibility" but scripts may be incomplete**: Need to verify `reproduce_all.sh` actually works
+
+**Code Audit Findings**:
+- [x] **Manuscript exists**: `COMPLETE_MANUSCRIPT_FOR_REVIEW.md` (201 lines) - verified
+- [x] **Cover letter exists**: `COVER_LETTER.md` - verified
+- [x] **Figures exist**: 14+ PNG/SVG files in `publication/figures/` - verified
+- [x] **Structural files exist**: 75 .cif files found (need to verify which are the 15 guides)
+- [x] **Data files exist**: Multiple CSV/JSON files in `publication/data/` - verified (real_target_lock_data.csv has correct structure)
+- [x] **Reproducibility guide exists**: `REPRODUCIBILITY.md` - verified BUT references `reproduce_all.sh` that doesn't exist
+- [x] **Submission checklist exists**: This file - verified
+- [x] **Audit document exists**: `.cursor/PUBLICATION_AUDIT_COMPLETE.md` - comprehensive audit found (871 lines)
+- [x] **304 vs 384 clarification**: Documented in READY_FOR_SUBMISSION_SUMMARY.md (384 total = 48 genes × 8 steps, 304 primary-only = 38 genes × 8 steps)
+
+**Plan Iterations**:
+- [ ] **Iteration 1**: Verify which 15 .cif files correspond to the 15 validated guides (75 total suggests 5 models per guide = AlphaFold 3 ensemble)
+- [ ] **Iteration 2**: Create actual GitHub repo (not placeholder) with all code and data - OR decide to wait until acceptance
+- [ ] **Iteration 3**: Generate Zenodo DOI before submission (not "upon acceptance") - OR clarify policy
+- [ ] **Iteration 4**: Verify figure DPI programmatically (not just visual inspection) - use ImageMagick or PIL
+- [ ] **Iteration 5**: CREATE `reproduce_all.sh` script - currently missing despite being claimed in REPRODUCIBILITY.md
+- [ ] **Iteration 6**: Consolidate duplicate publication directories (`publication/` vs `publications/01-metastasis-interception/`) - clarify source of truth
+- [ ] **Iteration 7**: Map structural validation files to manuscript claims - verify 15 guides match the 15 structures claimed
+
+---
+
+### Daily Progress Log
+
+**Day 1** (Date: Jan 31, 2025):
+- [x] Found existing audit document (`.cursor/PUBLICATION_AUDIT_COMPLETE.md` - 871 lines comprehensive)
+- [x] Found existing submission checklist (this file)
+- [x] Verified manuscript exists (201 lines in `COMPLETE_MANUSCRIPT_FOR_REVIEW.md`)
+- [x] Verified cover letter exists (`COVER_LETTER.md`)
+- [x] Found 75 .cif files (need to map to 15 guides - likely 5 models per guide)
+- [x] Found 2 PDFs (one-pager only, no compiled manuscript PDF/docx)
+- [x] Verified data files exist (`real_target_lock_data.csv` has correct structure)
+- [x] **CRITICAL GAP**: `reproduce_all.sh` script MISSING (claimed in REPRODUCIBILITY.md but doesn't exist)
+- [x] **CRITICAL GAP**: `publication/scripts/` directory appears empty
+- [ ] Need to verify figure DPI programmatically
+- [ ] Need to verify GitHub repo status (placeholder URL in README)
+- [ ] Need to verify Zenodo DOI (placeholder in README)
+- [ ] Need to map 75 .cif files to 15 validated guides
+- [ ] Need to clarify duplicate publication directories
+
+**Day 2** (Date: _____):
+- [ ] 
+
+**Day 3** (Date: _____):
+- [ ] 
+
+---
+
+### Blockers & Decisions Needed
+
+**Blockers**:
+- [ ] **GitHub repo decision**: Create now or wait until acceptance? (Checklist says "wait until acceptance" but README references it)
+- [ ] **Zenodo DOI decision**: Generate now or wait? (Some docs say "upon acceptance", others reference placeholder)
+- [ ] **Manuscript compilation**: Which manuscript file is the final version? Multiple exist (`COMPLETE_MANUSCRIPT_FOR_REVIEW.md`, `MANUSCRIPT_COMPLETE_FOR_SUBMISSION.md`)
+- [ ] **Structural file selection**: Which 15 of 75 .cif files are the validated guides? Need mapping
+
+**Alpha Decisions Needed**:
+- [ ] **Author order**: Fahad Kiani*, Ridwaan Jhetam or equal contributors?
+- [ ] **Ridwaan's email**: For submission metadata
+- [ ] **Country/affiliation**: For submission portal
+- [ ] **Suggested reviewers**: Use recommended list or Alpha provides?
+- [ ] **GitHub repo timing**: Create public repo now or wait?
+- [ ] **Zenodo DOI timing**: Generate now or wait?
+- [ ] **Journal selection**: Nature Biotechnology confirmed or consider alternatives?
+
+---
+
+**Last Updated**: January 31, 2025
+

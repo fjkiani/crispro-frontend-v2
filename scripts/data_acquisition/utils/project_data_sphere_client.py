@@ -83,6 +83,8 @@ class ProjectDataSphereClient:
             print(f"❌ Error: {e}")
             return []
     
+    
+    
     def search_for_ovarian_cancer_data(self):
         if not self.conn:
             return []
@@ -102,7 +104,7 @@ class ProjectDataSphereClient:
                             'file_name': f.get('name', ''),
                             'matched_keyword': keyword
                         })
-                        print(f" Found: {f.get('name', '')} ({keyword})")
+                        print(f"   ✅ Found: {f.get('name', '')} ({keyword})")
                         break
         return ovarian_datasets
     
@@ -121,8 +123,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--cas-url", default="https://mpmprodvdmml.ondemand.sas.com/cas-shared-default-http/")
     parser.add_argument("--ssl-cert", default="/Users/fahadkiani/Desktop/development/crispr-assistant-main/data/certs/trustedcerts.pem")
-    parser.add_argument("--username")
-    parser.add_argument("--password")
+    parser.add_argument("--username", default="mpm0fxk2", help="SAS username")
+    parser.add_argument("--password", help="PDS password (same as SAS password)")
     args = parser.parse_args()
     
     print("=" * 80)

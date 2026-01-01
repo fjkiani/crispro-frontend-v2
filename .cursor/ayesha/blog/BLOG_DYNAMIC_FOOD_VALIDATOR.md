@@ -8,7 +8,7 @@
 
 ## **🎯 THE CHALLENGE**
 
-When a patient like Ayesha (ovarian cancer, HRD+, post-platinum therapy) asks "Will Vitamin D help my cancer?", traditional approaches fall short:
+When a patient like AK (ovarian cancer, HRD+, post-platinum therapy) asks "Will Vitamin D help my cancer?", traditional approaches fall short:
 
 - **Google Search:** Returns generic information, no personalization
 - **PubMed Manual Search:** Time-consuming, requires expertise to interpret

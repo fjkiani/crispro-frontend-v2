@@ -1,0 +1,145 @@
+# Sporadic Cancer Contribution
+## Tumor-Context-First Precision Oncology for the Germline-Negative Majority (RUO)
+
+**Status:** Implemented (RUO)
+
+---
+
+## What this capability adds
+
+Sporadic Cancer adds a **tumor-context-first** workflow for patients who are **germline-negative or unknown** (the majority of oncology cases). It provides:
+
+- **TumorContext generation** (TMB, MSI status, HRD proxy score, completeness score)
+- **Deterministic scoring gates** that modify drug efficacy/confidence based on tumor biomarkers and data completeness
+- **Transparent provenance**: per-drug explanation of which gates applied and why
+- **Cohort-appropriate outcome benchmarking** where feasible (IO on biomarker-enriched cohorts; HRD outcome validation explicitly constrained)
+
+---
+
+## Why this matters (problem)
+
+Traditional precision oncology is often **germline-centric** and creates failure modes for sporadic patients:
+
+- PARP and IO decisions are made without explicit tumor biomarker gating logic
+- Recommendations are presented without explicit confidence penalties when tumor data are incomplete
+- Patients can be routed toward hereditary-only trials or away from tumor-biomarker trials due to missing context
+
+Sporadic Cancer introduces a **structured TumorContext** and deterministic gates to ensure the system is honest about uncertainty and mechanistic about biomarker effects.
+
+---
+
+## Where this fits in the drug development pipeline
+
+| FDA Step | Traditional Challenge | Sporadic Cancer Contribution |
+|---|---|---|
+| Step 1: Discovery & Development | Candidate selection not tied to tumor biomarker context | TumorContext-first scoring exposes which biomarkers would meaningfully change therapy fit |
+| Step 2: Preclinical Research | Mechanism rationale is implicit | Gate logic is explicit: PARP/IO logic + completeness tiers + provenance |
+| Step 3: Clinical Research | Eligibility-only trial matching misses biomarker stratification | TumorContext can be passed into trial matching services for biomarker-aware filtering/boosting |
+| Step 4: FDA Drug Review | Lack of transparent decision rationale | Per-drug provenance provides auditable rationale for gate application (RUO) |
+| Step 5: Post-marketing | Monitoring lacks explicit uncertainty model | Confidence caps provide an operational framework for incomplete data scenarios |
+
+---
+
+## Core mechanisms (Sporadic Gates)
+
+### 1) PARP gate (HRD threshold)
+- Applies a **penalty** or **rescue** based on germline status and HRD threshold.
+- Designed to prevent over-recommending PARP inhibitors when tumor context suggests low benefit.
+
+### 2) IO gate (TMB/MSI)
+- Applies an **immunotherapy boost** when tumor biomarkers indicate IO sensitivity (TMB and/or MSI).
+- Implementation includes defined precedence (e.g., threshold hierarchy).
+
+### 3) Confidence caps (L0/L1/L2)
+- Caps confidence based on data completeness tier:
+  - L0: minimal tumor data
+  - L1: partial tumor data
+  - L2: richer tumor data
+- Ensures the system is honest when key biomarkers are missing.
+
+### 4) Provenance (audit trail)
+- Each drug result can include `sporadic_gates_provenance` describing:
+  - gates applied
+  - efficacy and confidence deltas
+  - rationale entries
+
+---
+
+## User-facing flow (frontend)
+
+### Page
+- `oncology-coPilot/oncology-frontend/src/pages/SporadicCancerPage.jsx`
+
+### Context state
+- `oncology-coPilot/oncology-frontend/src/context/SporadicContext.jsx`
+
+### WIWFM handoff
+- `/validate` renders `HypothesisValidator`, which calls `POST /api/efficacy/predict` and injects:
+  - `germline_status`
+  - `tumor_context`
+
+### Provenance UI
+- `oncology-coPilot/oncology-frontend/src/components/sporadic/SporadicProvenanceCard.jsx`
+
+---
+
+## API endpoints
+
+- `POST /api/tumor/quick_intake`
+  - Generates a TumorContext from disease priors and user inputs
+
+- `POST /api/efficacy/predict`
+  - Consumes `mutations`, `germline_status`, and `tumor_context`
+  - Returns drug rankings plus optional `sporadic_gates_provenance`
+
+---
+
+## Validation and receipts
+
+### Deterministic correctness (tests)
+- Unit/integration tests validate that gates apply deterministically and provenance is produced when expected.
+
+### Outcome benchmarking (cohort-appropriate)
+Outcome benchmarking is handled under:
+- `oncology-coPilot/oncology-backend-minimal/biomarker_enriched_cohorts/`
+
+Key principle: **validate biomarkers on cohorts where they are prevalent**.
+- IO (TMB/MSI) validated on biomarker-enriched cohorts (e.g., UCEC / COADREAD)
+- Confidence caps stress-tested via simulated missingness
+
+### Claims discipline (important)
+- HRD proxy / PARP outcome validation is constrained without true HRD assay ground truth; frame as RUO and future work where appropriate.
+
+---
+
+## Reproducibility
+
+- Validation suite entrypoint:
+  - `oncology-coPilot/oncology-backend-minimal/biomarker_enriched_cohorts/scripts/run_validation_suite.py`
+
+- Expected outputs:
+  - JSON receipts
+  - figures
+  - markdown summaries
+  - SHA256 provenance
+
+---
+
+## Limitations (RUO)
+
+- This is a **Research Use Only** workflow.
+- Outcome validation is **cohort-dependent** and must be framed honestly:
+  - IO biomarkers should be validated on IO-enriched cohorts
+  - HRD proxy is exploratory without assay-ground-truth benchmarking
+
+---
+
+## Summary
+
+Sporadic Cancer operationalizes **tumor-context-first precision oncology** for germline-negative/unknown patients by:
+
+- generating a structured TumorContext
+- applying deterministic, explainable gates to efficacy and confidence
+- exposing per-drug provenance
+- validating outcome associations where the right cohorts exist, and explicitly constraining claims where they do not
+

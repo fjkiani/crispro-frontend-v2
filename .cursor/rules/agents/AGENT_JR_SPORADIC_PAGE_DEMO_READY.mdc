@@ -1,0 +1,57 @@
+# AGENT_JR_SPORADIC_PAGE_DEMO_READY — Mission
+
+## Goal
+Make `/sporadic-cancer` **demo-correct** and **production-ready (RUO)** by wiring the sporadic workflow to a real efficacy (adding persona-focused UX.
+
+## P0 Requirements (must ship)
+
+### 1) Fix the WIWFM CTA routing (critical)
+- **Current bug**: `src/pages/SporadicCancerPage.jsx` routes to `/validate`, which is mapped to `HypothesisValidator`.
+- **Fix**:
+  - Either route the CTA to the correct page that runs `/api/efficacy/predict` (preferred: `MutationExplorer`), or add a new `/wiwfm` route.
+
+**Files to inspect**:
+- `oncology-coPilot/oncology-frontend/src/pages/SporadicCancerPage.jsx`
+- `oncology-coPilot/oncology-frontend/src/App.jsx`
+- `oncology-coPilot/oncology-frontend/src/context/SporadicContext.jsx`
+- Likely efficacy caller:
+  - `oncology-coPilot/oncology-frontend/src/pages/MutationExplorer.jsx`
+  - or `oncology-coPilot/oncology-frontend/src/components/vus/MutationExplorer.jsx`
+
+**Acceptance**:
+- Clicking “Run Efficacy Prediction (WIWFM)” results in a POST to `/api/efficacy/predict`.
+
+### 2) Ensure tumor context is used in the efficacy request
+- When calling `/api/efficacy/predict`, payload must include:
+  - `germlinetus` from `useSporadic().germlineStatus`
+  - `tumor_context` from `useSporadic().tumorContext`
+
+**Acceptance**:
+- In devtools network request body, `tumor_context` is present after Quick Intake.
+
+### 3) Display provenance
+- If `drugs[*].sporadic_gates_provenance` exists, render it in results.
+
+**Acceptance**:
+- At least one drug row displays sporadic provenance after running efficacy.
+
+## P1 Requirements (strong demo differentiators)
+
+### 4) Persona toggle
+- Add a segmented control on Sporadic page:
+  - Clinician / Patient / Pharma
+- Same data, different copy + panel visibility.
+
+**Acceptance**:
+- Switching persona changes visible panels without refetching.
+
+### 5) “Copy clinician summary”
+- Add copy-to-clipboard markdown summary for clinician.
+
+**Acceptance**:
+- Clipboard contains: data level, biomarkers, applied gates, and top therapies.
+
+## Non-goals
+- No new backend endpoints unless absolutely necessary.
+- No claims beyond RUO.
+

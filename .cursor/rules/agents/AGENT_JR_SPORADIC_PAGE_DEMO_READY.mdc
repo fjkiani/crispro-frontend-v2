@@ -1,30 +1,21 @@
 # AGENT_JR_SPORADIC_PAGE_DEMO_READY — Mission
 
 ## Goal
-Make `/sporadic-cancer` **demo-correct** and **production-ready (RUO)** by wiring the sporadic workflow to a real efficacy (adding persona-focused UX.
+Make `/sporadic-cancer` **demo-correct** and **production-ready (RUO)** by ensuring the sporadic workflow routes into the WIWFM efficacy predictor and displays sporadic-gates provenance clearly.
 
 ## P0 Requirements (must ship)
 
-### 1) Fix the WIWFM CTA routing (critical)
-- **Current bug**: `src/pages/SporadicCancerPage.jsx` routes to `/validate`, which is mapped to `HypothesisValidator`.
-- **Fix**:
-  - Either route the CTA to the correct page that runs `/api/efficacy/predict` (preferred: `MutationExplorer`), or add a new `/wiwfm` route.
-
-**Files to inspect**:
-- `oncology-coPilot/oncology-frontend/src/pages/SporadicCancerPage.jsx`
-- `oncology-coPilot/oncology-frontend/src/App.jsx`
-- `oncology-coPilot/oncology-frontend/src/context/SporadicContext.jsx`
-- Likely efficacy caller:
-  - `oncology-coPilot/oncology-frontend/src/pages/MutationExplorer.jsx`
-  - or `oncology-coPilot/oncology-frontend/src/components/vus/MutationExplorer.jsx`
+### 1) Ensure the WIWFM CTA is demo-correct
+- **Current expected behavior**: The CTA on `oncology-coPilot/oncology-frontend/src/pages/SporadicCancerPage.jsx` routes to `/validate`.
+- **Route mapping**: `/validate` should render `HypothesisValidator`, which runs `POST /api/efficacy/predict`.
 
 **Acceptance**:
-- Clicking “Run Efficacy Prediction (WIWFM)” results in a POST to `/api/efficacy/predict`.
+- Clicking “Run Efficacy Prediction (WIWFM)” results in a `POST /api/efficacy/predict`.
 
 ### 2) Ensure tumor context is used in the efficacy request
 - When calling `/api/efficacy/predict`, payload must include:
-  - `germlinetus` from `useSporadic().germlineStatus`
-  - `tumor_context` from `useSporadic().tumorContext`
+  - `germline_status` from `useSporadic().germlineStatus`
+  - `tumor_c` from `useSporadic().tumorContext`
 
 **Acceptance**:
 - In devtools network request body, `tumor_context` is present after Quick Intake.
@@ -49,9 +40,8 @@ Make `/sporadic-cancer` **demo-correct** and **production-ready (RUO)** by wirin
 - Add copy-to-clipboard markdown summary for clinician.
 
 **Acceptance**:
-- Clipboard contains: data level, biomarkers, applied gates, and top therapies.
+- Clipboard contains: data level, biomarkers, applied gates, and next steps.
 
 ## Non-goals
 - No new backend endpoints unless absolutely necessary.
 - No claims beyond RUO.
-

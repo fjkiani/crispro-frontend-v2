@@ -6,6 +6,8 @@
 - `publications/sporadic_cancer/`
 - `publications/synthetic_lethality/`
 - `publications/01-metastasis-interception/`
+- `publications/02-trial-matching/`
+- `publications/03-sae-resistance/`
 
 We explicitly avoid noise from other folders unless a claim is backed by a reproducible artifact.
 
@@ -89,13 +91,55 @@ We explicitly avoid noise from other folders unless a claim is backed by a repro
 - CPIC mapping/logic is documented.
 
 **Primary receipts:**
-- `oncology-coPilot/oncology-backend-minimal/dosing_guidance_validation/docs/SME_REVIEW_PACKAGE.md (N=59; sensitivity 6/6 flagged)
+- `oncology-coPilot/oncology-backend-minimal/dosing_guidance_validation/docs/SME_REVIEW_PACKAGE.md` (N=59; sensitivity 6/6 flagged)
 - `oncology-coPilot/oncology-backend-minimal/dosing_guidance_validation/docs/CPIC_ALIGNMENT_SUMMARY.md`
 
 **Explicit non-claims:**
 - “MedWatch reduction” or real-world adverse event reduction without outcome receipts.
 
 ---
+
+
+---
+
+### 5) Trial Matching — publication scripts + receipt-backed figures/tables
+
+**Validated (receipt-backed behavior, not outcomes):**
+- The publication scripts run end-to-end and generate figures/tables from an on-disk trial MoA vectors file.
+- Table 1 is **computed** (no hardcoded Top-k/MRR claims).
+
+**Primary receipts:**
+- `publications/02-trial-matching/receipts/latest/generate_all_figures_stdout.txt`
+- `publications/02-trial-matching/tables/table1_validation_results.csv` (computed summary metrics)
+
+**Reproduce:**
+- `python3 -m venv /tmp/pub-venv && source /tmp/pub-venv/bin/activate && pip install -r publications/02-trial-matching/scripts/requirements.txt`
+- `python publications/02-trial-matching/scripts/generate_all_figures.py --output-dir publications/02-trial-matching/figures --format both`
+
+**Explicit non-claims:**
+- Top-k accuracy / MRR as “validated” until a labeled evaluation set is added to this bundle.
+
+---
+
+### 6) SAE Resistance — publication scripts + receipts (method-specific)
+
+**Validated (with receipts):**
+- Head-to-head PROXY vs TRUE comparisons run on the same cohort and write a timestamped JSON + stdout receipt.
+- ROC/CV figure generation runs and writes figure files; AUROC mean±std are printed in receipts.
+
+**Primary receipts:**
+- `publications/03-sae-resistance/receipts/latest/head_to_head_stdout.txt`
+- `publications/03-sae-resistance/receipts/latest/head_to_head_results.json`
+- `publications/03-sae-resistance/receipts/latest/generate_roc_curves_stdout.txt`
+- `publications/03-sae-resistance/figures/figure2_roc_curves.{png,pdf}`
+
+**Reproduce:**
+- `python3 -m venv /tmp/pub-venv && source /tmp/pub-venv/bin/activate && pip install -r publications/03-sae-resistance/scripts/requirements.txt`
+- `python publications/03-sae-resistance/scripts/head_to_head_proxy_vs_true.py`
+- `python publications/03-sae-resistance/scripts/generate_roc_curves.py`
+
+**Important note (claim hygiene):**
+- The “TRUE SAE” performance depends on the **evaluation method** (raw score vs logistic regression CV). Claims must specify which method is used.
 
 ## 🚫 Forbidden Claims (until outcome receipts exist)
 

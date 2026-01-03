@@ -134,7 +134,7 @@
 
 ### **8.2.1 Patient Profile**
 
-**Name**: Ayesha Kiani, 38F  
+**Name**: AK, 38F  
 **Cancer**: Ovarian (high-grade serous, presumed)  
 **Germline**: CustomNext-Cancer® +RNAinsight® - **NEGATIVE**  
 **Genes Tested**: 38 (BRCA1/2, Lynch, TP53, ATM, PALB2, RAD51C/D, CHEK2, and 26 others)  
@@ -241,7 +241,7 @@ Good news: You do NOT have an inherited genetic mutation.
 ```markdown
 ## Sporadic Cancer Analysis Report
 
-**Patient**: Ayesha Kiani  
+**Patient**: AK  
 **Germline**: Negative (38 genes, CustomNext-Cancer®)  
 **Cancer**: High-grade serous ovarian  
 **Stage**: IIIC-IV  

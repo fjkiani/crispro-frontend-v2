@@ -1,6 +1,6 @@
 # 🧬 AYESHA GENE ESSENTIALITY ANALYSIS PLAN
 
-**Patient:** Ayesha Kiani  
+**Patient:** AK  
 **Profile:** MBD4 c.1239delA (homozygous) + TP53 somatic mutation  
 **Date:** January 28, 2025  
 **Purpose:** Understand pathway dependencies and synthetic lethal opportunities

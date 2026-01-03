@@ -1,6 +1,6 @@
 # 🏥 AYESHA KIANI - CLINICAL SUMMARY & MONITORING PLAN
 
-**Patient:** Ayesha Kiani  
+**Patient:** AK  
 **DOB:** 6/25/1985 (Age 40)  
 **MRN:** 1011021118 / 68741392  
 **Last Updated:** November 2025

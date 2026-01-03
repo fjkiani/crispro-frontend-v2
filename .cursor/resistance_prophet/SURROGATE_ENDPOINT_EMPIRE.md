@@ -797,3 +797,5 @@ class ResistancePredictionEngine:
 **For:** Commander Alpha
 
 
+
+

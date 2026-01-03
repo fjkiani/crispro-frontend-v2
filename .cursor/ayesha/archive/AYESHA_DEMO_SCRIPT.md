@@ -65,7 +65,7 @@ VITE v5.x.x ready in xxx ms
 ### **Scene 1: Profile Summary** (30 seconds)
 
 **What to Show**:
-- **Patient**: Ayesha Kiani
+- **Patient**: AK
 - **Diagnosis**: Stage IVB Ovarian Cancer (High-Grade Serous)
 - **CA-125**: 2,842 U/mL (EXTENSIVE disease burden)
 - **Germline**: Negative (Ambry Genetics, June 2023)

@@ -9,7 +9,7 @@
 ### **6.1 AYESHA COMPLETE CARE ORCHESTRATOR**
 
 #### **6.1.1 Overview** (`routers/ayesha_orchestrator_v2.py`):
-- **Purpose**: Unified care plan orchestration for Ayesha Kiani (Stage IVB HGSOC)
+- **Purpose**: Unified care plan orchestration for AK (Stage IVB HGSOC)
 - **Endpoint**: `POST /api/ayesha/complete_care_v2`
 - **Integration**: Coordinates 7 clinical services + 3 SAE services + Resistance Prophet
 

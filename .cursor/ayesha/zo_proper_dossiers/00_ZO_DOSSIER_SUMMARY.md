@@ -2,7 +2,7 @@
 
 **Generated**: November 14, 2025 - 21:20 EST  
 **Commander**: Fahad Kiani  
-**Patient**: Ayesha Kiani (Stage IVB, First-line, Germline-negative)  
+**Patient**: AK (Stage IVB, First-line, Germline-negative)  
 **Total Dossiers**: 10 (5 TOP-TIER, 5 GOOD-TIER)
 
 ---

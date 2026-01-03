@@ -43,7 +43,7 @@
 {
   "status": "operational",
   "service": "ayesha_trials",
-  "for_patient": "Ayesha Kiani (Stage IVB ovarian cancer)",
+  "for_patient": "AK (Stage IVB ovarian cancer)",
   "capabilities": [
     "trial_search_frontline",
     "soc_recommendation",

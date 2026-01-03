@@ -1,100 +1,108 @@
-# MOAT Documentation Hub
+# 📊 MOAT IMPLEMENTATION STATUS - SOURCE OF TRUTH
 
-**Last Updated:** January 28, 2025  
-**Status:** 🔄 **ORGANIZED** - Following modular structure
-
----
-
-## 📚 Organized Topics
-
-### **🎯 Start Here - Core Systems:**
-
-| Topic | Status | Location | Description |
-|-------|--------|----------|-------------|
-| **MM** | 🚧 40% | [MM/](MM/) | Multiple Myeloma Resistance Prediction |
-| **TOXICITY** | ✅ 85% | [TOXICITY/](TOXICITY/) | Toxicity Risk Assessment (THE MOAT) |
-| **FOOD_VALIDATOR** | ✅ 80% | [FOOD_VALIDATOR/](FOOD_VALIDATOR/) | Food/Supplement Validation System |
-| **ADVANCED_CARE_PLAN** | ✅ 85% | [ADVANCED_CARE_PLAN/](ADVANCED_CARE_PLAN/) | Universal Advanced Care Plan |
+**Date:** January 28, 2025  
+**Status:** ✅ ACTIVE - Implementation Status Directory  
+**Purpose:** Source of truth for **BUILT FEATURES** and implementation status
 
 ---
 
-## 🗂️ Directory Structure
+## 🎯 WHAT THIS DIRECTORY IS
+
+This directory (`.cursor/MOAT/`) contains **implementation status** and **source of truth** files for features that have been **BUILT** and are **OPERATIONAL**.
+
+### **Key Characteristics:**
+- ✅ **Implementation-focused** - Documents what's actually built
+- ✅ **Status tracking** - Shows what works, what's tested, what's validated
+- ✅ **Source of truth** - Single authoritative file per feature (`00_SOURCE_OF_TRUTH.md`)
+- ✅ **File format** - Primarily `.md` files (Markdown, not MDC)
+- ✅ **Operational** - Documents working code, not plans
+
+---
+
+## 📁 DIRECTORY STRUCTURE
+
+### **Pattern: Feature-Based Organization**
 
 ```
 .cursor/MOAT/
-├── README.md                    # This file - Navigation hub
-│
-├── MM/                          # Multiple Myeloma Resistance
-│   ├── README.md
-│   ├── 00_MISSION.mdc          # Source of truth
-│   ├── 01_AUDIT.md
-│   ├── 02_VALIDATION.md
-│   └── archive/
-│
-├── TOXICITY/                    # Toxicity Risk Assessment
-│   ├── README.md
-│   ├── 00_SOURCE_OF_TRUTH.md   # THE MOAT: Toxicity-Aware Nutrition
-│   ├── 01_PRODUCTION_READINESS.md
-│   ├── 02_FRONTEND_SOURCE_OF_TRUTH.md
-│   └── archive/
-│
-├── FOOD_VALIDATOR/              # Food Validation System
-│   ├── README.md
-│   ├── 00_SOURCE_OF_TRUTH.md
-│   ├── 01_ASSESSMENT.md
-│   └── archive/
-│
-├── ADVANCED_CARE_PLAN/          # Advanced Care Plan
-│   ├── README.md
-│   ├── 00_SOURCE_OF_TRUTH.md
-│   ├── 01_EXPLAINED.md
-│   └── archive/
-│
-└── ... (other files at top level)
+├── ADVANCED_CARE_PLAN/
+│   ├── 00_SOURCE_OF_TRUTH.md      # Implementation source of truth
+│   ├── 01_EXPLAINED.md             # Detailed explanation
+│   └── README.md                    # Feature overview
+├── RESISTANCE_PREDICTION/
+│   └── 00_SOURCE_OF_TRUTH.md
+├── DRUG_EFFICACY/
+│   └── 00_SOURCE_OF_TRUTH.md
+└── ...
 ```
 
 ---
 
-## 🎯 Quick Navigation
+## 🔗 RELATIONSHIP TO `.cursor/rules/MOAT/`
 
-### **By Topic:**
-- **MM Resistance:** [MM/README.md](MM/README.md)
-- **Toxicity Risk:** [TOXICITY/README.md](TOXICITY/README.md)
-- **Food Validator:** [FOOD_VALIDATOR/README.md](FOOD_VALIDATOR/README.md)
-- **Advanced Care Plan:** [ADVANCED_CARE_PLAN/README.md](ADVANCED_CARE_PLAN/README.md)
+### **Distinction:**
 
-### **By Status:**
-- **Production Ready:** TOXICITY (85%), FOOD_VALIDATOR (80%), ADVANCED_CARE_PLAN (85%)
-- **In Development:** MM (40%)
+| Aspect | `.cursor/MOAT/` | `.cursor/rules/MOAT/` |
+|--------|-----------------|------------------------|
+| **Purpose** | Implementation status | Strategic doctrines & plans |
+| **File Type** | `.md` (Markdown) | `.mdc` (Markdown Doctrine) |
+| **Content** | What's built, tested, validated | What to build, how to build, why |
+| **Audience** | Developers, QA, product | Agents, architects, strategists |
+| **Status** | Operational features | Planning & execution docs |
+| **Example** | `00_SOURCE_OF_TRUTH.md` | `00_MASTER_INDEX.mdc` |
+
+### **Example:**
+
+**`.cursor/MOAT/ADVANCED_CARE_PLAN/00_SOURCE_OF_TRUTH.md`:**
+- ✅ Documents the **built** Advanced Care Plan feature
+- ✅ Shows **actual** API endpoints that work
+- ✅ Lists **real** test results and validation
+- ✅ Tracks **implementation** status
+
+**`.cursor/rules/MOAT/orchestration/07_CARE_PLAN_AGENT.mdc`:**
+- 📋 Documents the **planned** Care Plan Agent module
+- 📋 Shows **intended** architecture and design
+- 📋 Lists **requirements** and acceptance criteria
+- 📋 Tracks **execution** plan
 
 ---
 
-## 📊 Organization Status
+## 📊 KEY FILES
 
-**Before Consolidation:**
-- 101 files at top level
-- No organization
-- Hard to find related files
+### **Implementation Status Files:**
+- `ADVANCED_CARE_PLAN/00_SOURCE_OF_TRUTH.md` - Advanced Care Plan implementation
+- `RESISTANCE_PREDICTION/00_SOURCE_OF_TRUTH.md` - Resistance prediction implementation
+- `DRUG_EFFICACY/00_SOURCE_OF_TRUTH.md` - Drug efficacy implementation
 
-**After Consolidation:**
-- 83 files at top level (18 files organized)
-- 4 organized topic directories
-- Each topic has README.md navigation
-- Single source of truth per topic
+### **Agent Knowledge Base:**
+- `ZO_CODEBASE_DECODER_PLAN.mdc` - Zo's codebase decoder plan (exception: MDC file)
 
 ---
 
-## 🔗 Related Documentation
+## 🎯 WHEN TO USE THIS DIRECTORY
 
-**Orchestration:**
-- `.cursor/MOAT/orchestration/` - Agent orchestration plans
+**Use `.cursor/MOAT/` when:**
+- ✅ You need to know what's **actually built** and working
+- ✅ You need **implementation status** for a feature
+- ✅ You need **test results** and validation data
+- ✅ You need **operational** documentation
 
-**Other Topics:**
-- Files at top level that haven't been consolidated yet
-- See individual topic directories for organized docs
+**Use `.cursor/rules/MOAT/` when:**
+- 📋 You need **strategic plans** and doctrines
+- 📋 You need **agent modules** and execution plans
+- 📋 You need **architecture** and design docs
+- 📋 You need **planning** documentation
+
+---
+
+## 🔗 RELATED DOCUMENTATION
+
+- **Strategic Plans:** `.cursor/rules/MOAT/orchestration/00_MASTER_INDEX.mdc`
+- **Agent Assignments:** `.cursor/rules/MOAT/AGENT_ASSIGNMENTS_SUMMARY.mdc`
+- **Master Navigation:** `.cursor/rules/00_MASTER_INDEX.mdc`
 
 ---
 
 **Last Updated:** January 28, 2025  
-**Organization Model:** Follows MM/ structure (README + numbered docs + archive)
-
+**Maintained By:** Zo (MDC File Expert)  
+**Status:** ✅ ACTIVE - Implementation Status Directory

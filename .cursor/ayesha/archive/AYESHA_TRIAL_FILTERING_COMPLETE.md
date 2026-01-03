@@ -1,6 +1,6 @@
 # ⚔️ AYESHA TRIAL FILTERING ENGINE - COMPLETE STATUS ⚔️
 
-**Mission**: Build precision trial matching system for Ayesha Kiani (Stage IVB ovarian cancer)  
+**Mission**: Build precision trial matching system for AK (Stage IVB ovarian cancer)  
 **Date**: January 13, 2025  
 **Status**: ✅ **100% COMPLETE** - Backend + Frontend + Integration Testing  
 **Single Source of Truth**: This document
@@ -158,7 +158,7 @@
   {
     "status": "operational",
     "service": "ayesha_trials",
-    "for_patient": "Ayesha Kiani (Stage IVB ovarian cancer)",
+    "for_patient": "AK (Stage IVB ovarian cancer)",
     "capabilities": [
       "trial_search_frontline",
       "soc_recommendation",

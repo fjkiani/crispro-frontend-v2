@@ -64,7 +64,7 @@ curl http://localhost:8000/api/ayesha/complete_care_v2/health | jq
 {
   "status": "operational",
   "service": "complete_care_v2",
-  "for_patient": "Ayesha Kiani (Stage IVB ovarian cancer)",
+  "for_patient": "AK (Stage IVB ovarian cancer)",
   "sae_phase1_enabled": true,
   "sae_phase2_enabled": true,
   "sae_policy": "MANAGER_ANSWERS_TO_ZO_SAE_QUESTIONS.md (Jan 13, 2025)",

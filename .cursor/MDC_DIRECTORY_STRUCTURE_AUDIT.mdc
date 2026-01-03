@@ -1,0 +1,682 @@
+# 🗂️ MDC DIRECTORY STRUCTURE AUDIT & ORGANIZATION PLAN
+
+**Date:** January 28, 2025  
+**Status:** ✅ COMPREHENSIVE STRUCTURE AUDIT COMPLETE  
+**Purpose:** Map existing folder organization, identify core folders, find gaps, improve consolidation plan
+
+---
+
+## 📊 EXECUTIVE SUMMARY
+
+### **Current State:**
+- **50+ top-level directories** in `.cursor/rules/`
+- **10 subdirectories** in `.cursor/rules/MOAT/`
+- **Duplicate structures** (MOAT in both `.cursor/` and `.cursor/rules/`)
+- **Multiple archive directories** scattered throughout
+- **Inconsistent organization** (some topics well-organized, others scattered)
+
+### **Key Findings:**
+1. ✅ **Well-Organized:** MOAT, doctrines, specialized_systems, sae, spe_framework
+2. ⚠️ **Partially Organized:** ayesha, MM, use-cases, research
+3. ❌ **Scattered:** Some topics have files in multiple locations
+4. ⚠️ **Duplicates:** MOAT exists in both `.cursor/` and `.cursor/rules/`
+
+---
+
+## 🗂️ CORE FOLDER STRUCTURE ANALYSIS
+
+### **TIER 1: CORE ORGANIZATIONAL FOLDERS (Well-Established)**
+
+These folders represent **core organizational patterns** that should be used as templates:
+
+#### **1. `.cursor/rules/doctrines/`** ✅
+- **Purpose:** Master strategic doctrines
+- **Files:** 10 MDC files
+- **Status:** ✅ Well-organized
+- **Key Files:**
+  - `ZETA_DOCTRINE.mdc` (Tier 1 - P0)
+  - `BIOLOGICAL_CURE_DOCTRINE.mdc` (Tier 1 - P0)
+  - `master_forge_boltz_gauntlet_doctrine.mdc` (Tier 2 - P1)
+  - `MISSION_CONTROL_DASHBOARD_DOCTRINE.mdc`
+  - `CLIENT_DOSSIER_DOCTRINE.mdc`
+- **Pattern:** Single master file per topic
+- **Recommendation:** ✅ KEEP AS-IS, use as template
+
+---
+
+#### **2. `.cursor/rules/MOAT/`** ✅
+- **Purpose:** MOAT orchestration and intelligence
+- **Files:** 128 MDC files, 13 MD files
+- **Status:** ✅ Well-organized with subdirectories
+- **Subdirectories:**
+  - `orchestration/` - 17 agent modules (00_MASTER_INDEX.mdc + 16 agent files)
+  - `ADVANCED_CARE_PLAN/` - Advanced care plan docs
+  - `CLINICAL_TRIALS/` - Clinical trials mission and implementation
+  - `SAE_INTELLIGENCE/` - SAE intelligence system
+  - `AGENT_TRAINING_KNOWLEDGE/` - Agent training materials
+  - `CORE_DELIVERABLES/` - Core deliverables
+  - `DEMO_READINESS/` - Demo readiness assessments
+  - `MM/` - Multiple Myeloma specific
+  - `PREVENTION/` - Prevention strategies
+- **Pattern:** Topic-based subdirectories with master files
+- **Recommendation:** ✅ KEEP AS-IS, use as template for other topics
+
+---
+
+#### **3. `.cursor/rules/specialized_systems/`** ✅
+- **Purpose:** Specialized system doctrines
+- **Files:** 3 MDC files
+- **Status:** ✅ Well-organized
+- **Key Files:**
+  - `vus_master.mdc` (Tier 2 - P1)
+- **Pattern:** Master file per specialized system
+- **Recommendation:** ✅ KEEP AS-IS
+
+---
+
+#### **4. `.cursor/rules/spe_framework/`** ✅
+- **Purpose:** S/P/E framework master doctrine
+- **Files:** 3 MDC files
+- **Status:** ✅ Well-organized
+- **Key Files:**
+  - `spe_framework_master.mdc` (Tier 2 - P1)
+- **Pattern:** Master file with supporting docs
+- **Recommendation:** ✅ KEEP AS-IS
+
+---
+
+#### **5. `.cursor/rules/core_architecture/`** ✅
+- **Purpose:** Core platform architecture
+- **Files:** 9 MDC files
+- **Status:** ✅ Well-organized
+- **Key Files:**
+  - `platform_architecture_master.mdc` (Tier 2 - P1)
+- **Pattern:** Master file with supporting docs
+- **Recommendation:** ✅ KEEP AS-IS
+
+---
+
+#### **6. `.cursor/rules/platform/`** ✅
+- **Purpose:** Platform evolution and strategy
+- **Files:** 6 MDC files
+- **Status:** ✅ Well-organized
+- **Key Files:**
+  - `PLATFORM_EVOLUTION_MASTER_PLAN.mdc` (Tier 1 - P0)
+- **Pattern:** Master plan with supporting docs
+- **Recommendation:** ✅ KEEP AS-IS
+
+---
+
+#### **7. `.cursor/rules/forge_boltz/` & `.cursor/rules/forge-doctrine/`** ⚠️
+- **Purpose:** Forge/Boltz/Gauntlet doctrines
+- **Files:** 9 MDC files in forge_boltz, 9 files in forge-doctrine
+- **Status:** ⚠️ DUPLICATE STRUCTURE
+- **Key Files:**
+  - `forge_boltz_master.mdc` (in forge_boltz/)
+  - `master_forge_boltz_gauntlet_doctrine.mdc` (in forge-doctrine/ and doctrines/)
+- **Pattern:** Two separate folders for same topic
+- **Recommendation:** ⚠️ CONSOLIDATE - Merge into single folder or keep one
+
+---
+
+### **TIER 2: TOPIC-SPECIFIC FOLDERS (Partially Organized)**
+
+#### **8. `.cursor/rules/ayesha/`** ⚠️
+- **Purpose:** Ayesha-specific plans and doctrines
+- **Files:** 24 MDC files
+- **Status:** ⚠️ Partially organized
+- **Key Files:**
+  - `ayesha_plan_root.mdc` (2,190 lines - most complete)
+  - `ayesha.moat.mdc`
+  - `ayesha_dossier_dashboard_doctrine.mdc`
+  - Blog files in `blog/` subdirectory
+- **Gaps:**
+  - No clear single source of truth
+  - Multiple plan files (ayesha_plan.mdc, ayesha_plan_root.mdc)
+  - `AYESHA_ESSENTIALS_PLAN.mdc` not found (may be in different location)
+- **Recommendation:** ⚠️ CONSOLIDATE - Identify single source of truth, archive duplicates
+
+---
+
+#### **9. `.cursor/rules/MM/`** ⚠️
+- **Purpose:** Multiple Myeloma specific
+- **Files:** 28 MDC files, 15 MD files
+- **Status:** ⚠️ Partially organized
+- **Key Files:**
+  - `WIWFMSPE_MM_MASTER.mdc` (in Organizations/Internal/Doctrines/)
+- **Gaps:**
+  - Files scattered across subdirectories
+  - May overlap with `.cursor/rules/MOAT/MM/`
+- **Recommendation:** ⚠️ VERIFY - Check if consolidation needed with MOAT/MM
+
+---
+
+#### **10. `.cursor/rules/use-cases/`** ⚠️
+- **Purpose:** Use case implementations
+- **Files:** 26 MDC files, 49 MD files
+- **Status:** ⚠️ Partially organized
+- **Subdirectories:**
+  - `metastasis-project/` - 13+ files
+  - Other use cases scattered
+- **Gaps:**
+  - No clear master index
+  - Files scattered across subdirectories
+- **Recommendation:** ⚠️ ORGANIZE - Create master index, consolidate by topic
+
+---
+
+#### **11. `.cursor/rules/research/`** ⚠️
+- **Purpose:** Research concepts and plans
+- **Files:** 68 MDC files, 3 MD files
+- **Status:** ⚠️ LARGE, NEEDS ORGANIZATION
+- **Gaps:**
+  - Many outdated concepts
+  - No clear organization
+  - May need archiving
+- **Recommendation:** ⚠️ AUDIT & ARCHIVE - Review each file, archive outdated, keep active
+
+---
+
+#### **12. `.cursor/rules/resistance_prophet/`** ✅
+- **Purpose:** Resistance prediction framework
+- **Files:** 1 MDC file
+- **Status:** ✅ Organized (main files in `.cursor/resistance_prophet/`)
+- **Key Files:**
+  - `diseases/mm/MISSION.mdc`
+- **Note:** Main resistance prophet files are in `.cursor/resistance_prophet/` (not rules/)
+- **Recommendation:** ✅ KEEP AS-IS, but note main location is `.cursor/resistance_prophet/`
+
+---
+
+### **TIER 3: SUPPORTING FOLDERS**
+
+#### **13. `.cursor/rules/publications/`** ✅
+- **Purpose:** Publication plans and masters
+- **Files:** 4 MDC files
+- **Status:** ✅ Organized
+- **Recommendation:** ✅ KEEP AS-IS
+
+---
+
+#### **14. `.cursor/rules/testing_validation/`** ✅
+- **Purpose:** Testing and validation master
+- **Files:** 5 MDC files
+- **Status:** ✅ Organized
+- **Key Files:**
+  - `testing_validation_master.mdc` (Tier 2 - P1)
+- **Recommendation:** ✅ KEEP AS-IS
+
+---
+
+#### **15. `.cursor/rules/ip_regulatory/`** ✅
+- **Purpose:** IP and regulatory master
+- **Files:** 8 MDC files
+- **Status:** ✅ Organized
+- **Key Files:**
+  - `ip_regulatory_master.mdc` (Tier 2 - P1)
+- **Recommendation:** ✅ KEEP AS-IS
+
+---
+
+#### **16. `.cursor/rules/frontend_demo/`** ✅
+- **Purpose:** Frontend demo master
+- **Files:** 7 MDC files
+- **Status:** ✅ Organized
+- **Key Files:**
+  - `frontend_demo_master.mdc` (Tier 2 - P1)
+- **Recommendation:** ✅ KEEP AS-IS
+
+---
+
+#### **17. `.cursor/rules/modularization/`** ✅
+- **Purpose:** Modularization master
+- **Files:** 5 MDC files
+- **Status:** ✅ Organized
+- **Key Files:**
+  - `modularization_master.mdc` (Tier 2 - P1)
+- **Recommendation:** ✅ KEEP AS-IS
+
+---
+
+#### **18. `.cursor/rules/remaining_categories/`** ✅
+- **Purpose:** Remaining specialized files master
+- **Files:** 26 MDC files
+- **Status:** ✅ Organized
+- **Key Files:**
+  - `remaining_categories_master.mdc` (Tier 2 - P1)
+- **Recommendation:** ✅ KEEP AS-IS
+
+---
+
+#### **19. `.cursor/rules/sporadic_cancer/`** ✅
+- **Purpose:** Sporadic cancer strategy
+- **Files:** 12 MDC files
+- **Status:** ✅ Organized
+- **Key Files:**
+  - `00_MASTER_INDEX.mdc`
+- **Recommendation:** ✅ KEEP AS-IS
+
+---
+
+#### **20. `.cursor/rules/universal_build/`** ✅
+- **Purpose:** Universal hypothesis testing
+- **Files:** 13 MDC files, 9 MD files
+- **Status:** ✅ Organized
+- **Key Files:**
+  - `00_MASTER_INDEX.mdc`
+- **Recommendation:** ✅ KEEP AS-IS
+
+---
+
+#### **21. `.cursor/rules/product_docs/`** ✅
+- **Purpose:** Product documentation
+- **Files:** 7 MDC files, 1 MD file
+- **Status:** ✅ Organized
+- **Key Files:**
+  - `00_MASTER_INDEX.mdc`
+- **Recommendation:** ✅ KEEP AS-IS
+
+---
+
+#### **22. `.cursor/rules/saas_transformation/`** ✅
+- **Purpose:** SaaS transformation docs
+- **Files:** 44 MD files, 1 SQL file
+- **Status:** ✅ Organized (mostly .md files)
+- **Key Files:**
+  - `CONSOLIDATION_COMPLETE.md` (shows consolidation pattern)
+- **Recommendation:** ✅ KEEP AS-IS
+
+---
+
+### **TIER 4: UTILITY & TEMPORARY FOLDERS**
+
+#### **23. `.cursor/rules/utilities/`** ✅
+- **Purpose:** Utility files
+- **Files:** 2 MDC files
+- **Status:** ✅ Organized
+- **Recommendation:** ✅ KEEP AS-IS
+
+---
+
+#### **24. `.cursor/rules/temp/`** ⚠️
+- **Purpose:** Temporary files
+- **Files:** 12 MDC files
+- **Status:** ⚠️ TEMPORARY
+- **Recommendation:** ⚠️ REVIEW & ARCHIVE - Move to archive if not needed
+
+---
+
+#### **25. `.cursor/rules/zo/`** ⚠️
+- **Purpose:** Zo knowledge base
+- **Files:** 6 MDC files
+- **Status:** ⚠️ Partially organized
+- **Key Files:**
+  - `ZO_MASTER_KNOWLEDGE_BASE.mdc`
+  - `ZO_CODEBASE_KNOWLEDGE_BASE.mdc`
+- **Gaps:**
+  - May overlap with `.cursor/MOAT/ZO_CODEBASE_DECODER_PLAN.mdc`
+- **Recommendation:** ⚠️ VERIFY - Check for overlaps, consolidate if needed
+
+---
+
+## 🔍 DUPLICATE STRUCTURES IDENTIFIED
+
+### **1. MOAT in Multiple Locations** ⚠️
+
+**Found 4 MOAT locations:**
+1. `.cursor/MOAT/` - Implementation/status docs (268 MD files)
+2. `.cursor/rules/MOAT/` - Doctrines/plans (128 MDC files)
+3. `.cursor/MOAT/.cursor/MOAT/` - Nested duplicate (likely error)
+4. `.cursor/ayesha/MOAT/` - Ayesha-specific MOAT files
+
+**Location A:** `.cursor/MOAT/`
+- **Files:** 268 MD files, 16 Python files, 15 PDF files
+- **Subdirectories:** ADVANCED_CARE_PLAN, CLINICAL_TRIALS, FOOD_VALIDATOR, MM, TOXICITY, etc.
+- **Status:** Has organized subdirectories with `00_SOURCE_OF_TRUTH.md` files
+- **Purpose:** Implementation status, completion summaries, source of truth for built features
+
+**Location B:** `.cursor/rules/MOAT/`
+- **Files:** 128 MDC files, 13 MD files
+- **Subdirectories:** orchestration, ADVANCED_CARE_PLAN, CLINICAL_TRIALS, SAE_INTELLIGENCE, etc.
+- **Status:** Has organized subdirectories with master files
+- **Purpose:** Strategic doctrines, plans, agent modules, mission documents
+
+**Location C:** `.cursor/MOAT/.cursor/MOAT/` ⚠️
+- **Status:** Nested duplicate structure (likely error)
+- **Recommendation:** ⚠️ **INVESTIGATE** - May be accidental nesting, should be cleaned up
+
+**Location D:** `.cursor/ayesha/MOAT/`
+- **Status:** Ayesha-specific MOAT files
+- **Recommendation:** ✅ **KEEP** - Ayesha-specific, different purpose
+
+**Analysis:**
+- `.cursor/MOAT/` appears to be **implementation/status docs** (mostly .md files, 268 MD files)
+  - Has `00_SOURCE_OF_TRUTH.md` files in subdirectories (ADVANCED_CARE_PLAN, FOOD_VALIDATOR, TOXICITY)
+  - Contains implementation status, completion summaries, README files
+- `.cursor/rules/MOAT/` appears to be **doctrines/plans** (mostly .mdc files, 128 MDC files)
+  - Has master files and agent modules
+  - Contains strategic plans, mission documents, agent assignments
+- **Different purposes, but overlapping topics**
+
+**Key Differences Found:**
+- `.cursor/MOAT/ADVANCED_CARE_PLAN/` has `00_SOURCE_OF_TRUTH.md` (implementation)
+- `.cursor/rules/MOAT/ADVANCED_CARE_PLAN/` has `05_CLINICAL_DOSSIER.mdc` (doctrine)
+- Files are **complementary, not duplicates**
+
+**Recommendation:**
+1. ✅ **KEEP BOTH** - They serve different purposes:
+   - `.cursor/MOAT/` = Implementation status, source of truth for built features
+   - `.cursor/rules/MOAT/` = Strategic doctrines, plans, agent modules
+2. ✅ **DOCUMENT** the distinction clearly
+3. ⚠️ **VERIFY** if any files are true duplicates and consolidate those only
+
+---
+
+### **2. Resistance Prophet in Multiple Locations** ⚠️
+
+**Location A:** `.cursor/resistance_prophet/`
+- **Files:** Multiple MDC and MD files
+- **Subdirectories:** architecture, archive, diseases, implementation, integration, validation
+- **Status:** Well-organized with subdirectories
+
+**Location B:** `.cursor/rules/resistance_prophet/`
+- **Files:** 1 MDC file
+- **Status:** Minimal
+
+**Recommendation:**
+1. ✅ **KEEP** `.cursor/resistance_prophet/` as primary location
+2. ⚠️ **VERIFY** if `.cursor/rules/resistance_prophet/` file is needed or can be moved/archived
+
+---
+
+### **3. Ayesha in Multiple Locations** ⚠️
+
+**Location A:** `.cursor/ayesha/`
+- **Files:** 614 MD files, 32 Python files
+- **Subdirectories:** Many (Deliverables, MOAT, analysis, archive, blog, hypothesis_validator, etc.)
+- **Status:** Very large, well-organized with subdirectories
+
+**Location B:** `.cursor/rules/ayesha/`
+- **Files:** 24 MDC files
+- **Subdirectories:** blog/
+- **Status:** Doctrine/plan files
+
+**Analysis:**
+- `.cursor/ayesha/` appears to be **implementation/data/docs**
+- `.cursor/rules/ayesha/` appears to be **doctrines/plans**
+
+**Recommendation:**
+1. ✅ **KEEP BOTH** - Different purposes
+2. ⚠️ **VERIFY** if `AYESHA_ESSENTIALS_PLAN.mdc` is in `.cursor/ayesha/` or needs to be created
+
+---
+
+## 📋 GAPS IDENTIFIED
+
+### **Gap 1: No Clear Master Index for `.cursor/rules/`**
+- **Issue:** 50+ directories, no navigation hub
+- **Impact:** Hard to find related files
+- **Recommendation:** Create `00_MASTER_INDEX.mdc` in `.cursor/rules/` root
+
+---
+
+### **Gap 2: Inconsistent Master File Naming**
+- **Issue:** Some use `*_master.mdc`, others use `00_MASTER_INDEX.mdc`, others use `00_SOURCE_OF_TRUTH.md`
+- **Impact:** Hard to find single source of truth
+- **Recommendation:** Standardize naming:
+  - Doctrines: `*_master.mdc` or `*_doctrine.mdc`
+  - Implementation: `00_SOURCE_OF_TRUTH.md`
+  - Navigation: `00_MASTER_INDEX.mdc`
+
+---
+
+### **Gap 3: Archive Directories Scattered**
+- **Issue:** Multiple `archive/` directories throughout structure
+- **Impact:** Hard to know what's archived vs active
+- **Recommendation:** 
+  - Keep topic-specific archives (e.g., `MOAT/archive/`)
+  - Create central archive for truly obsolete files
+
+---
+
+### **Gap 4: Research Directory Too Large**
+- **Issue:** 68 MDC files in research, many may be outdated
+- **Impact:** Hard to find active concepts
+- **Recommendation:** 
+  - Audit each file
+  - Archive outdated concepts
+  - Create `research/00_MASTER_INDEX.mdc` for active concepts
+
+---
+
+### **Gap 5: Use-Cases Not Well Organized**
+- **Issue:** 26 MDC + 49 MD files, no clear organization
+- **Impact:** Hard to find specific use cases
+- **Recommendation:**
+  - Create `use-cases/00_MASTER_INDEX.mdc`
+  - Organize by topic (metastasis, breast cancer, etc.)
+
+---
+
+### **Gap 6: Concept vs Concepts - Different Files** ✅
+- **Issue:** Both `.cursor/rules/concept/` and `.cursor/rules/concepts/` exist
+- **Analysis:** ✅ **VERIFIED** - They have DIFFERENT files:
+  - `concept/` has: PLATFORM_EVOLUTION_MASTER_PLAN.mdc, RUNX1.mdc, evo2_endpoints_design.mdc, evidence/, jr2_dossier_mission/
+  - `concepts/` has: pathway.mdc (different file)
+- **Recommendation:**
+  - ✅ **KEEP BOTH** - Different files, different purposes
+  - ⚠️ **CONSIDER RENAMING** `concepts/` to be more specific (e.g., `concepts_pathway/`)
+
+---
+
+### **Gap 7: Doctrine vs Doctrines - Different Files** ✅
+- **Issue:** Both `.cursor/rules/doctrine/` and `.cursor/rules/doctrines/` exist
+- **Analysis:** ✅ **VERIFIED** - They have DIFFERENT files:
+  - `doctrine/` has: demo_conquest_plan.mdc, dynamic_assessor_protocol.mdc, myeloma_conquest_doctrine.mdc, operation_* files
+  - `doctrines/` has: ZETA_DOCTRINE.mdc, BIOLOGICAL_CURE_DOCTRINE.mdc, master_forge_boltz_gauntlet_doctrine.mdc (Tier 1-2 files)
+- **Recommendation:**
+  - ✅ **KEEP BOTH** - Different files, different purposes
+  - `doctrines/` = Master strategic doctrines (Tier 1-2)
+  - `doctrine/` = Operational doctrines/plans (Tier 3)
+  - ⚠️ **CONSIDER RENAMING** `doctrine/` to `operational_doctrines/` for clarity
+
+---
+
+## 🎯 IMPROVED ORGANIZATION PLAN
+
+### **Phase 1: Create Master Navigation (1 hour)**
+
+1. **Create `.cursor/rules/00_MASTER_INDEX.mdc`**
+   - List all top-level directories
+   - Categorize by purpose (Core, Topic-Specific, Supporting, Utility)
+   - Link to each directory's master file
+   - Document organization patterns
+
+2. **Standardize Master File Naming**
+   - Document naming conventions
+   - Update existing files if needed
+
+---
+
+### **Phase 2: Consolidate Duplicates (2 hours)**
+
+1. **Verify MOAT Duplicates**
+   - Compare `.cursor/MOAT/` vs `.cursor/rules/MOAT/`
+   - Document purpose of each
+   - Consolidate if overlapping
+
+2. **Verify Doctrine Duplicates**
+   - Compare `doctrine/` vs `doctrines/`
+   - Merge if duplicates, keep `doctrines/`
+
+3. **Verify Concept Duplicates**
+   - Compare `concept/` vs `concepts/`
+   - Merge if duplicates
+
+4. **Verify Forge Duplicates**
+   - Compare `forge_boltz/` vs `forge-doctrine/`
+   - Consolidate into single location
+
+---
+
+### **Phase 3: Organize Large Directories (3 hours)**
+
+1. **Research Directory**
+   - Audit all 68 MDC files
+   - Archive outdated concepts
+   - Create `research/00_MASTER_INDEX.mdc`
+
+2. **Use-Cases Directory**
+   - Create `use-cases/00_MASTER_INDEX.mdc`
+   - Organize by topic
+   - Archive completed use cases
+
+3. **Ayesha Directory**
+   - Verify `AYESHA_ESSENTIALS_PLAN.mdc` location
+   - Consolidate plan files
+   - Document structure
+
+---
+
+### **Phase 4: Archive Management (1 hour)**
+
+1. **Create Archive Strategy**
+   - Document what goes in topic-specific archives
+   - Document what goes in central archive
+   - Create archive index
+
+2. **Review Temp Directory**
+   - Audit `temp/` directory
+   - Move to archive if not needed
+   - Delete if truly temporary
+
+---
+
+## 📊 DIRECTORY STATISTICS
+
+### **Top-Level Directories in `.cursor/rules/`:**
+
+| Directory | MDC Files | MD Files | Total | Status |
+|-----------|-----------|----------|-------|--------|
+| MOAT | 128 | 13 | 141 | ✅ Well-organized |
+| research | 68 | 3 | 71 | ⚠️ Needs audit |
+| ayesha | 24 | 0 | 24 | ⚠️ Partially organized |
+| MM | 28 | 15 | 43 | ⚠️ Partially organized |
+| use-cases | 26 | 49 | 75 | ⚠️ Needs organization |
+| insights | 10 | 2 | 12 | ✅ Organized |
+| sae | 9 | 0 | 9 | ✅ Organized |
+| agents | 9 | 0 | 9 | ✅ Organized |
+| plans | 9 | 0 | 9 | ✅ Organized |
+| forge-doctrine | 7 | 2 | 9 | ⚠️ Duplicate? |
+| platform | 6 | 0 | 6 | ✅ Organized |
+| zo | 6 | 0 | 6 | ⚠️ Verify overlaps |
+| doctrines | 10 | 0 | 10 | ✅ Well-organized |
+| specialized_systems | 3 | 0 | 3 | ✅ Well-organized |
+| spe_framework | 3 | 0 | 3 | ✅ Well-organized |
+| core_architecture | 9 | 0 | 9 | ✅ Well-organized |
+| **Total** | **~400+** | **~100+** | **~500+** | |
+
+---
+
+## ✅ RECOMMENDED CORE FOLDER STRUCTURE
+
+### **Tier 1: Core Doctrines (Single Source of Truth)**
+```
+.cursor/rules/
+├── 00_MASTER_INDEX.mdc          # NEW: Navigation hub
+├── doctrines/                   # ✅ KEEP: Master strategic doctrines
+│   ├── ZETA_DOCTRINE.mdc        # Tier 1 - P0
+│   ├── BIOLOGICAL_CURE_DOCTRINE.mdc  # Tier 1 - P0
+│   └── master_forge_boltz_gauntlet_doctrine.mdc  # Tier 2 - P1
+├── platform/                    # ✅ KEEP: Platform evolution
+│   └── PLATFORM_EVOLUTION_MASTER_PLAN.mdc  # Tier 1 - P0
+└── core_architecture/           # ✅ KEEP: Platform architecture
+    └── platform_architecture_master.mdc  # Tier 2 - P1
+```
+
+### **Tier 2: Specialized Systems (Master Files)**
+```
+.cursor/rules/
+├── spe_framework/               # ✅ KEEP: S/P/E framework
+│   └── spe_framework_master.mdc
+├── specialized_systems/         # ✅ KEEP: VUS, etc.
+│   └── vus_master.mdc
+├── forge_boltz/                 # ⚠️ CONSOLIDATE: Merge forge-doctrine
+│   └── forge_boltz_master.mdc
+├── testing_validation/         # ✅ KEEP: Testing master
+│   └── testing_validation_master.mdc
+├── ip_regulatory/               # ✅ KEEP: IP/regulatory master
+│   └── ip_regulatory_master.mdc
+├── frontend_demo/               # ✅ KEEP: Frontend master
+│   └── frontend_demo_master.mdc
+├── modularization/              # ✅ KEEP: Modularization master
+│   └── modularization_master.mdc
+└── remaining_categories/         # ✅ KEEP: Other specialized
+    └── remaining_categories_master.mdc
+```
+
+### **Tier 3: Topic-Specific (Organized Subdirectories)**
+```
+.cursor/rules/
+├── MOAT/                        # ✅ KEEP: Well-organized template
+│   ├── 00_MASTER_INDEX.mdc      # Navigation hub
+│   ├── orchestration/           # 17 agent modules
+│   ├── ADVANCED_CARE_PLAN/     # With 00_SOURCE_OF_TRUTH.md
+│   ├── CLINICAL_TRIALS/        # Mission and implementation
+│   ├── SAE_INTELLIGENCE/       # SAE system
+│   └── ...
+├── ayesha/                      # ⚠️ CONSOLIDATE: Identify single source of truth
+│   ├── 00_MASTER_INDEX.mdc     # NEW: Create navigation
+│   └── ayesha_plan_root.mdc    # Keep as most complete
+├── MM/                          # ⚠️ VERIFY: Check overlap with MOAT/MM
+│   └── WIWFMSPE_MM_MASTER.mdc  # Single source of truth
+├── use-cases/                   # ⚠️ ORGANIZE: Create master index
+│   ├── 00_MASTER_INDEX.mdc     # NEW: Create navigation
+│   └── metastasis-project/    # Organized by topic
+├── research/                    # ⚠️ AUDIT & ARCHIVE: Review all files
+│   ├── 00_MASTER_INDEX.mdc     # NEW: Active concepts only
+│   └── archive/                 # Outdated concepts
+└── sporadic_cancer/             # ✅ KEEP: Well-organized
+    └── 00_MASTER_INDEX.mdc
+```
+
+### **Tier 4: Supporting (Organized)**
+```
+.cursor/rules/
+├── publications/                # ✅ KEEP: Publication plans
+├── product_docs/               # ✅ KEEP: Product documentation
+│   └── 00_MASTER_INDEX.mdc
+├── universal_build/             # ✅ KEEP: Universal build
+│   └── 00_MASTER_INDEX.mdc
+├── saas_transformation/        # ✅ KEEP: SaaS transformation
+└── utilities/                   # ✅ KEEP: Utility files
+```
+
+---
+
+## 🎯 ACTION ITEMS
+
+### **Immediate (This Week):**
+1. ✅ Create `.cursor/rules/00_MASTER_INDEX.mdc` - Navigation hub
+2. ✅ **VERIFIED** - MOAT locations serve different purposes (keep both, document distinction)
+3. ✅ **VERIFIED** - doctrine/doctrines have different files (keep both, consider renaming)
+4. ✅ **VERIFIED** - concept/concepts have different files (keep both, consider renaming)
+5. ⚠️ Consolidate forge_boltz/forge-doctrine duplicates (verify if different)
+6. ⚠️ **INVESTIGATE** `.cursor/MOAT/.cursor/MOAT/` nested structure (likely error)
+
+### **Short-Term (Next Week):**
+1. ⚠️ Audit research directory (68 files)
+2. ⚠️ Organize use-cases directory (75 files)
+3. ⚠️ Verify Ayesha essentials plan location
+4. ⚠️ Create master indexes for large directories
+
+### **Ongoing:**
+1. ✅ Maintain master files as single source of truth
+2. ✅ Archive completed/superseded files
+3. ✅ Document organization patterns
+
+---
+
+**Last Updated:** January 28, 2025  
+**Created By:** Zo (MDC File Expert)  
+**Status:** ✅ COMPREHENSIVE STRUCTURE AUDIT COMPLETE - READY FOR ORGANIZATION

@@ -160,7 +160,7 @@ async def run_stage3(self, trial) -> FilterResult:
 #### Step 1.6: Update LLM Prompts to Be Generic
 **In `trial_fit_analyzer.py`**, update prompt:
 ```python
-# Replace hardcoded "Ayesha Kiani" with:
+# Replace hardcoded "AK" with:
 patient_name = patient_profile.get('demographics', {}).get('name', 'Patient')
 patient_zip = patient_profile.get('logistics', {}).get('zip_code', 'Unknown')
 patient_location = patient_profile.get('logistics', {}).get('location', 'Unknown')

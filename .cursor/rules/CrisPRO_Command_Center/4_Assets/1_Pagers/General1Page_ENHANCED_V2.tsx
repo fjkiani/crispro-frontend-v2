@@ -205,7 +205,7 @@ const CONTENT_ENHANCED_V2 = {
                     { label: "Manuscript:", value: "In Preparation (Q1 2026 submission target)" },
                     { label: "Title:", value: '"Multi-modal AI for metastasis-specific therapeutic design"' },
                     { label: "Data:", value: "7 FDA-approved targets, 38 genes, 56 predictions (computational, RUO)" },
-                    { label: "Clinical Validation:", value: "Ayesha Kiani case (Stage IVB ovarian cancer, live system)" }
+                    { label: "Clinical Validation:", value: "AK case (Stage IVB ovarian cancer, live system)" }
                 ],
                 footer: { text: "Preprint: Available upon partnership agreement", color: "amber" }
             },

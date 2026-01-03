@@ -35,7 +35,7 @@ curl http://127.0.0.1:8000/api/ayesha/trials/health
 {
     "status": "operational",
     "service": "ayesha_trials",
-    "for_patient": "Ayesha Kiani (Stage IVB ovarian cancer)",
+    "for_patient": "AK (Stage IVB ovarian cancer)",
     "capabilities": [
         "trial_search_frontline",
         "soc_recommendation",

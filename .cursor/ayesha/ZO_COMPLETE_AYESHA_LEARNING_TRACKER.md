@@ -48,7 +48,7 @@
 - [x] `05_GTM_STRATEGY.md` - Revenue strategy ✅
 
 **Key Learnings:**
-- **Ayesha Care Strategy**: Complete unified care plan for Stage IVB ovarian cancer
+- **AK Care Strategy**: Complete unified care plan for Stage IVB ovarian cancer
 - **Sporadic Cancer**: 85% complete, handles 85-90% of patients (vs 10-15% germline-only)
 - **Agent Assignments**: Zo (backend), JR1 (trials seeding), JR2 (GTM automation)
 - **GTM Strategy**: 200 trials → 600 leads → $1-2M revenue pipeline

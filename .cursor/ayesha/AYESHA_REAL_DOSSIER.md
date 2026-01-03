@@ -8,7 +8,7 @@
 | Field | Value |
 |-------|-------|
 | **Patient ID** | AYESHA-001 |
-| **Name** | Ayesha Kiani |
+| **Name** | AK |
 | **Age/Sex** | 40F |
 | **Disease** | Ovarian Cancer (High-Grade Serous) |
 | **Stage** | IV |
@@ -437,7 +437,7 @@ The gaps are implementation:
 | Field | Value |
 |-------|-------|
 | **Patient ID** | AYESHA-001 |
-| **Name** | Ayesha Kiani |
+| **Name** | AK |
 | **Age/Sex** | 40F |
 | **Disease** | Ovarian Cancer (High-Grade Serous) |
 | **Stage** | IV |

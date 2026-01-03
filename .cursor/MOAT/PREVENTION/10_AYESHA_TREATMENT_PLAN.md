@@ -1,6 +1,6 @@
 # 🩺 AYESHA KIANI: DDR_bin-Guided Treatment Plan
 
-**Patient:** Ayesha Kiani  
+**Patient:** AK  
 **MRN:** AK_001  
 **Diagnosis:** Stage IV High-Grade Serous Ovarian Cancer (HGSOC)  
 **Key Mutations:** MBD4 c.1239delA (homozygous), TP53 p.R175H  
@@ -306,5 +306,5 @@ Median OS: 8-10+ years (potentially indefinite)
 
 *Document Owner: Zo*  
 *Last Updated: December 24, 2025*  
-*Patient: Ayesha Kiani (AK_001)*
+*Patient: AK (AK_001)*
 

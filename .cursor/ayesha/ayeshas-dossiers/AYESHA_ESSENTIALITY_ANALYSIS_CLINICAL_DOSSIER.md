@@ -1,5 +1,5 @@
 # Gene Essentiality Analysis - Clinical Report
-## Ayesha Kiani - Ovarian Cancer HGSOC
+## AK - Ovarian Cancer HGSOC
 
 **Analysis Date:** January 28, 2025  
 **Genomic Profile:** MBD4 c.1239delA (homozygous germline) + TP53 p.R175H (somatic)  

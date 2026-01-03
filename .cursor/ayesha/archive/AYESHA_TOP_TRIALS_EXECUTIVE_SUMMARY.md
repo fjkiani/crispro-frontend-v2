@@ -1,6 +1,6 @@
 # ⚔️ AYESHA KIANI — TOP CLINICAL TRIALS EXECUTIVE SUMMARY
 
-**Patient**: Ayesha Kiani (40F)  
+**Patient**: AK (40F)  
 **Diagnosis**: Stage IVB High-Grade Serous Ovarian Carcinoma (HGSOC)  
 **Status**: Pre-treatment (planned frontline chemo)  
 **Date**: November 15, 2025  

@@ -30,7 +30,7 @@
 
 **File**: `.cursor/ayesha/50_vector_candidates_for_jr2.json`
 
-**Patient Profile** (Ayesha Kiani):
+**Patient Profile** (AK):
 - **Disease**: Ovarian Cancer (High-Grade Serous)
 - **Stage**: IVB (metastatic)
 - **Treatment Line**: First-line (newly diagnosed, post-surgery)

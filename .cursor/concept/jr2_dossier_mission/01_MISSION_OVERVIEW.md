@@ -18,7 +18,7 @@
 
 ---
 
-## 📋 **PATIENT PROFILE (Ayesha Kiani)**
+## 📋 **PATIENT PROFILE (AK)**
 
 - **Disease**: Ovarian Cancer (High-Grade Serous)
 - **Stage**: IVB (metastatic)

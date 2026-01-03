@@ -2,7 +2,7 @@
 ## End-to-End Execution & Value Assessment
 
 **Date**: January 28, 2025  
-**Patient**: Ayesha Kiani (MRN: 1011021118)  
+**Patient**: AK (MRN: 1011021118)  
 **Mission**: Run complete MOAT pipeline and assess value delivered
 
 ---
@@ -14,7 +14,7 @@
 ```json
 {
   "patient_id": "AYESHA-001",
-  "patient_name": "Ayesha Kiani",
+  "patient_name": "AK",
   "mrn": "1011021118",
   "dob": "1985-06-25",
   "age": 40,
@@ -650,7 +650,7 @@ POST /api/ayesha/complete_care_v2
 ## End-to-End Execution & Value Assessment
 
 **Date**: January 28, 2025  
-**Patient**: Ayesha Kiani (MRN: 1011021118)  
+**Patient**: AK (MRN: 1011021118)  
 **Mission**: Run complete MOAT pipeline and assess value delivered
 
 ---
@@ -662,7 +662,7 @@ POST /api/ayesha/complete_care_v2
 ```json
 {
   "patient_id": "AYESHA-001",
-  "patient_name": "Ayesha Kiani",
+  "patient_name": "AK",
   "mrn": "1011021118",
   "dob": "1985-06-25",
   "age": 40,

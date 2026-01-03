@@ -387,7 +387,7 @@ const AyeshaDossierBrowser = () => {
           {dossiers.length} Commander-grade dossiers with mechanistic fit analysis
         </Typography>
         <Chip 
-          label={`Patient: Ayesha Kiani (Stage IVB HGSOC)`}
+          label={`Patient: AK (Stage IVB HGSOC)`}
           color="primary"
           sx={{ mt: 1 }}
         />
@@ -916,11 +916,11 @@ const generateShareableLink = () => {
   const shareUrl = `${baseUrl}/ayesha-dossiers/${nct_id}`;
   
   // Create email template
-  const subject = `Clinical Trial: ${nct_id} - Intelligence Report for Ayesha Kiani`;
+  const subject = `Clinical Trial: ${nct_id} - Intelligence Report for AK`;
   const body = `
 Dear Dr. [Oncologist Name],
 
-Please review this trial intelligence report for Ayesha Kiani (Stage IVB HGSOC):
+Please review this trial intelligence report for AK (Stage IVB HGSOC):
 
 Trial: ${dossier.nct_id}
 Match Score: ${Math.round(dossier.metadata.match_score * 100)}%
@@ -938,7 +938,7 @@ This dossier includes:
 Please let me know your thoughts.
 
 Best regards,
-Ayesha Kiani
+AK
   `.trim();
 
   const mailtoUrl = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;

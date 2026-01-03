@@ -1,6 +1,6 @@
 # 🧬 AYESHA ESSENTIALITY ANALYSIS RESULTS
 
-**Patient:** Ayesha Kiani  
+**Patient:** AK  
 **Profile:** MBD4 c.1239delA (homozygous) + TP53 somatic mutation  
 **Date:** January 28, 2025  
 **Status:** ✅ **ANALYSIS COMPLETE**

@@ -16822,7 +16822,7 @@ INTEGRATION:
 ### **Example: Ayesha (Full 4-Modality Profile)**
 
 ```yaml
-PATIENT: Ayesha Kiani (Ovarian HGSC, Stage IVB)
+PATIENT: AK (Ovarian HGSC, Stage IVB)
 
 MODALITY 1: GENOMIC
   - MBD4 c.1239delA (homozygous) → BER deficiency

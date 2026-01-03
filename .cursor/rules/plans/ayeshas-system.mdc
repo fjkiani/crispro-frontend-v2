@@ -144,7 +144,7 @@ Current State:
 
 File: api/services/ca125_intelligence.py (702 lines)
 Hardcoded: Ovarian cancer, CA-125 thresholds, GOG-218/ICON7 expectations
-Ayesha-specific: Comments reference "Ayesha Kiani"
+Ayesha-specific: Comments reference "AK"
 Universalization Steps:
 
 Clone to api/services/biomarker_intelligence_universal/
@@ -164,7 +164,7 @@ Code Changes:
 
 Replace hardcoded CA-125 thresholds with configurable BIOMARKER_THRESHOLDS dict
 Replace "ovarian cancer" with `patient_profile['disease']['type']`
-Replace "Ayesha Kiani" with `patient_profile['name']` or generic messaging
+Replace "AK" with `patient_profile['name']` or generic messaging
 Make response expectations disease-specific (load from config)
 
 **⚠️ HARDENING FOR BIOMARKER INTELLIGENCE** (S/P/E Domain):
@@ -177,7 +177,7 @@ Task 9.2: Clone Ayesha Orchestrator → Universal Complete Care Orchestrator
 Current State:
 
 File: api/routers/ayesha_orchestrator_v2.py (706 lines)
-Hardcoded: "Ayesha Kiani", "ovarian_cancer_hgs", "Stage IVB ovarian cancer"
+Hardcoded: "AK", "ovarian_cancer_hgs", "Stage IVB ovarian cancer"
 Ayesha-specific: Endpoint prefix /api/ayesha, patient name in responses
 Universalization Steps:
 
@@ -196,7 +196,7 @@ api/services/complete_care_universal/profile_adapter.py
 Code Changes:
 
 Replace prefix="/api/ayesha" with prefix="/api/complete_care"
-Replace "Ayesha Kiani" with patient_profile.get('name', 'Patient')
+Replace "AK" with patient_profile.get('name', 'Patient')
 Replace "ovarian_cancer_hgs" with `patient_profile['disease']['type']`
 Replace hardcoded SOC (carboplatin + paclitaxel) with disease-specific SOC from config
 Replace _call_ayesha_trials() with universal trials endpoint call

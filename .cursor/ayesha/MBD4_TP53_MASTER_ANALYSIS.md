@@ -3,7 +3,7 @@
 **Date**: January 27, 2025  
 **Status**: ✅ **COMPLETE - ALL 8 QUESTIONS ANSWERED WITH VERIFICATION FRAMEWORK**  
 **Analysis Method**: Proxy SAE (derived from S/P/E outputs)  
-**Consolidated From**: 6 source documents (now archived)
+**Consolidated From**: 8 source documents (now archived)
 
 ---
 
@@ -11,12 +11,13 @@
 
 1. [Executive Summary](#executive-summary)
 2. [Analysis Results](#analysis-results)
-3. [Execution Scripts](#execution-scripts)
-4. [Critical Answer Analysis](#critical-answer-analysis)
-5. [Proxy SAE v1 Results](#proxy-sae-v1-results)
-6. [Verification Framework](#verification-framework)
-7. [Verification Layer Implementation Plan](#verification-layer-implementation-plan)
-8. [Next Steps](#next-steps)
+3. [Clinical Action Plan & Treatment Recommendations](#clinical-action-plan--treatment-recommendations)
+4. [Execution Scripts](#execution-scripts)
+5. [Critical Answer Analysis](#critical-answer-analysis)
+6. [Proxy SAE v1 Results](#proxy-sae-v1-results)
+7. [Verification Framework](#verification-framework)
+8. [Verification Layer Implementation Plan](#verification-layer-implementation-plan)
+9. [Next Steps](#next-steps)
 
 ---
 
@@ -291,6 +292,99 @@
 - ⚠️ Pathway alignment may not capture all mechanisms
 - ⚠️ Not using true SAE features (would improve targeting)
 - ⚠️ **CRITICAL**: Food/supplement recommendations are **RESEARCH USE ONLY**
+
+---
+
+## 🏥 CLINICAL ACTION PLAN & TREATMENT RECOMMENDATIONS
+
+### **Immediate Actions (Priority 1)**
+
+1. **Primary Therapy: Olaparib (PARP inhibitor)**
+   - **Rationale**: Strongest biological match (DDR pathway disruption: 1.00)
+   - **Efficacy Prediction**: 80%
+   - **Confidence**: 40% (moderate - limited direct evidence for MBD4)
+   - **Consideration**: Off-label use (MBD4 not yet in FDA label, but strong rationale)
+   - **Clinical Badges**: ✅ ClinVar-Moderate, ✅ PathwayAligned
+   - **FDA Context**: Olaparib is FDA-approved for BRCA-mutated ovarian cancer; MBD4 loss creates similar synthetic lethal vulnerability
+
+2. **Standard of Care: Continue platinum-based chemotherapy**
+   - **Drug**: Carboplatin + Paclitaxel
+   - **Rationale**: DNA repair defects (MBD4+TP53) increase sensitivity to platinum agents
+   - **Efficacy Prediction**: 80%
+   - **Confidence**: 40% (moderate)
+   - **NCCN Guidelines**: First-line therapy (95-100% confidence)
+   - **Recommendation**: **STANDARD OF CARE** - continue with platinum-based therapy
+
+3. **Combination Strategy: Consider PARP + Platinum**
+   - **Rationale**: Synergistic DNA damage
+   - **Evidence**: Strong in BRCA-mutated ovarian cancer
+   - **Consideration**: May apply to MBD4-deficient tumors
+
+### **Secondary Considerations (Priority 2)**
+
+1. **Immunotherapy: Consider pembrolizumab**
+   - **Rationale**: TMB-High (25.0) meets FDA criteria (≥20 mutations/Mb)
+   - **Timing**: Consider as later-line or combination therapy
+   - **Evidence**: Weaker than PARP inhibitors for this profile
+   - **FDA Approval**: Pembrolizumab approved for TMB-high solid tumors
+
+2. **Clinical Trials: Search for DDR-deficient ovarian cancer trials**
+   - **Focus**: PARP inhibitor combinations
+   - **Consideration**: Basket trials for rare mutations
+   - **Current Status**: 0 trials matched (may need search criteria adjustment)
+
+### **Monitoring Strategy**
+
+1. **Response Assessment**:
+   - Standard imaging (CT/MRI) every 3 months
+   - CA-125 monitoring
+   - Clinical symptom assessment
+
+2. **Resistance Monitoring**:
+   - Track DNA repair capacity trends (baseline: 0.60)
+   - Monitor HRD score changes
+   - Watch for PARP inhibitor resistance patterns
+   - **Alert Thresholds**:
+     - DNA repair capacity drop >0.20 → Increased resistance risk
+     - HRD score drop → Potential resistance development
+     - CA-125 inadequate response → Clinical resistance signal
+
+3. **Toxicity Management**:
+   - Standard PARP inhibitor monitoring (hematologic, GI)
+   - Supportive care as needed
+
+### **Treatment Hierarchy**
+
+**First-Line Options**:
+1. **Olaparib** (PARP inhibitor) - Strongest biological match
+2. **Carboplatin** (platinum) - Standard of care, high predicted efficacy
+3. **Combination**: PARP + Platinum - Consider synergistic approach
+
+**Later-Line Options**:
+1. **Pembrolizumab** (immunotherapy) - TMB-High eligibility
+2. **Other PARP inhibitors** (niraparib, rucaparib) - Similar mechanism
+3. **Clinical trials** - DDR-deficient ovarian cancer trials
+
+### **Evidence Quality & Limitations**
+
+**Overall Evidence Quality**: **MODERATE**
+
+**Strengths**:
+- ✅ Strong biological rationale (DDR pathway disruption: 1.00)
+- ✅ Pathway alignment validated (DDR score: 1.00)
+- ✅ ClinVar pathogenic classification for both mutations
+- ✅ TP53 R175H is well-established hotspot (COSMIC: 15% frequency)
+
+**Limitations**:
+- ⚠️ Limited direct clinical evidence for MBD4 mutations
+- ⚠️ MBD4 not yet in FDA PARP inhibitor labels
+- ⚠️ Confidence scores moderate (40%) due to limited evidence
+- ⚠️ No matched clinical trials found
+
+**Confidence Breakdown**:
+- **High Confidence** (≥70%): Pathway disruption assessment (DDR: 1.00), Variant classification (both pathogenic), TMB status (HIGH: 25.0)
+- **Moderate Confidence** (40-69%): Drug efficacy predictions (40% confidence), DNA repair capacity calculation (0.60), IO eligibility (TMB-based)
+- **Low Confidence** (<40%): Clinical trial matching (0 trials found), Nutritional therapy recommendations (weak support)
 
 ---
 
@@ -885,14 +979,27 @@ python3 scripts/sae/run_mbd4_tp53_analysis.py --verify
 
 ## 📚 ARCHIVED SOURCE DOCUMENTS
 
-This master document consolidates the following 6 source documents (now archived in `.cursor/ayesha/archive/mbd4_tp53/`):
+This master document consolidates the following 8 source documents (now archived in `.cursor/ayesha/archive/mbd4_tp53/`):
 
-1. `MBD4_TP53_ANALYSIS_COMPLETE.md` - Analysis completion status
-2. `MBD4_TP53_ANALYSIS_SCRIPTS_COMPLETE.md` - Script documentation
-3. `MBD4_TP53_ANSWERS_CRITICAL_ANALYSIS.md` - Critical answer analysis
-4. `MBD4_TP53_PROXY_SAE_V1_RESULTS.md` - Proxy SAE v1 results
-5. `MBD4_TP53_VERIFICATION_FRAMEWORK.md` - Verification framework
-6. `MBD4_TP53_VERIFICATION_LAYER_IMPLEMENTATION_PLAN.md` - Implementation plan
+1. `MBD4_TP53_ANALYSIS_COMPLETE.md` - Analysis completion status and results summary
+2. `MBD4_TP53_ANALYSIS_SCRIPTS_COMPLETE.md` - Script documentation and execution guide
+3. `MBD4_TP53_ANSWERS_CRITICAL_ANALYSIS.md` - Critical answer analysis (what's validated vs. speculative)
+4. `MBD4_TP53_CLINICAL_DOSSIER.md` - Detailed clinical genomic analysis dossier with treatment recommendations
+5. `MBD4_TP53_PROXY_SAE_V1_RESULTS.md` - Proxy SAE v1 results and capabilities matrix
+6. `MBD4_TP53_VERIFICATION_FRAMEWORK.md` - Verification framework and ground truth sources
+7. `MBD4_TP53_VERIFICATION_LAYER_IMPLEMENTATION_PLAN.md` - Implementation plan for automated verification layer
+8. `MBD4_TP53_MASTER_ANALYSIS.md` - This master document (previous version)
+
+**Key Takeaways from Each Document**:
+
+1. **ANALYSIS_COMPLETE**: All 8 clinical questions answered; DDR pathway: 1.00; Top drug: Olaparib (80% efficacy)
+2. **ANALYSIS_SCRIPTS_COMPLETE**: Two scripts created (`run_mbd4_tp53_analysis.py`, `answer_mbd4_clinical_questions.py`); Ready for execution
+3. **ANSWERS_CRITICAL_ANALYSIS**: Confidence levels defined (90-100% validated biology, 70-85% predictions, 50-70% speculative); Transparent confidence doctrine
+4. **CLINICAL_DOSSIER**: Detailed treatment hierarchy; Clinical action plan with priorities; Evidence quality assessment; Monitoring strategy
+5. **PROXY_SAE_V1_RESULTS**: Capabilities matrix (what proxy SAE can/cannot answer); S/P/E integration status; Comparison to TRUE SAE
+6. **VERIFICATION_FRAMEWORK**: 4-level verification methodology; Ground truth sources; Verification checklist for all 8 questions
+7. **VERIFICATION_LAYER_IMPLEMENTATION_PLAN**: 6-phase implementation plan; 4-week timeline; Priority-based task breakdown (P0-P3)
+8. **MASTER_ANALYSIS**: Comprehensive consolidation of all above documents
 
 **Consolidation Date**: January 27, 2025  
 **Master Document**: This file serves as the single source of truth for MBD4+TP53 analysis

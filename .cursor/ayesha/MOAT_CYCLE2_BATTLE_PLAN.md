@@ -10,7 +10,7 @@
 ## 🔴 CURRENT CLINICAL STATUS (FROM TEST RESULTS)
 
 ### Patient Profile
-- **Name**: Ayesha Kiani
+- **Name**: AK
 - **DOB**: 6/25/1985 (Age: 40)
 - **MRN**: 1011021118
 
@@ -536,7 +536,7 @@ POST /api/trials/agent/search
 ## 🔴 CURRENT CLINICAL STATUS (FROM TEST RESULTS)
 
 ### Patient Profile
-- **Name**: Ayesha Kiani
+- **Name**: AK
 - **DOB**: 6/25/1985 (Age: 40)
 - **MRN**: 1011021118
 

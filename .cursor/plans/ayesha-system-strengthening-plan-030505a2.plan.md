@@ -237,7 +237,7 @@ Clone all Ayesha-specific services and make them work for any patient profile, f
 
 - File: `api/services/ca125_intelligence.py` (702 lines)
 - Hardcoded: Ovarian cancer, CA-125 thresholds, GOG-218/ICON7 expectations
-- Ayesha-specific: Comments reference "Ayesha Kiani"
+- Ayesha-specific: Comments reference "AK"
 
 **Universalization Steps**:
 
@@ -260,7 +260,7 @@ Clone all Ayesha-specific services and make them work for any patient profile, f
 
 - Replace hardcoded CA-125 thresholds with configurable `BIOMARKER_THRESHOLDS` dict
 - Replace "ovarian cancer" with `patient_profile['disease']['type']`
-- Replace "Ayesha Kiani" with `patient_profile['name']` or generic messaging
+- Replace "AK" with `patient_profile['name']` or generic messaging
 - Make response expectations disease-specific (load from config)
 
 ### Task 9.2: Clone Ayesha Orchestrator → Universal Complete Care Orchestrator
@@ -268,7 +268,7 @@ Clone all Ayesha-specific services and make them work for any patient profile, f
 **Current State**:
 
 - File: `api/routers/ayesha_orchestrator_v2.py` (706 lines)
-- Hardcoded: "Ayesha Kiani", "ovarian_cancer_hgs", "Stage IVB ovarian cancer"
+- Hardcoded: "AK", "ovarian_cancer_hgs", "Stage IVB ovarian cancer"
 - Ayesha-specific: Endpoint prefix `/api/ayesha`, patient name in responses
 - **CRITICAL BUGS IDENTIFIED**: Mutation format mismatch (line 199), hardcoded pathway scores (line 485)
 

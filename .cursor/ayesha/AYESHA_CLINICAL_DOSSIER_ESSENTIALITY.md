@@ -1,6 +1,6 @@
 # Clinical Dossier: Gene Essentiality Analysis
 
-**Patient:** Ayesha Kiani  
+**Patient:** AK  
 **DOB:** [Redacted]  
 **Diagnosis:** High-Grade Serous Ovarian Carcinoma, Stage IVB  
 **Prepared By:** Precision Oncology Analysis System  

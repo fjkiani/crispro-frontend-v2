@@ -1,0 +1,264 @@
+# 🎯 SYNTHETIC LETHALITY PUBLICATION EXECUTION PLAN
+
+**Commander:** Alpha  
+**Objective:** Publication-Ready + Gold Standard Positioning  
+**Timeline:** 4 weeks to submission  
+**Status:** BATTLE PLAN READY
+
+---
+
+## 📊 CURRENT STATE → TARGET STATE
+
+| Dimension | Current | Target (Publication) | Target (Gold Standard) |
+|-----------|---------|---------------------|------------------------|
+| **Validation Cases** | 10 | 50-100 | 500+ |
+| **Drug Accuracy** | 50% | >65% | >80% |
+| **Evo2 Usage** | 100% ✅ | 100% | 100% |
+| **Cancer Types** | 1 (Ovarian) | 5+ | Pan-cancer |
+| **Ground Truth** | Fabricated | Real DepMap | SynLethDB + DepMap + Clinical |
+| **Comparison** | None | Random + Rule-based | All SOTA tools |
+| **Clinical Validation** | 0 | 1 case study | Prospective trial |
+
+---
+
+## 🔧 GAP #1: EXPAND VALIDATION (10 → 100 CASES)
+
+### What We Need:
+```
+100 Test Cases:
+├── 40 Known SL Pairs (Positive Controls)
+│   ├── 10 BRCA1/2 + PARP (FDA-approved)
+│   ├── 10 MBD4/BER + PARP (our strength)
+│   ├── 10 TP53 + ATR/WEE1 (clinical trials)
+│   └── 10 Other DDR genes (ATM, PALB2, RAD51)
+│
+├── 30 Negative Controls
+│   ├── 10 Non-DDR oncogenes (KRAS, EGFR, MET)
+│   ├── 10 Passenger mutations (no SL expected)
+│   └── 10 VUS (variants of unknown significance)
+│
+├── 20 Diverse Cancers
+│   ├── 5 Ovarian (HGSOC)
+│   ├── 5 Breast (TNBC, HER2-)
+│   ├── 5 Prostate (mCRPC)
+│   └── 5 Pancreatic (PDAC)
+│
+└── 10 Edge Cases
+    ├── 5 Double-hit (e.g., BRCA1 + TP53)
+    └── 5 Triple-hit (complex cases)
+```
+
+### Known SL Pairs from Literature (with PMIDs):
+| Gene | SL Partner | Drug | Evidence | PMID |
+|------|-----------|------|----------|------|
+| BRCA1 | PARP1 | Olaparib | FDA | 25366685 |
+| BRCA2 | PARP1 | Niraparib | FDA | 28569902 |
+| MBD4 | PARP1 | Olaparib | Preclinical | 30111527 |
+| TP53 | ATR | Ceralasertib | Phase2 | 33115855 |
+| TP53 | WEE1 | Adavosertib | Phase2 | 32592347 |
+| ATM | PARP1 | Olaparib | Phase2 | 29880560 |
+| PALB2 | PARP1 | Olaparib | Phase2 | 32592347 |
+| RAD51C | PARP1 | Rucaparib | Phase2 | 30345854 |
+| RAD51D | PARP1 | Rucaparib | Phase2 | 30345854 |
+| ARID1A | ATR | Ceralasertib | Preclinical | 30510156 |
+| CDK12 | PARP1 | Olaparib | Preclinical | 31320749 |
+
+### Timeline: 2 days
+
+---
+
+## 🔧 GAP #2: FIX GROUND TRUTH (REAL DEPMAP DATA)
+
+### What We Need:
+Download actual DepMap gene essentiality scores.
+
+### Source:
+- DepMap 24Q4 Public Release: https://depmap.org/portal/download/all/
+- File: `Achilles_gene_effect.csv` (~500MB)
+
+### Key Genes to Extract:
+```
+DDR Pathway: BRCA1, BRCA2, PARP1, PARP2, ATM, ATR, CHEK1, CHEK2, PALB2, RAD51C, RAD51D
+BER Pathway: MBD4, OGG1, APEX1, XRCC1
+Cell Cycle: TP53, CDKN1A, WEE1, CDC25A
+Other: ARID1A, CDK12, KRAS, EGFR (negative controls)
+```
+
+### Interpretation:
+- Score < -0.5 = Essential (dependency)
+- Score > 0 = Non-essential
+
+### Timeline: 2 hours
+
+---
+
+## 🔧 GAP #3: ADD BASELINE COMPARISONS
+
+### Baselines to Compare:
+
+| Model | Description | Expected Accuracy |
+|-------|-------------|-------------------|
+| **Random** | Random drug from list (6 drugs) | ~17% |
+| **Rule-based** | IF DDR gene THEN PARP inhibitor | ~40% |
+| **OncoKB-lite** | Match to OncoKB annotations | ~45% |
+| **S/P/E (Ours)** | Full pipeline | >60% |
+
+### Statistical Tests:
+- Fisher's exact test for accuracy comparison
+- 95% confidence intervals via bootstrapping
+- P-values for superiority claims
+
+### Timeline: 1 day
+
+---
+
+## 🔧 GAP #4: ABLATION STUDIES
+
+### Experiments:
+| Model | Components | Expected Accuracy |
+|-------|------------|-------------------|
+| S only | Evo2 sequence | ~35% |
+| P only | Pathway | ~30% |
+| E only | Evidence | ~25% |
+| S+P | Sequence + Pathway | ~50% |
+| S+E | Sequence + Evidence | ~45% |
+| P+E | Pathway + Evidence | ~40% |
+| **S+P+E** | **Full model** | **>60%** |
+
+### Key Insight to Prove:
+**Each component contributes, but the combination is greater than the sum.**
+
+### Timeline: 2 days
+
+---
+
+## 🔧 GAP #5: PUBLICATION FIGURES
+
+### Figure 1: System Architecture
+- Input: Patient mutations
+- Three branches: S (Evo2), P (Pathway), E (Evidence)
+- Integration: Combined S/P/E score
+- Output: Ranked drug recommendations
+
+### Figure 2: Benchmark Results
+- Panel A: Accuracy comparison bar chart
+- Panel B: Confusion matrix for SL detection
+- Panel C: Confidence calibration plot
+
+### Figure 3: Case Studies
+- Panel A: MBD4+TP53 → Olaparib walkthrough
+- Panel B: BRCA1 → Olaparib walkthrough
+- Panel C: KRAS (negative control) walkthrough
+
+### Figure 4: Ablation Results
+- Bar chart showing contribution of each component
+- Demonstrates synergy of S+P+E
+
+### Figure 5 (Supplementary): Error Analysis
+- False positive analysis (SL_006, SL_007)
+- False negative analysis (SL_004, SL_008)
+- Failure mode characterization
+
+### Timeline: 2 days
+
+---
+
+## 🚀 GOLD STANDARD POSITIONING
+
+### Phase 1: Publication (4 weeks)
+- 100 cases with real ground truth
+- Baseline comparisons showing superiority
+- Ablation studies proving component value
+- Peer-reviewed publication
+
+### Phase 2: Community Adoption (3-6 months)
+- Open-source benchmark release
+- Community contributions
+- Integration with existing tools
+
+### Phase 3: Clinical Validation (6-12 months)
+- Partner with oncology center
+- Prospective validation study
+- Track treatment outcomes
+
+### Phase 4: Gold Standard Status (1-2 years)
+- FDA breakthrough designation
+- CLIA-certified predictions
+- EHR integration
+- Industry adoption
+
+---
+
+## 📅 EXECUTION TIMELINE
+
+### Week 1: Data & Validation
+| Day | Task | Output |
+|-----|------|--------|
+| Mon | Create 100-case dataset with PMIDs | `test_cases_100.json` |
+| Tue | Download real DepMap data | `depmap_essentiality.json` |
+| Wed | Run 100-case benchmark | `benchmark_100_results.json` |
+| Thu | Run baseline comparisons | `baseline_comparison.json` |
+| Fri | Run ablation studies | `ablation_results.json` |
+
+### Week 2: Analysis & Figures
+| Day | Task | Output |
+|-----|------|--------|
+| Mon | Analyze failure cases | `error_analysis.md` |
+| Tue | Create Figure 1 (architecture) | `figure1.svg` |
+| Wed | Create Figure 2-4 | `figures/` |
+| Thu | Statistical analysis | `statistical_report.md` |
+| Fri | Review all data | Approval checkpoint |
+
+### Week 3: Manuscript Writing
+| Day | Task | Output |
+|-----|------|--------|
+| Mon | Write Introduction | Section 1 |
+| Tue | Write Methods | Section 2 |
+| Wed | Write Results | Section 3 |
+| Thu | Write Discussion | Section 4 |
+| Fri | Compile full draft | `manuscript_v1.docx` |
+
+### Week 4: Review & Submit
+| Day | Task | Output |
+|-----|------|--------|
+| Mon | Internal review | Feedback |
+| Tue | Revisions | `manuscript_v2.docx` |
+| Wed | Format for journal | Final format |
+| Thu | Prepare supplementary | `supplementary.pdf` |
+| Fri | **SUBMIT** | Confirmation |
+
+---
+
+## ✅ SUCCESS METRICS
+
+### Publication-Ready Checklist:
+- [ ] 100+ validation cases with real ground truth
+- [ ] >60% drug accuracy (vs ~17% random)
+- [ ] Statistically significant superiority (p<0.05)
+- [ ] Ablation studies proving S/P/E value
+- [ ] 4+ publication-quality figures
+- [ ] Complete manuscript draft
+- [ ] Code availability statement
+
+### Gold Standard Metrics (Post-Publication):
+- [ ] 500+ validation cases
+- [ ] Prospective clinical validation
+- [ ] Open-source benchmark adopted
+- [ ] 100+ citations within 2 years
+- [ ] Industry partnerships
+
+---
+
+## 🎯 IMMEDIATE NEXT STEPS
+
+1. **Create 100-case dataset** with real PMIDs
+2. **Download DepMap** for real essentiality scores
+3. **Run expanded benchmark** (100 cases)
+4. **Compare to baselines** (random, rule-based)
+5. **Generate publication figures**
+
+---
+
+**This plan transforms us from "promising pilot" to "publication-ready" to "gold standard candidate."**
+
+**Ready to execute, Commander?** 🔥

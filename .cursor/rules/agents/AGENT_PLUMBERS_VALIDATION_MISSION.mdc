@@ -1,0 +1,174 @@
+# AGENT MISSION (Plumbers + Lead): Evidence-First Validation Program
+
+## 🎯 Mission
+Turn our existing publication bundles into a **single, defensible validation program** that:
+- Enforces **claim hygiene** (validated vs benchmarked vs projected)
+- Produces **new receipts** in a controlled sequence
+- Enables future “pharma integrated development” messaging **only after** evidence exists
+
+**North star:** We do not build “platform features” first. We validate what we already have, then we earn the right to expand.
+
+---
+
+## 📦 In-Scope Artifacts (source of truth)
+
+### Primary source-of-truth docs
+- `.cursor/rules/lectures/drugDevelopment/UNIFIED_VALIDATION_PLAN.md`
+- `.cursor/rules/lectures/drugDevelopment/VALIDATED_CLAIMS_LEDGER.md`
+
+### Publication bundles (validated receipts)
+- `publications/sporadic_cancer/`
+- `publications/synthetic_lethality/`
+- `publications/01-metastasis-interception/`
+
+### Safety foundation (supporting receipts; not a publication claim by itself)
+- `oncology-coPilot/oncology-backend-minimal/dosing_guidance_validation/`
+
+---
+
+## 🚫 Out of Scope (for this mission)
+
+- Writing or marketing outcome claims (Phase 2 success lift, MedWatch reduction, survival benefit) without outcome receipts.
+- Implementing a “Holistic Score” service/router/UI before an **evaluation spec + datasets + acceptance tests** exist.
+- Expanding beyond the three publication folders unless a new claim is backed by a reproducible artifact.
+
+---
+
+## ✅ Definition of Done (DoD)
+
+We consider this mission complete when:
+1. We have a **single execution pipeline** that can regenerate the receipts for each publication bundle (or explicitly documents environment constraints).
+2. We have a **cross-capability measurement receipt pack** that measures multiple signals on the same cases (Tier 1 from the plan).
+3. We have a written **Outcome Validation Protocol** that pre-registers endpoints/stats and forbids cherry-picking.
+
+---
+
+## 🧭 Work Plan (phased, receipt-driven)
+
+### Phase 0 — Lock what’s already validated (DONE)
+**Deliverables (already created):**
+- `UNIFIED_VALIDATION_PLAN.md`
+- `VALIDATED_CLAIMS_LEDGER.md`
+
+**Rule:** nothing can be labeled “validated” unless it appears in the ledger.
+
+---
+
+### Phase 1 — Reproduce all receipts (re-run, don’t reinvent)
+
+**Goal:** Make sure the repo can re-generate the receipts we cite.
+
+**Plumber tasks (execution):**
+- Sporadic cancer:
+  - Run sporadic gate validator and confirm output JSON matches PASS status.
+  - Verify scenario suite receipt exists and is readable.
+- Synthetic lethality:
+  - Run publication suite runner and confirm it writes JSON + MD receipts.
+  - Run dataset validator and confirm it writes a validation report.
+- Metastasis interception:
+  - Follow `publications/01-metastasis-interception/REPRODUCIBILITY.md` and confirm expected files land in `publication/`.
+
+**Lead tasks (audit/ownership):**
+- Verify each reproduction run produced:
+  - deterministic outputs (or documented reason if not)
+  - correct file paths
+  - no silent dependency drift
+- Update the claims ledger if any receipt paths changed (only if necessary).
+
+**Acceptance criteria:**
+- Each bundle has a reproducible command path and a verified output list.
+
+---
+
+### Phase 2 — Tier 1 “Cross-Capability Measurement” (new receipts; no new product code)
+
+**Goal:** Produce a single “cross-capability” measurement pack that shows we can compute multiple signals on the same cases.
+
+**What this is (important):**
+- Not a unified score.
+- Not an outcome claim.
+- A measurement artifact: coverage, missingness, per-case provenance snapshots.
+
+**Deliverables:**
+- `reports/cross_capability_metrics.json`
+- `reports/cross_capability_metrics.md`
+
+**Plumber tasks (execution):**
+- Collect and normalize case IDs across:
+  - sporadic scenario suite (25)
+  - synthetic lethality dataset (100)
+  - (optional) PGx dosing cohort (N=59)
+- Produce a single JSON schema with:
+  - feature coverage per-feature missingness per feature
+  - provenance pointers
+
+**Lead tasks (audit/ownership):**
+- Define the schema + acceptance tests for the pack.
+- Enforce “no claims without receipts.”
+
+**Acceptance criteria:**
+- Deterministic rerun.
+- Coverage quantified.
+- No marketing language.
+
+---
+
+### Phase 3 — Outcome Validation Protocol (design; no new modeling yet)
+
+**Goal:** Pre-register how we would validate outcome-linked claims.
+
+**Deliverable:**
+- `OUTCOME_VALIDATION_PROTOCOL.md` (repo-level protocol)
+
+**Plumber tasks (execution):**
+- Inventory candidate outcome datasets already in repo (if any), with paths and fields.
+
+**Lead tasks (audit/ownership):**
+- Choose endpoints, define stats, define exclusion rules, define “forbidden analyses.”
+
+**Acceptance criteria:**
+- Protocol prohibits threshold cherry-picking and p-hacking.
+
+---
+
+## 👷 Roles & Responsibilities
+
+### Lead (me)
+- Own the source-of-truth documents:
+  - `UNIFIED_VALIDATION_PLAN.md`
+  - `VALIDATED_CLAIMS_LEDGER.md`
+- Define acceptance criteria a- Approve/deny new claims.
+- Review plumber outputs and either:
+  - accept receipts into ledger
+  - or reject and request fixes
+
+### Plumbers (execution agents)
+- Run the reproduction commands.
+- Generate receipts exactly as specified.
+- Do not introduce new narratives or “interpretations.”
+- Do not create new scoring services/UI unless explicitly instructed.
+
+---
+
+## 📍 Immediate Next Actions (hand to plumbers)
+
+1. Re-run sporadic validation:
+   - `python oncology-coPilot/oncology-backend-minimal/scripts/validation/validate_sporadic_gates.py`
+
+2. Re-run synthetic lethality suite:
+   - `python publications/synthetic_lethality/code/run_publication_suite.py --test-file publications/synthetic_lethality/data/data/test_cases_100.json --api-root http://127.0.0.1:8000 --model-id evo2_1b`
+   - `python publications/synthetic_lethality/code/validate_test_cases.py publications/synthetic_lethality/data/data/test_cases_100.json`
+
+3. Follow metastasis reproducibility:
+   - `publications/01-metastasis-interception/RCIBILITY.md` steps (seed=42, B=1000)
+
+4. Report back with:
+   - paths to generated outputs
+   - runtime
+   - any environment blockers
+
+---
+
+## 📌 Notes
+- The ultimate vision doc (`.cursor/rules/lectures/drugDevelopment/pharma_integrated_development.mdc`) is intentionally **not** modified during this mission.
+- This mission exists to earn the right to use that vision safely.

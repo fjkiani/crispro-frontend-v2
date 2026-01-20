@@ -111,7 +111,6 @@ export default function PapersList({ papers, maxDisplay = 10 }) {
                         variant="caption"
                         color="text.secondary"
                         sx={{
-                          display: 'block',
                           mt: 0.5,
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',

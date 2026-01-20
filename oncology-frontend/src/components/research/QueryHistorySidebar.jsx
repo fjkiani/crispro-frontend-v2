@@ -156,7 +156,6 @@ export default function QueryHistorySidebar({ onSelectQuery, selectedQueryId, re
                       variant="caption" 
                       color="text.secondary"
                       sx={{
-                        display: 'block',
                         mb: 1,
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',

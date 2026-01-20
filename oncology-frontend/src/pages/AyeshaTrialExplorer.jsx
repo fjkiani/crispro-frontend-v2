@@ -28,6 +28,12 @@ import {
 } from '../components/ayesha';
 import { SyntheticLethalityCard } from '../components/orchestrator/Analysis/SyntheticLethalityCard';
 import { useSyntheticLethality } from '../hooks/useSyntheticLethality';
+import { useTimingChemoFeatures } from '../hooks/useTimingChemoFeatures';
+import {
+  TimingFeaturesCard,
+  TreatmentHistoryTimeline,
+  ChemosensitivityFeaturesCard,
+} from '../components/timing';
 import { AYESHA_11_17_25_PROFILE } from '../constants/patients/ayesha_11_17_25';
 
 const API_ROOT = import.meta.env.VITE_API_ROOT || 'http://localhost:8000';
@@ -54,6 +60,14 @@ const AyeshaTrialExplorer = () => {
   
   // NEW: Synthetic Lethality (SL) analysis
   const { slResult, loading: slLoading, error: slError, analyzeSL } = useSyntheticLethality();
+  
+  // NEW: Timing & Chemosensitivity Features
+  const {
+    timingFeatures,
+    loading: timingLoading,
+    error: timingError,
+    computeTimingFeatures,
+  } = useTimingChemoFeatures();
   
   // Meta
   const [isLoading, setIsLoading] = useState(true);
@@ -472,7 +486,7 @@ const AyeshaTrialExplorer = () => {
         </Box>
       )}
 
-      {/* TAB 2: TREATMENT (SOC + Drug Efficacy + Food) */}
+      {/* TAB 2: TREATMENT (SOC + Drug Efficacy + Food + Timing) */}
       {activeTab === 2 && (
         <Box>
           {/* SOC */}
@@ -481,6 +495,141 @@ const AyeshaTrialExplorer = () => {
               <SOCRecommendationCard {...socRecommendation} />
             </Box>
           )}
+
+          {/* NEW: Treatment History & Timing Features */}
+          <Box mb={3}>
+            <Typography variant="h6" gutterBottom>
+              ⏱️ Treatment History & Timing
+            </Typography>
+            {(() => {
+              // Check if patient has treatment history
+              const treatmentHistory = AYESHA_11_17_25_PROFILE.treatment_history || [];
+              const treatmentLine = AYESHA_11_17_25_PROFILE.inferred_fields?.treatment_line?.value || 0;
+              
+              // If treatment-naive, show helpful message
+              if (treatmentLine === 0 && (!treatmentHistory || treatmentHistory.length === 0)) {
+                return (
+                  <Alert severity="info">
+                    <Typography variant="body2">
+                      <strong>Treatment-Naive Patient:</strong> Timing features (PFI, PTPI, TFI, PFS, OS, KELIM) 
+                      will be available once treatment begins. These metrics help assess treatment response 
+                      and guide future therapy decisions.
+                    </Typography>
+                  </Alert>
+                );
+              }
+
+              // If treatment history exists, compute timing features
+              if (treatmentHistory && treatmentHistory.length > 0 && !timingFeatures && !timingLoading) {
+                // Build request data from treatment history
+                const regimenTable = treatmentHistory.map((tx, idx) => ({
+                  patient_id: AYESHA_11_17_25_PROFILE.patient?.patient_id || 'AK',
+                  regimen_id: `regimen_${idx + 1}`,
+                  regimen_start_date: tx.start_date || new Date().toISOString(),
+                  regimen_end_date: tx.end_date || null,
+                  regimen_type: tx.regimen_type || (tx.drugs?.join('+') || 'unknown'),
+                  line_of_therapy: tx.line || idx + 1,
+                  setting: tx.setting || (idx === 0 ? 'frontline' : 'recurrent'),
+                  last_platinum_dose_date: tx.last_platinum_dose_date || null,
+                  progression_date: tx.progression_date || null,
+                  best_response: tx.outcome || tx.best_response || null,
+                }));
+
+                const survivalTable = [{
+                  patient_id: AYESHA_11_17_25_PROFILE.patient?.patient_id || 'AK',
+                  vital_status: 'Alive', // Default - should be updated from patient data
+                  death_date: null,
+                  last_followup_date: new Date().toISOString(),
+                }];
+
+                const clinicalTable = [{
+                  patient_id: AYESHA_11_17_25_PROFILE.patient?.patient_id || 'AK',
+                  disease_site: AYESHA_11_17_25_PROFILE.disease?.type?.replace(/_/g, ' ') || 'ovary',
+                  tumor_subtype: AYESHA_11_17_25_PROFILE.disease?.histology || 'HGSOC',
+                }];
+
+                // CA-125 measurements if available
+                const ca125Measurements = AYESHA_11_17_25_PROFILE.labs?.ca125_measurements || null;
+
+                // Trigger computation
+                computeTimingFeatures({
+                  regimenTable,
+                  survivalTable,
+                  clinicalTable,
+                  ca125MeasurementsTable: ca125Measurements,
+                }).catch(err => {
+                  console.error('[AyeshaTrialExplorer] Timing features computation failed:', err);
+                });
+              }
+
+              // Display timing features
+              if (timingLoading) {
+                return (
+                  <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
+                    <CircularProgress />
+                    <Typography variant="body1" sx={{ ml: 2 }}>
+                      Computing timing and chemosensitivity features...
+                    </Typography>
+                  </Box>
+                );
+              }
+
+              if (timingError) {
+                return (
+                  <Alert severity="error" sx={{ mb: 2 }}>
+                    <Typography variant="body2">
+                      <strong>Error computing timing features:</strong> {timingError}
+                    </Typography>
+                  </Alert>
+                );
+              }
+
+              if (timingFeatures?.timing_features_table && timingFeatures.timing_features_table.length > 0) {
+                return (
+                  <Grid container spacing={3}>
+                    {/* Timeline View */}
+                    <Grid item xs={12}>
+                      <TreatmentHistoryTimeline
+                        timingFeaturesTable={timingFeatures.timing_features_table}
+                        orientation="vertical"
+                        showTFI={true}
+                        showPFI={true}
+                        showPTPI={true}
+                      />
+                    </Grid>
+
+                    {/* Individual Regimen Cards */}
+                    {timingFeatures.timing_features_table.map((features, idx) => (
+                      <Grid item xs={12} md={6} key={features.regimen_id || idx}>
+                        <TimingFeaturesCard
+                          timingFeatures={features}
+                          showDetails={true}
+                          highlightPFI={true}
+                          highlightPTPI={true}
+                        />
+                        {/* KELIM/CA-125 Features */}
+                        {features.has_ca125_data && (
+                          <ChemosensitivityFeaturesCard
+                            kelimFeatures={{
+                              kelim_k_value: features.kelim_k_value,
+                              kelim_category: features.kelim_category,
+                              ca125_percent_change_day21: features.ca125_percent_change_day21,
+                              ca125_percent_change_day42: features.ca125_percent_change_day42,
+                              ca125_time_to_50pct_reduction_days: features.ca125_time_to_50pct_reduction_days,
+                              ca125_normalized_by_cycle3: features.ca125_normalized_by_cycle3,
+                            }}
+                            diseaseSite={features.disease_site || 'ovary'}
+                          />
+                        )}
+                      </Grid>
+                    ))}
+                  </Grid>
+                );
+              }
+
+              return null;
+            })()}
+          </Box>
 
           {/* Drug Efficacy (WIWFM) */}
           <Box mb={3}>

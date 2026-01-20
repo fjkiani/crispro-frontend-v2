@@ -20,6 +20,7 @@ import {
   ChevronDownIcon,
   MapPinIcon,
 } from '@heroicons/react/24/solid';
+import HolisticScoreCard from './HolisticScoreCard';
 
 const TrialMatchCard = ({ trial, rank }) => {
   const [expanded, setExpanded] = useState(false);
@@ -258,6 +259,9 @@ const TrialMatchCard = ({ trial, rank }) => {
             {reasoningText}
           </Alert>
         )}
+
+        {/* Holistic Score Card */}
+        <HolisticScoreCard trial={trial} />
 
         {/* Locations */}
         {locations && locations.length > 0 && (

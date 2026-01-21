@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { isSupabaseEnabled } from '../../services/supabaseClient';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -9,6 +10,31 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const { signIn } = useAuth();
   const navigate = useNavigate();
+
+  // Show configuration error if Supabase is not enabled
+  if (!isSupabaseEnabled) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full space-y-8">
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+            <h3 className="font-semibold mb-2">Supabase not configured</h3>
+            <p className="text-sm mb-2">
+              Authentication requires Supabase configuration. Please set the following environment variables:
+            </p>
+            <ul className="text-sm list-disc list-inside mb-2">
+              <li><code>VITE_SUPABASE_URL</code></li>
+              <li><code>VITE_SUPABASE_ANON_KEY</code></li>
+            </ul>
+            <p className="text-xs text-red-600">
+              {import.meta.env.MODE === 'production' 
+                ? 'For production deployments, set these in your hosting platform\'s environment variables (e.g., Render dashboard).'
+                : 'For local development, ensure these are set in your .env file and restart the dev server.'}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();

@@ -116,9 +116,19 @@ async function fetchKBData(url, cacheKey, persist = false) {
     }
 
     const data = await response.json();
+    // Safely get run_id from headers (may not be available due to CORS or missing header)
+    let runId = null;
+    try {
+      if (response && response.headers) {
+        runId = response.headers.get('x-run-id');
+      }
+    } catch (headerError) {
+      console.warn('Could not access response headers:', headerError);
+    }
+    
     const provenance = {
       source: 'KB',
-      run_id: response.headers.get('x-run-id'),
+      run_id: runId,
       cached: false,
       timestamp: new Date().toISOString()
     };

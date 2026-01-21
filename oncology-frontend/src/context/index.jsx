@@ -7,8 +7,11 @@ import { eq } from "drizzle-orm";
 const StateContext = createContext();
 
 // Log environment variables at the module level for early diagnosis
-console.log('[Context] VITE_WS_ROOT:', import.meta.env.VITE_WS_ROOT);
-console.log('[Context] All env vars:', JSON.stringify(import.meta.env, null, 2));
+// Note: VITE_WS_ROOT is optional - only needed if WebSocket features are used
+if (import.meta.env.DEV) {
+  console.log('[Context] VITE_WS_ROOT:', import.meta.env.VITE_WS_ROOT);
+  console.log('[Context] All env vars:', JSON.stringify(import.meta.env, null, 2));
+}
 
 // Mock current user data if no login system is active
 const MOCK_USER = {

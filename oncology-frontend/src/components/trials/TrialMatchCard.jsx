@@ -21,6 +21,7 @@ import {
   MapPinIcon,
 } from '@heroicons/react/24/solid';
 import HolisticScoreCard from './HolisticScoreCard';
+import TrialHolisticScoreCard from '../holistic/TrialHolisticScoreCard';
 
 const TrialMatchCard = ({ trial, rank }) => {
   const [expanded, setExpanded] = useState(false);
@@ -260,8 +261,17 @@ const TrialMatchCard = ({ trial, rank }) => {
           </Alert>
         )}
 
-        {/* Holistic Score Card */}
-        <HolisticScoreCard trial={trial} />
+        {/* Holistic Score Card (Legacy - if trial has holistic_score field) */}
+        {trial.holistic_score !== undefined && (
+          <HolisticScoreCard trial={trial} />
+        )}
+
+        {/* New Holistic Clinical Benefit Score (D/P/M/T/S) */}
+        <TrialHolisticScoreCard
+          trial={trial}
+          useCase="trial_enrollment"
+          showDetails={expanded}
+        />
 
         {/* Locations */}
         {locations && locations.length > 0 && (

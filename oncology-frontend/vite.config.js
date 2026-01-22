@@ -34,47 +34,36 @@ export default defineConfig({
       external: [],
       output: {
         // Manual chunk splitting to reduce memory usage
+        // Conservative approach: only split very large, independent libraries
         manualChunks: (id) => {
-          // Split node_modules into separate chunks to reduce memory usage
           if (id.includes('node_modules')) {
-            // Large libraries get their own chunks
-            if (id.includes('@mui')) {
+            // Keep MUI packages together (they have tight dependencies)
+            if (id.includes('@mui/material') || id.includes('@mui/icons-material') || 
+                id.includes('@mui/system') || id.includes('@mui/lab') || 
+                id.includes('@mui/x-charts') || id.includes('@emotion')) {
               return 'mui';
             }
-            if (id.includes('react') || id.includes('react-dom')) {
+            // React core libraries together
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
               return 'react-vendor';
             }
+            // Supabase (independent)
             if (id.includes('@supabase')) {
               return 'supabase';
             }
+            // Recharts (independent)
             if (id.includes('recharts')) {
               return 'recharts';
             }
-            if (id.includes('@google/generative-ai')) {
-              return 'google-ai';
+            // AI libraries (independent)
+            if (id.includes('@google/generative-ai') || id.includes('openai')) {
+              return 'ai-vendor';
             }
-            if (id.includes('openai')) {
-              return 'openai';
-            }
+            // Web3 libraries (independent)
             if (id.includes('ethers') || id.includes('@thirdweb')) {
-              return 'web3';
+              return 'web3-vendor';
             }
-            // Split remaining vendor into smaller chunks
-            if (id.includes('node_modules')) {
-              // Group by first letter to create smaller chunks
-              const match = id.match(/node_modules\/(@[^/]+\/)?([^/]+)/);
-              if (match) {
-                const pkgName = match[2] || match[1] || '';
-                if (pkgName.startsWith('@')) {
-                  return 'vendor-scoped';
-                }
-                const firstLetter = pkgName.charAt(0).toLowerCase();
-                if (firstLetter >= 'a' && firstLetter <= 'm') {
-                  return 'vendor-a-m';
-                }
-                return 'vendor-n-z';
-              }
-            }
+            // Everything else goes to vendor (less aggressive splitting)
             return 'vendor';
           }
         },

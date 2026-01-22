@@ -33,42 +33,19 @@ export default defineConfig({
     rollupOptions: {
       external: [],
       output: {
-        // Manual chunk splitting to reduce memory usage
-        // Very conservative approach: only split truly independent libraries
-        // MUI packages are NOT manually chunked - let Vite handle them automatically
-        // to avoid breaking internal module dependencies
-        manualChunks: (id) => {
-          if (id.includes('node_modules')) {
-            // DO NOT manually chunk MUI - let Vite handle it to preserve dependencies
-            // React core libraries together
-            if ((id.includes('react') || id.includes('react-dom') || id.includes('react-router')) 
-                && !id.includes('@mui')) {
-              return 'react-vendor';
-            }
-            // Supabase (independent)
-            if (id.includes('@supabase')) {
-              return 'supabase';
-            }
-            // Recharts (independent)
-            if (id.includes('recharts')) {
-              return 'recharts';
-            }
-            // AI libraries (independent)
-            if (id.includes('@google/generative-ai') || id.includes('openai')) {
-              return 'ai-vendor';
-            }
-            // Web3 libraries (independent)
-            if (id.includes('ethers') || id.includes('@thirdweb')) {
-              return 'web3-vendor';
-            }
-            // Everything else (including MUI) goes to vendor - Vite will handle MUI internally
-            return 'vendor';
-          }
-        },
+        // Disable manual chunking to avoid circular dependency issues
+        // Let Vite handle chunking automatically - it's better at preserving module order
+        // This fixes "Cannot access '$d' before initialization" errors
+        // The trade-off is slightly larger chunks, but better reliability
       },
     },
     // Reduce memory usage during build
     minify: 'esbuild', // Faster than terser
     target: 'es2015', // Broader compatibility, less transformation
+    // Use commonjs format for better compatibility
+    commonjsOptions: {
+      include: [/node_modules/],
+      transformMixedEsModules: true,
+    },
   },
 });

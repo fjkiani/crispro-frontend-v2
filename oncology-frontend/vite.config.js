@@ -34,17 +34,15 @@ export default defineConfig({
       external: [],
       output: {
         // Manual chunk splitting to reduce memory usage
-        // Conservative approach: only split very large, independent libraries
+        // Very conservative approach: only split truly independent libraries
+        // MUI packages are NOT manually chunked - let Vite handle them automatically
+        // to avoid breaking internal module dependencies
         manualChunks: (id) => {
           if (id.includes('node_modules')) {
-            // Keep MUI packages together (they have tight dependencies)
-            if (id.includes('@mui/material') || id.includes('@mui/icons-material') || 
-                id.includes('@mui/system') || id.includes('@mui/lab') || 
-                id.includes('@mui/x-charts') || id.includes('@emotion')) {
-              return 'mui';
-            }
+            // DO NOT manually chunk MUI - let Vite handle it to preserve dependencies
             // React core libraries together
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
+            if ((id.includes('react') || id.includes('react-dom') || id.includes('react-router')) 
+                && !id.includes('@mui')) {
               return 'react-vendor';
             }
             // Supabase (independent)
@@ -63,7 +61,7 @@ export default defineConfig({
             if (id.includes('ethers') || id.includes('@thirdweb')) {
               return 'web3-vendor';
             }
-            // Everything else goes to vendor (less aggressive splitting)
+            // Everything else (including MUI) goes to vendor - Vite will handle MUI internally
             return 'vendor';
           }
         },

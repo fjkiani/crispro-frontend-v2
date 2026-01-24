@@ -1018,33 +1018,6 @@ class EvoService1B:
             alt = str(item.get("alt")).upper()
             windows = item.get("windows") or [1024, 2048, 4096, 8192]
             logger.info(f"/score_variant_multi (1B) | {chrom}:{pos} {ref}>{alt} windows={windows}")
-            deltas = []
-            try:
-                with httpx.Client(timeout=30) as client:
-                    for w in windows:
-                        flank = max(1, int(w) // 2)
-                        start = max(1, pos - flank)
-                        end = pos + flank
-                        asm = "GRCh38" if assembly.lower() in ("grch38", "hg38") else "GRCh37"
-                        region = f"{chrom}:{start}-{end}:1"
-                        url = f"https://rest.ensembl.org/sequence/region/human/{region}?content-type=text/plain;coord_system_version={asm}"
-                        resp = client.get(url)
-                        resp.raise_for_status()
-                        seq = resp.text.strip().upper()
-                        idx = pos - start
-                        if idx < 0 or idx >= len(seq):
-                            raise HTTPException(status_code=400, detail="position out of fetched window")
-                        ref_base = seq[idx]
-                        if ref_base != ref and ref_base != "N":
-                            raise HTTPException(status_code=400, detail=f"Reference allele mismatch: fetched='{ref_base}' provided='{ref}' at {chrom}:{pos}")
-                        ref_sequence = seq
-                        alt_sequence = seq[:idx] + alt + seq[idx+1:]
-                        ll = self.model.score_sequences([ref_sequence, alt_sequence])
-                        ref_ll = float(ll[0])
-                        alt_ll = float(ll[1])
-                        delta = alt_ll - ref_ll
-                        deltas.append({"window": int(w), "delta": delta})
-                min_entry = min(deltas, key=lambda d: d["delta"]) if deltas else {"window": None, "delta": 0.0}
                 logger.info(f"/score_variant_multi (1B) done | min_delta={min_entry['delta']:.4f} window={min_entry['window']}")
                 return {"deltas": deltas, "min_delta": min_entry["delta"], "window_used": min_entry["window"]}
             except HTTPException:

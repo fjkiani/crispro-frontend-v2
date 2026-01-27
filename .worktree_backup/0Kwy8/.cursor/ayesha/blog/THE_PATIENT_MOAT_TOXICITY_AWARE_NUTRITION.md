@@ -8,7 +8,7 @@
 
 ## The Question Nobody Was Answering
 
-Ayesha sits in the infusion chair, carboplatin dripping into her veins. She's fighting ovarian cancer. She has BRCA1.
+AK sits in the infusion chair, carboplatin dripping into her veins. She's fighting ovarian cancer. She has BRCA1.
 
 After the session, she'll go home exhausted. Her body will spend the next 48 hours processing a poison designed to kill rapidly dividing cells—cancer cells, yes, but also some of her own.
 
@@ -48,7 +48,7 @@ CONNECTED SYSTEM: "The Patient MOAT"
               Here's why, in words you can understand."
 ```
 
-**The MOAT isn't about technology. It's about finally answering Ayesha's question.**
+**The MOAT isn't about technology. It's about finally answering AK's question.**
 
 ---
 
@@ -199,7 +199,7 @@ if patient_medications and germline_genes:
                 }
 ```
 
-### The Result: A Response That Finally Answers Ayesha's Question
+### The Result: A Response That Finally Answers AK's Question
 
 ```json
 {

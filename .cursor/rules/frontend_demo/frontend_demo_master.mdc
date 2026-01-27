@@ -433,3 +433,133 @@ All original files have been preserved in `frontend_demo/archive/`:
 **ENFORCEMENT:** Mandatory across all development and operational activities
 
 **This master doctrine represents the complete consolidation of all frontend and demo knowledge. Every component, flow, and presentation pattern is preserved and organized for maximum clarity and actionability.**
+
+---
+
+## 💊 PGx SAFETY GATE (NEW CAPABILITY)
+
+### Overview
+
+The **PGx Safety Gate** adds pharmacogenomic toxicity screening to the platform, preventing severe adverse events before drug administration or trial enrollment.
+
+### Clinical Evidence
+
+| Claim | Evidence | Result |
+|-------|----------|--------|
+| **DPYD/UGT1A1 toxicity prevention** | PREPARE trial (n=563) | **83.1% relative risk reduction** |
+| **CYP2C19 failure detection** | Clopidogrel study (n=210) | **4.28× higher failure rate** in PM/IM |
+| **Trial failure prevention** | Combined projection | **87.5% toxicities prevented** |
+
+### Frontend Components
+
+#### SafetyGateCard.jsx
+- **Location**: `src/components/safety/SafetyGateCard.jsx`
+- **Purpose**: Display drug-level PGx toxicity tier and dose adjustments
+- **Props**: `{ drug }` object with `pgx_screening`, `composite_score`, `action_label`
+- **Renders**:- Toxicity tier badge (HIGH/MODERATE/LOW)
+  - Adjustment factor
+  - Alert messages
+  - Dose recommendations
+
+#### TrialSafetyGate.jsx
+- **Location**: `src/components/safety/TrialSafetyGate.jsx`
+- **Purpose**: Display trial-level aggregated PGx risk
+- **Props**: `{ trial }` object with `pgx_safety.safety_status`
+- **Renders**:
+  - Safety status (SAFE/MODERATE_RISK/HIGH_RISK/UNKNOWN)
+  - Drug-specific alerts for trial interventions
+
+#### DosingGuidanceCard.jsx
+- **Location**: `src/components/dosing/DosingGuidanceCard.jsx`
+- **Purpose**: Display CPIC-based dose recommendations
+- **Props**: `{ guidance }` object with dose adjustments
+
+### Integration Points
+
+#### WIWFM Flow (Enhanced)
+1. User inputs variants → Validation (GRCh38)
+2. **NEW**: Include germline_variants in request
+3. Call `/api/efficacy/predict` → Get ranked drugs
+4. **NEW**: Display `composite_score` (efficacy × safety) and `action_label`
+5. **NEW**: Show PGx alerts via SafetyGateCard for HIGH/MODERATE drugs
+6. Show ProvenanceBar with run_idprofile
+
+#### Trial Matching Flow (Enhanced)
+1. Call `/api/clinical_trials/match` → Get matched trials
+2. **NEW**: Each trial includes `pgx_safety.safety_status`
+3. **NEW**: Display TrialSafetyGate badge on trial cards
+4. **NEW**: Sort trials by safety status (SAFE > MODERATE > HIGH_RISK > UNKNOWN)
+
+### API Response Schema
+
+#### Drug with PGx Screening
+```json
+{
+  "name": "5-fluorouracil",
+  "efficacy_score": 0.85,
+  "pgx_screening": {
+    "toxicity_tier": "HIGH",
+    "adjustment_factor": 0.0,
+    "alerts": [{"severity": "HIGH", "gene": "DPYD", "variant": "*2A", "message": "Contraindicated"}],
+    "recommendations": [{"gene": "DPYD", "alternatives": ["capecitabine with 50% dose reduction"]}]
+  },
+  "composite_score": 0.0,
+  "action_label": "AVOID"
+}
+```
+
+#### Trial with PGx Safety
+```json
+{
+  "nctId": "NCT03462342",
+  "title": "PARP + ATR Inhibitor Study",
+  "pgx_safety": {
+    "safety_status": "SAFE",
+    "has_high_risk_drug": false,
+    "has_moderate_risk_drug": false,
+    "alerts": []
+  }
+}
+```
+
+### De Flow for PGx
+
+#### Slide: "PGx Safety Gate Demo"
+1. **Input**: Patient with BRAF V600E (somatic) + DPYD *2A (germline)
+2. **API Call**: `/api/complete_care/v2` with `germline_variants`
+3. **Output**: 
+   - 5-FU ranked HIGH efficacy but **AVOID** (composite: 0.0)
+   - Olaparib ranked and **RECOMMENDED** (composite: 0.85)
+   - Trial NCT-FluoroTrial **EXCLUDED** (HIGH_RISK)
+4. **Value**: Prevented potential severe toxicity
+
+### Smoke Tests (PGx)
+```bash
+# Health Check
+curl http://127.0.0.1:8000/api/pgx/health
+
+# PGx Screening
+curl -X POST http://127.0.0.1:8000/api/pgx/screen \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "drugs": ["5-fluorouracil", "capecitabine"],
+    "germline_variants": [{"gene": "DPYD", "variant": "*2A"}]
+  }'
+
+# Complete Care with PGx
+curl -X POST http://127.0.0.1:8000/api/complete_care/v2 \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "patient_profile": {
+      "disease": {"type": "ovarian_cancer"},
+      "germline_variants": [{"gene": "DPYD", "variant": "*2A"}]
+    },
+    "include_wiwfm": true,
+    "include_trials": true
+  }'
+```
+
+### RUO Disclaimer
+
+All PGx outputs must display:
+> **Research Use Only (RUO)**: PGx recommendations are based on CPIC guidelines and require validation by certified clinical pharmacogenomics specialists before clinical implementation.

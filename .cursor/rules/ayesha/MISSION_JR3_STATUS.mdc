@@ -124,3 +124,135 @@
 ---
 
 **Status:** Ready to proceed with PI3K/TP53/Combined validation ✅
+
+---
+
+## 🎯 NEW MISSION: HOLISTIC SCORE INTEGRATION (FROM ZO)
+
+**Date Assigned:** January 2026
+**Priority:** 🔴 CRITICAL
+**Blocked By:** None - Core service implemented
+
+### What Zo Built
+
+1. ✅ `api/services/holistic_score_service.py` - Core scoring logic
+2. ✅ `api/routers/holistic_score.py` - API endpoints
+3. ✅ Smoke test passing:
+   - PARP trial (DDR-high): 0.996 (HIGH) ✅
+   - 5-FU trial (PGx risk): 0.808 with PGx = 0.5 ⚠️
+   - MEK trial (poor fit): 0.631 (MEDIUM) ⚠️
+
+### What JR3 Needs To Do
+
+#### Task 1: Register Router in main.py
+
+**File:** `api/main.py`
+
+**Change:** Add import and include router:
+```python
+from api.routers.holistic_score import router as holistic_score_router
+
+# In the router includes section:
+app.include_router(holistic_score_router)
+```
+
+---
+
+#### Task 2: Wire Holistic Score into Trial Matching
+
+**File:** `api/services/trials/trial_**Change:** After mechanism fit ranking, compute holistic scores:
+
+```python
+# After existing mechanism fit ranking
+from api.services.holistic_score_service import get_holistic_score_service
+
+async def match(self, patient_profile, ...):
+    # ... existing trial matching logic ...
+    
+    # NEW: Compute holistic scores for top matches
+    holistic_service = get_holistic_score_service()
+    
+    for match in matches:
+        holistic_result = await holistic_service.compute_holistic_score(
+            patient_profile=patient_profile,
+            trial=match.to_dict() if hasattr(match, 'to_dict') else match,
+            pharmacogenes=patient_profile.get("germline_variants"),
+            drug=None  # Extracted from trial interventions
+        )
+        match.holistic_score = holistic_result.holistic_score
+        match.holistic_interpretation = holistic_result.interpretation
+        match.pgx_caveat = holistic_result.caveats[0] if holistic_result.caveats else None
+    
+    # Re-sort by holistic score
+    matches.sort(key=lambda m: getattr(m, 'holistic_score', 0), reverse=True)
+```
+
+---
+
+#### Task 3: Add Holistic Score to Complete Care Response
+
+**File:** `api/routers/complete_care_universal.py`
+
+**Change:** Add holistic score to trial matches in the response.
+
+---
+
+#### Task 4: Create Frontend Component
+
+**File:** `oncology-frontend/src/components/holistic/HolisticScoreCard.jsx`
+
+**Features:**
+- Visual gauge (0-1)
+- Component breakdown (mechanism, eligibility, PGx)
+- Color-coded interpretation
+- Caveats displayed prominently
+
+---
+
+#### Task 5: Integration Testing
+
+**Create:** `scripts/validation/test_holistic_score_integration.py`
+
+**Tests:**
+1. Single trial scoring
+2. Batch trial scoring
+3. PGx contraindication detection
+4. Mechanism fit ranking correlation
+5. End-to-end with complete care
+
+---
+
+### Dependencies
+
+| Component | Status | Owner |
+|-----------|--------|-------|
+| `mechanism_fit_ranker.py` | ✅ EXISTS | - |
+| `eligibility_filters.py` | ✅ EXISTS | - |
+| `pgx_screening_service.py` | ✅ EXISTS | Zo olistic_score_service.py` | ✅ CREATED | Zo |
+| `holistic_score.py` router | ✅ CREATED | Zo |
+| Trial MoA vectors | ✅ FROM OTHER AGENT | JR3 (trials) |
+
+---
+
+### Validation Criteria
+
+1. **Score-Outcome Correlation**: Holistic score should correlate with trial suitability
+2. **PGx Detection**: 100% sensitivity for DPYD/TPMT/UGT1A1 contraindications
+3. **Ranking Accuracy**: DDR-high patients should rank DDR trials higher
+
+---
+
+### Quick Test Command
+
+```bash
+cd oncology-coPilot/oncology-backend-minimal
+python3 -c "
+import asyncio
+from api.services.holistic_score_service import get_holistic_score_service
+# ... test code ...
+"
+```
+
+---
+
+**Status:** READY FOR JR3 EXECUTION

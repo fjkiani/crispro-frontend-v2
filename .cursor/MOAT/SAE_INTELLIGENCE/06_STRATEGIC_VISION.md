@@ -56,15 +56,15 @@ This is **proactive oncology**, not reactive.
 
 | Marker | Status | Evidence |
 |--------|--------|----------|
-| NF1 → MAPK resistance | ✅ VALIDATED | RR=2.10, p<0.05 |
-| DDR_bin features | ✅ VALIDATED | 9 features, AUROC 0.783 |
+| NF1 → MAPK resistance | ✅ Skeptic | RR=2.10, p<0.05 |
+| DDR_bin features | ✅ Skeptic | 9 features, AUROC 0.783 |
 | TRUE SAE > PROXY | ✅ PROVED | ΔAUROC = +0.155 |
 
 ### **Phase 2: Multiple Myeloma (PROXY VALIDATED)**
 
 | Marker | Status | Evidence |
 |--------|--------|----------|
-| DIS3 mortality | ✅ VALIDATED | RR=2.08, p=0.0145 |
+| DIS3 mortality | ✅ Skeptic | RR=2.08, p=0.0145 |
 | TP53 mortality | ⚠️ TREND | RR=1.90, p=0.11 |
 | TRUE SAE extraction | ⏳ PENDING | Need MMRF data |
 

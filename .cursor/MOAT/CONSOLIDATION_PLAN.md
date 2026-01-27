@@ -321,49 +321,31 @@ Move outdated files to `archive/` directory
 - **Action:** Added `from .routers import vus as vus_router` and `app.include_router(vus_router.router)` to `main.py`
 - **Files:** `api/main.py` (lines 64, 232)
 - **Test:** Server restart required to test `/api/vus/identify` endpoint
-- **Impact:** ✅ VUS resolution functionality now available via `/api/vus/identify`
-
----
-
-### **CRITICAL DELIVERABLES (Blocking):**
-
-#### **3. Data Extraction Agent** 🔴 **BLOCKING - 4-6 HOURS**
+- **Impact:** ✅ VUS resolution functionality now available via `/api/vus/identify`---### **CRITICAL DELIVERABLES (Blocking):**#### **3. Data Extraction Agent** 🔴 **BLOCKING - 4-6 HOURS**
 - **Status:** ✅ **VERIFIED - COMPLETE** (100% - not 20% as previously documented)
 - **Priority:** CRITICAL - Nothing can run without it
 - **Files:** `api/services/extraction/extraction_agent.py` (EXISTS - 389 lines, all parsers complete)
 - **Verification:** ✅ Agent exists, all 5 parsers (VCF/MAF/PDF/JSON/TXT) implemented, orchestrator integration working
 - **Dependencies:** None
-- **See:** `.cursor/MOAT/VERIFICATION_REPORT.md` for details
-
-#### **4. Drug Efficacy Integration** 🔴 **CRITICAL - 8-10 HOURS**
+- **See:** `.cursor/MOAT/VERIFICATION_REPORT.md` for details#### **4. Drug Efficacy Integration** 🔴 **CRITICAL - 8-10 HOURS**
 - **Status:** ✅ **VERIFIED - INTEGRATED** (100% - not 80% skeleton as previously documented)
 - **Priority:** CRITICAL - Core drug ranking
 - **Files:** `api/services/orchestrator/orchestrator.py` (lines 743-792: `_run_drug_efficacy_agent()` fully implemented)
 - **Verification:** ✅ Direct import from `efficacy_orchestrator`, no HTTP calls, mechanism vector extraction working
 - **Dependencies:** Data Extraction Agent (✅ Complete)
-- **See:** `.cursor/MOAT/VERIFICATION_REPORT.md` for details
-
----
-
-### **HIGH PRIORITY DELIVERABLES:**
-
-#### **5. Nutrition Integration** 🟡 **HIGH - 4-6 HOURS**
+- **See:** `.cursor/MOAT/VERIFICATION_REPORT.md` for details---### **HIGH PRIORITY DELIVERABLES:**#### **5. Nutrition Integration** 🟡 **HIGH - 4-6 HOURS**
 - **Status:** ✅ **VERIFIED - INTEGRATED** (100% - not 70% skeleton as previously documented)
 - **Priority:** HIGH - MOAT feature
 - **Files:** `api/services/orchestrator/orchestrator.py` (lines 660-741: `_run_nutrition_agent()` fully implemented)
 - **Verification:** ✅ Direct import from `nutrition`, error handling with graceful fallback, germline/drug extraction working
-- **See:** `.cursor/MOAT/VERIFICATION_REPORT.md` for details
-
-#### **6. End-to-End Pipeline Testing** 🟡 **MEDIUM - 2-3 HOURS**
+- **See:** `.cursor/MOAT/VERIFICATION_REPORT.md` for details#### **6. End-to-End Pipeline Testing** 🟡 **MEDIUM - 2-3 HOURS**
 - **Status:** ✅ **TEST SCRIPTS CREATED**
 - **Files Created:**
   - `tests/test_orchestrator_e2e_pipeline.py` - Full pipeline test with mutations
   - `tests/test_vus_endpoint.py` - VUS endpoint test
   - `scripts/validate_therapy_fit_metrics.py` - Therapy Fit metric validation
 - **Action:** Run tests to validate pipeline execution
-- **Goal:** Verify all agents execute correctly and state is properly managed
-
-#### **7. Therapy Fit Verification** 🟡 **HIGH - 5 DAYS**
+- **Goal:** Verify all agents execute correctly and state is properly managed#### **7. Therapy Fit Verification** 🟡 **HIGH - 5 DAYS**
 - **Status:** 🚧 **IN PROGRESS** (4/10 deliverables complete, demo ready)
 - **Completed:**
   - ✅ Deliverable 1: End-to-End Test Script (`scripts/test_therapy_fit_endpoint.py` - already exists)
@@ -387,13 +369,6 @@ Move outdated files to `archive/` directory
   - Demo: `python scripts/demo_therapy_fit.py --test-case AYESHA-001 --debug`
   - All cases: `python scripts/generate_therapy_fit_results.py --all`
 - **Goal:** Complete verification and demo readiness
-- **Next:** Deliverable 5 - Code Verification Report (verify implementation matches documentation)
-
----
-
-**See:** `.cursor/MOAT/CORE_DELIVERABLES/06_GAP_ANALYSIS.md` for full gap list  
+- **Next:** Deliverable 5 - Code Verification Report (verify implementation matches documentation)---**See:** `.cursor/MOAT/CORE_DELIVERABLES/06_GAP_ANALYSIS.md` for full gap list  
 **See:** `.cursor/MOAT/orchestration/03_DELIVERABLES_PLAN.md` for orchestration plan  
-**See:** `.cursor/MOAT/ZO_NEXT_10_DELIVERABLES.md` for Therapy Fit verification details
-
-**Note:** All Therapy Fit status consolidated in this file. Orphan documentation files archived to `archive/` directory.
-
+**See:** `.cursor/MOAT/ZO_NEXT_10_DELIVERABLES.md` for Therapy Fit verification details**Note:** All Therapy Fit status consolidated in this file. Orphan documentation files archived to `archive/` directory.

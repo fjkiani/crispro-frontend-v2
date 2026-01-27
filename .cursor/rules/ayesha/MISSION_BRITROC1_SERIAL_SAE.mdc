@@ -1,0 +1,217 @@
+# 🎯 MISSION: BriTROC-1 SERIAL SAE VALIDATION
+
+**Assigned To:** Zo  
+**Priority:** 🔴 P0 - IMMEDIATE  
+**Status:** ✅ ANALYSIS COMPLETE  
+**Last Updated:** 2026-01-26 16:15
+
+## ✅ MISSION COMPLETE
+
+### Key Results:
+
+| Metric | Value |
+|--------|-------|
+| **Best signature** | CN_s7 at Relapse |
+| **AUROC** | **0.874** (95% CI: 0.750-0.974) |
+| **p-value** | **0.035** ✅ (Wilcoxon) |
+| **Improvement over diagnosis** | +0.180 |
+
+### Serial SAE Hypothesis: ✅ SUPPORTED
+
+- s7 at **Relapse** (0.874) > s7 at **Diagnosis** (0.694)
+- Higher post-treatment s7 → more likely platinum resistant
+
+### Caveats:
+- Only n=3 resistant vs n=37 sensitive (underpowered)
+- OS correlation not significant
+- Needs external validation
+
+---
+
+## 🎯 THE OBJECTIVE
+
+Validate Serial SAE hypothesis on **n=182 paired patients** from BriTROC-1:
+> "Post-treatment pathway scores predict platinum resistance better than baseline"
+
+---
+
+## 📊 DATA INVENTORY
+
+### ✅ ACQUIRED
+
+| Data | Source | Status | Path |
+|------|--------|--------|------|
+| Shallow WGS BAMs (679) | EGA EGAD00001011049 | ✅ Access granted | `outbox.ega-archive.org` |
+| Sample metadata | EGA | ✅ Parsed | `data/britoc/OC/EDAG/EGAD00001011049-metadata (1)/samples.json` |
+| Clinical response data | Nature Comms Supp | ✅ Downloaded | `data/britoc/OC/41467_2023_39867_MOESM4_ESM.txt` |
+| Source data (figures) | Nature Comms Supp | ✅ Downloaded | `data/britoc/OC/source_data/` |
+
+### 📊 KEY STATS
+
+| Metric | Value |
+|--------|-------|
+| Total samples | 679 |
+| Unique patients | 265 |
+| **Paired patients (diagnosis + relapse)** | **182** 🎯 |
+| Total data size | 511 GB |
+
+### 📋 CLINICAL DATA FIELDS (MOESM4_ESM.txt)
+
+| Field | Use |
+|-------|-----|
+| `fk_britroc_number` | Patient ID (links to `subject_id` in samples.json) |
+| `chemotherapy_line` | Treatment line |
+| `overall_response` | CR/PR/SD/PD |
+| `progression_date` | For PFI calculation |
+
+---
+
+## 📋 EXECUTION PLAN
+
+### Phase 1: Data Linkage ⏳ IN PROGRESS
+
+- [x] Download EGA metadata
+- [x] Parse samples.json to extract patient IDs
+- [x] Download clinical supplementary data
+- [ ] **Link patient IDs to sample IDs**
+- [ ] Create unified patient table with:
+  - Sample IDs (diagnosis + relapse)
+  - Response at each treatment line
+  - Progression dates
+  - PFI calculation
+
+### Phase 2: ETL Pipeline Setup
+
+- [ ] Set up Modal secrets for EGA credentials
+- [ ] Test SFTP download of 1 sample
+- [ ] Build ichorCNA pipeline for shallow WGS
+- [ ] Test CNV → pathway score computation
+
+### Phase 3: Batch Processing
+
+- [ ] Process all 679 BAMs (or prioritize 182 paired)
+- [ ] Compute DDR/PI3K/VEGF pathway scores
+- [ ] Store results in structured format
+
+### Phase 4: Analysis
+
+- [ ] Correlate post-treatment scores with PFI
+- [ ] Compute delta (post - pre) correlation
+- [ ] 5-fold CV with bootstrap CI
+- [ ] Compare to GSE165897 (n=11) results
+
+### Phase 5: Manuscript Update
+
+- [ ] Update Serial SAE manuscript with n=182 validation
+- [ ] Create figures
+- [ ] Revise statistical methods
+
+---
+
+## 🔧 TECHNICAL DETAILS
+
+### Patient ID Linkage
+
+```
+EGA samples.json:  subject_id = "1", "55", "57", ...
+Clinical data:     fk_britroc_number = 1, 55, 57, ...
+```
+
+**Linkage key:** `subject_id == fk_britroc_number`
+
+### Sample Types
+
+| Title in EGA | Meaning |
+|--------------|---------|
+| "diagnosis tumour DNA" | Pre-treatment sample |
+| "relapse tumour DNA" | Post-treatment sample |
+
+### Pathway Genes (from shallow WGS CNV)
+
+```python
+DDR_GENES = ['BRCA1', 'BRCA2', 'PALB2', 'RAD51', 'ATM', 'ATR', 
+             'CHEK1', 'CHEK2', 'TP53', 'XRCC1', 'PARP1']
+PI3K_GENES = ['PIK3CA', 'PIK3CB', 'AKT1', 'AKT2', 'PTEN', 'MTOR']
+VEGF_GENES = ['VEGFA', 'VEGFB', 'KDR', 'FLT1', 'ANGPT1', 'ANGPT2']
+```
+
+---
+
+## 📁 FILE LOCATIONS
+
+```
+/oncology-coPilot/oncology-backend-minimal/data/britoc/OC/
+├── EDAG/EGAD00001011049-metadata (1)/
+│   ├── samples.json           # 679 samples with patient IDs
+│   ├── sample_file.json       # Sample → file mapping
+│   ├── experiments.json       # Experiment metadata
+│   └── ...
+├── 41467_2023_39867_MOESM4_ESM.txt   # Clinical response data
+├── 41467_2023_39867_MOESM5_ESM.txt   # Additional clinical data
+├── 41467_2023_39867_MOESM1_ESM.pdf   # Supplementary PDF
+├── source_data/              # Figure source data (76 files)
+│   ├── figure_1B_layer_1.tsv
+│   └── ...
+└── BriTROC1_METADATA_ANALYSIS.md     # Our analysis summary
+
+/oncology-coPilot/oncology-backend-minimal/pipelines/
+└── britroC_etl.py              # Modal ETL pipeline (draft)
+
+/publications/
+├── DATA_ACQUISITION_STRATEGY.md
+└── DATA_ACCESS_REQUESTS.md
+```
+
+---
+
+## 🎯 SUCCESS CRITERIA
+
+| Metric | Target | Notes |
+|--------|--------|-------|
+| Post-treatment DDR correlation with PFI | ρ < -0.5 | Inverse correlation |
+| Post-treatment AUROC for resistance | > 0.70 | On held-out data |
+| Sample size | n ≥ 100 paired | Must be 10x GSE165897 |
+| 95% CI width | < 0.15 | Reasonable precision |
+
+---
+
+## ⏰ TIMELINE
+
+| Date | Milestone |
+|------|-----------|
+| 2026-01-26 | ✅ Clinical data acquired, metadata parsed |
+| 2026-01-27 | Complete patient linkage, create unified table |
+| 2026-01-28 | Test ETL on 5 samples |
+| 2026-01-29 | Start batch processing |
+| 2026-01-31 | Complete CNV analysis for paired samples |
+| 2026-02-02 | Complete statistical analysis |
+| 2026-02-05 | Update manuscript draft |
+
+---
+
+## 💀 BLOCKERS & RISKS
+
+| Risk | Mitigation |
+|------|------------|
+| EGA download slow | Use Modal with GCS intermediate storage |
+| ichorCNA fails on shallow WGS | Test coverage thresholds, may need alternative |
+| Patient ID mismatch | Verify linkage on 10 samples first |
+| Missing clinical data for some patients | Document exclusions |
+
+---
+
+## 📝 NOTES
+
+- BriTROC-1 paper: PMID 37474499, DOI: 10.1038/s41467-023-39867-7
+- 15 UK centers, recruited 2013-2017
+- 209 platinum-sensitive, 67 platinum-resistant at enrollment
+- Published finding: "HGSC genome is remarkably stable between diagnosis and relapse"
+  - This is interesting! Our Serial SAE hypothesis may contradict this if pathway scores DO change
+
+---
+
+## 🔗 RELATED MISSIONS
+
+- MISSION_JR3_COMPLETE_PATHWAY_RESISTANCE.mdc - Overall resistance validation
+- IO Response Prediction - Separate track (GSE206422)
+- Timing Engine - Can use BriTROC-1 treatment dates

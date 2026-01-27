@@ -19,6 +19,7 @@ Version: 1.0.0 (Dominance Mode)
 """
 
 import json
+import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -46,8 +47,15 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 def load_ground_truth() -> Dict:
-    """Load 24-gene ground truth labels from metastasis_rules_v1.0.0.json"""
-    rules_path = Path("oncology-coPilot/oncology-backend-minimal/api/config/metastasis_rules_v1.0.0.json")
+    """Load ground truth labels (prefer v1.0.1; override with METASTASIS_RULES_PATH)."""
+    rules_path = Path(
+        os.environ.get(
+            "METASTASIS_RULES_PATH",
+            "oncology-coPilot/oncology-backend-minimal/api/config/metastasis_rules_v1.0.1.json",
+        )
+    )
+    if not rules_path.exists():
+        rules_path = Path("oncology-coPilot/oncology-backend-minimal/api/config/metastasis_rules_v1.0.0.json")
     
     if not rules_path.exists():
         raise FileNotFoundError(f"Ground truth file not found: {rules_path}")
@@ -110,39 +118,18 @@ def load_target_lock_scores() -> pd.DataFrame:
     score_path = DATA_DIR / "real_target_lock_data.csv"
     
     if not score_path.exists():
-        # Create synthetic data for testing
-        print(f"⚠️  {score_path} not found, creating synthetic test data...")
-        rules = load_ground_truth()
-        labels = create_step_labels(rules)
-        
-        synthetic_data = []
-        for _, row in labels.iterrows():
-            for step in rules['steps'].keys():
-                label = row[step]
-                # Higher scores for relevant genes
-                base_score = 0.6 if label == 1 else 0.4
-                noise = np.random.normal(0, 0.1)
-                
-                synthetic_data.append({
-                    'gene': row['gene'],
-                    'step': step,
-                    'target_lock_score': np.clip(base_score + noise, 0, 1),
-                    'functionality': np.random.uniform(0.4, 0.7),
-                    'essentiality': np.random.uniform(0.3, 0.6),
-                    'chromatin': np.random.uniform(0.4, 0.7),
-                    'regulatory': np.random.uniform(0.05, 0.15)
-                })
-        
-        df = pd.DataFrame(synthetic_data)
-        df.to_csv(score_path, index=False)
-        print(f"   Created synthetic data: {len(df)} rows")
-    else:
-        df = pd.read_csv(score_path)
-        # Rename 'mission' to 'step' for consistency
-        if 'mission' in df.columns:
-            df = df.rename(columns={'mission': 'step'})
-        print(f"✅ Loaded Target-Lock scores: {len(df)} rows")
-    
+        raise FileNotFoundError(
+            f"Missing required dataset: {score_path}\n"
+            "Stage the canonical inputs with:\n"
+            "  venv/bin/python scripts/metastasis/stage_publication_inputs.py\n"
+            "or place `real_target_lock_data.csv` at `publication/data/`."
+        )
+
+    df = pd.read_csv(score_path)
+    # Rename 'mission' to 'step' for consistency
+    if 'mission' in df.columns:
+        df = df.rename(columns={'mission': 'step'})
+    print(f"✅ Loaded Target-Lock scores: {len(df)} rows")
     return df
 
 def bootstrap_metric(y_true, y_score, metric_fn, n_iterations=1000, seed=42):

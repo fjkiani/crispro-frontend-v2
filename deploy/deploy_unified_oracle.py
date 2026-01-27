@@ -1,7 +1,6 @@
 # CACHE BUSTER v1.1: Forcing a rebuild to fix the GenerationOutput attribute error.
 import modal
 import os
-import torch
 
 # --- Image Definition ---
 # A single, consolidated image for all oracle tasks.
@@ -22,9 +21,18 @@ evo2_image = (
         "mkdir -p /tools/llvm/bin",
         "ln -s /usr/bin/ar /tools/llvm/bin/llvm-ar",
     )
+    # CRITICAL: Pin PyTorch 2.3.0 BEFORE installing evo2
+    # This is the battle-tested configuration that works with transformer_engine==1.13 and cuDNN 8
+    # Using cu121 for CUDA 12.4 compatibility
+    .run_commands("pip install torch==2.3.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121")
     .run_commands("git clone --recurse-submodules https://github.com/ArcInstitute/evo2.git && cd evo2 && pip install .")
+    # CRITICAL: Force transformer_engine==1.13 (works with cuDNN 8 and PyTorch 2.3.0)
+    # transformer_engine>=2.0.0 requires cuDNN 9 which is not in Ubuntu repos
     .run_commands("pip uninstall -y transformer-engine transformer_engine")
     .run_commands("pip install 'transformer_engine[pytorch]==1.13' --no-build-isolation")
+    # Install flash-attn (required by vtx/vortex ops for evo2)
+    # Try CUDA 12.4 first, fallback to 12.1, then generic
+    .run_commands("bash -c \"pip install 'flash-attn-cu124==2.6.3' --no-build-isolation 2>/dev/null || pip install 'flash-attn-cu121==2.6.3' --no-build-isolation 2>/dev/null || pip install 'flash-attn==2.6.3' --no-build-isolation\"")
     .pip_install("fastapi", "pydantic", "requests", "numpy==1.22.0")
 )
 
@@ -35,27 +43,6 @@ app = modal.App("unified-oracle-service", image=evo2_image)
 volume = modal.Volume.from_name("hf_cache", create_if_missing=True)
 mount_path = "/root/.cache/huggingface"
 
-class JunkPenaltyLogitsProcessor:
-    """
-    A logits processor that penalizes tokens that would lead to junk sequences.
-    """
-    def __init__(self, tokenizer, penalty: float = 100.0, junk_pattern: str = "AAAAAAA", device="cuda"):
-        self.penalty = penalty
-        # Convert the pattern to a tensor and move it to the correct device.
-        self.junk_pattern_ids = torch.tensor(tokenizer.tokenize(junk_pattern), device=device)
-        self.junk_token_id = self.junk_pattern_ids[0].item() # The token to penalize (e.g., 'A')
-        self.pattern_length = len(self.junk_pattern_ids)
-
-    def __call__(self, input_ids: torch.Tensor, scores: torch.Tensor) -> torch.Tensor:
-        # Check if the last part of the input matches the junk pattern
-        if input_ids.shape[1] >= self.pattern_length:
-            last_tokens = input_ids[0, -self.pattern_length:]
-            if torch.all(last_tokens == self.junk_pattern_ids):
-                # We have a match, penalize the next junk token
-                scores[:, self.junk_token_id] -= self.penalty
-                print(f"🚨 Junk pattern detected! Penalizing token ID {self.junk_token_id}.")
-        return scores
-
 @app.cls(gpu="H100:2", volumes={mount_path: volume}, timeout=900, scaledown_window=300)
 class UnifiedOracle:
     @modal.enter()
@@ -63,63 +50,77 @@ class UnifiedOracle:
         """
         Load the single Evo2 model for all tasks.
         """
+        import torch
+        # CRITICAL: PyTorch 2.3.0+ defaults to weights_only=True for security
+        # evo2 checkpoints need weights_only=False. Force override for checkpoint loading
+        original_torch_load = torch.load
+        def patched_torch_load(*args, **kwargs):
+            # ALWAYS set weights_only=False for evo2 checkpoint loading (trusted source from HuggingFace)
+            # Override any default or explicit True value
+            kwargs['weights_only'] = False
+            return original_torch_load(*args, **kwargs)
+        torch.load = patched_torch_load
+        
+        # CRITICAL: PyTorch 2.3.0 doesn't have add_safe_globals, but vortex may try to use it
+        # Patch torch.serialization.add_safe_globals to be a no-op if it doesn't exist
+        if not hasattr(torch.serialization, 'add_safe_globals'):
+            def add_safe_globals(globals_list):
+                pass  # No-op for PyTorch < 2.4.0
+            torch.serialization.add_safe_globals = add_safe_globals
+        
         from evo2 import Evo2
         print("✅ Loading Unified Evo2 Biological Foundation Model...")
         # The 7B model is a strong balance of power and reliability for both tasks.
-        self.model = Evo2('evo2_40b')
-        self.logits_processor = JunkPenaltyLogitsProcessor(self.model.tokenizer)
-        print("🎉 Unified Evo2 40B model loaded successfully.")
+        self.model = Evo2('evo2_7b_base')
+        print("🎉 Unified Evo2 7B model loaded successfully.")
 
     # DOCTRINAL CORRECTION: These are internal helper methods, not standalone Modal Functions.
     # The @modal.method decorator is not needed and was the source of the call failures.
     def score_variant(self, ref_sequence: str, alt_sequence: str) -> dict:
         """Scores the likelihood difference between reference and alternate sequences."""
         try:
-            log_likelihoods = self.model.score_sequences([ref_sequence, alt_sequence])
-            delta_score = float(log_likelihoods[1] - log_likelihoods[0])
+            # Match exact pattern from working evo_service/main.py
+            ll = self.model.score_sequences([ref_sequence, alt_sequence])
+            ref_ll = float(ll[0])
+            alt_ll = float(ll[1])
+            delta_score = alt_ll - ref_ll
             
             print(f"📊 Delta score: {delta_score}")
             return {
                 "delta_score": delta_score,
                 "status": "success",
-                "ref_likelihood": float(log_likelihoods[0]),
-                "alt_likelihood": float(log_likelihoods[1])
+                "ref_likelihood": ref_ll,
+                "alt_likelihood": alt_ll
             }
         except Exception as e:
             print(f"❌ Error scoring variant: {e}")
+            import traceback
+            print(traceback.format_exc())
             return {"status": "error", "message": str(e)}
 
     def generate_variant(self, prompt_sequence: str, gen_params: dict) -> dict:
-        """
-        Generates a new sequence based on a prompt and generation parameters.
-        --- DOCTRINE V3: PURE, DIVERSE GENERATION ---
-        The Oracle's sole responsibility is to generate a diverse candidate.
-        The client is responsible for scoring and selection.
-        """
+        """Generates a new sequence based on a prompt and generation parameters."""
         try:
-            # We use a moderately high temperature to ensure the client receives a diverse set of options over multiple calls.
-            temperature = gen_params.get("temperature", 0.85)
-            top_p = gen_params.get("top_p", 0.9)
-            n_tokens = gen_params.get("n_tokens", 30)
+            temperature = gen_params.get("temperature", 0.7)
+            top_p = gen_params.get("top_p", 0.95)
+            n_tokens = gen_params.get("n_tokens", 2048) # Default to a reasonable number of tokens
             
-            print(f"🧬 Generating a diverse candidate sequence...")
+            print(f"🧬 Generating sequence from prompt: {prompt_sequence[:30]}...")
             print(f"   - Temp: {temperature}, Top-p: {top_p}, Tokens: {n_tokens}")
 
             completion_obj = self.model.generate(
-                [prompt_sequence], 
+                [prompt_sequence], # CRITICAL FIX: Pass the prompt as a list to treat it as a single batch item.
                 n_tokens=n_tokens, 
                 temperature=temperature, 
                 top_p=top_p
             )
             
+            # DOCTRINAL CORRECTION v2: The model returns a GenerationOutput object.
+            # The correct attribute is .sequences, which is a list of strings.
+            # We will take the first element as the primary candidate.
             completion_str = completion_obj.sequences[0]
 
-            # The simple, reactive junk filter is still valuable here.
-            if "AAAAAAAA" in completion_str or len(set(completion_str)) < 4:
-                print(f"❌ Junk sequence detected and rejected: {completion_str}")
-                return {"completion": completion_str, "status": "error", "message": "Generated sequence filtered as junk."}
-
-            print(f"✅ Generated candidate: {completion_str[:30]}...")
+            print(f"✅ Generated sequence: {completion_str[:30]}...")
             return {"completion": completion_str, "status": "success"}
         except Exception as e:
             print(f"❌ Error generating variant: {e}")
@@ -176,10 +177,12 @@ class UnifiedOracle:
 
 @app.local_entrypoint()
 def main():
+    """
+    Local entry point for testing. 
+    NOTE: This is only called when running locally, not during Modal deployment.
+    For web testing, use the /invoke endpoint directly.
+    """
     oracle = UnifiedOracle()
-    print("--- Testing Scoring ---")
+    print("--- Testing Scoring (single test) ---")
     score_res = oracle.invoke.remote({"action": "score", "params": {"reference_sequence": "ATGC", "alternate_sequence": "ATGG"}})
-    print(score_res)
-    
-    print("\n--- Testing Generation ---")
-    gen_res = oracle.invoke.remote({"action": "generate", "params": {"prompt": "ATGC", "gen_params": {"n_tokens": 10}}})
+    print(score_res) 

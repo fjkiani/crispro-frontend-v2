@@ -11,7 +11,7 @@ try:
     print("✅ EVO module loaded successfully.")
 except ImportError:
     MODEL_LOADED = False
-    print("❌ Failed to import 'evo'. Make sure it's installed or in the PYTHONPATH.")
+    # print("❌ Failed to import 'evo'. Make sure it's installed or in the PYTHONPATH.")
 except Exception as e:
     MODEL_LOADED = False
     print(f"❌ An error occurred while loading the evo model: {e}")

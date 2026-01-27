@@ -1,0 +1,260 @@
+# 🗂️ MISSION: BriTROC-1 Data Organization & Capability Assessment
+
+**Assigned To:** [NEXT AGENT]  
+**Priority:** 🟡 P1 - HIGH  
+**Deadline:** Before using this data for any validation  
+**Status:** ⬜ NOT STARTED
+
+---
+
+## 🎯 THE PROBLEM
+
+We've extracted BriTROC-1 data (n=182 paired patients, 503 samples) but:
+- **Don't fully understand what analyses this data CAN support**
+- **Don't have it organized for easy querying**
+- **Don't have automated loading pipelines**
+- **Risk starting from zero each time we want to use it**
+
+---
+
+## 📋 YOUR MISSION
+
+Create a **comprehensive data capability matrix** and **automated ETL pipeline** so we never start from scratch again.
+
+---
+
+## 🎯 DELIVERABLES
+
+### 1. Data Capability Matrix
+
+Create: `publications/serial-sae/BriTROC1_CAPABILITY_MATRIX.md`
+
+**Questions to Answer:**
+
+| Question | Current Status | Investigation Needed |
+|----------|----------------|----------------------|
+| Can we predict platinum resistance? | ✅ Yes (AUROC 0.874) | Document validated approach |
+| Can we predict PFI (continuous)? | ❓ Unknown | Test CN signature correlations |
+| Can we predict overall survival? | ⚠️ Tried, not significant | Document why (n=47 underpowered?) |
+| Can we validate pathway scores? | ❌ No pathway data | Document what molecular features we DO have |
+| Can we do time-to-event analysis? | ❓ Unknown | Check if progression dates available |
+| Can we stratify by treatment line? | ✅ Yes | Treatment line data in MOESM4 |
+| Can we validate MAPK/DDR/PI3K? | ❓ Unknown | Check if mutational data available |
+| Can we compute TMB? | ❓ Unknown | Check if we have mutation counts |
+| Can we compute HRD scores? | ❓ Unknown | Check if LOH/TAI/LST available |
+| Can we validate IO biomarkers? | ❓ Unknown | Check immune infiltration data |
+
+### 2. Data Dictionary
+
+Create: `data/britoc/OC/DATA_DICTIONARY.md`
+
+**For Each File, Document:**
+- File path
+- Number of rows/columns
+- Column definitions
+- Data types
+- Missing data %
+- Linkage keys
+- Example use cases
+
+**File Inventory:**
+```
+data/britoc/OC/
+├── britroC1_patient_linkage.csv          # 182 patients
+├── britroC1_etl_manifest.csv             # 503 samples
+├── britroC1_serial_sae_analysis.csv      # CN signatures + resistance
+├── britroC1_auroc_results.csv            # AUROC results
+├── britroC1_paired_with_os.csv           # Paired data with OS
+├── 41467_2023_39867_MOESM4_ESM.txt       # Clinical response
+├── 41467_2023_39867_MOESM5_ESM.txt       # Treatment data
+└── source_data/
+    ├── figure_4A.tsv                     # CN signatures
+    ├── figure_1B_layer_1.tsv             # Survival data
+    ├── figure_2.tsv                      # Sample mapping
+    └── ... (70+ more files)
+```
+
+### 3. Fast Query Library
+
+Create: `data/britoc/OC/query_examples.py`
+
+**Quick queries for common tasks:**
+
+```python
+def get_paired_patients_with_resistance():
+    """Get all paired patients with resistance labels"""
+    df = pd.read_csv("britroC1_patient_linkage.csv")
+    return df[df['resistance_class'].isin(['sensitive', 'resistant'])]
+
+def get_cn_signatures_by_timepoint(signature='s7', timepoint='rel'):
+    """Get CN signature scores at specific timepoint"""
+    df = pd.read_csv("britroC1_serial_sae_analysis.csv")
+    return df[f'{signature}_{timepoint}']
+
+def get_treatment_history(patient_id):
+    """Get complete treatment history for patient"""
+    df = pd.read_csv("41467_2023_39867_MOESM5_ESM.txt", sep='\t')
+    return df[df['fk_britroc_number'] == patient_id]
+
+# Add 10+ more common queries
+```
+
+### 4. Automated ETL Pipeline
+
+Create: `scripts/data_loaders/britroC1_loader.py`
+
+**Requirements:**
+- One function call loads all BriTROC-1 data
+- Handles all file formats (CSV, TSV, JSON)
+- Validates data integrity
+- Caches for fast re-loading
+- Error handling for missing files
+
+```python
+from scripts.data_loaders import britroC1_loader
+
+# Should be this simple:
+data = britroC1_loader.load_all()
+# Returns dict with all datasets:
+# {
+#   'patients': df_patients,
+#   'samples': df_samples,
+#   'clinical': df_clinical,
+#   'cn_signatures': df_cn,
+#   'survival': df_survival,
+#   ...
+# }
+```
+
+### 5. Validation Capability Report
+
+Create: `publications/serial-sae/VALIDATION_CAPABILITIES.md`
+
+**For Each Validation Goal, Document:**
+
+| Validation Goal | Can We Do It? | Data Needed | Data Available | Gap |
+|-----------------|---------------|-------------|----------------|-----|
+| DDR pathway validation | ⚠️ Partial | DDR mutations | ❓ Check MOESM files | TBD |
+| PI3K pathway validation | ⚠️ Partial | PI3K mutations | ❓ Check MOESM files | TBD |
+| MAPK pathway validation | ⚠️ Partial | MAPK mutations | ❓ Check MOESM files | TBD |
+| HRD validation | ❓ Unknown | HRD scores (LOH/TAI/LST) | ❓ Check source data | TBD |
+| TMB validation | ❓ Unknown | Mutation counts | ❓ Check MOESM files | TBD |
+| Serial SAE hypothesis | ✅ Yes | Paired samples + resistance | ✅ Yes | None |
+| KELIM+ model | ❌ No | CA-125 kinetics | ❌ Not available | Major |
+
+---
+
+## 🔍 INVESTIGATION TASKS
+
+### Task 1: Source Data Deep Dive
+
+**Goal:** Understand what's in the 76 source data files
+
+```bash
+cd data/britoc/OC/source_data/
+for file in *.tsv; do
+    echo "=== $file ==="
+    head -5 "$file"
+    wc -l "$file"
+done
+```
+
+**Document:**
+- What molecular features are available?
+- Which figures have patient-level data vs summary stats?
+- Which files link to our 182 paired patients?
+
+### Task 2: Mutation Data Hunt
+
+**Goal:** Find if we have somatic mutation data
+
+Check these files:
+- `figure_6B.tsv` (mutations by gene - already saw this has mutation data!)
+- Any files with "mutation", "variant", "SNV" in name
+- MOESM files for mutation supplements
+
+**If found, extract:**
+- Which genes are mutated per patient?
+- Mutation counts (for TMB calculation)
+- Hotspot mutations (KRAS, BRAF, TP53)
+- DDR pathway mutations (BRCA1/2, ATM, etc)
+
+### Task 3: HRD Score Hunt
+
+**Goal:** Find if we have HRD scores or components
+
+Check for:
+- LOH (Loss of Heterozygosity) scores
+- TAI (Telomeric Allelic Imbalance) scores
+- LST (Large-scale State Transitions) scores
+- Any "HRD score" or "genomic scar" mentions
+
+### Task 4: OS and PFI Analysis
+
+**Goal:** Understand survival outcome availability
+
+From `figure_1B_layer_1.tsv`:
+- How many patients have OS data?
+- How many have progression dates?
+- Can we calculate PFI from progression dates?
+- What's the event rate (% deceased)?
+
+---
+
+## 📊 SUCCESS CRITERIA
+
+By the end of this mission, we should be able to answer:
+
+1. ✅ **What can this data validate?**
+   - List of 10+ specific hypotheses we can test
+   
+2. ✅ **How do we access it quickly?**
+   - < 5 lines of code to load any dataset
+   
+3. ✅ **What are the gaps?**
+   - Clear documentation of what we DON'T have
+
+4. ✅ **What's the quality?**
+   - Missing data report
+   - Data integrity checks
+   - Linkage validation
+
+---
+
+## 🎯 OUTPUT FILES
+
+| File | Purpose | Size Estimate |
+|------|---------|---------------|
+| `BriTROC1_CAPABILITY_MATRIX.md` | What we can validate | 2-3 pages |
+| `DATA_DICTIONARY.md` | Column definitions | 5-10 pages |
+| `VALIDATION_CAPABILITIES.md` | Gap analysis | 2-3 pages |
+| `query_examples.py` | Quick queries | 200-300 lines |
+| `britroC1_loader.py` | ETL pipeline | 300-500 lines |
+
+---
+
+## ⚠️ CRITICAL: Don't Reinvent
+
+**Before coding anything, check if these already exist:**
+- `scripts/data_loaders/` - May have existing loaders
+- `publications/serial-sae/` - May have existing analysis scripts
+- `data/britoc/OC/` - May have README or documentation
+
+**If they exist:**
+- Build on them, don't replace
+- Document what you add
+- Link to original files
+
+---
+
+## 🔗 RELATED MISSIONS
+
+- `MISSION_BRITROC1_SERIAL_SAE.mdc` - Main validation mission
+- `BriTROC1_DATA_EXTRACTION_GUIDE.md` - How we got the data
+- `BriTROC1_VALIDATION_RESULTS.md` - What we've validated so far
+
+---
+
+**START HERE:** Read `BriTROC1_DATA_EXTRACTION_GUIDE.md` to understand what we've done already.
+
+**END HERE:** Update `MISSION_BRITROC1_SERIAL_SAE.mdc` with your findings.

@@ -8049,7 +8049,6 @@ _**Agent (model default, mode Agent)**_
 
 ---
 
-
 Searching for additional validated claims:
 
 
@@ -8199,7 +8198,6 @@ Output mode: files_with_matches
 
 ---
 
-
 Adding validated claims from the E2E validation results:
 
 
@@ -8255,7 +8253,6 @@ Lines added: 3, lines removed: undefined
 
 
 ---
-
 
 ## Summary of Fourth Iteration
 

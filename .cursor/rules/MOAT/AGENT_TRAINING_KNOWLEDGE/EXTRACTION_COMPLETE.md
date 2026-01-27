@@ -261,3 +261,16 @@ All critical doctrines extracted and organized:
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+

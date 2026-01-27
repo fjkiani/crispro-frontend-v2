@@ -10,6 +10,7 @@ Date: October 13, 2025
 """
 
 import json
+import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -23,7 +24,9 @@ OUTPUT_DIR = Path("publication/figures")
 DATA_DIR = Path("publication/data")
 
 def load_data():
-    rules_path = Path("oncology-coPilot/oncology-backend-minimal/api/config/metastasis_rules_v1.0.0.json")
+    rules_path = Path(os.environ.get("METASTASIS_RULES_PATH", "oncology-coPilot/oncology-backend-minimal/api/config/metastasis_rules_v1.0.1.json"))
+    if not rules_path.exists():
+        rules_path = Path("oncology-coPilot/oncology-backend-minimal/api/config/metastasis_rules_v1.0.0.json")
     with open(rules_path) as f:
         rules = json.load(f)
     

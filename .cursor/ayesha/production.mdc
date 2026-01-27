@@ -1,0 +1,271 @@
+---
+alwaysApply: true
+---
+
+# 🎯 AYESHA PRODUCTION FOCUS - Zo's Tracking
+
+**Last Updated:** January 10, 2026
+**Agent:** Zo (LLM Abstraction + Research Intelligence + Clinical Trials)
+**Status:** 🔥 ACTIVE - Core Focus Areas
+
+---
+
+## ✅ COMPLETED THIS SESSION
+
+### 1. Clinical Trial Cohere Switch ✅
+- **Problem:** `403 Your API key was reported as leaked` error from Google AI
+- **Solution:** Extended LLM abstraction layer with `embed()` method
+- **Files Changed:**
+  - `api/services/llm_provider/llm_abstract.py` - Added embed() to all providers
+  - `api/services/clinical_trial_search_service.py` - Now uses LLM abstraction
+- **Tests:** `tests/test_clinical_trial_cohere_switch.py` - PASSING ✅
+- **Status:** PRODUCTION READY
+
+### 2. Research Intelligence Route Added ✅
+- **Problem:** `/research-intelligence` was built but NOT in App.jsx
+- **Solution:** Added import and route with persona protection
+- **Files Changed:**
+  - `oncology-frontend/src/App.jsx` - Added ResearchIntelligence import + route
+  - `oncology-frontend/src/context/PersonaContext.jsx` - Added to oncologist pages
+
+---
+
+## 🎯 MY CORE FOCUS AREAS (Zo)
+
+### Focus 1: Clinical Trials (MOAT Core)
+- ✅ Cohere embeddings working
+- ✅ LLM abstraction layer extended
+- 🔲 AstraDB integration verification (needs testing)
+- 🔲 Trial matching with mechanism_fit scores
+
+### Focus 2: Research Intelligence (MOAT Core)
+- ✅ Route added to App.jsx
+- ✅ Backend orchestrator working
+- ✅ Dossier generation service
+- ✅ Value synthesis service
+- 🔲 Database persistence (PostgREST cache issue)
+- 🔲 Query history UI integration
+
+### Focus 3: Ayesha Patient Persona
+- ✅ `/ayesha-complete-care` - Working
+- ✅ `/ayesha-trials` - Working
+- ✅ `/patient/profile` - Working
+- 🔲 Patient-friendly language in Research Intelligence
+- 🔲 Dossier export/share for patients
+
+---
+
+## 🔧 PLUMBER AGENT REQUESTS
+
+### Request 1: App.jsx Modularization
+**Goal:** Make App.jsx maintainable by splitting routes into modules
+
+```
+/routes
+  ├── index.js              # Main route aggregator
+  ├── authRoutes.js         # /login, /signup, /admin/*
+  ├── patientRoutes.js      # /patient/*, /ayesha-*
+  ├── moatRoutes.js         # /universal-*, /orchestrator, /research-intelligence
+  ├── researchRoutes.js     # /clinical-genomics, /synthetic-lethality, etc.
+  └── devRoutes.js          # DEV-only routes (already partially done)
+```
+
+**Pattern to Follow:**
+```jsx
+// routes/moatRoutes.js
+export const moatRoutes = [
+  { path: '/universal-complete-care', element: UniversalCompleteCare, personas: ['oncologist', 'researcher'] },
+  { path: '/orchestrator', element: OrchestratorDashboard, personas: ['researcher'] },
+  // ...
+];
+```
+
+### Request 2: DEV-Gate These Routes
+These routes should be wrapped in `{import.meta.env.DEV && ...}`:
+- `/investor-slideshow`
+- `/demo-summarizer`
+- `/food-validator`
+- `/batch-food-validator`
+- `/runx-conquest`
+- `/campaigns/pik3ca-de-risking`
+
+### Request 3: Add Persona Protection
+These routes need `PersonaRoute` wrapper:
+- `/protein-synthesis` → researcher only
+- `/structure-predictor` → researcher only
+- `/metastasis` → oncologist, researcher
+- `/clinical-genomics` → oncologist, researcher
+
+### Request 4: Clean Up Duplicates
+Evaluate and potentially consolidate:
+- `/research` vs `/research-intelligence` (what's the difference?)
+- `/agent-dashboard` vs `/orchestrator` (legacy?)
+- `/ayesha-dossiers` vs `/universal-dossiers` (patient vs clinical view)
+
+---
+
+## 📋 COPILOT AUDIT FINDINGS
+
+### Current State: MINIMAL
+The CoPilot component (`CoPilot.jsx`) is a **placeholder**:
+- Only shows "Modular Architecture Test - Success!"
+- No actual chat functionality
+- Q2C Router exists but not connected
+
+### Q2C Router: COMPREHENSIVE ✅
+Located at `components/CoPilot/Q2CRouter/intents.js`:
+- 12 intent patterns defined
+- Maps questions → API endpoints
+- Supports: trials, drug_efficacy, variant_impact, complete_care, etc.
+- **NOT WIRED TO COPILOT UI**
+
+### Hooks Available:
+- `useAnalysisCoPilot.js` - Analysis integration
+- `useChemoGuidance.js` - Chemo guidance
+- `useCoPilotIntegration.js` - Page context integration
+- `useProactiveInsights.js` - Proactive suggestions
+- `useRadOncGuidance.js` - RadOnc guidance
+
+### Integration Components:
+- `ChemoGuidanceCard.jsx` - Chemo guidance display
+- `RadOncGuidanceCard.jsx` - RadOnc display
+- `MyelomaDigitalTwinIntegration.jsx` - Myeloma integration
+
+### RECOMMENDATION:
+CoPilot needs to be **fully wired up** to use Q2C Router for natural language navigation.
+This would give users a conversational way to access all MOAT capabilities.
+
+---
+
+## 🧬 SPORADIC CANCER AUDIT
+
+### Location: `/sporadic-cancer` → `SporadicCancerPage.jsx`
+
+### Purpose:
+For **oncologists** analyzing patients **without hereditary mutations**:
+- Germline status (negative, VUS, positive)
+- Tumor context (HRD score, TMB, etc.)
+- Gate-based drug recommendations
+
+### Integration:
+- Uses `SporadicContext` for state management
+- Uses `SporadicWorkflow` component
+- Biomarker-driven decision gates
+
+### Status: ✅ PRODUCTION READY for oncologists
+
+---
+
+## 🎭 MYELOMA DIGITAL TWIN AUDIT
+
+### Location: `/myeloma-digital-twin` → `MyelomaDigitalTwin.jsx`
+
+### Purpose:
+Create a **digital twin** of a myeloma patient for:
+- Variant analysis (mutations list)
+- Treatment history tracking
+- Drug efficacy prediction (S/P/E)
+- Resistance prediction
+- CoPilot integration
+
+### Key Components:
+- `VariantInputList` - Mutation input
+- `TreatmentHistoryForm` - Treatment line tracking
+- `MyelomaResponseDisplay` - Results display
+- `EfficacyPanel` - Drug efficacy
+- `ResistancePanel` - Resistance prediction
+- `AssistantPanel` - AI assistance
+
+### Integration:
+- Uses Evo2 models (1B/7B)
+- Uses `useAnalysisHistory` for saving
+- Uses `useCoPilotIntegration` for context
+
+### Status: ⚠️ NEEDS PERSONA PROTECTION
+Should be oncologist/researcher only.
+
+---
+
+## 🤖 AGENTS PAGE AUDIT
+
+### Location: `/agents` → `AgentsPage.jsx`
+
+### Purpose:
+Dashboard for viewing/managing all agents in the system.
+Could potentially be used for:
+- Agent selection for specific tasks
+- Agent status monitoring
+- Pipeline composition
+
+### Status: 🔲 NEEDS DEEPER AUDIT
+Need to understand how this relates to MOAT orchestrator.
+
+---
+
+## 📊 ROUTE CATEGORIZATION SUMMARY
+
+### MOAT CORE (Keep - Production Ready)
+- `/universal-complete-care` ✅
+- `/universal-trial-intelligence` ✅
+- `/orchestrator` ✅
+- `/research-intelligence` ✅ (JUST ADDED)
+- `/clinical-genomics` ✅
+- `/synthetic-lethality` ✅
+- `/dosing-guidance` ✅
+
+### PATIENT PERSONA (Keep)
+- `/ayesha-complete-care` ✅
+- `/ayesha-trials` ✅
+- `/patient/profile` ✅
+- `/patient/dashboard` ✅
+- `/patient/settings` ✅
+
+### SPECIALTY TOOLS (Keep - Add Persona Protection)
+- `/sporadic-cancer` - Oncologist/Researcher
+- `/myeloma-digital-twin` - Oncologist/Researcher
+- `/threat-assessor` - Needs audit
+- `/radonc-co-pilot` - RadOnc specialty
+
+### RESEARCH ONLY (Keep - Researcher Only)
+- `/tools` (Armory) ✅
+- `/crispr-designer` ✅
+- `/protein-synthesis` 🔲 Needs persona
+- `/structure-predictor` 🔲 Needs persona
+
+### DEV-GATE CANDIDATES
+- `/investor-slideshow`
+- `/demo-summarizer`
+- `/food-validator`
+- `/batch-food-validator`
+- `/runx-conquest`
+- `/campaigns/pik3ca-de-risking`
+
+---
+
+## 🚀 NEXT STEPS FOR ZO
+
+1. **Test Research Intelligence E2E** - Verify the route works in browser
+2. **Test Clinical Trials with AstraDB** - Full vector search test
+3. **Wire up patient-friendly language** - Use PatientLanguageTranslator
+4. **Audit `/research` page** - Compare with `/research-intelligence`
+5. **Document CoPilot recommendations** - For future agent to implement
+
+---
+
+## 📝 NOTES FOR OTHER AGENTS
+
+### For Plumber Agent:
+- See "PLUMBER AGENT REQUESTS" section above
+- Focus on modularization and cleanup
+- Don't touch core logic, just structure
+
+### For MOAT Agents:
+- Clinical trials now use Cohere (not Google AI)
+- Research Intelligence is wired up
+- Database persistence needs PostgREST cache refresh
+
+### For Patient Experience Agent:
+- Ayesha routes are working
+- Need patient-friendly language in Research Intelligence
+- Dossier sharing/export needed
+

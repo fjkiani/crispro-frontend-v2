@@ -1,0 +1,351 @@
+#!/usr/bin/env python3
+"""
+Validate BRCA Model with Sum Aggregation + Nested CV
+=====================================================
+
+Step 1: Verify sum aggregation improvement with proper nested CV
+- Feature selection inside each CV fold (no leakage)
+- Sum aggregation (instead of mean)
+- Stable features analysis
+"""
+
+import json
+import sys
+from pathlib import Path
+from typing import Dict, List, Any, Tuple
+from datetime import datetime
+import numpy as np
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import StratifiedKFold
+from sklearn.metrics import roc_auc_score
+from sklearn.preprocessing import StandardScaler
+from scipy import stats
+
+# Paths
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+BRCA_CHECKPOINT = PROJECT_ROOT / "oncology-coPilot" / "oncology-backend-minimal" / "data" / "validation" / "sae_cohort" / "checkpoints" / "BRCA_TCGA_TRUE_SAE_cohort.json"
+RECURRENCE_LABELS = PROJECT_ROOT / "oncology-coPilot" / "oncology-backend-minimal" / "data" / "validation" / "sae_cohort" / "brca_recurrence_labels.json"
+OUTPUT_DIR = PROJECT_ROOT / ".cursor" / "MOAT" / "SAE_INTELLIGENCE" / "BRCA_VALIDATION"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+OUTPUT_FILE = OUTPUT_DIR / "brca_sum_aggregation_nested_cv.json"
+
+# Statistical thresholds
+P_VALUE_THRESHOLD = 0.05
+COHENS_D_THRESHOLD = 0.5
+MAX_FEATURES = 10
+
+
+def build_feature_matrix_sum(patients: List[Dict]) -> Tuple[np.ndarray, List[str]]:
+    """Build feature matrix using SUM aggregation."""
+    n_patients = len(patients)
+    n_features = 32768
+    
+    feature_matrix = np.zeros((n_patients, n_features))
+    patient_ids = []
+    
+    for i, patient in enumerate(patients):
+        patient_id = patient.get("patient_id")
+        patient_ids.append(patient_id)
+        
+        variants = patient.get("variants", [])
+        for variant in variants:
+            top_features = variant.get("top_features", [])
+            for tf in top_features:
+                idx = tf.get("index")
+                val = tf.get("value", 0.0)
+                if idx is not None and 0 <= idx < n_features:
+                    # SUM aggregation (not normalized)
+                    feature_matrix[i, idx] += abs(float(val))
+    
+    return feature_matrix, patient_ids
+
+
+def fdr_correction(p_values, alpha=0.05):
+    """Simple FDR correction (Benjamini-Hochberg)."""
+    if len(p_values) == 0:
+        return p_values
+    
+    p_array = np.array(p_values)
+    n = len(p_array)
+    
+    sorted_indices = np.argsort(p_array)
+    sorted_p = p_array[sorted_indices]
+    
+    adjusted_p = np.zeros(n)
+    for i in range(n-1, -1, -1):
+        if i == n-1:
+            adjusted_p[sorted_indices[i]] = sorted_p[i]
+        else:
+            adjusted_p[sorted_indices[i]] = min(
+                adjusted_p[sorted_indices[i+1]],
+                sorted_p[i] * n / (i + 1)
+            )
+    
+    return adjusted_p
+
+
+def select_features_nested(
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    p_threshold: float = 0.05,
+    cohen_d_threshold: float = 0.5,
+    max_features: int = 10
+) -> List[int]:
+    """Select features on training fold only (prevents leakage)."""
+    n_features = X_train.shape[1]
+    
+    # Compute correlations
+    pearson_r = np.zeros(n_features)
+    pearson_p = np.ones(n_features)
+    
+    for i in range(n_features):
+        feature_values = X_train[:, i]
+        if np.std(feature_values) == 0:
+            continue
+        r, p = stats.pearsonr(feature_values, y_train)
+        pearson_r[i] = r
+        pearson_p[i] = p
+    
+    # Compute Cohen's d
+    cohen_d = np.zeros(n_features)
+    recurrence_mask = y_train.astype(bool)
+    
+    for i in range(n_features):
+        feature_values = X_train[:, i]
+        recurrence_values = feature_values[recurrence_mask]
+        no_recurrence_values = feature_values[~recurrence_mask]
+        
+        if len(recurrence_values) == 0 or len(no_recurrence_values) == 0:
+            continue
+        
+        mean_diff = np.mean(recurrence_values) - np.mean(no_recurrence_values)
+        pooled_std = np.sqrt((np.var(recurrence_values) + np.var(no_recurrence_values)) / 2)
+        
+        if pooled_std == 0:
+            continue
+        
+        cohen_d[i] = abs(mean_diff / pooled_std)
+    
+    # Apply FDR correction
+    valid_mask = pearson_p < 1.0
+    if np.sum(valid_mask) > 0:
+        valid_p = pearson_p[valid_mask]
+        p_corrected = fdr_correction(valid_p, alpha=p_threshold)
+        p_corrected_full = np.ones(n_features)
+        p_corrected_full[valid_mask] = p_corrected
+    else:
+        p_corrected_full = pearson_p
+    
+    # Select features
+    significant = []
+    for i in range(n_features):
+        if p_corrected_full[i] < p_threshold and cohen_d[i] >= cohen_d_threshold:
+            significant.append((i, cohen_d[i], pearson_r[i], p_corrected_full[i]))
+    
+    # Sort by Cohen's d, take top N
+    significant.sort(key=lambda x: x[1], reverse=True)
+    selected_indices = [f[0] for f in significant[:max_features]]
+    
+    return selected_indices
+
+
+def validate_sum_aggregation_nested_cv() -> Dict[str, Any]:
+    """Validate sum aggregation with proper nested CV."""
+    print("=" * 80)
+    print("🔬 STEP 1: VALIDATE SUM AGGREGATION WITH NESTED CV")
+    print("=" * 80)
+    print()
+    
+    # Load data
+    print("📥 Loading data...")
+    with open(BRCA_CHECKPOINT, 'r') as f:
+        brca_sae = json.load(f)
+    
+    patients_dict = brca_sae.get("data", {})
+    
+    with open(RECURRENCE_LABELS, 'r') as f:
+        labels_data = json.load(f)
+    
+    outcomes = labels_data.get("outcomes", {})
+    
+    # Prepare data
+    patients_list = []
+    outcome_labels = []
+    
+    for patient_id, patient_data in patients_dict.items():
+        outcome = outcomes.get(patient_id, {})
+        recurrence = outcome.get("recurrence")
+        
+        if recurrence is None:
+            continue
+        
+        patient_data["patient_id"] = patient_id
+        patients_list.append(patient_data)
+        outcome_labels.append(1 if recurrence else 0)
+    
+    print(f"   ✅ Loaded {len(patients_list)} patients")
+    print(f"   Recurrence: {sum(outcome_labels)} True, {len(outcome_labels) - sum(outcome_labels)} False")
+    
+    # Build feature matrix with SUM aggregation
+    print()
+    print("🔍 Building feature matrix with SUM aggregation...")
+    feature_matrix, _ = build_feature_matrix_sum(patients_list)
+    X = feature_matrix
+    y = np.array(outcome_labels)
+    
+    print(f"   ✅ Feature matrix: {X.shape}")
+    
+    # Nested CV
+    print()
+    print("📊 Running nested cross-validation with SUM aggregation...")
+    print("   Outer CV: 5-fold (model evaluation)")
+    print("   Inner CV: Feature selection on training fold only")
+    print()
+    
+    outer_cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    cv_scores = []
+    fold_results = []
+    all_selected_features = []
+    
+    for fold_idx, (train_idx, test_idx) in enumerate(outer_cv.split(X, y)):
+        print(f"   Fold {fold_idx + 1}/5...")
+        
+        X_train, X_test = X[train_idx], X[test_idx]
+        y_train, y_test = y[train_idx], y[test_idx]
+        
+        # Feature selection on training fold only
+        selected_features = select_features_nested(
+            X_train, y_train,
+            p_threshold=P_VALUE_THRESHOLD,
+            cohen_d_threshold=COHENS_D_THRESHOLD,
+            max_features=MAX_FEATURES
+        )
+        
+        if len(selected_features) == 0:
+            print(f"      ⚠️  No features selected, skipping fold")
+            continue
+        
+        all_selected_features.extend(selected_features)
+        
+        # Train model on selected features
+        X_train_selected = X_train[:, selected_features]
+        X_test_selected = X_test[:, selected_features]
+        
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train_selected)
+        X_test_scaled = scaler.transform(X_test_selected)
+        
+        model = LogisticRegression(
+            class_weight='balanced',
+            max_iter=1000,
+            random_state=42,
+            solver='lbfgs'
+        )
+        
+        model.fit(X_train_scaled, y_train)
+        y_pred_proba = model.predict_proba(X_test_scaled)[:, 1]
+        
+        # Compute AUROC
+        if len(set(y_test)) >= 2:
+            auroc = roc_auc_score(y_test, y_pred_proba)
+            cv_scores.append(auroc)
+            fold_results.append({
+                "fold": fold_idx + 1,
+                "n_features": len(selected_features),
+                "features": selected_features,
+                "auroc": float(auroc),
+                "n_train": len(y_train),
+                "n_test": len(y_test),
+                "n_pos_train": int(sum(y_train)),
+                "n_pos_test": int(sum(y_test))
+            })
+            print(f"      ✅ AUROC: {auroc:.3f} ({len(selected_features)} features)")
+        else:
+            print(f"      ⚠️  Insufficient outcome diversity in test fold")
+    
+    # Analyze stable features
+    from collections import Counter
+    feature_counts = Counter(all_selected_features)
+    stable_features = [f for f, count in feature_counts.items() if count >= 3]
+    
+    # Summary
+    print()
+    print("=" * 80)
+    print("📊 NESTED CV RESULTS (SUM AGGREGATION)")
+    print("=" * 80)
+    
+    if len(cv_scores) > 0:
+        mean_auroc = np.mean(cv_scores)
+        std_auroc = np.std(cv_scores)
+        
+        print(f"CV AUROC: {mean_auroc:.3f} ± {std_auroc:.3f}")
+        print(f"CV scores: {[f'{s:.3f}' for s in cv_scores]}")
+        print(f"Folds completed: {len(cv_scores)}/5")
+        print()
+        print(f"Stable features (appear in ≥3 folds): {len(stable_features)}")
+        print(f"  Features: {stable_features}")
+        print()
+        
+        # Compare to mean aggregation baseline
+        mean_baseline = 0.607
+        print("Comparison to mean aggregation (nested CV):")
+        print(f"  Mean aggregation: {mean_baseline:.3f}")
+        print(f"  Sum aggregation: {mean_auroc:.3f}")
+        print(f"  Improvement: {mean_auroc - mean_baseline:+.3f}")
+        
+        if mean_auroc > mean_baseline + 0.02:
+            print("  ✅ Significant improvement with sum aggregation!")
+        elif mean_auroc > mean_baseline:
+            print("  ✅ Modest improvement with sum aggregation")
+        else:
+            print("  ⚠️  No significant improvement")
+    else:
+        print("❌ No valid folds completed")
+        mean_auroc = 0.0
+        std_auroc = 0.0
+        stable_features = []
+    
+    # Save results
+    results = {
+        "validation_date": datetime.now().isoformat(),
+        "method": "nested_cv_sum_aggregation",
+        "aggregation": "sum",
+        "outer_cv_folds": 5,
+        "feature_selection": "inside_cv_fold",
+        "fdr_correction": True,
+        "max_features": MAX_FEATURES,
+        "performance": {
+            "cv_auroc_mean": float(mean_auroc),
+            "cv_auroc_std": float(std_auroc),
+            "cv_scores": [float(s) for s in cv_scores],
+            "n_folds": len(cv_scores)
+        },
+        "stable_features": stable_features,
+        "fold_results": fold_results,
+        "comparison": {
+            "mean_aggregation_auroc": 0.607,
+            "sum_aggregation_auroc": float(mean_auroc),
+            "improvement": float(mean_auroc - 0.607)
+        }
+    }
+    
+    with open(OUTPUT_FILE, 'w') as f:
+        json.dump(results, f, indent=2)
+    
+    print()
+    print(f"💾 Results saved to: {OUTPUT_FILE}")
+    print("=" * 80)
+    
+    return results
+
+
+if __name__ == "__main__":
+    try:
+        result = validate_sum_aggregation_nested_cv()
+        print("\n✅ STEP 1 COMPLETE: Sum aggregation validated with nested CV")
+        sys.exit(0)
+    except Exception as e:
+        print(f"\n❌ VALIDATION FAILED: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)

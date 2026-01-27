@@ -1,0 +1,940 @@
+# CrisPRO Ovarian Cancer MVP: Data Schema & Acquisition Blueprint
+
+**Purpose**: Structured, longitudinal patient schema centered on treatment timelines, serial CA‑125, and DDR/HRD markers, with derived timing and kinetic metrics layered on top.
+
+**Status**: Blueprint for data acquisition, starting with **Platinum Timing + PFI/PTPI from TCGA-OV**
+
+**Approach**: Acquire one concept at a time to ensure tractability and accuracy.
+
+---
+
+## Table of Contents
+
+1. [Executive Summary](#executive-summary)
+2. [Part I: Complete Data Schema](#part-i-complete-data-schema)
+3. [Part II: Data Sources & Acquisition Strategy](#part-ii-data-sources--acquisition-strategy)
+4. [Part III: Derived Field Computations](#part-iii-derived-field-computations)
+5. [Part IV: KELIM Implementation Strategies](#part-iv-kelim-implementation-strategies)
+6. [Part V: Validation Benchmarks](#part-v-validation-benchmarks)
+7. [Part VI: MVP Prioritization](#part-vi-mvp-prioritization)
+8. [Part VII: Step-by-Step Implementation Plans](#part-vii-step-by-step-implementation-plans)
+
+---
+
+## Executive Summary
+
+### Overview
+The CrisPRO ovarian cancer MVP requires a comprehensive patient schema integrating:
+- **Treatment timelines**: Platinum regimens, PARPi sequences, response assessments
+- **CA-125 kinetics**: Serial measurements for KELIM-like modeling
+- **DDR/HRD markers**: BRCA status, HRD scores, composite DDR_bin signatures
+- **Derived metrics**: PFI, PTPI, PFS, OS, KELIM scores
+
+### Data Sources
+- **Public datasets**: TCGA-OV (genomics + limited clinical), trial datasets (KELIM publications), PARPi cohorts
+- **Partner data**: EMR feeds, lab systems (CA-125 series), NGS labs (DDR markers)
+
+### Current Focus
+**Concept 1: Platinum Timing + PFI/PTPI from TCGA-OV**
+- Target: `tcga_ov_platinum_timing.csv` with patient-level platinum dates and PFI
+- Sources: GDC TCGA-OV clinical XML, TCGA-CDR supplement, cBioPortal export
+- Status: Ready for implementation (see Part VII)
+
+### Key Definitions
+- **PFI (Platinum-Free Interval)**: Time from last platinum dose to subsequent progression/recurrence
+- **PTPI (Platinum-to-PARPi Interval)**: Time from last platinum dose to PARPi start
+- **KELIM**: CA-125 elimination rate constant (K) from exponential decay modeling
+- **DDR_bin**: Composite binary indicator for DDR-defective vs. DDR-proficient status
+
+---
+
+## Part I: Complete Data Schema
+
+### 1.1 Demographics & Baseline Tumor Info
+
+| field_name | type | description |
+|------------|------|-------------|
+| patient_id | string | Stable unique identifier, de-identified but linkable across encounters and data sources |
+| date_of_birth | date | Date of birth to compute age_at_diagnosis; can be stored as year-only if needed for privacy |
+| sex | categorical | Biological sex; expected "female" for ovarian but include for completeness and QC |
+| race_ethnicity | categorical | Standard categories (e.g., White, Black, Asian, Hispanic, Other) for disparity/stratified analyses |
+| diagnosis_date | date | Date of first histologically confirmed epithelial ovarian, fallopian tube, or primary peritoneal cancer |
+| age_at_diagnosis | float | Age in years at diagnosis; can be derived from date_of_birth and diagnosis_date but store if available |
+| primary_site | categorical | Ovary, fallopian tube, primary peritoneal, or mixed; from pathology |
+| histology | categorical | Histologic subtype (e.g., high-grade serous, low-grade serous, endometrioid, clear cell, mucinous, other) |
+| grade | categorical | Tumor grade at diagnosis (e.g., G1–G3, high vs low) |
+| figo_stage | categorical | FIGO stage (e.g., IIIA, IIIC, IVB) at diagnosis |
+| debulking_status | categorical | Initial cytoreduction status (e.g., no_residual, ≤1cm, >1cm, unresectable, biopsy_only) |
+| debulking_type | categorical | Primary debulking surgery (PDS), interval debulking (IDS) after neoadjuvant chemo, or none |
+| brca1_germline_status | categorical | Pathogenic, VUS, wildtype, not_tested; germline testing |
+| brca2_germline_status | categorical | Pathogenic, VUS, wildtype, not_tested; germline testing |
+| brca1_somatic_status | categorical | Pathogenic, VUS, wildtype, not_tested; somatic sequencing |
+| brca2_somatic_status | categorical | Pathogenic, VUS, wildtype, not_tested; somatic sequencing |
+| hrd_status_overall | categorical | HRD_positive, HRD_negative, unknown; from commercial assays (e.g., Myriad GIS, Foundation) |
+| hrd_score | float | Continuous HRD score (e.g., genomic instability score), if reported |
+| loh_score | float | Genomic loss-of-heterozygosity metric if separately provided |
+| tmb_score | float | Tumor mutational burden, mutations/Mb, if available |
+| microsatellite_status | categorical | MSS, MSI-low, MSI-high, unknown |
+| baseline_ca125_value | float | CA‑125 closest to and prior to start of frontline platinum (U/mL) |
+| baseline_ca125_date | date | Sample date for baseline_ca125_value |
+
+**MVP Prioritization**: age_at_diagnosis, histology, FIGO stage, debulking_status, and BRCA/HRD categorical status are **must-have**; detailed HRD_score, LOH_score, TMB are **important but optional** for MVP; microsatellite_status is **nice-to-have**.
+
+---
+
+### 1.2 Treatment Timeline (Systemic Therapies)
+
+**Core structure**: one record per regimen (systemic therapy course), linked to patient_id.
+
+| field_name | type | description |
+|------------|------|-------------|
+| regimen_id | string | Unique ID per systemic regimen per patient |
+| patient_id | string | Foreign key linking to patient |
+| regimen_start_date | date | First administration date of regimen (e.g., day 1 of carboplatin–paclitaxel) |
+| regimen_end_date | date | Last administration date of that regimen (or date treatment stopped) |
+| regimen_type | categorical | platinum, taxane, platinum_taxane, PARPi, ATR_inhibitor, WEE1_inhibitor, other_ddr_targeted, non_platinum_chemo, bevacizumab, immunotherapy, other |
+| regimen_name | string | Human-readable regimen (e.g., carboplatin AUC5 + paclitaxel 175 mg/m²) |
+| line_of_therapy | integer | Numeric treatment line in recurrent setting; frontline = 1, first relapse = 2, etc. |
+| setting | categorical | frontline, neoadjuvant, adjuvant, first_recurrence, later_recurrence, maintenance |
+| platinum_in_regimen | boolean | True if regimen includes any platinum agent |
+| parpi_in_regimen | boolean | True if regimen includes PARP inhibitor (e.g., olaparib, niraparib, rucaparib, talazoparib) |
+| ddr_targeted_in_regimen | boolean | True if regimen includes DDR-targeted non-PARP agents (ATR, WEE1, CHK1/2, POLQ, etc.) |
+| bevacizumab_in_regimen | boolean | True if regimen includes bevacizumab |
+| immunotherapy_in_regimen | boolean | True if regimen includes checkpoint inhibitor or other IO |
+| response_criteria | categorical | RECIST_v1_1, GCIG_CA125, investigator_assessed, other, unknown |
+| best_response | categorical | CR, PR, SD, PD, not_evaluable, unknown, using specified criteria |
+| best_response_date | date | Date when best_response was first documented |
+| progression_date | date | Date of radiologic/clinical/biochemical progression on or after this regimen |
+| progression_assessment_method | categorical | imaging, CA125_only, clinical, mixed, unknown |
+| treatment_stop_reason | categorical | progression, toxicity, completion, patient_choice, other, unknown |
+| last_platinum_dose_date | date | Date of last platinum administration in regimen (can equal regimen_end_date if regimen is platinum-only) |
+| subsequent_relapse_date | date | First recurrence/progression date after a specified regimen, if progression_date is not precisely captured |
+| subsequent_parpi_start_date | date | For each platinum regimen, start_date of the first PARPi regimen following that platinum, if any |
+| treatment_gap_days_to_next_regimen | integer | Derived: days between regimen_end_date and next regimen_start_date (but can be stored as convenience) |
+
+**These fields enable computation of**:
+- **PFI (platinum-free interval)**: time from last platinum dose in a platinum-containing regimen to subsequent progression or relapse event
+- **PTPI (platinum-to-PARPi interval)**: time from last platinum dose to start of a PARPi regimen (or PARPi maintenance)
+- **Treatment-free interval**: time from regimen_end_date of the prior regimen to regimen_start_date of the next regimen
+
+**MVP Prioritization**: regimen_start_date, regimen_end_date, regimen_type, line_of_therapy, best_response, response_criteria, progression_date, last_platinum_dose_date are **must-have** for timing metrics and outcome models; bevacizumab/immunotherapy flags and detailed regimen_name are **important but optional**; subsequent_parpi_start_date can be derived but is useful to store.
+
+---
+
+### 1.3 Tumor Markers / CA-125 Kinetics
+
+**Structure**: one record per CA‑125 measurement.
+
+| field_name | type | description |
+|------------|------|-------------|
+| ca125_id | string | Unique ID per CA‑125 measurement |
+| patient_id | string | Foreign key |
+| ca125_measurement_date | date | Sample collection date |
+| ca125_value | float | CA‑125 level in U/mL |
+| ca125_assay_lab | string | Lab identifier or code; optional for QC |
+| ca125_context | categorical | baseline_pre_frontline, on_frontline_cycle1, on_frontline_cycle2, on_frontline_cycle3_plus, surveillance, at_progression, pre_parpi, on_parpi, other, unknown |
+| linked_regimen_id | string | Regimen during which this measurement was taken (if applicable) |
+
+**Minimum KELIM-like requirement**:
+- At least 3 CA‑125 measurements during the first 100 days of platinum-based chemotherapy, including: baseline (≤14 days before or at cycle 1), and ≥2 additional on-treatment values before day 100
+- Ideally ≥4–5 points improves robustness
+
+**Predefined derived CA‑125 metrics to store**:
+
+| field_name | type | description |
+|------------|------|-------------|
+| kelim_k_value | float | Modeled CA‑125 elimination rate constant K for a specified platinum regimen, derived from longitudinal CA‑125 values over first 100 days |
+| kelim_standardized_score | float | Standardized KELIM score (e.g., centered and scaled as in published models) |
+| kelim_category | categorical | favorable, unfavorable, intermediate per published thresholds for a given setting |
+| ca125_percent_change_day21 | float | Percent change from baseline to around day 21 (or end of cycle 1–2), using closest available measurement |
+| ca125_percent_change_day42 | float | Percent change from baseline to around day 42 |
+| ca125_time_to_50pct_reduction_days | float | Days from regimen_start_date to first time CA‑125 is ≤50% of baseline |
+| ca125_normalized_by_cycle3 | boolean | True if CA‑125 reaches ≤35 U/mL or within normal lab reference range by cycle 3 (or ~day 63) |
+
+**Storage**: Keep derived metrics in a separate `CA125_feature` table keyed by patient_id and regimen_id.
+
+**MVP Prioritization**: serial ca125_measurement_date and ca125_value linked to frontline platinum regimen are **must-have** for any KELIM-like implementation and CA‑125 proxies; elaborate CA‑125 QC fields are optional.
+
+---
+
+### 1.4 Molecular / DDR Data
+
+**Structure**: allow gene-level and pathway-level representations.
+
+**Gene-level DDR calls** (panel-like table, one record per gene):
+
+| field_name | type | description |
+|------------|------|-------------|
+| patient_id | string | Foreign key |
+| sample_id | string | Tumor sample ID (e.g., primary, recurrence, ascites) |
+| sample_type | categorical | primary_tumor, metastatic_tumor, ascites, cfDNA, other |
+| collection_date | date | Sample collection date, if known |
+| gene_symbol | categorical | HGNC gene symbol (e.g., BRCA1, BRCA2, RAD51C, RAD51D, PALB2, ATM, ATR, CHEK1, CHEK2, BRIP1, BARD1, FANCA, FANCD2, RAD50, MRE11, NBN, POLQ, etc.) |
+| variant_type | categorical | SNV, indel, splice, rearrangement, copy_number_loss, copy_number_gain, promoter_methylation, other |
+| variant_classification | categorical | pathogenic, likely_pathogenic, VUS, likely_benign, benign |
+| zygosity | categorical | monoallelic, biallelic, unknown |
+| variant_allele_frequency | float | VAF if available |
+| copy_number_state | categorical | deletion, loss, neutral, gain, amplification, unknown |
+
+**Pathway/HRD-level fields** (per sample/patient):
+
+| field_name | type | description |
+|------------|------|-------------|
+| sample_id | string | Foreign key linking to molecular sample |
+| patient_id | string | Foreign key |
+| hrd_assay_name | string | Assay/provider (e.g., Myriad GIS, FoundationOne CDx, in-house HRD) |
+| hrd_status_sample | categorical | HRD_positive, HRD_negative, equivocal, unknown |
+| hrd_score_sample | float | HRD score value for this sample |
+| loh_score_sample | float | LOH score if assay reports separately |
+| lsi_score_sample | float | Large-scale transition or telomeric allelic imbalance score if available |
+| signature3_exposure | float | Mutational Signature 3 (HRD-associated) proportion if WES/WGS available |
+| signature8_exposure | float | Other DDR-related signature exposures if modeled |
+| ddr_bin_status | categorical | DDR_bin_positive, DDR_bin_negative, unknown; composite indicator (e.g., from cumulative DDR defects) |
+| ddr_pathway_activity_score | float | Continuous expression-based DDR pathway score if transcriptomics available (e.g., HR pathway score) |
+| rad51_foci_assay_performed | boolean | True if RAD51 foci functional assay performed |
+| rad51_foci_status | categorical | deficient, proficient, indeterminate; from RAD51 foci readout |
+| rad51_foci_assay_date | date | Date of assay |
+
+**MVP Prioritization**: at minimum, BRCA1/2 pathogenic/WT calls, any HRD_status_sample / hrd_score_sample, and a simplified ddr_bin_status are **must-have** for PARPi/DDR models; mutational signatures, expression-based scores, and RAD51 foci are **important but optional**; detailed VAF and copy-number states are nice-to-have but helpful for DDR_bin refinement.
+
+---
+
+### 1.5 Outcomes and Survival
+
+**Per regimen** (index regimen table) plus **patient-level survival**:
+
+**Regimen-level outcome fields**:
+
+| field_name | type | description |
+|------------|------|-------------|
+| regimen_id | string | Foreign key to treatment table |
+| is_index_regimen | boolean | True if regimen is predefined index (frontline platinum, first-relapse platinum, PARPi, etc.) |
+| index_regimen_type | categorical | frontline_platinum, first_relapse_platinum, later_platinum, parpi_monotherapy, parpi_maintenance, non_platinum_chemo, other_ddr_therapy |
+| best_response | categorical | As above |
+| best_response_date | date | As above |
+| progression_date | date | As above |
+| censoring_date | date | Date when patient is censored for PFS if no progression (e.g., last disease assessment) |
+| pfs_days_from_regimen_start | integer | Derived: days from regimen_start_date to min(progression_date, censoring_date) |
+| os_days_from_regimen_start | integer | Derived: days from regimen_start_date to min(death_date, last_followup_date) |
+
+**Patient-level survival fields**:
+
+| field_name | type | description |
+|------------|------|-------------|
+| vital_status | categorical | alive, dead, unknown |
+| death_date | date | Date of death, if known |
+| last_followup_date | date | Last date known alive/disease status documented |
+| cause_of_death | categorical | ovarian_cancer, other_cancer, non_cancer, unknown; optional |
+
+**Derived timing metrics**:
+
+| field_name | type | description |
+|------------|------|-------------|
+| platinum_free_interval_days | integer | For each platinum regimen: days from last_platinum_dose_date to subsequent_relapse_date (or progression_date defining platinum-free interval) |
+| platinum_to_parpi_interval_days | integer | For patients who receive PARPi after platinum: days from last_platinum_dose_date of prior regimen to parpi_regimen_start_date |
+| treatment_free_interval_days | integer | Days from regimen_end_date of prior regimen to regimen_start_date of next regimen (per line) |
+
+**MVP Prioritization**: vital_status, death_date or last_followup_date, progression_date, and regimen_start_date are **must-have** to compute PFS/OS; cause_of_death is optional.
+
+---
+
+## Part II: Data Sources & Acquisition Strategy
+
+### 2.1 Public Research Datasets
+
+**Key realistic sources**:
+- **TCGA-OV**: genomic, some clinical (baseline, limited treatment), HRD-like scores
+- **ICON, AGO-OVAR, GOG, CHIVA-type KELIM publications**: trial datasets not generally fully public, but sometimes accessible via data request; often include serial CA‑125, treatment, and outcomes
+- **GENIE, AACR, MSK-IMPACT-like cohorts**: genomic + limited treatment and outcome
+- **Rafii/MITO–8 and similar platinum interval studies**: often require collaboration/requests but define PFI and outcomes
+
+**What can be populated**:
+
+**From TCGA-OV and similar genomic cohorts**:
+- Demographics (age_at_diagnosis, primary_site, histology, FIGO stage)
+- BRCA1/2 somatic status, other DDR gene-level calls, some HRD metrics, mutational signatures (Signature 3)
+- Usually no detailed treatment dates; sometimes just whether platinum given
+
+**From trial datasets with CA‑125 modeling (KELIM trials, CHIVA, etc.)**:
+- Detailed regimented treatment timeline (regimen_start_date, regimen_end_date, line_of_therapy, best_response, progression_date)
+- Serial CA‑125 values with dates over first 100 days of platinum
+- Survival outcomes (PFS, OS) with defined start dates
+
+**From PARPi trial datasets and PARPi observational cohorts**:
+- PARPi regimen details (index_regimen_type = parpi_monotherapy or parpi_maintenance)
+- DDR markers (BRCA status, HRD_status_overall, sometimes RAD51 foci or expression scores)
+- Outcomes (PFS with precise treatment_start_dates)
+
+**Gaps in public data**:
+- Serial CA‑125 with real calendar dates (often available but may be visit-based only)
+- Detailed line-of-therapy history beyond first-line and trial regimens
+- Comprehensive routine-practice CA‑125 series during and after therapy
+- Real-world PARPi sequences with prior platinum intervals for PTPI
+
+**For MVP, public datasets primarily support**:
+- DDR/HRD feature development (DDR_bin, HRD_score, signatures)
+- Proof-of-concept KELIM modeling on available CA‑125, if accessible under collaboration
+- Benchmark patterns (PFI vs response, HRD vs PARPi benefit)
+
+---
+
+### 2.2 Partner / Clinical Data (EHR, Registry, Labs, Molecular Labs)
+
+**These are essential for production-ready CrisPRO**.
+
+**Demographics & baseline tumor info**:
+- **Source**: EMR structured fields (problem list, tumor registry), pathology LIS (histology, grade, debulking_status), genetics reports (BRCA1/2, HRD assays)
+- **Data-sharing requirements**: Structured diagnosis_date, FIGO stage, histology subtype; pathology text or discrete fields for debulking_status and debulking_type; full genetics PDFs or structured reports, including germline and somatic BRCA, HRD_status_overall and hrd_score
+
+**Treatment timeline**:
+- **Source**: Chemotherapy order systems (CPOE), infusion center records, pharmacy administration logs, EMR medication administration records
+- **Data-sharing requirements**: Exact dates of each chemotherapy/targeted therapy administration; regimen composition (drug names, doses) for identifying platinum, PARPi, ATR, WEE1, etc.; line_of_therapy if recorded; otherwise, full timeline to derive it; structured or text-encoded response assessments (e.g., RECIST reports, radiology impressions) with dates
+
+**CA‑125 series**:
+- **Source**: Laboratory information systems (LIS) and EMR lab tables
+- **Data-sharing requirements (must explicitly require)**: All CA‑125 values with dates, units, and specimen type; mapping to regimen timeline (link to encounter or visit to infer linked_regimen_id); no suppression of "unnecessary" lab history; full time series is critical
+
+**Molecular / DDR**:
+- **Source**: In-house NGS labs (somatic and germline), external panel providers (Foundation, Caris, Myriad, etc.)
+- **Data-sharing requirements**: Raw variant tables or structured variant summaries for key DDR genes; HRD assay outputs including scores and statuses, not just "eligible/yes/no"; if available, expression data or RAD51 foci assay results
+
+**Outcomes**:
+- **Source**: EMR (problem list, notes, imaging, discharge summaries), tumor registries
+- **Data-sharing requirements**: Vital status, death_date, last_followup_date from registry or EMR; radiology report dates with explicit progression annotations or tumor board summaries
+
+---
+
+### 2.3 Data Integration & Join Strategies
+
+**Critical for multi-source data assembly**:
+
+**Join Keys**:
+- **Primary key**: `patient_id` (must be consistent across all sources)
+- **TCGA barcode format**: Extract patient barcode root (e.g., `TCGA-XX-XXXX`) from full barcode (e.g., `TCGA-XX-XXXX-01A`) for joins
+- **cBioPortal patient IDs**: May use same TCGA barcode or study-specific IDs (verify mapping)
+
+**Platinum Drug Name Standardization**:
+- **Standard names**: `cisplatin`, `carboplatin`, `oxaliplatin`
+- **Common aliases**: `cis-diamminedichloroplatinum`, `CDDP`, `Platinol`, `Paraplatin`, `Eloxatin`
+- **Normalization strategy**: Case-insensitive matching, synonym mapping before identification
+
+**Date Alignment**:
+- **TCGA index date**: Date of pathologic diagnosis (all `days_to_*` variables are offsets from this)
+- **Absolute date conversion**: `regimen_start_date = diagnosis_date + days_to_drug_therapy_start`
+- **Date format standardization**: Use ISO 8601 (YYYY-MM-DD) across all sources
+
+**Missing Data Handling**:
+- **PFI approximation**: If TCGA-CDR PFI is from diagnosis (not last platinum dose), compute approximate PFI as `pfi_days_tcga_cdr - first_platinum_end_days`
+- **Validation**: Flag cases where computed PFI < 0 (data quality issue)
+
+**Sanity Checks**:
+- **Patient count validation**: GDC clinical (N~500), TCGA-CDR (N~500), cBioPortal (N~500) should match within 5%
+- **Platinum regimen coverage**: ≥70% of patients should have platinum drug records
+- **Date consistency**: `regimen_start_date` < `regimen_end_date` < `progression_date` (where applicable)
+
+---
+
+## Part III: Derived Field Computations
+
+### 3.1 PFI (Platinum-Free Interval)
+
+**⚠️ CRITICAL DEFINITION CLARIFICATION**:
+- **Schema definition (Section 1.2)**: "time from last platinum dose in a platinum-containing regimen to subsequent progression or relapse event"
+- **TCGA-CDR definition**: "time from diagnosis to first progression/recurrence/death" (from diagnosis, not last dose)
+- **Resolution for TCGA**: Use TCGA-CDR PFI as approximation, but note it's measured from diagnosis, not last platinum dose
+
+**Computation**:
+```
+PFI_days = subsequent_relapse_date − last_platinum_dose_date
+```
+
+**TCGA approximation** (when last platinum dose date unavailable):
+```
+approx_PFI_days = pfi_days_tcga_cdr − first_platinum_end_days
+```
+(Note: This is rough since PFI_CDR is from diagnosis, but usable as first approximation)
+
+**Base fields required (must-have)**:
+- `last_platinum_dose_date` (from platinum regimen)
+- `subsequent_relapse_date` or `progression_date` defining recurrence
+
+**Categorization**: <6 months, 6–12 months, >12 months for sensitivity/resistance labeling
+
+---
+
+### 3.2 PTPI (Platinum-to-PARPi Interval)
+
+**Definition**: Time from last platinum dose date to start of PARPi regimen.
+
+**Computation**:
+```
+PTPI_days = parpi_regimen_start_date − last_platinum_dose_date
+```
+
+**Base fields required (must-have for PARPi models)**:
+- `last_platinum_dose_date` of the prior platinum regimen
+- `parpi_regimen_start_date` for the first PARPi regimen
+
+**Note**: PTPI is not fully available in TCGA (no PARPi), but the same machinery will later be reused on real-world cohorts.
+
+---
+
+### 3.3 Treatment-Free Interval
+
+**Definition**: Time between the end of one regimen and start of the next line.
+
+**Computation**:
+```
+TFI_days = regimen_start_date_(N+1) − regimen_end_date_N
+```
+
+**Base fields required**:
+- `regimen_end_date` for regimen N
+- `regimen_start_date` for regimen N+1
+
+---
+
+### 3.4 PFS and OS
+
+**PFS from index regimen**:
+```
+PFS_days = min(progression_date, censoring_date) − regimen_start_date
+```
+
+**OS from index regimen**:
+```
+OS_days = min(death_date, last_followup_date) − regimen_start_date
+```
+
+**Required fields**:
+- `regimen_start_date`, `progression_date` or `censoring_date` (must-have)
+- `last_followup_date`
+
+---
+
+### 3.5 DDR_bin
+
+**Concept**: DDR_bin-like variable that binarizes patients into DDR-defective vs DDR-proficient according to cumulative defects across BRCA1/2 and broader DDR genes, HRD scores, and functional assays.
+
+**Base fields** (important but can be simplified for MVP):
+- Pathogenic/likely-pathogenic variants in BRCA1/2 and selected DDR genes
+- `hrd_status_sample` and `hrd_score_sample`
+- `rad51_foci_status` or expression-based DDR activity score where available
+
+**Computation** (MVP simplified):
+```
+DDR_bin_status = DDR_bin_positive if any of:
+  - BRCA1/2 pathogenic (germline or somatic)
+  - HRD_positive
+  - RAD51 deficient
+DDR_bin_negative otherwise
+unknown if missing key data
+```
+
+**Must-have vs nice-to-have**: PFI, PTPI, treatment-free interval, PFS, OS, and a simple DDR_bin_status are **must-have or strongly recommended**; more elaborate DDR_bin scoring and signature-based refinements are future nice-to-have.
+
+---
+
+## Part IV: KELIM Implementation Strategies
+
+### 4.1 KELIM Concept Summary
+
+**Inputs**: Longitudinal CA‑125 measurements collected during the first ~100 days of platinum-based chemotherapy (frontline or platinum-sensitive relapse), with at least three values including baseline.
+
+**Model**: Population pharmacokinetic-like model where CA‑125 kinetics follow an exponential decline under effective therapy:
+```
+CA125(t) = CA125_0 · e^(-K·t) + C_min
+```
+or variant with production term, constrained to nonnegative values.
+
+**Approach**: Nonlinear mixed-effects modeling (e.g., using NONMEM or similar) with standardized patient-level KELIM (K) values.
+
+**Thresholds**: K is standardized and dichotomized into favorable vs unfavorable KELIM based on cutoffs predictive of PFS/OS or complete cytoreduction; e.g., higher KELIM scores associated with improved PFS/OS and higher complete resection odds.
+
+**Constraint**: Because raw KELIM trial datasets with CA‑125 trajectories are not freely downloadable, CrisPRO needs to approximate KELIM using partner data and validation against published patterns rather than direct replication.
+
+---
+
+### 4.2 Strategy A – Own Implementation on Partner Data
+
+**Concept**: Implement a KELIM-like exponential decay model on serial CA‑125 measurements collected in routine care platinum regimens, borrowing published structure and thresholds.
+
+**Data requirements** (at patient-regimen level):
+- `regimen_start_date` for platinum regimen (frontline or platinum-sensitive recurrence)
+- `baseline_ca125_value` and `baseline_ca125_date` within 14 days before or on `regimen_start_date`
+- Serial CA‑125: ≥3 CA‑125 measurements within first 100 days after `regimen_start_date`, including baseline; ≥4–5 preferred for stability; dates and values; ideally aligned with cycle 1–3
+- Outcomes: `best_response` and `best_response_date`, `progression_date`, PFS and OS from `regimen_start_date`, and `debulking_status` for surgical outcomes where relevant
+
+**Modeling approach**:
+- Fit an exponential (or biexponential if needed) decay model of CA‑125 vs time since `regimen_start_date`, with patient-specific K parameter
+- Use nonlinear mixed-effects or hierarchical Bayesian modeling across the cohort to stabilize K estimates, akin to published KELIM modeling
+- Standardize K across cohort (mean 0, SD 1) to create `kelim_standardized_score` and categorize into favorable vs unfavorable via published or data-driven thresholds
+
+**Validation approach**:
+- **Internal validation**: Assess association of K (continuous and categorical) with PFS and OS hazard ratios (HRs) using Cox models adjusted for known covariates; probability of complete cytoreduction (if surgery present) or best_response (CR/PR vs SD/PD); compare magnitude and direction to published estimates: favorable K associated with HRs around ~0.5–0.6 for PFS/OS vs unfavorable K in several studies
+- **External face validity**: Check that patients with high baseline CA‑125 but favorable K have outcomes similar to those with lower baseline but favorable K, supporting K as a chemosensitivity marker rather than static burden
+
+**Key limitations**:
+- Real-world CA‑125 schedules may be irregular and sparser than trial datasets, increasing uncertainty in K; some patients may not meet the ≥3 values in 100 days requirement
+- Heterogeneous assay labs and timing relative to infusions may introduce noise
+- Without direct access to the original population model and covariate structure, K may not be identical to proprietary KELIM but should approximate its behavior
+
+---
+
+### 4.3 Strategy B – External Tools / API Validation
+
+**Concept**: Use publicly available KELIM calculators (e.g., web-based tools like Biomarker Kinetics KELIM calculators used in trials) for a small set of de-identified CA‑125 trajectories to cross-validate CrisPRO's internal K implementation.
+
+**Data requirements**:
+- De-identified subset of partner patients with `regimen_start_date` for platinum regimen; baseline and ≥3 CA‑125 values in the first 100 days; age, baseline CA‑125 if required by external calculator
+- For external calculators lacking API, manual or semiautomated entry is feasible on a few hundred patients as a validation set
+
+**Validation approach**:
+- For each validation patient, compute: internal K estimate (`kelim_k_value`) from CrisPRO's model; external K or KELIM score from the public calculator
+- Evaluate: Pearson/Spearman correlation between internal and external K values; concordance in favorable vs unfavorable category assignment (Cohen's kappa); compare their associations with PFS/OS in this subset to ensure similar HRs
+
+**Key limitations**:
+- External calculators may implement proprietary standardization or covariate adjustments; direct K values may not be numerically identical
+- Limited throughput and potential manual steps; best suited for validation, not routine production
+- Calculator terms of use and data transfer/privacy must be respected
+
+---
+
+### 4.4 Strategy C – Proxy Chemosensitivity Features when K not Computable
+
+**Concept**: When CA‑125 data are too sparse or irregular for robust K modeling, use simpler CA‑125-based proxies to capture early chemosensitivity.
+
+**Proxy features and data requirements**:
+
+**Early percent decline**:
+- Compute percent change from baseline to ~cycle 2 or day 21 (using nearest CA‑125):
+  ```
+  %ΔCA125_21 = 100 · (CA125_day21 − CA125_0) / CA125_0
+  ```
+- Requires baseline and at least one on-treatment CA‑125 in 21±7 days window
+
+**Time to 50% reduction**:
+- Days from `regimen_start_date` to first time CA‑125 ≤50% of baseline
+- Requires baseline and serial CA‑125 until 50% threshold reached or censored
+
+**Normalization by cycle 3**:
+- Binary: CA‑125 normalized (≤35 U/mL) by ~cycle 3 (e.g., day 63±14 days)
+- Requires baseline and at least one CA‑125 measurement around cycle 3
+
+**Integration into models**:
+- Use proxy features as separate covariates in outcome models alongside PFI/PTPI and DDR_bin
+- When KELIM is available, treat these proxies as complementary; when not, treat them as primary chemosensitivity indicators
+
+**Validation approach**:
+- **Internal**: Assess associations of proxies with PFS and OS; expect that greater early decline, faster 50% reduction, and normalization by cycle 3 correlate with improved outcomes, similar to KELIM
+- **External alignment**: Compare hazard ratios and predictive performance (e.g., c-index) of these proxies vs KELIM when both available in overlapping patients
+
+**Key limitations**:
+- Simpler proxies may be more sensitive to baseline CA‑125 level and measurement noise than model-based K
+- Thresholds may require re-calibration per cohort and treatment context
+- Cannot fully replicate nuanced kinetic information captured by KELIM's mixed-effects modeling
+
+---
+
+## Part V: Validation Benchmarks
+
+Each scenario is intended as a data adequacy and sanity check once schema fields are populated. If expected patterns are absent and data quality appears sufficient, that flags model or cohort issues.
+
+### 5.1 Platinum Response Benchmark (PFI/PTPI/KELIM vs Platinum Outcomes)
+
+**Cohort definition**:
+- Patients with high-grade serous or similar high-grade epithelial ovarian cancer
+- Received frontline platinum-based chemotherapy
+- Have at least one subsequent platinum-based regimen in the recurrent setting (platinum re-challenge)
+- For a subset, have adequate CA‑125 data to compute K or proxies during frontline
+
+**Required fields**:
+- Demographics & baseline: histology, figo_stage, debulking_status, baseline_ca125_value
+- Treatment: frontline platinum regimen_start_date, last_platinum_dose_date, best_response, progression_date; subsequent platinum regimen details
+- Outcomes: PFS and OS from frontline and from subsequent platinum
+- Derived: PFI, PFI categories, KELIM or CA‑125 proxies
+
+**Target relationships/metrics**:
+- Verify that longer PFI (>6 or >12 months) is associated with higher response rates and longer PFS to subsequent platinum (HR <1 vs shorter PFI), consistent with Rafii, MITO‑8, and other studies
+- In KELIM subset, confirm favorable KELIM is associated with: higher probability of complete resection and improved PFS/OS in frontline, with HRs roughly similar to published (e.g., HR ~0.5–0.6 for favorable vs unfavorable)
+- If KELIM not available, ensure CA‑125 proxies (early decline, normalization by cycle 3) show similar directional association with outcomes
+
+---
+
+### 5.2 PARPi Response Benchmark (DDR_bin + PTPI + Prior Lines)
+
+**Cohort definition**:
+- Patients with recurrent high-grade serous ovarian cancer who received PARP inhibitor therapy (monotherapy or maintenance)
+- Known BRCA1/2 status and HRD_status_sample for most patients
+- Prior platinum regimen with available last_platinum_dose_date to compute PTPI
+
+**Required fields**:
+- Demographics & baseline: histology, stage, baseline_ca125_value
+- Molecular/DDR: BRCA1/2 germline/somatic status, HRD_status_sample, hrd_score_sample, ddr_bin_status
+- Treatment: prior platinum regimen timeline, last_platinum_dose_date; PARPi regimen_start_date, line_of_therapy, best_response, progression_date
+- Derived: PTPI, number of prior platinum lines, PFS from PARPi start
+
+**Target relationships/metrics**:
+- Reproduce expected patterns from PARPi trials and observational data:
+  - BRCA-mutated and HRD-positive patients show better PARPi response and longer PFS than BRCA-wildtype/HRD-negative
+  - Longer PTPI and fewer prior lines associate with better PARPi outcomes
+  - DDR_bin_positive group has enhanced PARPi sensitivity vs DDR_bin_negative, approximating HRs reported for composite DDR markers and PARPi benefit
+
+---
+
+### 5.3 KELIM / CA‑125 Kinetics Benchmark
+
+**Cohort definition**:
+- Patients treated with platinum-based frontline or platinum-sensitive recurrent therapy
+- Have ≥3 CA‑125 measurements within first 100 days (KELIM-eligible)
+
+**Required fields**:
+- CA‑125 series: ca125_measurement_date, ca125_value, linked_regimen_id
+- Treatment: regimen_start_date for platinum regimen, best_response, progression_date
+- Outcomes: PFS/OS from regimen_start_date
+- Derived: kelim_k_value, kelim_category, CA‑125 proxy features
+
+**Target relationships/metrics**:
+- Demonstrate that kelim_k_value (continuous) and kelim_category (favorable vs unfavorable) correlate with: higher odds of CR/PR vs SD/PD; longer PFS/OS with HRs in line with published KELIM studies
+- In cohorts receiving PARPi maintenance after platinum response, confirm that favorable K associates with longer PARPi PFS, consistent with emerging PARPi + KELIM data
+- Use CA‑125 proxies as backup; expect similar directional trends though potentially weaker effect sizes
+
+---
+
+### 5.4 DDR/HRD Biomarker Benchmark
+
+**Cohort definition**:
+- Patients with available DDR/HRD measurements and known systemic therapy history (platinum and/or PARPi)
+
+**Required fields**:
+- Molecular/DDR: gene-level DDR variants, hrd_status_sample, hrd_score_sample, ddr_bin_status, rad51_foci_status where available
+- Treatment: platinum and PARPi regimens, line_of_therapy
+- Outcomes: response and PFS from relevant regimens
+
+**Target relationships/metrics**:
+- Confirm that HRD-positive / BRCA-mutated / DDR_bin_positive patients:
+  - Have improved response to platinum-based chemotherapy and PARPi therapy (higher CR/PR rates)
+  - Show longer PFS/OS under DNA-damaging or DDR-targeted therapy, with HR<1 vs HRD-negative
+  - If RAD51 foci data present, validate expected relationship: RAD51-deficient status enriches for PARPi sensitivity
+
+---
+
+### 5.5 Data Completeness and Timing Benchmark
+
+**Cohort definition**:
+- All ovarian cancer patients in a partner system over a defined time window (e.g., last 5–10 years)
+
+**Required fields**:
+- All major schema fields: demographics, baseline tumor info, treatment timeline, CA‑125, DDR, survival
+
+**Target metrics**:
+- Proportion of patients with: structured platinum regimens and dates; at least one CA‑125 value during frontline, and ≥3 within first 100 days; known BRCA1/2 and HRD_status_sample; defined progression_date and vital_status
+
+**Thresholds for data sufficiency to proceed**: e.g., ≥60–70% KELIM-eligible among frontline platinum patients, ≥70% BRCA/HRD data for PARPi-treated cohort
+
+---
+
+## Part VI: MVP Prioritization
+
+### 6.1 MVP Must-Have (for initial CrisPRO ovarian deployment)
+
+**Core demographics and baseline**: patient_id, age_at_diagnosis, histology, FIGO stage, debulking_status, diagnosis_date
+
+**Treatment**: detailed regimen records with regimen_start_date, regimen_end_date, regimen_type, line_of_therapy, last_platinum_dose_date, best_response, progression_date
+
+**CA‑125**: baseline_ca125_value/date, serial ca125_measurement_date + ca125_value during frontline platinum; enough density to compute proxies and KELIM-like K in a subset
+
+**DDR**: BRCA1/2 status, HRD_status_overall or hrd_status_sample, basic DDR_bin_status
+
+**Outcomes**: vital_status, death_date or last_followup_date, PFS and OS derived from regimen_start_date and progression/death dates
+
+**Derived**: PFI, PTPI, treatment-free interval
+
+---
+
+### 6.2 Important but Optional (strongly recommended)
+
+- Detailed HRD and LOH scores, mutational signatures, extended DDR panel
+- CA‑125 context (linked_regimen_id, ca125_context) to automate regimen linkage
+- KELIM-derived fields (kelim_k_value, kelim_standardized_score, kelim_category) once implementation is validated
+- RAD51 foci assay results or expression-based DDR pathway scores
+
+---
+
+### 6.3 Future Nice-to-Have
+
+- Detailed dosing schedules, dose intensity, and relative dose intensity metrics
+- Imaging-derived volumetric tumor burden or radiomics features
+- Patient-reported outcomes and toxicity data to support broader benefit-risk models
+
+---
+
+## Part VII: Step-by-Step Implementation Plans
+
+### 7.1 Concept 1: Platinum Timing + PFI/PTPI from TCGA-OV
+
+**Target**: Build `tcga_ov_platinum_timing.csv` with patient-level platinum dates and PFI
+
+**Status**: Ready for implementation
+
+---
+
+#### 7.1.1 Target Variables for This Concept
+
+**You only need three groups of fields from TCGA-OV**:
+
+**Patient-level survival and index date**:
+- `days_to_death`
+- `days_to_last_followup`
+- `vital_status`
+- **Index date for TCGA**: Date of pathologic diagnosis (all `days_to_*` variables are offsets from this)
+
+**Drug-level treatment dates and drugs**:
+- `days_to_drug_therapy_start`
+- `days_to_drug_therapy_end`
+- `drug_name` / `pharmaceutical_therapy_drug_name`
+- Optionally `measure_of_response` if present
+
+**Primary therapy outcome / platinum sensitivity surrogates** (from cBioPortal):
+- `primary_therapy_outcome_success` (e.g., CR/PR/SD/PD)
+- `platinum_status` or equivalent platinum sensitivity variable if exposed
+
+**From these you can compute**:
+- `regimen_start_date` / `regimen_end_date` = `diagnosis_date` + `days_to_drug_therapy_start` / `end`
+- `last_platinum_dose_date` = max end date of platinum drugs (cisplatin, carboplatin, oxaliplatin)
+- **PFI**: Event time from `last_platinum_dose_date` to recurrence/progression – for TCGA, this is approximated by the Pan-Cancer Clinical Data Resource PFI variable, which has already derived PFI from TCGA clinical events
+- **PTPI**: Not fully available in TCGA (no PARPi), but the same machinery will later be reused on real-world cohorts
+
+---
+
+#### 7.1.2 Files / Portals to Pull
+
+**From GDC / TCGA-OV**:
+
+**TCGA-OV clinical XML/TSV (drug section)**:
+- **Portal**: GDC TCGA-OV project page
+- **Content**: Patient, follow-up, drug records including `days_to_drug_therapy_start`, `days_to_drug_therapy_end`, `drug_name`
+- **Use either**:
+  - Raw XML (and parse `patient.drugs.drug.*` fields) or
+  - Preprocessed tables from packages like `curatedTCGAData`, which expose `patient.drugs.drug.N.days_to_drug_therapy_start`, `drug_name`, etc.
+
+**TCGA Pan-Cancer Clinical Data Resource (TCGA-CDR)**:
+- **Paper**: "An Integrated TCGA Pan-Cancer Clinical Data Resource" (TCGA-CDR)
+- **Supplement**: A standardized clinical file with four endpoints, including PFI (progression-free interval) derived for each case
+- **File location**: Available as supplement to the TCGA-CDR paper (typically downloadable from TCGA Research Network or NCI GDC)
+- **This file gives you a ready-made PFI variable**, with clear definition/checks:
+  - PFI = time from diagnosis to first progression/recurrence/death; validated across TCGA
+
+**Standard survival fields**:
+- Same or similar clinical TSV: `days_to_death`, `days_to_last_followup`, `vital_status`, as described in GDC/TCGA workflows
+
+**From cBioPortal TCGA-OV**:
+- **Portal**: cBioPortal TCGA-OV study
+- **Fields to export**: `PRIMARY_THERAPY_OUTCOME_SUCCESS`, `PLATINUM_STATUS` or similar labels (if present in that build), `OS_MONTHS`, `OS_STATUS`, `PFI_TIME`, `PFI_EVENT` if present as derived variables
+- **These help label platinum sensitivity categories and cross-check PFI**
+
+---
+
+#### 7.1.3 Concrete Minimal Dataset to Build
+
+**One table**: `tcga_ov_platinum_timing.csv`
+
+**Row = 1 patient** (TCGA barcode root)
+
+**Columns (for this concept only)**:
+- `patient_id` (TCGA barcode)
+- `diagnosis_day0` (implicit; 0)
+- `first_platinum_start_days` (minimum `days_to_drug_therapy_start` for any platinum drug)
+- `first_platinum_end_days` (maximum `days_to_drug_therapy_end` for that course)
+- `last_platinum_dose_days` (same as `first_platinum_end_days` for frontline; later extended for multiple lines)
+- `vital_status`
+- `days_to_death`
+- `days_to_last_followup`
+- `pfi_days_tcga_cdr` (PFI from TCGA-CDR supplement)
+- `pfi_event` (from CDR: 1 = event, 0 = censored)
+- `primary_therapy_outcome_success` (from cBioPortal)
+- `platinum_status` or similar if available (from cBioPortal)
+
+**You can then derive**:
+- `os_days = ifelse(vital_status == "Dead", days_to_death, days_to_last_followup)`
+- `approx_platinum_free_interval_days = pfi_days_tcga_cdr - first_platinum_end_days` (rough, since PFI_CDR is from diagnosis, not last dose, but usable as a first approximation)
+
+---
+
+#### 7.1.4 Exact Download + Merge Steps
+
+**Step 1: Download GDC TCGA-OV Clinical Data**
+- Navigate to GDC Data Portal: https://portal.gdc.cancer.gov/
+- Query: Project = `TCGA-OV`, Data Category = `Clinical`, Data Type = `Clinical Supplement`
+- Download: Clinical XML files or use GDC API to fetch
+- Expected: ~500 patients
+
+**Step 2: Download TCGA-CDR Supplement**
+- Source: TCGA-CDR paper supplement (available via TCGA Research Network or NCI GDC)
+- File: `TCGA-CDR-SupplementalTableS1.xlsx` or similar (contains PFI, OS, DSS, DFI endpoints)
+- Extract: TCGA-OV rows (filter by project = "TCGA-OV")
+- Expected: ~500 patients with `PFI_time` and `PFI_event` columns
+
+**Step 3: Download cBioPortal TCGA-OV Clinical Data**
+- Navigate to cBioPortal: https://www.cbioportal.org/study/summary?id=ov_tcga
+- Export: Clinical data (select all clinical attributes)
+- Fields to extract: `PATIENT_ID`, `PRIMARY_THERAPY_OUTCOME_SUCCESS`, `PLATINUM_STATUS` (if available), `OS_MONTHS`, `OS_STATUS`, `PFI_TIME`, `PFI_EVENT`
+- Expected: ~500 patients
+
+**Step 4: Parse GDC Clinical XML/TSV**
+- Extract drug therapy records: `patient.drugs.drug.*` sections
+- Identify platinum drugs: `cisplatin`, `carboplatin`, `oxaliplatin` (case-insensitive, handle aliases)
+- Compute: `first_platinum_start_days = min(days_to_drug_therapy_start)` for all platinum drugs; `first_platinum_end_days = max(days_to_drug_therapy_end)` for all platinum drugs in frontline course
+- Join key: Patient barcode root (extract from full barcode, e.g., `TCGA-XX-XXXX-01A` → `TCGA-XX-XXXX`)
+
+**Step 5: Merge All Sources**
+- Join on `patient_id` (TCGA barcode root)
+- GDC clinical (base) ← TCGA-CDR (PFI) ← cBioPortal (outcomes)
+- Validation: All three sources should have ~500 patients; join should preserve ≥95% of patients (some may be missing in one source)
+
+**Step 6: Sanity Checks**
+- **Patient count**: All sources should match within 5% (e.g., 475-500 patients)
+- **Platinum coverage**: ≥70% of patients should have platinum drug records
+- **Date consistency**: `first_platinum_start_days` < `first_platinum_end_days` < `pfi_days_tcga_cdr` (where applicable)
+- **PFI validation**: `approx_platinum_free_interval_days` should be ≥0 (if negative, flag as data quality issue)
+
+**Step 7: Export Final Table**
+- Output: `tcga_ov_platinum_timing.csv`
+- Format: CSV with headers, one row per patient
+- Validation: Column count = 12, row count ≈ 500, no missing `patient_id` values
+
+---
+
+#### 7.1.5 Implementation Script Template
+
+**Python script structure** (pseudo-code):
+```python
+# 1. Load GDC clinical XML/TSV
+gdc_clinical = load_gdc_clinical_xml("path/to/gdc_clinical.xml")
+
+# 2. Extract platinum drug records
+platinum_drugs = filter_platinum_drugs(gdc_clinical.drugs)
+first_platinum_start = min(platinum_drugs.days_to_drug_therapy_start)
+first_platinum_end = max(platinum_drugs.days_to_drug_therapy_end)
+
+# 3. Load TCGA-CDR supplement
+tcga_cdr = pd.read_excel("path/to/TCGA-CDR-SupplementalTableS1.xlsx")
+tcga_cdr_ov = tcga_cdr[tcga_cdr.project == "TCGA-OV"]
+
+# 4. Load cBioPortal export
+cbio_clinical = pd.read_csv("path/to/cbioportal_clinical_export.csv")
+
+# 5. Normalize patient IDs (extract barcode root)
+gdc_clinical['patient_id'] = extract_barcode_root(gdc_clinical.barcode)
+tcga_cdr_ov['patient_id'] = extract_barcode_root(tcga_cdr_ov.barcode)
+cbio_clinical['patient_id'] = normalize_cbio_patient_id(cbio_clinical.PATIENT_ID)
+
+# 6. Merge
+final_table = gdc_clinical.merge(
+    tcga_cdr_ov[['patient_id', 'PFI_time', 'PFI_event']],
+    on='patient_id',
+    how='left'
+).merge(
+    cbio_clinical[['patient_id', 'PRIMARY_THERAPY_OUTCOME_SUCCESS', 'PLATINUM_STATUS']],
+    on='patient_id',
+    how='left'
+)
+
+# 7. Compute derived fields
+final_table['os_days'] = final_table.apply(
+    lambda row: row.days_to_death if row.vital_status == "Dead" else row.days_to_last_followup,
+    axis=1
+)
+final_table['approx_platinum_free_interval_days'] = (
+    final_table.pfi_days_tcga_cdr - final_table.first_platinum_end_days
+)
+
+# 8. Export
+final_table.to_csv("tcga_ov_platinum_timing.csv", index=False)
+```
+
+---
+
+### 7.2 Next Concepts (Future Implementation)
+
+**Concept 2: CA‑125 Kinetics (KELIM-like features)**
+- Status: Pending (requires partner data or trial collaboration)
+- Target: Serial CA‑125 measurements during first 100 days of platinum
+- Output: `tcga_ov_ca125_kinetics.csv` with KELIM scores
+
+**Concept 3: DDR/HRD Features (DDR_bin)**
+- Status: Pending
+- Target: BRCA status, HRD scores, composite DDR_bin
+- Output: `tcga_ov_ddr_features.csv` with DDR_bin_status
+
+**Concept 4: PARPi Outcome Modeling**
+- Status: Pending (TCGA has no PARPi; requires real-world cohorts)
+- Target: PARPi sequences with prior platinum intervals for PTPI
+- Output: `realworld_parpi_outcomes.csv` with PTPI and PFS
+
+---
+
+## Appendices
+
+### Appendix A: Platinum Drug Name Standardization
+
+**Standard names**:
+- `cisplatin`
+- `carboplatin`
+- `oxaliplatin`
+
+**Common aliases to map**:
+- `cis-diamminedichloroplatinum` → `cisplatin`
+- `CDDP` → `cisplatin`
+- `Platinol` → `cisplatin`
+- `Paraplatin` → `carboplatin`
+- `Eloxatin` → `oxaliplatin`
+
+**Normalization strategy**: Case-insensitive matching, synonym mapping before identification
+
+---
+
+### Appendix B: TCGA Barcode Format
+
+**Full barcode format**: `TCGA-XX-XXXX-XX-XXX`
+- `TCGA`: Project prefix
+- `XX`: Tissue source site (2 alphanumeric)
+- `XXXX`: Patient ID (4 alphanumeric)
+- `XX`: Sample type (e.g., `01` = primary tumor, `06` = metastasis)
+- `XXX`: Vial/portion/analyte (e.g., `A` = portion A, `D` = DNA)
+
+**Patient barcode root** (for joins): `TCGA-XX-XXXX` (first 3 segments)
+
+**Extraction method**: Split by `-`, take first 3 segments, rejoin with `-`
+
+---
+
+### Appendix C: Data Quality Validation Checklist
+
+**Before merging**:
+- [ ] All patient IDs are normalized (barcode root format)
+- [ ] Date fields are consistent format (days_from_diagnosis or absolute dates)
+- [ ] Platinum drug names are standardized
+
+**After merging**:
+- [ ] Patient count matches across sources (within 5%)
+- [ ] ≥70% of patients have platinum drug records
+- [ ] Date consistency checks pass (`regimen_start` < `regimen_end` < `progression`)
+- [ ] PFI approximation ≥0 for all patients (flag negatives as data quality issues)
+- [ ] No duplicate patient_ids in final table
+
+**Post-processing**:
+- [ ] All derived fields computed correctly
+- [ ] Missing data flags applied where appropriate
+- [ ] Export format matches schema specification
+
+---
+
+## Document Status
+
+**Last Updated**: 2025-01-XX  
+**Version**: 1.0  
+**Status**: Blueprint ready for implementation  
+**Next Step**: Execute Concept 1 (Platinum Timing + PFI/PTPI from TCGA-OV)
+
+**This blueprint provides a concrete target schema and sourcing plan directly aligned with PFI/PTPI timing metrics, CA‑125 kinetics, DDR/HRD biology, and platinum/PARPi outcome modeling.**

@@ -86,9 +86,9 @@ models/
 **/_build/
 
 # Git worktrees and branches (14GB+ of duplicate code)
-**/.cursor/worktrees/
-~/.cursor/worktrees/
-**/worktrees/
+# **/.cursor/worktrees/
+# ~/.cursor/worktrees/
+# **/worktrees/
 
 # Large backup/history/chat files (100MB+ total)
 *BACKUP*.txt
@@ -125,3 +125,44 @@ main_agent_chat_export_ALL_HISTORY.sql
 
 # Worktree backup directory
 .worktree_backup/
+
+# Archive directory (160MB+ of backup files)
+archive/
+
+# Large markdown files in .cursor/ (can cause lag - 410K+ lines total)
+# These are still accessible via explicit @ references
+.cursor/rules/**/*.md
+.cursor/rules/**/*.mdc
+.cursor/**/*.pdf
+
+# Exclude large knowledge base files (38K+ lines each)
+**/COMPLETE_KNOWLEDGE_BASE.md
+**/COMPREHENSIVE_KNOWLEDGE_BASE.md
+**/resistance_framework_doctrine.mdc
+
+# Exclude nested .cursor directories (worktree artifacts, subdirectory configs)
+# BUT keep main .cursor/ directory accessible (just exclude large files inside it)
+.cursor/Users/
+.cursor/**/.cursor/
+**/worktree_backup/**/.cursor/
+**/.worktree_backup/**/.cursor/
+oncology-coPilot/**/.cursor/
+publications/.cursor/
+
+# Exclude literal ~ directory (not home directory, but a directory named "~")
+~/
+
+# Exclude Cursor state/cache files that cause indexing lag
+.cursor/**/*.json
+.cursor/**/*.cache
+.cursor/**/*.log
+.cursor/**/.DS_Store
+
+# Exclude Cursor plans directory (auto-generated validation plans cause startup lag)
+.cursor/plans/
+**/.cursor/plans/
+
+# CRITICAL: Exclude Cursor's global worktrees directory from indexing
+# This prevents Cursor from trying to index 874MB of old worktrees on startup
+# Note: This uses absolute path pattern - Cursor may need workspace-relative paths
+# Alternative: Exclude via Cursor settings or workspace configuration

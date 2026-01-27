@@ -51,15 +51,39 @@ class ProjectDataSphereClient:
             result = self.conn.table.caslibInfo()
             caslibs = []
             if hasattr(result, 'CASLibInfo'):
-                for caslib in result.CASLibInfo:
-                    caslibs.append({
-                        'name': caslib.get('Name', ''),
-                        'description': caslib.get('Description', ''),
-                        'path': caslib.get('Path', '')
-                    })
+                # SWAT returns DataFrame-like object, convert to dict properly
+                caslib_df = result.CASLibInfo
+                if hasattr(caslib_df, 'to_dict'):
+                    # Convert DataFrame to list of dicts
+                    caslib_records = caslib_df.to_dict('records')
+                    for record in caslib_records:
+                        caslibs.append({
+                            'name': record.get('Name', ''),
+                            'description': record.get('Description', ''),
+                            'path': record.get('Path', '')
+                        })
+                elif hasattr(caslib_df, 'iterrows'):
+                    # Pandas-like DataFrame
+                    for idx, row in caslib_df.iterrows():
+                        caslibs.append({
+                            'name': row.get('Name', row['Name'] if 'Name' in row else ''),
+                            'description': row.get('Description', row['Description'] if 'Description' in row else ''),
+                            'path': row.get('Path', row['Path'] if 'Path' in row else '')
+                        })
+                else:
+                    # Fallback: try dict access
+                    for caslib in caslib_df:
+                        if isinstance(caslib, dict):
+                            caslibs.append({
+                                'name': caslib.get('Name', ''),
+                                'description': caslib.get('Description', ''),
+                                'path': caslib.get('Path', '')
+                            })
             return caslibs
         except Exception as e:
             print(f"❌ Error: {e}")
+            import traceback
+            traceback.print_exc()
             return []
     
     def list_files_in_caslib(self, caslib_name, path=None):

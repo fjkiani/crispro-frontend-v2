@@ -135,3 +135,16 @@ This directory (`.cursor/rules/MOAT/`) contains **strategic doctrines**, **execu
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+

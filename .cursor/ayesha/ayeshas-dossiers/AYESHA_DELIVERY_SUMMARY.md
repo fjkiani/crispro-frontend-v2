@@ -9,7 +9,7 @@
 ## 🎯 What We Delivered
 
 ### Patient Case
-- **ID**: AYESHA-001
+- **ID**: AK
 - **Diagnosis**: High-grade serous ovarian cancer (HGSOC)
 - **Variants**:
   - MBD4 germline: homozygous c.1239delA (p.Ile413Serfs*2) - **EXTREMELY RARE**

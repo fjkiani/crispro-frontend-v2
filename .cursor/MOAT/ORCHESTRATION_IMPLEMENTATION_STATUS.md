@@ -123,6 +123,7 @@ POST /api/resistance/predict
 
 ## 🔬 VALIDATED MARKERS (Production Ready)
 
+** Skeptic view validations in Validation Ledgar for validated metrics *** 
 | Marker | Disease | RR | p-value | Status |
 |--------|---------|-----|---------|--------|
 | **DIS3** | MM | 2.08 | 0.0145 | ✅ SIGNIFICANT |

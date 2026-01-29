@@ -1,0 +1,116 @@
+---
+description: Full Audit Trail: Resistance Prophet Evolution (Phase 1-9)
+globs: ["api/services/resistance_prophet/**", "tests/resistance_prophet/**"]
+---
+
+# 🛡️ Resistance Prophet: From Black Box to Glass Box
+**Audit Trail & Evolution Log (Jan 28, 2026)**
+
+This document captures the complete re-engineering journey of the Oncology Resistance Engine, tracing the path from the "0.71 Probability Paradox" to the "Glass Box" doctrine.
+
+---
+
+## 1. 🏁 The Origin: The "0.71 Paradox"
+**Context: The Patient Safety Risk**
+
+We discovered a critical alignment failure during the audit of high-grade serous ovarian cancer cases.
+
+### The Incident (Case: CCNE1-AMP)
+A patient on Platinum therapy was **responding clinically** (CA-125 dropping, tumor shrinking). However, the "Resistance Prophet" model flagged them as:
+> **Status**: 🔴 HIGH RISK 
+> **Probability**: 0.71
+> **Rationale**: "CCNE1 Amplification Detected"
+
+### The Interpretation Gap
+- **The Algorithm**: Correctly identified a *genomic mechanism* (Replication Stress) that causes resistance.
+- **The Clinician**: Saw a "False Alarm." *"The patient is responding. Why are you telling me to switch drugs?"*
+
+**The Danger**: If a clinician trusted the "Black Box" score blindly, they might prematurely switch a patient off a working therapy.
+
+---
+
+## 2. 🗺️ The Strategy: Closing the Market Gaps
+
+We didn't just patch the bug. We executed a strategic roadmap (Phases 1-9) to map specific "Market Gaps" to our code architecture.
+
+### Gap 1: "Live Function" vs "Static Mutation"
+*Problem: Treating dynamic evolution like a static test.*
+- **Solution (Phase 4)**: We implemented **Patient-Specific Baselines**.
+- **Change**: Instead of comparing to a "Population Average," we now compare the patient's *current* profile to their *own* germline baseline (e.g., MBD4 deficiency).
+- **Result**: We can detect "Restoration" (Reversion mutations) relative to *their* starting point.
+
+### Gap 2: "Dynamic Monitoring" (The Missing Signal)
+*Problem: Relying only on NGS (expensive, slow).*
+- **Solution (Phase 7)**: We built the **Resistance Engine** to integrate **CA-125 Kinetics** (Signal 3).
+- **Safety Cap Logic**: If CA-125 history is missing, the Engine *refuses* to issue a HIGH Confidence High Risk prediction.
+- **Result**: "No Data" does not equal "Safe," but it also doesn't equal "Certain Doom." It equals "Uncertainty (Medium Cap)."
+
+### Gap 3: "Threshold Optimization"
+*Problem: The binary "Resistant/Sensitive" flip.*
+- **Solution (Phase 5)**: **Split Output Strategy**.
+- **Alert**: `driver_alerts` (Biology) are now orthogonal. They persist even if `risk_level` (Clinical) is LOW.
+- **Result**: The clinician sees the warning ("Genomic Driver Present") but the Status remains GREEN ("Low Risk") if the patient is responding.
+
+---
+
+## 3. 🧪 Phase 7: The "Glass Box" (Resistance Lab)
+
+We realized that "Explainability" wasn't enough. We needed **Observability**.
+
+### The "Zeta Interface"
+We built a dedicated frontend (`/resistance-lab`) that acts as a cockpit for the engine.
+- **Input**: Clinicians can toggle "Germline Status" or "Treatment History" switches.
+- **Process**: A real-time "Logic Stream" prints the Engine's decision tree.
+- **Output**: Detailed provenance.
+
+This transformed the tool from a "Magic Oracle" into a **Clinical Instrument**.
+
+---
+
+## 4. 📜 Provenance Evolution: The Evidence
+
+The transformation is encoded in the JSON response itself.
+
+### Phase 1: The Black Box (Legacy)
+*Opaque. "Trust the math."*
+```json
+"provenance": {
+  "model": "resistance_prophet_v1",
+  "reason": "calculated_risk"
+}
+```
+
+### Phase 7: The Choice (V2 Final Payload)
+*Transparent. "Here is the math."*
+```json
+"provenance": {
+  "model_version": "resistance_prophet_v2.0_engine",
+  "engine": "deterministic",
+  
+  # The Resolution of the "0.71 Paradox"
+  "probability_components": {
+     "clinical_phenotype": 0.0,    // "Patient is responding clinically."
+     "genomic_driver": 0.71,       // "But their genetics are dangerous (CCNE1)."
+     "blended_score": 0.71         // "Weighted probability."
+  },
+  
+  # The Safety Guard
+  "risk_drivers": {
+     "driven_by": "blended_probability",
+     "clinical_signal_count": 0,   // "Zero clinical signals detected."
+     "note": "Risk strictly capped due to lack of phenotypic corroboration."
+  }
+}
+```
+
+---
+
+## 5. 🛳️ Final Status: Deployment Ready
+
+**Contract Established**:
+1.  **Genomic Drivers** are persistent warnings (Safety).
+2.  **Clinical Risk** requires corroboration (Precision).
+3.  **Missing Data** triggers uncertainty caps (Humility).
+4.  **Blended Probability** connects the two (Reality).
+
+The Resistance Prophet v2.0 is no longer guessing. It is calculating.

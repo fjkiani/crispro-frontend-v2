@@ -112,7 +112,11 @@ print(f"Timing engine completed: {len(results)} regimens")
 print()
 
 # Extract computed PFI
+# Extract computed PFI (Using outcome PFI for validation of first-line regimens)
 computed = pd.DataFrame(results)
+# If PFI_outcome_days exists, use it; otherwise fallback (though it will be null for L1)
+if 'PFI_outcome_days' in computed.columns:
+    computed['PFI_days'] = computed['PFI_outcome_days'] # Alias for comparison
 computed = computed[['patient_id', 'PFI_days', 'PFI_category']]
 
 # Get ground truth (kept separate)

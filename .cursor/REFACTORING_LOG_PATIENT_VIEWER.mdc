@@ -1,0 +1,59 @@
+# Refactoring Log: Patient Record Viewer
+**Date:** January 31, 2026
+**Focus:** Modularization, Performance, and Workflow Integration
+
+## 1. Objective
+Refactor the monolithic `PatientRecordViewer.jsx` (2000+ lines) into manageable, domain-specific components to improve maintainability and enable the "Workflow & Triage" feature set (Kanban).
+
+## 2. Key Changes
+
+### A. Modularization
+The single file was split into a parent controller and three distinct tab components:
+
+1.  **`components/ehr/PatientRecordViewer.jsx`** (Controller)
+    *   **Role:** Manages global state (WebSocket, User Context, Activity Logging), handles data fetching (Workflow), and orchestration of consultation logic.
+    *   **Change:** Logic for rendering specific tabs was stripped out and delegates to child components.
+
+2.  **`components/ehr/tabs/PatientWorkflowTab.jsx`** (New)
+    *   **Role:** Renders the Kanban Board for trial triage.
+    *   **Integration:** Imports `KanbanBoard` and accepts `workflowTasks` and `handleTaskMove` as props.
+
+3.  **`components/ehr/tabs/PatientClinicalTab.jsx`** (New)
+    *   **Role:** The heavy lifting. Handles:
+        *   CoPilot Prompt Interface ("CoPilot Actions")
+        *   Deep Dive/Agent Output display
+        *   Clinical Data Sections (Labs, Meds, Diagnosis)
+        *   Consultation Modals & Logic
+    *   **Refactor:** Moved the bulk of the JSX from the main file here.
+
+4.  **`components/ehr/tabs/PatientDemographicsTab.jsx`** (New)
+    *   **Role:** Simple display of static patient details.
+
+### B. Shared Utilities
+*   **`components/ehr/RenderIncludedInfo.jsx`**
+    *   Extracted the `RenderIncludedInfo` component and the `formatDate` helper function to avoid code duplication and circular dependencies.
+
+### C. Sidebar Navigation
+*   **File:** `constants/moatNavigation.js`
+*   **Change:** Added `{ label: 'Patient Records', link: '/medical-records', ... }` to the navigation array.
+*   **Result:** "Patient Records" now appears in the Sidebar, linking to the list view (and subsequently to `/medical-records/:id`).
+
+### D. Bug Fixes
+*   **File:** `components/vus/AnalysisResults.jsx`
+*   **Issue:** `Uncaught SyntaxError` due to incorrect import of `ACTIVITY_TYPES`.
+*   **Fix:** Changed import path from `../../constants` to `../../context/ActivityContext`.
+
+## 3. New File Structure
+```text
+src/components/ehr/
+├── PatientRecordViewer.jsx         <-- Main Entry
+├── RenderIncludedInfo.jsx          <-- Shared Helper
+└── tabs/
+    ├── PatientWorkflowTab.jsx      <-- Kanban Integration
+    ├── PatientClinicalTab.jsx      <-- Clinical/CoPilot View
+    └── PatientDemographicsTab.jsx  <-- Simple Data View
+```
+
+## 4. Next Steps
+*   Verify the "Workflow" tab persists state correctly via the backend.
+*   Wire up "Review Required" logic to automatically populate from the Trial Scanner.

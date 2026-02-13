@@ -1,0 +1,266 @@
+{
+  "test_case_1_ayesha_brca1_biallelic": {
+    "description": "Ayesha with BRCA1 biallelic loss (germline-negative but somatic BRCA1 + LOH)",
+    "patient_profile": {
+      "ca125_value": 2842.0,
+      "stage": "IVB",
+      "treatment_line": "first-line",
+      "germline_status": "negative",
+      "has_ascites": true,
+      "has_peritoneal_disease": true,
+      "ecog_status": 1,
+      "location_state": "NY"
+    },
+    "tumor_context": {
+      "somatic_mutations": [
+        {
+          "gene": "BRCA1",
+          "hgvs_p": "p.E23fs",
+          "variant_type": "frameshift",
+          "vaf": 0.65,
+          "copy_number": "loss"
+        },
+        {
+          "gene": "TP53",
+          "hgvs_p": "p.R175H",
+          "variant_type": "missense",
+          "vaf": 0.82
+        },
+        {
+          "gene": "NF1",
+          "hgvs_p": "p.R1391*",
+          "variant_type": "nonsense",
+          "vaf": 0.45
+        }
+      ],
+      "hrd_score": 58.0,
+      "tmb_score": 8.5,
+      "msi_status": "MSS",
+      "purity": 0.75,
+      "ploidy": 2.1
+    },
+    "expected_sae_features": {
+      "dna_repair_capacity": "HIGH (0.75-0.85)",
+      "mechanism_vector_ddr": "HIGH (>0.70)",
+      "resistance_detected": false,
+      "clinical_action": "Favor platinum + PARP maintenance"
+    }
+  },
+  
+  "test_case_2_ayesha_her2_positive": {
+    "description": "Ayesha with HER2 amplification (unlocks NCT06819007 trial)",
+    "patient_profile": {
+      "ca125_value": 2842.0,
+      "stage": "IVB",
+      "treatment_line": "first-line",
+      "germline_status": "negative",
+      "has_ascites": true,
+      "has_peritoneal_disease": true,
+      "ecog_status": 1,
+      "location_state": "NY"
+    },
+    "tumor_context": {
+      "somatic_mutations": [
+        {
+          "gene": "TP53",
+          "hgvs_p": "p.R273C",
+          "variant_type": "missense",
+          "vaf": 0.88
+        },
+        {
+          "gene": "ERBB2",
+          "hgvs_p": "amplification",
+          "variant_type": "copy_number_gain",
+          "copy_number": 6.2,
+          "her2_ihc": "3+"
+        },
+        {
+          "gene": "PIK3CA",
+          "hgvs_p": "p.E545K",
+          "variant_type": "missense",
+          "vaf": 0.52
+        }
+      ],
+      "hrd_score": 22.0,
+      "tmb_score": 6.2,
+      "msi_status": "MSS",
+      "purity": 0.80,
+      "ploidy": 2.8
+    },
+    "expected_sae_features": {
+      "dna_repair_capacity": "LOW-MODERATE (0.30-0.45)",
+      "mechanism_vector_her2": "HIGH (>0.70)",
+      "mechanism_vector_pi3k": "MODERATE (0.40-0.60)",
+      "resistance_detected": false,
+      "clinical_action": "HER2-targeted trial (NCT06819007) + PI3K inhibitor consideration"
+    }
+  },
+  
+  "test_case_3_ayesha_high_tmb_io_eligible": {
+    "description": "Ayesha with high TMB (IO eligible - rare in ovarian but possible)",
+    "patient_profile": {
+      "ca125_value": 2842.0,
+      "stage": "IVB",
+      "treatment_line": "first-line",
+      "germline_status": "negative",
+      "has_ascites": true,
+      "has_peritoneal_disease": true,
+      "ecog_status": 1,
+      "location_state": "NY"
+    },
+    "tumor_context": {
+      "somatic_mutations": [
+        {
+          "gene": "TP53",
+          "hgvs_p": "p.Y220C",
+          "variant_type": "missense",
+          "vaf": 0.75
+        },
+        {
+          "gene": "POLE",
+          "hgvs_p": "p.P286R",
+          "variant_type": "missense",
+          "vaf": 0.68,
+          "note": "Polymerase epsilon mutation → ultramutated phenotype"
+        },
+        {
+          "gene": "ARID1A",
+          "hgvs_p": "p.R1276*",
+          "variant_type": "nonsense",
+          "vaf": 0.55
+        }
+      ],
+      "hrd_score": 18.0,
+      "tmb_score": 24.5,
+      "msi_status": "MSI-High",
+      "purity": 0.70,
+      "ploidy": 2.2
+    },
+    "expected_sae_features": {
+      "dna_repair_capacity": "LOW (0.20-0.35)",
+      "io_eligible": true,
+      "mechanism_vector_io": "1.0",
+      "resistance_detected": false,
+      "clinical_action": "IO eligible (pembrolizumab) + platinum chemotherapy"
+    }
+  },
+  
+  "test_case_4_resistance_detected": {
+    "description": "Ayesha after 3 cycles - HRD drop suggests HR restoration (PARP resistance)",
+    "patient_profile": {
+      "ca125_value": 1200.0,
+      "stage": "IVB",
+      "treatment_line": "first-line",
+      "germline_status": "negative",
+      "has_ascites": false,
+      "has_peritoneal_disease": true,
+      "ecog_status": 1,
+      "location_state": "NY"
+    },
+    "tumor_context": {
+      "somatic_mutations": [
+        {
+          "gene": "BRCA1",
+          "hgvs_p": "p.E23fs",
+          "variant_type": "frameshift",
+          "vaf": 0.35,
+          "note": "VAF dropped from 0.65 → tumor evolving"
+        },
+        {
+          "gene": "TP53",
+          "hgvs_p": "p.R175H",
+          "variant_type": "missense",
+          "vaf": 0.80
+        },
+        {
+          "gene": "RAD51C",
+          "hgvs_p": "reversion",
+          "variant_type": "reversion_mutation",
+          "vaf": 0.55,
+          "note": "Secondary mutation restores HR function"
+        }
+      ],
+      "hrd_score": 38.0,
+      "previous_hrd_score": 58.0,
+      "tmb_score": 9.2,
+      "msi_status": "MSS",
+      "purity": 0.72,
+      "ploidy": 2.0
+    },
+    "previous_sae_features": {
+      "dna_repair_capacity": 0.82
+    },
+    "expected_sae_features": {
+      "dna_repair_capacity": "DROPPED to 0.55-0.65 (from 0.82)",
+      "hrd_drop": 20.0,
+      "resistance_detected": true,
+      "triggers_met": ["hrd_drop", "dna_repair_drop"],
+      "hr_restoration_suspected": true,
+      "recommended_actions": [
+        "Order updated HRD test (confirm HR restoration)",
+        "Order ctDNA panel (check for reversion mutations)",
+        "Switch from PARP to ATR inhibitor trials"
+      ],
+      "clinical_action": "⚠️ HR RESTORATION DETECTED - Switch to ATR/CHK1 trials immediately"
+    }
+  },
+  
+  "test_instructions": {
+    "how_to_test": {
+      "step_1": "Start backend server: cd oncology-backend-minimal && uvicorn main:app --reload",
+      "step_2": "Test Pre-NGS (Ayesha TODAY): curl -X POST http://localhost:8000/api/ayesha/complete_care_v2 -H 'Content-Type: application/json' -d @test_case_pre_ngs.json",
+      "step_3": "Test Post-NGS (BRCA1 biallelic): curl -X POST http://localhost:8000/api/ayesha/complete_care_v2 -H 'Content-Type: application/json' -d @test_case_1_ayesha_brca1_biallelic.json",
+      "step_4": "Test HER2+ (NCT06819007 eligible): curl -X POST http://localhost:8000/api/ayesha/complete_care_v2 -H 'Content-Type: application/json' -d @test_case_2_ayesha_her2_positive.json",
+      "step_5": "Test IO eligible (high TMB): curl -X POST http://localhost:8000/api/ayesha/complete_care_v2 -H 'Content-Type: application/json' -d @test_case_3_ayesha_high_tmb_io_eligible.json",
+      "step_6": "Test resistance detection: curl -X POST http://localhost:8000/api/ayesha/complete_care_v2 -H 'Content-Type: application/json' -d @test_case_4_resistance_detected.json"
+    },
+    "what_to_validate": {
+      "pre_ngs": [
+        "sae_features.status == 'awaiting_ngs'",
+        "resistance_alert.status == 'awaiting_ngs'",
+        "next_test_recommender has 3 tests (HRD, ctDNA, HER2 IHC)",
+        "hint_tiles max 4 tiles",
+        "mechanism_map all gray"
+      ],
+      "post_ngs_brca1": [
+        "sae_features.dna_repair_capacity > 0.70",
+        "sae_features.mechanism_vector[0] > 0.70 (DDR high)",
+        "resistance_alert.resistance_detected == false",
+        "mechanism_map DDR chip green",
+        "hint_tiles include 'Consider PARP maintenance'"
+      ],
+      "post_ngs_her2": [
+        "sae_features.mechanism_vector[4] > 0.70 (HER2 high)",
+        "mechanism_map HER2 chip green or yellow",
+        "hint_tiles include 'HER2-targeted trial available'",
+        "trials ranked by mechanism fit (HER2 trials boosted)"
+      ],
+      "post_ngs_io": [
+        "sae_features.io_eligible == true",
+        "sae_features.mechanism_vector[5] == 1.0 (IO)",
+        "hint_tiles include 'IO eligible (pembrolizumab)'",
+        "mechanism_map IO chip green"
+      ],
+      "resistance": [
+        "resistance_alert.resistance_detected == true",
+        "resistance_alert.trigger_count == 2",
+        "resistance_alert.hr_restoration_suspected == true",
+        "resistance_alert.recommended_actions includes 'Switch to ATR'",
+        "hint_tiles include '⚠️ Resistance suspected'"
+      ]
+    }
+  },
+  
+  "data_sources": {
+    "note": "This NGS data is based on real ovarian cancer genomic profiles from:",
+    "sources": [
+      "cBioPortal TCGA Ovarian Cancer (Nature 2011) - https://www.cbioportal.org/study/summary?id=ov_tcga_pan_can_atlas_2018",
+      "AACR Project GENIE - Ovarian Cancer subset",
+      "Published case reports of HER2+ ovarian cancer (rare, <5% prevalence)",
+      "Published case reports of POLE-mutated hypermutated ovarian cancer (rare, <2%)",
+      "Published examples of PARP resistance via HR restoration (RAD51C/D reversions)"
+    ],
+    "disclaimer": "These are synthetic but clinically realistic profiles for validation testing. Real patient NGS data would come from Guardant360, FoundationOne, MyChoice CDx, or Tempus xT."
+  }
+}
+

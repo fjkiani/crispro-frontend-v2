@@ -1,0 +1,46 @@
+---
+description: Ayesha Care Plan Integration Strategy & Status
+globs: oncology-coPilot/oncology-backend-minimal/api/services/ayesha_care_plan/**, oncology-coPilot/oncology-frontend/src/pages/ayesha/AyeshaCompleteCare.jsx, oncology-coPilot/oncology-frontend/src/hooks/useCompleteCareOrchestrator.js
+alwaysApply: false
+---
+
+# Ayesha Care Plan Integration (De-Orphaning)
+
+## Context
+Goal: Ensure all components of the "Ayesha Care Plan" (Drug Efficacy, Foods, Synthetic Lethality, Resistance Prediction, Trials) are fully integrated, consistent in data flow (Backend -> Frontend), and visually verified.
+
+## Architecture
+- **Orchestrator**: `api/services/ayesha_care_plan/orchestrator.py`
+  - Coordinates all services.
+  - Aggregates results into `CompleteCareV2Response`.
+- **Frontend Hook**: `useCompleteCareOrchestrator.js`
+  - Fetches plan from `/api/ayesha/complete_care_v2`.
+  - Also fetches parallel endpoints (VUS, Synthetic Lethality fallback) and merges them.
+- **Main Page**: `AyeshaCompleteCare.jsx`
+  - Renders all components based on the aggregated `result`.
+
+## Integration Status (Verified)
+
+| Component | Backend Service | Frontend Component | Verification Status | Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| **Synthetic Lethality** | `SyntheticLethalityAgent` via `/api/guidance/synthetic_lethality` | `SyntheticLethalityCard` | **VERIFIED** | Refactored `guidance.py` to use Agent; replaced fast-path. FE wired. |
+| **Resistance Prophet** | `ResistanceProphetService` via `/api/ayesha/complete_care_v2` | `ResistanceProphetCard` | **VERIFIED** | Created V2 card; wired backend V2 signal logic (Restoration/Escape). |
+| **IO Safest Selection** | `io_safest_selection_service.py` (Real RUO impl) | `IOSafestSelectionCard` | **Likely OK** | Service is real (not mock). FE renders if `result.io_selection` exists. |
+| **Food & Supplements** | `food_service.py` -> `dynamic_food_extraction` | `FoodRankingPanel` | **Likely OK** | Service calls real endpoints. |
+| **Trials & SOC** | `trial_service` / `soc_service` | `TrialMatchesCard` / `SOCRecommendationCard` | **Assume OK** | Core existing functionality. |
+
+## Recent Refactors (Jan 2026)
+1.  **Synthetic Lethality De-Orphaning**:
+    - Backend: `guidance.py` updated to use `SyntheticLethalityAgent` directly.
+    - Frontend: `SyntheticLethalityCard` now receives rich `SyntheticLethalityResult` structure.
+2.  **Resistance Prophet V2**:
+    - Backend: `ovarian.py` signal logic inverted to match biological reality (Restoration = Drop in Deficiency).
+    - Frontend: `ResistanceProphetCard` visualizes V2 signals (Restoration/Escape) + Risk Level.
+
+## Known Risks / TODOs
+- **IO / Food Visual Verification**: While code looks correct, visual verification in browser (or unit test) is pending to ensure data shapes match FE expectations exactly.
+- **Trial Matches Card**: Ensure `mechanism_vector` from SAE service effectively filters/ranks trials (Priority 2).
+
+## Validated Logic (Resistance)
+- **Deficiency Score**: High (>0.7) = Sensitive (Green/Good for treatment). Low (<0.4) = Resistant (Red/Bad).
+- **Restoration Signal**: Triggered when Score drops significantly (Baseline - Current > Delta? No, `Baseline (High) - Current (Low) > Threshold`). Actually, logic is `restoration_delta = baseline - current`. If Baseline=0.8 and Current=0.2, Delta=0.6 (>0.15) -> **DETECTED**.

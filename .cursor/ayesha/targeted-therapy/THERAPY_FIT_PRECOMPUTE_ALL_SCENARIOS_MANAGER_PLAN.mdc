@@ -1,0 +1,545 @@
+---
+alwaysApply: true
+---
+
+# ⚔️ Manager Plan: Precompute Ayesha Therapy-Fit for ALL Scenarios (Locked Preview, Real Pipeline)
+
+**Date:** 2026-02-03  
+**Status:** PLAN (manager review)  
+**Goal:** Ensure Ayesha sees **computed mechanistic predictions** for *every* scenario instead of asking an LLM (hallucination risk).  
+**Non-negotiable:** previews must be produced by the **real pipeline** (WIWFM/S/P/E + provenance + completeness caps), never hand-authored confidence ranges.
+
+---
+
+## ✅ Manager sign‑off checklist (v1 MVP, one‑glance)
+
+### Integrity spine (NON‑NEGOTIABLE: 1–4)
+
+- [ ] **1) Scenario precompute job (service-layer)**
+  - **Deliver**: `api/services/ayesha_fit/precompute.py` with `compute_all_previews_async()` that precomputes **L1 + all L2 + all (L2×L3)** using bounded concurrency + stale‑while‑revalidate.  
+    **No work inside `/scenarios` requests.**
+  - **Acceptance**: app boot does not block; `GET /api/ayesha/therapy-fit/scenarios` returns immediately with cached previews while background refresh runs.
+
+- [ ] **2) Preview cache model v1 (in‑memory + optional snapshot)**
+  - **Deliver**: a structured cache object storing per‑scenario preview summaries (and optionally full bundle payloads), superseding the current ad‑hoc dict shapes.
+  - **Acceptance**: `/scenarios` returns `preview.status = ok|degraded|failed` per scenario plus `preview_cache.{generated_at, ttl_seconds, errors}`.
+
+- [ ] **3) Cache invalidation via `scenario_version_hash` + `pipeline_version_hash`**
+  - **Deliver**: compute + plumb both hashes into cache entries and the `/scenarios` response.
+  - **Acceptance**:
+    - any edit to `L2_SCENARIOS`/`L3_SCENARIOS`/`BASELINE_EXPR` forces recompute (`scenario_version_hash`)
+    - any scoring/pipeline default change forces recompute (`pipeline_version_hash`)
+    - previews never appear “fresh” across a hash mismatch.
+
+- [ ] **4) “Preview == bundle” invariant + CI test**
+  - **Deliver**: CI test that randomly samples \(N\) scenario contexts and asserts preview Top‑k fields exactly match the bundle Top‑k fields:
+    - `name`, `efficacy_score`, `confidence`, `evidence_tier`, `badges` (set equality)
+  - **Acceptance**: build fails on drift (prevents silent lying) and test uses the same scenario application logic (`build_profile_for_level`) as analysis endpoints.
+
+### Mechanism / escape layer (7D computed, RUO)
+
+- [ ] **5) Mechanism panel computed for every preview (7D first‑class)**
+  - **Deliver**: `mechanism_panel` in every preview payload:
+    - canonical `mechanism_axes`
+    - `baseline_mechanism_vector`, `current_mechanism_vector`, `mechanism_delta`
+    - `mechanism_top_axes`
+    - provenance incl. baseline source/quality + completeness level
+  - **Acceptance**: axes ordering is canonical (DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux) and provenance is explicit.
+
+- [ ] **6) Minimal drug→axis mapping (v1) + fallback**
+  - **Deliver**: version + reuse `DRUGPATHWAYTARGETS` (or equivalent) to identify targeted axes; strict fallback to drug‑agnostic mode when drug/class unknown (no guessing).
+  - **Acceptance**: known drug class → targeted axes list; unknown → targeted axes empty + explicit confidence downgrade (`targeting_context="unknown"`).
+
+- [ ] **7) Targeted escape warnings (RUO, mechanism-level)**
+  - **Deliver**: if any targeted axis delta ≤ −0.15, emit `ESCAPE: targeted axis dropped` and populate `escaped_pathways[]` (reuse existing threshold constant).
+  - **Acceptance**: warning payload always includes per‑axis deltas (`mechanism_delta` / `mechanism_alignment`) so UI can show what moved.
+
+- [ ] **8) Drug‑agnostic drift warnings (always available)**
+  - **Deliver**: if any axis delta ≥ +0.15 or ≤ −0.15, emit drift warnings even when drug class is unknown.
+  - **Acceptance**: works when baseline is population/default; if baseline missing/weak, warnings still emit but confidence is explicitly lower.
+
+### Cross‑product QA + SL toggle
+
+- [ ] **9) Cross‑product plausibility guard (QA-only, non‑blocking)**
+  - **Deliver**: heuristic flagger annotating `honesty.flags` + `honesty.note` on contradictory L2×L3 combos **without changing ranks/scores**.
+  - **Acceptance**: guard never mutates efficacy results; it only labels to prevent over‑interpretation; runs on every L2×L3 preview.
+
+- [ ] **10) SL toggle MVP (advisory, on‑demand only)**
+  - **Deliver**: `include_synthetic_lethality=true` computes SL panel on demand; returns `status ok|failed + error`; must not change primary drug ranking unless UI explicitly switches views.
+  - **Acceptance**: SL never silently disappears; failures surfaced in payload provenance; efficacy remains primary.
+
+### File anchors (where this plugs in)
+
+- **Existing preview cache + `/scenarios` surface**: Ayesha therapy‑fit router module (`list_scenarios()`, `compute_scenario_previews_if_needed()`, current cache object).
+- **Existing normalization/validation “tripwires” to reuse for #9**: `validate_demo_scenarios()` and `build_profile_for_level()`.
+- **Existing SL on‑demand pattern to preserve for #10**: analysis bundle path (`include_synthetic_lethality` / `_run_sl_bundle` as advisory add‑on).
+
+### Smoke commands (manager can run)
+
+```bash
+# 1) Scenarios endpoint should return fast (cached/degraded ok)
+curl -sS "http://127.0.0.1:8000/api/ayesha/therapy-fit/scenarios" | jq '.preview_cache.status, .preview_cache.generated_at, .preview_cache.scenario_version_hash, .preview_cache.pipeline_version_hash'
+
+# 2) Call again after background compute; generated_at should advance when enabled
+curl -sS "http://127.0.0.1:8000/api/ayesha/therapy-fit/scenarios" | jq '.preview_cache.status, .preview_cache.generated_at'
+
+# 3) Bundle with/without SL: Top-k efficacy must be unchanged unless UI switches views
+curl -sS -X POST "http://127.0.0.1:8000/api/ayesha/therapy-fit/bundle" \
+  -H "Content-Type: application/json" \
+  -d '{"level":"all","scenario_id":"S1_HRDhigh_TMBhigh","l3_scenario_id":"S1_VEGFhigh_CA125high","include_synthetic_lethality":false}' \
+  | jq '.levels.L2.top_drugs[0] | {name, efficacy_score, confidence, evidence_tier, badges}'
+
+curl -sS -X POST "http://127.0.0.1:8000/api/ayesha/therapy-fit/bundle" \
+  -H "Content-Type: application/json" \
+  -d '{"level":"all","scenario_id":"S1_HRDhigh_TMBhigh","l3_scenario_id":"S1_VEGFhigh_CA125high","include_synthetic_lethality":true}' \
+  | jq '{top:.levels.L2.top_drugs[0] | {name, efficacy_score, confidence, evidence_tier, badges}, sl:.levels.L2.synthetic_lethality.status}'
+```
+
+---
+
+## 1) What “compute everything” means (precise)
+
+We will run Therapy Fit for:
+- **L1** (clinical reality baseline)
+- **Every L2 scenario** in `L2_SCENARIOS`
+- **Every L3 scenario** in `L3_SCENARIOS`, paired with **every L2 scenario** (full cross-product), i.e.:
+  - compute **all** `(L2 scenario_id, L3 l3_scenario_id)` combinations
+
+Rationale: the system should be able to show Ayesha “what happens if HRD/TMB look like X AND expression/CA-125 look like Y” without needing an LLM to fabricate.
+
+---
+
+## 2) Why we do this (the core safety/UX thesis)
+
+**Problem:** If the product cannot show precomputed scenario outcomes, users ask the Co‑Pilot/LLM “what would happen,” and the LLM will:
+- hallucinate therapies, tiers, and confidence,
+- misrepresent whether Evo2/S/P/E ran,
+- omit missingness/completeness caps.
+
+**Solution:** Always have a “locked preview” that is **computed** and **auditable**:
+- show preview cards with Top 3 options + tier/confidence + citations_count + rationale snippet
+- keep them locked (requires[] still visible) to communicate “preview only”
+- include provenance that makes it impossible to confuse preview with clinical certainty
+
+---
+
+## 3) Current state (truth)
+
+Backend today:
+- `POST /api/ayesha/therapy-fit/bundle` runs real pipeline for a selected scenario.
+- `GET /api/ayesha/therapy-fit/scenarios` returns skeleton cards (no computed preview yet).
+
+So the missing capability is: **systematic precompute + preview cache + /scenarios preview payload**.
+
+---
+
+## 4) Implementation strategy (non-breaking, production-safe, no second scenario system)
+
+### 4.1 Add a dedicated precompute module (service-layer)
+
+Create a small module (names are suggestions; keep consistent with current modularization):
+
+```
+api/services/ayesha_fit/precompute.py
+  - ScenarioPreviewCache (in-memory + optional disk snapshot)
+  - compute_all_previews_async()
+  - get_cached_preview(level, scenario_id, l3_scenario_id)
+  - summarize_bundle_to_preview(bundle_level_payload)
+  - scenario_version_hash()  # content hash for cache invalidation
+```
+
+**Key rule:** precompute must call the same internal functions used by the router:
+- `build_profile_for_level(lk, scenario_id=..., l3_scenario_id=...)`
+- `run_therapy_fit_analysis(profile, level_tag, is_preview=...)`
+- optional `_run_sl_bundle(profile, include_explanations=False)` (default off for preview)
+
+No HTTP calls inside the backend; direct service calls only.
+
+### 4.1.1 Reuse canonical scenario registry + normalization (zero drift)
+
+We must reuse:
+- the existing `L2_SCENARIOS`, `L3_SCENARIOS` registries
+- the existing ID strings used by the router/UI (e.g., `S1_HRDhigh_TMBhigh`, `S1_VEGFhigh_CA125high`, etc.)
+- the existing normalization behavior, including:
+  - BASELINE expression fill (`BASELINE_EXPR`) so L3 overrides are never sparse
+  - consistent biomarker field presence (e.g., `msi_status` consistently present/absent)
+
+**Do not introduce a second registry or “alias forever” system.** If any old IDs exist, use a one-time alias map and delete the old names.
+
+### 4.2 Non-blocking startup (do NOT crash boot)
+
+At FastAPI startup:
+- schedule background task: `asyncio.create_task(compute_all_previews_async())`
+- do **not** block boot on Evo2 availability
+
+If manager wants strict behavior in dev:
+- `AYESHA_THERAPY_FIT_PRECOMPUTE_STRICT=1` → fail startup if precompute cannot finish
+Otherwise:
+- log failures + keep stale cache + mark preview “degraded”
+
+### 4.3 Concurrency + rate limits (protect Evo2 + stability)
+
+Precompute must be bounded:
+- `AYESHA_THERAPY_FIT_PRECOMPUTE_CONCURRENCY=2` (default)
+- use `asyncio.Semaphore` to cap concurrent runs
+- optional jitter between requests to avoid thundering herd
+
+### 4.4 Cache model (what we store)
+
+Store BOTH:
+1) **Full per-level bundle payload** (for instant drill-down) — optional, can be disk-backed
+2) **Preview summary** (what `/scenarios` returns) — required
+
+Preview summary structure (per scenario or scenario-pair):
+- `top_drugs[0..2]`: `{ name, efficacy_score, confidence, evidence_tier, badges, citations_count }`
+- `rationale_snippet`: first 1–2 lines of rationale for top drug
+- `inputs_used_summary`: mutation count + key tumor_context fields (HRD/TMB/MSI/CA-125 present?)
+- `completeness`: `{ completeness_score, level, caps_applied[] }` (computed, never hand-authored)
+- `honesty`: `{ inputs_assumed: [...], inputs_missing: [...] }`  # prevents synthetic previews looking “real”
+- `provenance_min`: `{ evo2_used?, fusion_used?, profile?, run_id? }` (whatever exists in current payload)
+- `mechanism_panel`: `{ mechanism_axes, current_mechanism_vector, mechanism_top_axes, escape_warnings, provenance }` (see Section 6.5)
+- `generated_at`, `status: ok|degraded|failed`, `error?`
+
+**Locked semantics remain unchanged**:
+- cards remain `locked: true`
+- still include `requires[]`
+- previews are labeled **Preview (Computed)** and **RUO**
+
+### 4.5 TTL + refresh policy
+
+Because scenarios can change as scoring changes:
+- `AYESHA_THERAPY_FIT_PRECOMPUTE_TTL_SECONDS=86400` (default 24h)
+- if TTL expired, background-refresh (serve stale cache immediately)
+
+### 4.6 Cache invalidation: SCENARIO_VERSION_HASH (required)
+
+We must compute a **scenario content hash** that is stable and reviewable:
+- hash of: `(L2_SCENARIOS content + L3_SCENARIOS content + BASELINE_EXPR + any gating constants used by builder)`
+- store it as `scenario_version_hash` in `preview_cache`
+- if hash changes, invalidate cached previews even if TTL not expired
+
+This avoids stale previews after scenario edits.
+
+### 4.7 Cache invalidation: PIPELINE_VERSION_HASH (required)
+
+Scenario edits are not the only thing that can change preview meaning. The same scenario run can yield different outputs if we change:
+- scoring constants / tier logic,
+- default feature flags / profiles,
+- model routing defaults (e.g., `EVO_FORCE_MODEL`),
+- pathway aggregation behavior,
+- evidence gating behavior.
+
+So we also compute and store a **pipeline version hash**:
+- `pipeline_version_hash = hash(scoring_code_version + key_constants + model_defaults + feature_flag_defaults)`
+- store alongside `scenario_version_hash` inside the preview cache
+- invalidate cached previews if *either* hash changes
+
+**Hard rule:** A preview must never look “fresh” if the pipeline changed but scenarios did not.
+
+---
+
+## 5) API contract changes (minimal, additive)
+
+### 5.1 `GET /api/ayesha/therapy-fit/scenarios`
+
+Add `preview` field(s) per card (no breaking removals):
+
+```json
+{
+  "l2_scenarios": [
+    {
+      "id": "S1_HRDhigh_TMBhigh",
+      "name": "...",
+      "locked": true,
+      "requires": ["NGS somatic mutations", "HRD score", "TMB score"],
+      "preview": { "...computed preview summary..." },
+      "meta": { "...scenario spec..." }
+    }
+  ],
+  "l3_scenarios": [
+    {
+      "id": "S1_VEGFhigh_CA125high",
+      "name": "...",
+      "locked": true,
+      "requires": ["RNA expression data", "CA-125 lab values"],
+      "preview_matrix": {
+        "by_l2": {
+          "S1_HRDhigh_TMBhigh": { "...computed preview..." }
+        }
+      },
+      "meta": { "...scenario spec..." }
+    }
+  ],
+  "preview_cache": {
+    "generated_at": "...",
+    "ttl_seconds": 86400,
+    "status": "ok|degraded",
+    "errors": [],
+    "scenario_version_hash": "...",
+    "pipeline_version_hash": "..."
+  }
+}
+```
+
+Notes:
+- L3 is a cross-product; we can represent it as `preview_matrix.by_l2[l2_id]`.
+- This keeps UI simple: user picks L2 then L3, preview updates instantly.
+
+### 5.2 `POST /api/ayesha/therapy-fit/bundle`
+
+Optional optimization (non-breaking):
+- If cache has the full computed bundle for the selected scenario, serve from cache (fast).
+- Otherwise compute live (current behavior) and populate cache.
+
+---
+
+## 6) Operational guardrails (manager-grade)
+
+### “Preview honesty” rules
+- Preview must display: **computed_at + provenance + completeness/caps**.
+- If Evo2/Fusion not used, preview must not imply they were.
+- If any level failed, it must show `status="failed"` and keep locked.
+
+### “Preview == bundle” invariant (testable, non-negotiable)
+Previews are summarized from bundle payloads; therefore they must be **exactly consistent** with the bundle for the same scenario selection.
+
+Requirement:
+- In CI, randomly sample \(N\) scenario contexts and for each context:
+  - call the bundle computation path (or load cached full bundle)
+  - call the preview summarizer
+  - assert that preview Top‑k fields **exactly match** the corresponding bundle Top‑k fields:
+    - drug name
+    - `efficacy_score`
+    - `confidence`
+    - `evidence_tier`
+    - badges (set equality)
+  - if mismatch → fail build
+
+This prevents “silent lying” regressions where the preview drifts from the real pipeline.
+
+### Plausibility / consistency guard for cross-products (QA-only)
+Some L2×L3 combinations may be biologically contradictory or clinically nonsensical. We still compute the full matrix (to preserve “compute everything”), but we add a QA-only guard pass:
+- if a combo is flagged, keep its preview locked and computed, but annotate:
+  - `honesty.note`: brief explanation (e.g., “combination may be biologically inconsistent”)
+  - `honesty.flags`: structured tags (e.g., `["contradictory_biomarkers"]`)
+
+**Hard rule:** plausibility flags do not change ranks/scores; they only prevent over-interpretation.
+
+### Failure isolation
+- One scenario failing must not prevent others from being cached.
+- Always return `/scenarios` even if previews are degraded (with status/errors).
+
+### Security / cost controls
+- No unbounded parallelism.
+- No repeated recomputation on every page load (TTL + stale-while-revalidate).
+
+---
+
+## 6.5 How scenarios use 7D mechanism (escape/resistance coverage)
+
+### The key clarification (manager question)
+**Scenarios do not “set” a 7D vector.** Scenarios set **biology inputs** (mutations + tumor_context additions like HRD/TMB/MSI/expression/CA‑125).  
+Downstream services compute:
+- `pathway_scores` (from WIWFM / efficacy orchestrator)
+- (from that) a **7D mechanism panel** (DDR/MAPK/PI3K/VEGF/HER2/IO/Efflux) for explainability + escape tracking
+
+So “how scenarios use 7D” is: **scenario inputs → computed pathway_scores → derived mechanism_vector (+ deltas/warnings)**.
+
+**Hard rule:** scenarios never set vectors, expected vectors, or “completeness_score” by hand.  
+The mechanism panel must always carry provenance naming:
+- the canonical source (`efficacy.pathway_scores` in v1; `sae_features` later),
+- the completeness level used (L1/L2/L3),
+- whether baseline is “patient baseline” vs “population/default”.
+
+### Canonical 7D ordering (contract)
+All scenario previews must emit:
+```json
+{
+  "mechanism_axes": ["DDR","MAPK","PI3K","VEGF","HER2","IO","Efflux"]
+}
+```
+No UI hardcoding of indices: labels come from payload.
+
+### Mechanism panel: what we compute and cache per scenario
+For each computed level result (L1/L2/L3), derive:
+- `current_mechanism_vector` (7 floats, in canonical axis order)
+- `mechanism_top_axes` (top 1–2 axes + values)
+- `escape_warnings` (see below)
+
+**Source of truth for v1 (no new science):**
+- build vector from `pathway_scores` returned by `run_therapy_fit_analysis` / WIWFM.
+  - provenance must say `source="efficacy.pathway_scores"` (or equivalent)
+
+If we later swap to SAE-derived vectors, only the provenance changes; the payload shape remains stable.
+
+### Baseline vs current (escape requires a delta)
+Escape/resistance is a delta question. For each scenario context, compute:
+- `baseline_mechanism_vector`: the **L1 vector** for Ayesha (computed once)
+- `current_mechanism_vector`: scenario vector
+- `mechanism_delta = current - baseline`
+
+This allows scenario previews to communicate “what axis rose/fell” without changing drug ranks.
+
+### Escape warning heuristics (simple, robust, auditable)
+We generate two classes of warnings:
+
+1) **Drug-agnostic drift warnings** (always available):
+- if any axis delta ≥ +0.15 ⇒ `severity="watch"` (“bypass/emergence candidate”)
+- if any axis delta ≤ −0.15 ⇒ `severity="watch"` (“loss of vulnerability signal”)
+
+2) **Drug-aware escape warnings** (v1 minimal mapping + fallback):
+- If we can identify a therapy context (drug class or drug name) and map it to one or more axes,
+  then “escape” means **a targeted axis dropped** vs baseline.
+- If we cannot identify therapy context, fall back to drug‑agnostic warnings only.
+
+#### Minimal v1 drug→axis mapping (low risk, already exists in codebase)
+We will reuse the existing mapping used by resistance logic (naming may differ), e.g.:
+- PARP/ATR/WEE1/CHK1/ATM → DDR
+- checkpoint inhibitors → IO
+- bevacizumab / anti‑VEGF → VEGF
+- trastuzumab / anti‑HER2 → HER2
+- MEK inhibitors → MAPK
+- PI3K inhibitors → PI3K
+- platinum agents → DDR
+
+**Hard rule:** mapping is versioned + audited (counts as pipeline_version_hash input).
+
+#### Targeted-axis drop rule (RUO, mechanism-level)
+If `current_drug_class` (or `drug_name`) maps to a set of targeted axes \(T\), then:
+- compute per-axis `mechanism_delta` vs baseline
+- for any axis in \(T\) with delta ≤ −0.15, emit:
+  - `ESCAPE: targeted axis dropped` with `severity="high"`
+  - include `escaped_pathways: ["DDR" | "IO" | ...]`
+
+If therapy context is missing/unknown:
+- emit only `POTENTIAL_ESCAPE: axis drift` warnings (drug-agnostic)
+- downgrade confidence and cap any “escape probability” semantics (if used) to 0.4
+- include explicit provenance: `targeting_context="unknown"`
+
+#### Always include mechanism alignment
+Regardless of targeted vs agnostic mode, the payload must include:
+- `mechanism_delta` (per-axis changes, current − baseline)
+- `mechanism_alignment` (alias acceptable): per-axis table for UI display
+
+This makes warnings auditable and lets the UI show “exactly what moved.”
+
+### Manager product decision (explicit answer)
+**Decision recommended for v1 (updated):** implement **minimal drug→axis mapping** now, and emit “targeted axis dropped” warnings **when targeting context is known**, with a **clean fallback** to drug‑agnostic warnings when unknown.
+
+Why:
+- the mapping already exists for resistance logic (low effort / low risk),
+- targeted warnings are strictly more actionable (escape from what we’re treating),
+- still preserves semantics: 7D explains mechanism; mapping only selects which axis is “targeted.”
+
+**Guardrail:** if targeting context is unknown, do not guess; fall back to drug‑agnostic + downgrade confidence.
+
+### WIWFM gates stay separate from 7D (non-negotiable)
+7D is not a gate and must not silently rerank therapies. In v1:
+- **Top therapies** are determined by WIWFM/S/P/E + completeness caps + PGx safety gates.
+- **Why/escape** is communicated by the 7D mechanism delta + warnings panel.
+
+Any future coupling between 7D and ranking requires an explicit, versioned policy layer (separate doc).
+
+### Scenario registry refinement (to ensure coverage of all axes)
+To “capture all escapes,” the registry must cover archetypes that exercise each axis:
+- DDR-high vs DDR-low
+- MAPK activation archetype
+- PI3K activation archetype
+- VEGF/angiogenesis-high archetype
+- IO-inflamed archetype
+- Efflux-high archetype
+- HER2-high archetype (even if rare; include as an “unlock” case)
+
+**Manager rule:** each axis must have at least one scenario where it is expected to appear in top axes.
+
+### Optional QA metadata (does not affect scoring)
+Add optional scenario metadata fields purely for validation/review:
+- `intended_axis_shifts`: e.g. `{"Efflux": "up", "DDR": "down"}`
+- `escape_archetype`: `"efflux_mdr" | "pi3k_bypass" | "mapk_bypass" | ...`
+
+Precompute job can run a soft QA check: “does computed top axis match intended?”
+This is a guardrail against silently broken scenarios.
+
+---
+
+## 7) Synthetic Lethality (SL) toggle (manager guidance)
+
+### Default behavior (SL OFF in scenario cards)
+Reason: reduces compute, avoids failure modes, and prevents confusing “ranking” vs “advice.”
+
+### Toggle ON behavior (advisory panel; no silent rank shifts)
+When `include_sl=true`:
+- run `_run_sl_bundle(profile, include_explanations=false)` for the same scenario context
+- store SL output in a **separate** preview object (or on-demand compute)
+- SL must return `status: ok|failed` + `error` if failed; never silently disappear
+- SL output must be labeled **RUO** and **advisory**
+
+**Additional constraint (product safety):**
+- Toggling SL must not change the primary “Top‑3 therapies” list unless the UI explicitly switches to an “SL view.”
+
+### Storage strategy (recommended early)
+- keep two caches per scenario context:
+  - `preview_no_sl` (always computed)
+  - `preview_with_sl` (computed on-demand only when toggled)
+
+This avoids doubling the precompute explosion.
+
+### “Does SL apply to this specific drug?” semantics (two options)
+1) **Panel-only (recommended v1):**
+   - show “Top SL vulnerabilities / SL-suggested drugs”
+   - UI highlights overlap with top WIWFM drugs (“appears in both”)
+   - no mapping layer required
+2) **Drug-conditional (v2):**
+   - define `drug_targets` / `drug_pathways` mapping
+   - compute `sl_supported = overlap(SL_targets, drug_targets)`
+   - show `SL-supported: yes/no/unknown` with provenance
+
+v1 keeps correctness without inventing ontology.
+
+---
+
+## 7) Acceptance criteria (what manager can sign off)
+
+1) On boot (or shortly after), system computes previews for:
+   - all L2 scenarios
+   - all (L2×L3) scenario pairs
+2) `GET /api/ayesha/therapy-fit/scenarios` returns:
+   - locked cards
+   - computed preview summaries (not ranges)
+   - cache status + timestamps
+3) The preview for a scenario matches the bundle result for the same selection (top drug fields), and CI enforces this invariant via random sampling.
+4) If Evo2 is down, previews degrade gracefully with explicit provenance and caps (no lying).
+5) Precompute does not exceed configured concurrency.
+6) Scenario previews include a 7D mechanism panel:
+   - `mechanism_axes` present and ordered correctly
+   - `current_mechanism_vector` present
+   - `mechanism_delta` computed vs L1 baseline and warnings emitted
+7) Registry coverage: at least one scenario exercises each axis (DDR/MAPK/PI3K/VEGF/HER2/IO/Efflux) with intended shifts documented (QA-only).
+8) Previews are invalidated when either:
+   - scenario registry content changes (`scenario_version_hash`), or
+   - pipeline/scoring defaults change (`pipeline_version_hash`).
+
+---
+
+## 8) Smoke commands (copy/paste)
+
+```bash
+# 1) Confirm scenarios include preview cache metadata
+curl -sS "http://127.0.0.1:8000/api/ayesha/therapy-fit/scenarios" | jq '.preview_cache'
+
+# 2) Spot-check one L2 scenario bundle matches preview
+curl -sS -X POST "http://127.0.0.1:8000/api/ayesha/therapy-fit/bundle?level=l2&scenario_id=S1_HRDhigh_TMBhigh" | jq '.levels.L2.efficacy.drugs[0] | {name, efficacy_score, confidence, evidence_tier, citations_count}'
+curl -sS "http://127.0.0.1:8000/api/ayesha/therapy-fit/scenarios" | jq '.l2_scenarios[] | select(.id=="S1_HRDhigh_TMBhigh") | .preview.top_drugs[0]'
+```
+
+---
+
+## 9) Manager decision points (choose defaults)
+
+1) Include SL in previews?
+   - Recommended default: **NO** in scenario cards; **ON-DEMAND toggle** computes SL with explicit status/provenance.
+2) Startup strictness:
+   - Recommended default: strict in dev, non-strict in prod.
+3) Cache persistence:
+   - Recommended default: in-memory + optional JSON snapshot to disk for quick warm-start.
+

@@ -1,0 +1,263 @@
+{
+  "report_metadata": {
+    "report_id": "[AUTO-GENERATED-UUID]",
+    "report_type": "HIPAA_COMPLIANT_CLINICAL_SUMMARY",
+    "report_date": "[ISO-8601-TIMESTAMP]",
+    "report_version": "1.0",
+    "compliance_status": "HIPAA_COMPLIANT",
+    "de_identification_level": "FULLY_DE_IDENTIFIED|LIMITED_DATASET|IDENTIFIED_AUTHORIZED",
+    "generated_by": "CrisPRO_Clinical_Report_Generator",
+    "last_modified": "[ISO-8601-TIMESTAMP]"
+  },
+  "hipaa_compliance": {
+    "phi_handling": {
+      "patient_name": "REMOVED|CODED|RETAINED_AUTHORIZED",
+      "mrn": "REMOVED|CODED|RETAINED_AUTHORIZED",
+      "dob": "REMOVED|AGE_RANGE_ONLY|RETAINED_AUTHORIZED",
+      "dates": "RELATIVE_DATES|YEAR_ONLY|FULL_DATES_AUTHORIZED",
+      "provider_names": "REMOVED|CODED|RETAINED_AUTHORIZED",
+      "facility_names": "REMOVED|CODED|RETAINED_AUTHORIZED",
+      "geographic_data": "REMOVED|GENERALIZED|RETAINED_AUTHORIZED"
+    },
+    "authorization": {
+      "authorization_type": "RESEARCH|TREATMENT|PAYMENT|HEALTHCARE_OPERATIONS",
+      "authorization_date": "[ISO-8601-DATE]",
+      "authorization_expiration": "[ISO-8601-DATE]",
+      "authorized_recipients": ["[LIST]"],
+      "purpose_of_disclosure": "[DESCRIPTION]",
+      "authorization_document_id": "[REFERENCE]"
+    },
+    "access_controls": {
+      "access_level": "PUBLIC|INTERNAL|RESTRICTED",
+      "encryption_status": "ENCRYPTED|UNENCRYPTED",
+      "encryption_method": "AES-256|TLS-1.2+|OTHER",
+      "access_log_required": true,
+      "audit_trail_id": "[REFERENCE]"
+    },
+    "minimum_necessary": {
+      "data_included_justification": {
+        "imaging_results": "Treatment planning and response assessment",
+        "pathology_results": "Diagnostic confirmation and treatment selection",
+        "genetic_testing": "Treatment eligibility determination",
+        "clinical_timeline": "Disease progression understanding"
+      },
+      "data_excluded": [
+        "Provider personal information",
+        "Facility billing codes",
+        "Insurance information",
+        "Social security numbers",
+        "Financial information"
+      ]
+    }
+  },
+  "patient_demographics": {
+    "age_range": "40-41",
+    "sex": "F",
+    "primary_diagnosis": "Stage IVB Ovarian Cancer (High-Grade Serous)",
+    "clinical_status": "ACTIVE_TREATMENT"
+  },
+  "clinical_findings": {
+    "imaging_studies": [
+      {
+        "study_type": "CT_ABDOMEN_PELVIS",
+        "study_date": "[RELATIVE_DATE or YEAR_ONLY]",
+        "key_findings": [
+          "Extensive peritoneal carcinomatosis",
+          "Small volume ascites",
+          "Abdominopelvic lymphadenopathy",
+          "Bilateral pleural effusions"
+        ],
+        "clinical_significance": "Confirms Stage IVB disease, baseline for monitoring",
+        "de_identified_report_id": "[REFERENCE]"
+      },
+      {
+        "study_type": "PET_CT_FULL_BODY",
+        "study_date": "[RELATIVE_DATE or YEAR_ONLY]",
+        "key_findings": [
+          "Extensive FDG-avid carcinomatosis (SUV max 15)",
+          "Bilateral pleural/pericardial metastases",
+          "Extensive nodal metastases",
+          "Soft tissue metastases"
+        ],
+        "clinical_significance": "Confirms widespread metastatic disease",
+        "de_identified_report_id": "[REFERENCE]"
+      }
+    ],
+    "pathology_results": [
+      {
+        "specimen_type": "PLEURAL_FLUID",
+        "specimen_date": "[RELATIVE_DATE or YEAR_ONLY]",
+        "diagnosis": "Metastatic adenocarcinoma, Mullerian primary",
+        "immunohistochemistry": {
+          "positive_markers": ["claudin4", "MOC31", "CK7", "PAX8", "WT1"],
+          "negative_markers": ["calretinin", "CD163", "TTF1", "GATA3", "CK20"],
+          "special_markers": {
+            "p16": "Strong and diffuse",
+            "p53": "Mutant type pattern",
+            "ER": "Weak to moderate (60%)",
+            "PR": "Negative (0%)"
+          }
+        },
+        "clinical_significance": "Confirms high-grade serous ovarian carcinoma",
+        "de_identified_report_id": "[REFERENCE]"
+      }
+    ],
+    "genetic_testing": [
+      {
+        "test_type": "GERMLINE_CANCER_PANEL",
+        "test_date": "[RELATIVE_DATE or YEAR_ONLY]",
+        "genes_tested": 38,
+        "result": "NEGATIVE",
+        "pathogenic_mutations": [],
+        "vus": [],
+        "clinical_significance": "Rules out hereditary cancer, confirms sporadic cancer",
+        "de_identified_report_id": "[REFERENCE]"
+      },
+      {
+        "test_type": "SOMATIC_CANCER_PANEL",
+        "test_date": "[RELATIVE_DATE or YEAR_ONLY]",
+        "result": "POSITIVE",
+        "mutations": [
+          {
+            "gene": "MBD4",
+            "variant": "c.1293delA (p.K431Nfs*54)",
+            "zygosity": "HOMOZYGOUS",
+            "classification": "PATHOGENIC",
+            "syndrome": "MBD4-associated neoplasia syndrome (MANS)",
+            "clinical_significance": "DNA repair deficiency, may impact treatment response"
+          },
+          {
+            "gene": "PDGFRA",
+            "variant": "p.S755P (c.2263T>C)",
+            "zygosity": "HETEROZYGOUS",
+            "classification": "VUS",
+            "clinical_significance": "Unknown significance"
+          }
+        ],
+        "de_identified_report_id": "[REFERENCE]"
+      }
+    ]
+  },
+  "clinical_timeline": {
+    "disease_progression": [
+      {
+        "event": "Total colectomy",
+        "relative_date": "Baseline - 22 months",
+        "age_at_event": 38,
+        "findings": "Multiple tubular adenomas"
+      },
+      {
+        "event": "CT scan - ovarian cysts",
+        "relative_date": "Baseline - 21 months",
+        "age_at_event": 38,
+        "findings": "No carcinomatosis"
+      },
+      {
+        "event": "CT scan - extensive disease",
+        "relative_date": "Baseline",
+        "age_at_event": 40,
+        "findings": "Peritoneal carcinomatosis, metastases"
+      },
+      {
+        "event": "PET-CT - widespread disease",
+        "relative_date": "Baseline + 2 weeks",
+        "age_at_event": 40,
+        "findings": "Extensive metastatic disease"
+      },
+      {
+        "event": "Cytology - malignant cells",
+        "relative_date": "Baseline + 3 weeks",
+        "age_at_event": 40,
+        "findings": "Metastatic adenocarcinoma confirmed"
+      }
+    ]
+  },
+  "clinical_implications": {
+    "diagnostic_confirmation": {
+      "primary_site": "Ovarian",
+      "histology": "High-grade serous carcinoma",
+      "stage": "IVB",
+      "molecular_profile": {
+        "p53_status": "MUTANT",
+        "ER_status": "WEAKLY_POSITIVE",
+        "PR_status": "NEGATIVE",
+        "MBD4_mutation": "HOMOZYGOUS_PATHOGENIC"
+      }
+    },
+    "treatment_considerations": {
+      "standard_of_care": "Carboplatin + Paclitaxel + Bevacizumab (first-line)",
+      "parp_inhibitor_eligibility": {
+        "germline_status": "NEGATIVE",
+        "hrd_testing_recommended": true,
+        "rationale": "MBD4 mutation may indicate HRD pathway involvement"
+      },
+      "biomarkers_pending": [
+        "TMB",
+        "MSI",
+        "HRD_Score"
+      ]
+    },
+    "prognostic_factors": {
+      "favorable": ["ER positivity (potential hormone therapy)"],
+      "unfavorable": [
+        "Extensive metastatic disease",
+        "p53 mutant pattern"
+      ],
+      "uncertain": ["MBD4 mutation impact on treatment response"]
+    }
+  },
+  "security_notices": {
+    "handling_instructions": [
+      "Store in encrypted format",
+      "Transmit via secure channels only (TLS 1.2+)",
+      "Limit access to authorized personnel",
+      "Secure deletion when no longer needed",
+      "Log all access attempts"
+    ],
+    "breach_notification": {
+      "incident_response_plan": "[LINK]",
+      "notification_timeline_days": 60,
+      "contact": "[HIPAA_PRIVACY_OFFICER]"
+    }
+  },
+  "audit_trail": {
+    "report_generated_by": "[SYSTEM/USER]",
+    "report_generated_date": "[ISO-8601-TIMESTAMP]",
+    "last_modified_by": "[USER]",
+    "last_modified_date": "[ISO-8601-TIMESTAMP]",
+    "access_log_id": "[REFERENCE]",
+    "modification_history": [
+      {
+        "modified_by": "[USER]",
+        "modified_date": "[ISO-8601-TIMESTAMP]",
+        "modification_type": "CREATED|UPDATED|ACCESSED",
+        "reason": "[DESCRIPTION]"
+      }
+    ]
+  },
+  "quality_checks": {
+    "phi_de_identification": true,
+    "minimum_necessary_applied": true,
+    "access_controls_documented": true,
+    "audit_trail_established": true,
+    "encryption_verified": true,
+    "authorization_documented": true
+  },
+  "compliance_verification": {
+    "hipaa_privacy_rule": true,
+    "hipaa_security_rule": true,
+    "business_associate_agreement": true,
+    "patient_authorization": true
+  }
+}
+
+
+
+
+
+
+
+
+
+
+

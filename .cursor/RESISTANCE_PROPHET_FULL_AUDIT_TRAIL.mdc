@@ -1,116 +1,241 @@
 ---
-description: Full Audit Trail: Resistance Prophet Evolution (Phase 1-9)
-globs: ["api/services/resistance_prophet/**", "tests/resistance_prophet/**"]
+description: Resistance Prophet V2 – Complete Technical Specification & Audit Trail
+globs: api/services/resistance_prophet/**, scripts/benchmark/**, reports/**
 ---
 
-# 🛡️ Resistance Prophet: From Black Box to Glass Box
-**Audit Trail & Evolution Log (Jan 28, 2026)**
+# Resistance Prophet V2: Full Technical Specification
 
-This document captures the complete re-engineering journey of the Oncology Resistance Engine, tracing the path from the "0.71 Probability Paradox" to the "Glass Box" doctrine.
-
----
-
-## 1. 🏁 The Origin: The "0.71 Paradox"
-**Context: The Patient Safety Risk**
-
-We discovered a critical alignment failure during the audit of high-grade serous ovarian cancer cases.
-
-### The Incident (Case: CCNE1-AMP)
-A patient on Platinum therapy was **responding clinically** (CA-125 dropping, tumor shrinking). However, the "Resistance Prophet" model flagged them as:
-> **Status**: 🔴 HIGH RISK 
-> **Probability**: 0.71
-> **Rationale**: "CCNE1 Amplification Detected"
-
-### The Interpretation Gap
-- **The Algorithm**: Correctly identified a *genomic mechanism* (Replication Stress) that causes resistance.
-- **The Clinician**: Saw a "False Alarm." *"The patient is responding. Why are you telling me to switch drugs?"*
-
-**The Danger**: If a clinician trusted the "Black Box" score blindly, they might prematurely switch a patient off a working therapy.
+**Version**: Phase 3 (Diamond & MFAP4 Injected)
+**Date**: 2026-01-29
+**Status**: PRODUCTION-READY (Layer 1 & 2 Active)
 
 ---
 
-## 2. 🗺️ The Strategy: Closing the Market Gaps
-
-We didn't just patch the bug. We executed a strategic roadmap (Phases 1-9) to map specific "Market Gaps" to our code architecture.
-
-### Gap 1: "Live Function" vs "Static Mutation"
-*Problem: Treating dynamic evolution like a static test.*
-- **Solution (Phase 4)**: We implemented **Patient-Specific Baselines**.
-- **Change**: Instead of comparing to a "Population Average," we now compare the patient's *current* profile to their *own* germline baseline (e.g., MBD4 deficiency).
-- **Result**: We can detect "Restoration" (Reversion mutations) relative to *their* starting point.
-
-### Gap 2: "Dynamic Monitoring" (The Missing Signal)
-*Problem: Relying only on NGS (expensive, slow).*
-- **Solution (Phase 7)**: We built the **Resistance Engine** to integrate **CA-125 Kinetics** (Signal 3).
-- **Safety Cap Logic**: If CA-125 history is missing, the Engine *refuses* to issue a HIGH Confidence High Risk prediction.
-- **Result**: "No Data" does not equal "Safe," but it also doesn't equal "Certain Doom." It equals "Uncertainty (Medium Cap)."
-
-### Gap 3: "Threshold Optimization"
-*Problem: The binary "Resistant/Sensitive" flip.*
-- **Solution (Phase 5)**: **Split Output Strategy**.
-- **Alert**: `driver_alerts` (Biology) are now orthogonal. They persist even if `risk_level` (Clinical) is LOW.
-- **Result**: The clinician sees the warning ("Genomic Driver Present") but the Status remains GREEN ("Low Risk") if the patient is responding.
+## 1. Executive Summary
+This document is the definitive technical reference for the Resistance Prophet V2 engine. It captures the complete re-engineering from the legacy Monolith (Phase 1a) through the Modular Refactor (Phase 1b) and the rigorous Audit Hardening (Phase 1c), including the negative "Red Team" findings that validated the production thresholds.
 
 ---
 
-## 3. 🧪 Phase 7: The "Glass Box" (Resistance Lab)
+## 2. Architecture
 
-We realized that "Explainability" wasn't enough. We needed **Observability**.
+### 2.1. Module Map
+```
+api/services/resistance_prophet/
+├── engine.py          # Pure Logic Kernel (Deterministic)
+├── schemas.py         # Pydantic-style Data Contracts
+├── constants.py       # Thresholds & Knowledge Bases
+├── aggregation.py     # Probability & Risk Stratification
+├── actions.py         # Urgency & Recommended Actions
+├── baseline.py        # Population Average Fallback
+├── shim.py            # Legacy Backward Compatibility
+└── signals/
+    ├── ovarian.py     # OV-Specific Detectors
+    └── mm.py          # MM-Specific Detectors
+```
 
-### The "Zeta Interface"
-We built a dedicated frontend (`/resistance-lab`) that acts as a cockpit for the engine.
-- **Input**: Clinicians can toggle "Germline Status" or "Treatment History" switches.
-- **Process**: A real-time "Logic Stream" prints the Engine's decision tree.
-- **Output**: Detailed provenance.
+### 2.2. Data Flow (Sequence)
+```mermaid
+sequenceDiagram
+    participant Router as API Router
+    participant Service as ResistanceProphetService
+    participant Signals as Signal Detectors (OV/MM)
+    participant Engine as Deterministic Engine
+    participant Shim as Legacy Shim
 
-This transformed the tool from a "Magic Oracle" into a **Clinical Instrument**.
+    Router->>Service: predict_resistance(patient_data)
+    Service->>Signals: detect_restoration(), detect_escape(), detect_kinetics()
+    Signals-->>Service: List[ResistanceSignalData]
+    Service->>Engine: calculate_resistance_prediction(signals, context)
+    Engine-->>Service: ResistancePrediction (Object)
+    Service->>Shim: serialize_to_legacy(prediction)
+    Shim-->>Router: LegacyDict (API Response)
+```
 
 ---
 
-## 4. 📜 Provenance Evolution: The Evidence
+## 3. Constants & Thresholds (`constants.py`)
 
-The transformation is encoded in the JSON response itself.
+### 3.1. Core Thresholds
+| Constant | Value | Description |
+| :--- | :--- | :--- |
+| `DNA_REPAIR_THRESHOLD` | **0.15** | Restoration detected if Deficiency drops by >15% |
+| `PATHWAY_ESCAPE_THRESHOLD` | **0.15** | Escape detected if Target Burden drops by >15% |
+| `HIGH_RISK_PROBABILITY` | **0.70** | Minimum probability for HIGH risk classification |
+| `MEDIUM_RISK_PROBABILITY` | **0.50** | Minimum probability for MEDIUM risk |
+| `MIN_SIGNALS_FOR_HIGH` | **2** | Minimum corroborating signals for HIGH risk |
 
-### Phase 1: The Black Box (Legacy)
-*Opaque. "Trust the math."*
-```json
-"provenance": {
-  "model": "resistance_prophet_v1",
-  "reason": "calculated_risk"
+### 3.2. Baseline Reliability Weights (Missing Data Policy)
+| Constant | Value | Meaning |
+| :--- | :--- | :--- |
+| `WEIGHT_PATIENT_BASELINE` | **1.0** | Full confidence if patient's own baseline is used |
+| `WEIGHT_POPULATION_BASELINE` | **0.2** | Confidence penalty if population average is used |
+
+### 3.3. Pathway Contribution Weights (Formula C1)
+```python
+PATHWAY_CONTRIBUTIONS = {
+    "ddr": 0.60,  # DNA Damage Repair
+    "hrr": 0.20,  # Homologous Recombination Repair
+    "exon": 0.20  # Exon Disruption
 }
 ```
 
-### Phase 7: The Choice (V2 Final Payload)
-*Transparent. "Here is the math."*
+### 3.4. Ovarian Knowledge Base (`OV_HIGH_RISK_GENES`)
+| Gene | Effect | Confidence | Mechanism | Rationale |
+| :--- | :--- | :--- | :--- | :--- |
+| **MBD4** | SENSITIVITY | 0.80 | BER Deficiency | PARP trapping; Reversion = Resistance |
+| **BRCA1** | SENSITIVITY | 0.95 | HRD | Classic HRD marker (NCCN) |
+| **BRCA2** | SENSITIVITY | 0.95 | HRD | Classic HRD marker (NCCN) |
+| **NF1** | RESISTANCE | 0.90 | MAPK Activation | Platinum bypass |
+| **TP53BP1** | RESISTANCE | 0.85 | HR Restoration | PARP resistance (53BP1 loss) |
+| **CCNE1** | RESISTANCE | 0.90 | Replication Stress | Poor PARP/Platinum response |
+
+### 3.5. Myeloma Knowledge Base (`MM_HIGH_RISK_GENES`)
+| Gene | Effect | Relative Risk | Confidence | Mechanism |
+| :--- | :--- | :--- | :--- | :--- |
+| **DIS3** | RESISTANCE | 2.08 | 0.95 | RNA Surveillance Deficiency |
+| **TP53** | RESISTANCE | 1.90 | 0.75 | Genomic Instability |
+| **NFE2L2** | RESISTANCE | N/A | 0.50 | NRF2 -> PI Resistance |
+
+### 3.6. True SAE "Diamond" Features (Layer 2)
+**Source**: `SAE_FAILURE_POSTMORTEM.mdc` (Validated on Tier-3 Cohort, n=149)
+| Feature | Effect Size | P-Value | Mechanism |
+| :--- | :--- | :--- | :--- |
+| **27607** | 0.635 | 0.0145 | DDR Compromise (NF1-linked) |
+| **26220** | 0.609 | 0.0215 | Checkpoint Bypass (TP53-linked) |
+| **16337** | 0.634 | 0.0247 | Replication Stress A |
+| **12893** | 0.597 | 0.0246 | Replication Stress B |
+| *And 5 others (6020, 22868, 1407, 31362, 9738)* | | | |
+
+### 3.7. Transcriptomic Markers (Layer 1)
+**Source**: `VALIDATION_SUMMARY_FINAL.md` (GSE63885)
+| Marker | Effect | Threshold | AUROC | Mechanism |
+| :--- | :--- | :--- | :--- | :--- |
+| **MFAP4** | RESISTANCE | > 1.5 (Z) | **0.763** | Intrinsic (Mesenchymal) |
+
+---
+
+## 4. Signal Detectors (`signals/ovarian.py`)
+
+### 4.1. `detect_restoration(current_sae, baseline_sae)`
+**Purpose**: Detect DNA Repair Restoration (Reversion Signal).
+**Formula**:
+```
+restoration_delta = baseline_deficiency - current_deficiency
+```
+**Trigger**: `restoration_delta > DNA_REPAIR_THRESHOLD (0.15)`
+**Probability (Sigmoid)**:
+```python
+probability = 1.0 / (1.0 + math.exp(-10 * (restoration_delta - 0.15)))
+```
+
+### 4.2. `detect_escape(current_sae, baseline_sae, drug_class)`
+**Purpose**: Detect Pathway Escape (Target Loss).
+**Logic**: Lookup target pathways for `drug_class` in `DRUG_PATHWAY_TARGETS`. Calculate burden drop per pathway.
+**Trigger**: `drop > PATHWAY_ESCAPE_THRESHOLD (0.15)`
+
+### 4.3. `detect_ca125_kinetics(ca125_history)` (Delegated to `CA125IntelligenceService`)
+**Purpose**: Detect CA-125 Kinetic Resistance.
+**Logic (Rustin Criteria)**:
+1.  **Doubling**: `current >= 2.0 * nadir` AND `current > 20` -> Prob 0.95.
+2.  **Rising (1.5x)**: `current >= 1.5 * nadir` AND `current > 20` -> Prob 0.40.
+3.  **Monotonic Rise**: Last 3 points increasing -> Prob 0.75.
+
+**Critical Noise Floor**: `current_val > 20.0` (Values <=20 are ignored).
+
+### 4.4. `detect_diamond_features(current_sae)`
+**Purpose**: Detect True SAE "Diamond" drivers.
+**Logic**: Check for high activation (>0.1) of 9 validated features (27607, etc.).
+**Probability**: Derived from Effect Size (0.5 + d*0.4).
+
+### 4.5. `detect_transcriptomic_risk(current_sae)`
+**Purpose**: Detect Layer 1 Intrinsic Resistance (MFAP4).
+**Logic**: Check `expression["MFAP4"] > 1.5`.
+**Trigger**: AUROC 0.763 -> High Probability (0.80).
+
+---
+
+## 5. Deterministic Engine (`engine.py`)
+
+### 5.1. `calculate_resistance_prediction(...)`
+**Inputs**: `signals`, `treatment_history`, `baseline_source`, `baseline_penalty`, `full_ca125_history_available`.
+**Output**: `ResistancePrediction` dataclass.
+
+### 5.2. Logic Steps
+1.  **Aggregate Signals**: Compute blended probability from detected signals.
+2.  **Stratify Risk**: Apply `stratify_risk(prob, signal_count)`.
+    -   HIGH: `prob >= 0.70 AND signal_count >= 2`.
+    -   MEDIUM: `prob >= 0.50 OR signal_count == 1`.
+    -   LOW: Otherwise.
+3.  **Extract Driver Alerts**: Separate Genomic Drivers (orthogonal to clinical risk).
+4.  **Apply Safety Caps** (`_apply_safety_caps`): If CA-125 missing AND would-be HIGH, cap to MEDIUM.
+
+### 5.3. Provenance Object (Output)
 ```json
-"provenance": {
+{
   "model_version": "resistance_prophet_v2.0_engine",
   "engine": "deterministic",
-  
-  # The Resolution of the "0.71 Paradox"
   "probability_components": {
-     "clinical_phenotype": 0.0,    // "Patient is responding clinically."
-     "genomic_driver": 0.71,       // "But their genetics are dangerous (CCNE1)."
-     "blended_score": 0.71         // "Weighted probability."
+    "clinical": 0.0,
+    "driver": 0.71,
+    "blended": 0.71
   },
-  
-  # The Safety Guard
   "risk_drivers": {
-     "driven_by": "blended_probability",
-     "clinical_signal_count": 0,   // "Zero clinical signals detected."
-     "note": "Risk strictly capped due to lack of phenotypic corroboration."
+    "clinical_signal_count": 0,
+    "driven_by": "blended_probability"
   }
 }
 ```
 
 ---
 
-## 5. 🛳️ Final Status: Deployment Ready
+## 6. Alert Mode Policy (`ResistanceProphetService`)
 
-**Contract Established**:
-1.  **Genomic Drivers** are persistent warnings (Safety).
-2.  **Clinical Risk** requires corroboration (Precision).
-3.  **Missing Data** triggers uncertainty caps (Humility).
-4.  **Blended Probability** connects the two (Reality).
+### 6.1. Toggle Parameter
+`alert_mode`: `"precise"` (default) | `"sensitive"`.
 
-The Resistance Prophet v2.0 is no longer guessing. It is calculating.
+### 6.2. Behavior
+| Mode | Trigger | Alert Level | Actions |
+| :--- | :--- | :--- | :--- |
+| **Precise** | `risk_level == HIGH` | `ACTIONABLE` | Switch Therapy |
+| **Sensitive** | `risk_level == MEDIUM` OR `CA125_KINETICS` detected | `SOFT` | Increase Monitoring |
+
+### 6.3. Rate Limiting (Sensitive Mode)
+-   **Rule**: Max 1 Soft Alert per 7 days per patient.
+-   **Exceptions**: New signal type OR probability surge >= 0.20.
+
+---
+
+## 7. Phase 1c: Red Team Analysis (OV-045)
+
+### 7.1. Hypothesis
+Could we detect recurrence earlier (Day 362 vs. 469) by lowering thresholds or using ctDNA?
+
+### 7.2. Findings
+| Proposed Change | Result | Verdict |
+| :--- | :--- | :--- |
+| Lower CA-125 Floor (20 -> 10) | PPV = **46.7%**. 25% cohort FP. | ❌ Rejected |
+| ctDNA (TF > 0.005) | TF at Day 362 (0.8%) < Day 56 (1.0%). Stable. | ❌ Rejected |
+
+### 7.3. Conclusion
+The production thresholds are validated. **Concurrent Detection** is the correct, evidence-based behavior for OV-045. The engine avoided a False Positive at Day 362.
+
+---
+
+## 8. Operational Artifacts
+
+### 8.1. Key Scripts
+| Script | Purpose |
+| :--- | :--- |
+| `scripts/benchmark/replay_real_patients.py` | Time-travel replay against MSK-Spectrum |
+| `scripts/benchmark/cohort_noise_analysis.py` | PPV analysis for threshold changes |
+| `scripts/audit/generate_strict_hygiene_reports.py` | Data integrity validation |
+
+### 8.2. Key Reports
+| Report | Contents |
+| :--- | :--- |
+| `reports/Phase1c_Receipt.md` | Formal audit usage receipt |
+| `reports/signal_trace_patient_OV-045_day_469.json` | Full proof-of-work JSON |
+| `reports/audit_results_*.csv` | Alert Mode behavior evidence |
+
+---
+*Generated by Antigravity Agent*

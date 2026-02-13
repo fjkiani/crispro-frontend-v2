@@ -1,0 +1,188 @@
+{
+  "metrics": {
+    "auprc": 0.6,
+    "auroc": 0.5
+  },
+  "n": 5,
+  "api_base": "http://127.0.0.1:8000",
+  "results": [
+    {
+      "input": {
+        "disease": "ovarian cancer",
+        "gene": "BRCA1",
+        "hgvs_p": "R1699W",
+        "chrom": "",
+        "pos": "",
+        "ref": "",
+        "alt": "",
+        "build": "GRCh38",
+        "outcome_platinum": "1"
+      },
+      "prediction": {
+        "error": "timed out"
+      },
+      "score": 0.5
+    },
+    {
+      "input": {
+        "disease": "ovarian cancer",
+        "gene": "BRCA2",
+        "hgvs_p": "D2723H",
+        "chrom": "",
+        "pos": "",
+        "ref": "",
+        "alt": "",
+        "build": "GRCh38",
+        "outcome_platinum": "1"
+      },
+      "prediction": {
+        "error": "timed out"
+      },
+      "score": 0.5
+    },
+    {
+      "input": {
+        "disease": "breast cancer",
+        "gene": "BRCA1",
+        "hgvs_p": "R175H",
+        "chrom": "",
+        "pos": "",
+        "ref": "",
+        "alt": "",
+        "build": "GRCh38",
+        "outcome_platinum": "1"
+      },
+      "prediction": {
+        "error": "timed out"
+      },
+      "score": 0.5
+    },
+    {
+      "input": {
+        "disease": "breast cancer",
+        "gene": "TP53",
+        "hgvs_p": "R248W",
+        "chrom": "",
+        "pos": "",
+        "ref": "",
+        "alt": "",
+        "build": "GRCh38",
+        "outcome_platinum": "0"
+      },
+      "prediction": {
+        "suggested_therapy": "braf inhibitor",
+        "damage_report": [
+          {
+            "variant": {
+              "gene": "TP53",
+              "hgvs_p": "R248W",
+              "build": "GRCh38"
+            },
+            "vep": null,
+            "functionality": {
+              "gene": "TP53",
+              "hgvs_p": "R248W",
+              "functionality_change_score": 0.6,
+              "affected_domains": [
+                "DNA_binding_domain"
+              ],
+              "provenance": {
+                "model_id": "evo2_7b",
+                "method": "esm_stub+evo2_rule",
+                "feature_flags": {
+                  "enable_massive_modes": false,
+                  "enable_research_mode": false,
+                  "enable_calibration_preload": true,
+                  "enable_insights_api": true,
+                  "enable_design_api": true,
+                  "enable_command_center": true
+                }
+              }
+            }
+          }
+        ],
+        "essentiality_report": [
+          {
+            "gene": "TP53",
+            "result": {
+              "gene": "TP53",
+              "essentiality_score": 0.35,
+              "flags": {
+                "truncation": false,
+                "frameshift": false
+              },
+              "rationale": "Truncation-first; Evo2 multi/exon magnitude proxy; calibrated if available",
+              "confidence": 0.55,
+              "provenance": {
+                "model_id": "evo2_7b",
+                "feature_flags": {
+                  "enable_massive_modes": false,
+                  "enable_research_mode": false,
+                  "enable_calibration_preload": true,
+                  "enable_insights_api": true,
+                  "enable_design_api": true,
+                  "enable_command_center": true
+                },
+                "method": "evo2_multi_exon_v1",
+                "calibration": {
+                  "calibration_source": "none"
+                }
+              }
+            }
+          }
+        ],
+        "guidance": {
+          "therapy": "braf inhibitor",
+          "disease": "breast cancer",
+          "on_label": false,
+          "tier": "III",
+          "strength": "moderate",
+          "efficacy_score": 0.115,
+          "confidence": 0.31999999999999995,
+          "insights": {
+            "functionality": 0.0,
+            "chromatin": 0.0,
+            "essentiality": 0.0,
+            "regulatory": 0.0
+          },
+          "rationale": [
+            "MoA alignment: MAPK blockade",
+            "evidence_strength=0.55",
+            "citations_count=5",
+            "resistance:TP53_high_risk",
+            "TP53 R248W high-risk context"
+          ],
+          "citations": [
+            "40702960",
+            "40512670",
+            "40839989"
+          ],
+          "evidence_tier": "consider",
+          "badges": [],
+          "provenance": {
+            "efficacy_run": "abb05cda760e",
+            "source": "efficacy/predict"
+          }
+        }
+      },
+      "score": 0.5
+    },
+    {
+      "input": {
+        "disease": "multiple myeloma",
+        "gene": "BRCA1",
+        "hgvs_p": "R1699W",
+        "chrom": "",
+        "pos": "",
+        "ref": "",
+        "alt": "",
+        "build": "GRCh38",
+        "outcome_platinum": "0"
+      },
+      "prediction": {
+        "error": "timed out"
+      },
+      "score": 0.5
+    }
+  ]
+}

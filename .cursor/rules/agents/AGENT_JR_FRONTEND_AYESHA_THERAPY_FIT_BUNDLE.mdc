@@ -1,0 +1,181 @@
+## Mission: Ayesha Therapy Fit Frontend — Real Data Bundle Wiring (RUO)
+
+> [!IMPORTANT] ZO AUDIT (2026-01-31)
+> **MISSION ACCOMPLISHED.**
+> This agent instructions file has been efficiently executed.
+> The components `AyeshaDrugPanel`, `DrugCard`, `SyntheticLethalityCard`, and `ScenarioTeasers` are now LIVE.
+> Future modification should treat these components as the baseline.
+
+**Owner:** Frontend agent (JR)
+
+**Owner:** Frontend agent (JR)  
+**Goal:** Delete demo-only hardcoded numbers and wire the UI end-to-end to real backend outputs using one canonical bundle endpoint + scenario cards backed by computed previews.
+
+### Background (Why this exists)
+- The “Ayesha Therapy Fit” UI components were built with hardcoded demo values (fake Evo2 deltas, fake percentiles).
+- Real analysis artifacts exist in backend outputs (e.g. `oncology-coPilot/oncology-backend-minimal/results/ayesha_analysis/ayesha_mbd4_tp53_analysis_*.json`) and the live pipelines already compute provenance fields.
+- Backend now exposes production endpoints:
+  - **Bundle (single contract):** `POST /api/ayesha/therapy-fit/bundle`
+  - **Scenario cards:** `GET /api/ayesha/therapy-fit/scenarios`
+
+### Non-Negotiable Rules
+- **Do NOT hardcode Evo2 deltas/percentiles/confidence.** All displayed values must come from the API response.
+- **Do NOT re-rank drugs in the frontend.** Render the backend ordering. Only add “actionable / gated” UI states.
+- **Keep SL and efficacy as separate panels** (efficacy = primary ranking; SL = advisory explanation).
+- Must preserve **RUO labeling** wherever results are shown.
+
+---
+
+## Backend Contracts (Source of Truth)
+
+### 1) Bundle Endpoint (primary UI data source)
+**Endpoint:** `POST /api/ayesha/therapy-fit/bundle?level=all|l1|l2|l3&scenario_id=<L2>&l3_scenario_id=<L3>`
+
+**Important:** This endpoint exists and routes are registered (verified by import-time route scan).
+
+**Top-level response (shape):**
+- `patient_id`
+- `requested_levels`: e.g. `["L1","L2","L3"]`
+- `scenario_context`: `{ l2_scenario_id, l3_scenario_id }`
+- `generated_at`
+- `levels`: object keyed by `"L1"|"L2"|"L3"`
+
+**Per-level shape:** `levels["L1"]` etc:
+- `is_preview`: boolean
+- `effective_assembly`: string (best-effort UI disambiguation)
+- `inputs_used`: `{ mutations: [], tumor_context: {} }`
+- `efficacy`: `{ drugs: [], pathway_scores: {}, provenance: {} }`
+- `synthetic_lethality`: SL result object (or `{ error, provenance }`)
+- `completeness`: the existing completeness block (missing fields, cap, etc)
+
+### 2) Scenario Endpoint (for teaser cards)
+**Endpoint:** `GET /api/ayesha/therapy-fit/scenarios`
+
+**Response:**
+- `l2_scenarios`: list of cards with `{ id, name, locked, requires[], preview, meta }`
+- `l3_scenarios`: list of cards with `{ id, name, locked, requires[], preview, meta }`
+- `defaults`
+- `preview_cache` (mode/ttl/errors)
+
+Previews are computed from real L2/L3 runs on the backend and cached.
+
+---
+
+## Frontend Targets (Files to Change)
+
+### Primary page to wire (Therapy Fit page)
+- `oncology-coPilot/oncology-frontend/src/pages/ayesha/AyeshaTherapyFit.jsx`
+
+**Current problem:** It calls `/api/ayesha/therapy-fit/analyze?level=l1` and renders a legacy shape.
+
+**Required change:**
+- Replace with a single call to `/api/ayesha/therapy-fit/bundle?level=l1` (or `level=all` if the page will show L1+teasers).
+- Use `levels["L1"]` as the data source for drug cards + completeness + provenance display.
+- Use `effective_assembly` in UI (small caption near provenance).
+
+### Teaser cards (Scenarios)
+- Add a “Future Scenarios” section by calling `GET /api/ayesha/therapy-fit/scenarios`.
+- **ZO OVERRIDE:** Do NOT render `preview` fields (top_drug/confidence). The backend returns them as UNDEFINED.
+  - Render Only: `name`, `locked` status, `requires[]` chips.
+- ~Render `preview.top_drug`, `preview.confidence`, and `preview.rationale` (all real).~
+- Render `requires[]` chips and lock icon.
+
+### Demo components to de-hardcode (if still used anywhere)
+> [!NOTE] ZO AUDIT: COMPONENT STRATEGY
+> The Execution Plan calls for a new `AyeshaDrugPanel.jsx`. PREFER implementing that fresh component over refactoring `MutationScoringPipeline.jsx` for the main view. Use `MutationScoringPipeline` only for the specific Evo2 deep-dive modal/view.
+
+Locate and update these components to accept props driven by the bundle payload:
+- `src/components/ayesha/MutationScoringPipeline.jsx`
+- `src/components/ayesha/PathwayDisruptionMap.jsx`
+- `src/components/ayesha/SyntheticLethalityFlow.jsx`
+
+If these are used by `AyeshaTwinDemo`, keep Twin Demo separate; **Therapy Fit** should be driven by bundle contract above.
+
+---
+
+## UX Requirements (what to render)
+
+### Drug cards (from `bundle.levels["L1"].efficacy.drugs`)
+Render for each drug:
+- `name`
+- `confidence` (as %)
+- `efficacy_score`
+- `evidence_tier`
+- `badges`
+- `citations_count` (if present)
+- `rationale` (accordion; show strings or `explanation` fields if objects)
+
+### Actionability (visual gating only)
+Do not change ordering. Add a lightweight “gated” style:
+- If `citations_count === 0` OR badges indicate capped tier OR confidence is capped via completeness, render card in gray with “Not actionable (missing evidence)” helper text.
+- Use `completeness.missing[]` and `completeness.confidence_cap` to explain why.
+
+### Synthetic Lethality (advisory panel)
+Use `bundle.levels["L1"].synthetic_lethality`:
+- show `synthetic_lethality_detected`
+- show `double_hit_description`
+- render top `recommended_drugs` (name/class/confidence/tier)
+- render `essentiality_scores` table showing:
+  - `gene`
+  - `essentiality_score`
+  - `evo2_raw_delta`
+  - `evo2_window_used`
+  - `confidence`
+
+### Provenance (debug / RUO)
+Expose `effective_assembly`, `inputs_used`, and `efficacy.provenance` under an accordion.
+
+---
+
+## Implementation Steps (Do in Order)
+
+1) **Create a hook** `useAyeshaTherapyFitBundle(level, scenario_id, l3_scenario_id)`:
+   - Uses `VITE_API_ROOT` if needed (match other hooks).
+   - Calls `POST /api/ayesha/therapy-fit/bundle?...`.
+
+2) **Update `AyeshaTherapyFit.jsx`**:
+   - Use the hook.
+   - Render L1 panel from `data.levels.L1`.
+   - Render scenarios section from `GET /api/ayesha/therapy-fit/scenarios` (LOCKED STATE ONLY - No previews).
+
+3) **Build `AyeshaDrugPanel.jsx` & `DrugCard.jsx`**: (Clean Build - Preferred)
+   - Implement the new patterns defined in the Execution Plan.
+   - Do NOT try to repurpose `MutationScoringPipeline` for the main list.
+   - Wire `DrugCard` to show S/P/E logic from `efficacy.drugs`.
+
+4) **Wire `SyntheticLethalityCard.jsx`**:
+   - Ensure it accepts the `synthetic_lethality` object from the bundle.
+   - Show the "Mechanism Diagram" if data aligns.
+
+5) **Optional / Debug Only**:
+   - If `MutationScoringPipeline` is kept for a 'Details' view, wire it to `inputs_used`.
+   - Otherwise, prioritize the new panels above.
+
+4) **Delete / remove any hardcoded fixtures** in those components.
+
+---
+
+## Acceptance Criteria (Must Pass)
+
+- `AyeshaTherapyFit.jsx` makes **no calls** to demo endpoints and contains **no hardcoded deltas**.
+- The page renders with:
+  - L1 drugs from `/bundle` (confidence bars match backend, not constants)
+  - SL panel populated from `/bundle`
+  - Scenario teaser cards from `/scenarios` with computed `preview` fields
+- No console errors.
+- RUO copy present (banner or small caption).
+
+---
+
+## Quick Manual Test Plan (local)
+
+1) Backend running on `127.0.0.1:8000`
+2) Browser:
+   - Open the Therapy Fit page route that corresponds to `AyeshaTherapyFit.jsx`
+3) Network checks:
+   - `POST /api/ayesha/therapy-fit/bundle?level=l1` returns 200
+   - `GET /api/ayesha/therapy-fit/scenarios` returns 200
+4) Visual checks:
+   - Confidence values are not “nice round fake numbers” (should reflect backend)
+   - Scenario cards show correctly LOCKED state (previews are disabled in backend).
+

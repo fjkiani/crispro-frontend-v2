@@ -1,3 +1,9 @@
+# ⚠️ HALLUCINATION AUDIT (Feb 10, 2026)
+> **STATUS**: DEBUNKED / LEGACY ARTIFACT
+> **CAUSE**: This report claims "MBD4 Loss -> PARP Sensitivity" based on "Biological Modeling".
+> **REALITY**: The "Modeling" was a hardcoded rule in `api/services/synthetic_lethality/constants.py` mapping `MBD4 -> BER -> PARP Dependency`.
+> **ACTION**: Logic disabled in backend. Treat this document as a historical record of the "Simple Synthetic Lethality" hypothesis, NOT clinical truth.
+
 # Gene Essentiality Analysis - Clinical Report
 ## AK - Ovarian Cancer HGSOC
 

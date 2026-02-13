@@ -43,23 +43,20 @@ Action: Order ctDNA, search trials, escalate to tumor board
 
 2. ✅ **Pathway Burden** (7D Mechanism Vector)
    - Computes 7D mechanism vector: [DDR, MAPK, PI3K, VEGF, HER2, IO, Efflux]
-   - Example: BRCA1 → DDR=0.70, MAPK=0.10, others low
+   - Source: **Proxy Logic** (Validated Genes)
 
 3. ✅ **Hotspot Detection** (COSMIC Database)
    - Detects KRAS/BRAF/NRAS hotspots
    - Maps to pathways (KRAS → MAPK, BRAF → MAPK)
-   - Provides targeted therapy hints
 
-4. ✅ **Resistance Detection** (2-of-3 Triggers)
-   - HRD score drop ≥10 points vs baseline
-   - DNA repair capacity drop ≥0.15 vs baseline
-   - CA-125 inadequate response (<50% drop by Cycle 3)
-   - Early resistance detection (3-6 weeks faster)
+4. ✅ **Transcriptomic Risk (L1)**
+   - **MFAP4 Biomarker**: High expression -> EMT Phenotype.
+   - **AUROC**: 0.763 (Gold Standard).
 
-5. ✅ **Mechanism-Based Trial Matching**
-   - Uses SAE mechanism vector for trial ranking
-   - Cosine similarity: patient vector ↔ trial MoA vector
-   - Combined scoring: 0.7×eligibility + 0.3×mechanism_fit
+5. ✅ **Resistance Detection** (2-of-3 Triggers)
+   - HRD score drop ≥10 points
+   - MFAP4 Spike (New)
+   - CA-125 inadequate response
 
 **What's Missing:**
 - ❌ ctDNA VAF tracking over time - partially built

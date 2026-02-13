@@ -1,0 +1,45 @@
+---
+description: Resistance Prophet Refactor & Integration Strategy
+globs: api/services/resistance_prophet/**, api/services/resistance_prophet_service.py
+alwaysApply: false
+---
+
+# Resistance Prophet V2 (Modular)
+
+## Context
+This module replaces the legacy monolithic `ResistanceProphetService`. It introduces disease-specific modularity (Ovarian vs Multiple Myeloma) while maintaining strict backward compatibility with the legacy JSON API contract.
+
+## Architecture
+- **Core Orchestrator**: `api/services/resistance_prophet_service.py`
+  - Acts as the entry point.
+  - Manages dependencies (`sae_service`, `playbook_service`).
+  - **CRITICAL**: Applies `serialize_to_legacy` shim at the return boundary.
+
+- **Signal Detectors**: `api/services/resistance_prophet/signals/`
+  - `ovarian.py`: Handles Restoration, Pathway Escape (7D Vectors), and OV Genes (`OV_HIGH_RISK_GENES`).
+  - `mm.py`: Handles MM Genes and Cytogenetics.
+  - **Invariant**: Detectors output `ResistanceSignalData` (dataclass) with `snake_case` fields.
+
+- **Legacy Shim**: `api/services/resistance_prophet/shim.py`
+  - **Purpose**: Translates V2 internal state to Legacy Public Contract.
+  - **Mapping**: 
+    - `risk_level` -> `risklevel`
+    - `DNA_REPAIR_RESTORATION` -> `DNAREPAIRRESTORATION`
+    - `GENE_LEVEL_RESISTANCE` -> **EXCLUDED** (to prevent Enum crashes in legacy consumers).
+
+## Key Logic Changes (V2)
+1.  **Restoration Logic**: Fixed inversion. Now triggers when `(current - baseline) > 0.15`.
+2.  **Escape Logic**: Fixed inversion. Now triggers when `(baseline - current) > 0.15` (Drop in burden).
+3.  **Polarity Safety**: Ovarian genes (e.g. `MBD4`) with `effect="SENSITIVITY"` are **excluded** from Risk Probability calculation.
+
+## Verification
+- **Golden Dataset**: `fixtures/resistance_prophet/golden_dataset.json` contains 6 canonical cases used to verify logic.
+- **Script**: `scripts/verify_resistance_prophet.py` mocks the service and asserts against **Legacy Output Keys** (proving the Shim works).
+
+## Known Regressions / Limits
+- **Risk Capping**: The legacy rule (High->Medium if CA-125 missing & 2 signals) IS implemented in `_apply_legacy_safety_caps`, but relies on `has_ca125=False` hardcoded assumption for now.
+- **Gene Signals**: Ovarian Gene signals are largely invisible to legacy consumers due to the Enum Exclusion. Internal logic sees them, but API hides them.
+
+## Do Not Modify
+- Do NOT remove `serialize_to_legacy` call in `predict_resistance`.
+- Do NOT rename Enums in `schemas.py` without updating `shim.py` mapping table.

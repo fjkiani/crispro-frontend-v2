@@ -1,0 +1,390 @@
+## Therapy-Fit Payload Forensics & Recovery (AK / WIWFM + Synthetic Lethality)
+
+**Status**: Active forensic document  
+**Audience**: Future agents reverse-engineering “what happened” and how to reproduce outputs  
+**Scope**: How the “therapy-fit bundle payload” was created, why changes were made, where the receipts live, and how to recover when chat/history is missing.  
+**RUO**: Everything described here is **Research Use Only**. This document is about **reproducibility + provenance**, not clinical truth.
+
+---
+
+## 0) Major takeaways (what the previous agents actually built)
+
+This section is the “agent brain dump” in a format that is:
+
+- **Actionable**: tells you exactly where the code is and what it does.
+- **Receipt-backed**: points to payload fields, artifacts, and transcript anchors rather than “memory”.
+- **Cache-aware**: explains why you can see different outputs on different runs.
+
+### 0.1 The payload is now the canonical artifact (not chat text)
+
+The work shifted away from “remembering what we said” toward “the payload is the truth.”  
+This is why the contract exposes:
+
+- `inputs_used` (mutations + tumor_context actually used)
+- `efficacy.provenance` (scoring and resolution receipts)
+- `synthetic_lethality` (full SL engine output, not UI-generated)
+
+If a doc/UI contradicts the payload, **the doc/UI is wrong**.
+
+### 0.2 The core production endpoint was created/standardized
+
+The canonical therapy-fit bundle endpoint is:
+
+- `POST /api/ayesha/therapy-fit/bundle`
+
+It returns L1/L2/L3 under `levels`, and also exposes top-level `synthetic_lethality` + `patient_context` for legacy frontend compatibility.
+
+### 0.3 The “empty WIWFM panel” failure mode was fixed at the source
+
+**Symptom**: `efficacy.drugs` empty or near-empty for L1 while SL had meaningful recommendations.  
+**Root cause**: L1 often had HGVS-only variants (missing chrom/pos/ref/alt), so Evo2 scoring could not run; downstream gates removed drug rows.  
+**Fix**: add HGVS→GRCh38 resolution inside `run_therapy_fit_analysis()` and attach receipts to `provenance.variant_resolution`.
+
+This is the single most important “recoverability” brick.
+
+### 0.4 SL “recommended drugs” must come from backend, never from frontend heuristics
+
+There was hard-coded SL drug logic in the frontend (especially around PARP) that could overwrite or contradict backend outputs.  
+The fix direction is:
+
+- UI renders `synthetic_lethality.recommended_drugs` *as returned*
+- UI does not fabricate `fda_approved=true`
+
+### 0.5 Cache and feature flags are part of the proof chain
+
+Different outputs can be explained by:
+
+- Evo2 cache hits/misses (persisted cache + TTL)
+- which Evo2 URL/model was active (`EVO_URL_1B`, `EVO_FORCE_MODEL`)
+- whether “fast” mode or heuristic fallback was allowed (`allow_heuristic_sequence`)
+
+A “good agent” in this system always records these in provenance and/or prints them during debugging.
+
+---
+
+## 1) What “the payload” is (definition)
+
+When we say “the payload,” we mean the JSON returned by:
+
+- **Endpoint**: `POST /api/ayesha/therapy-fit/bundle`
+- **Backend router**: `oncology-coPilot/oncology-backend-minimal/api/routers/ayesha_therapy_fit.py`
+- **Core components inside the response**:
+  - `levels.L1.efficacy` = WIWFM-like **S/P/E** drug ranking result (via `EfficacyOrchestrator`)
+  - `levels.L1.synthetic_lethality` = **Synthetic Lethality** agent output (via `SyntheticLethalityAgent`)
+  - `levels.L1.inputs_used` = exact mutations + tumor_context that were actually used
+  - `levels.L1.efficacy.provenance` = receipts including `variant_resolution` (HGVS → GRCh38) when needed
+
+This payload is the authoritative, receipt-backed artifact that the UI and doctor-review docs must reflect.
+
+---
+
+## 2) The exact code path that generates the payload
+
+### 2.1 Router entry point (`/bundle`)
+
+The bundle endpoint builds per-level outputs and nests **efficacy** + **synthetic_lethality** under each level:
+
+```35:106:oncology-coPilot/oncology-backend-minimal/api/routers/ayesha_therapy_fit.py
+@router.post("/bundle")
+async def ayesha_analysis_bundle(
+    level: Optional[str] = Query("all", description="Level to analyze: 'l1', 'l2', 'l3', or 'all'"),
+    scenario_id: Optional[str] = Query(None, description="L2 scenario ID"),
+    l3_scenario_id: Optional[str] = Query(None, description="L3 scenario ID"),
+    include_synthetic_lethality: bool = Query(True, description="Include SL panel"),
+    ctdna_status_override: Optional[str] = Query(None, description="Force ctDNA status (e.g. RISING) for validation"),
+):
+    # ...
+    efficacy = await run_therapy_fit_analysis(profile, lk.upper(), is_preview=(lk != "l1"))
+    # ...
+    sl_payload = await _run_sl_bundle(profile, include_explanations=False)
+    # ...
+    out[lk.upper()] = {
+        "inputs_used": {"mutations": mutations_used, "tumor_context": tumor_context_used},
+        "efficacy": {"drugs": ..., "pathway_scores": ..., "provenance": ...},
+        "synthetic_lethality": sl_payload,
+        "completeness": ...
+    }
+```
+
+### 2.2 WIWFM/Efficacy component (`run_therapy_fit_analysis`)
+
+The WIWFM-like drug ranking is produced by `EfficacyOrchestrator.predict()` inside:
+
+```37:282:oncology-coPilot/oncology-backend-minimal/api/services/ayesha_fit/service.py
+async def run_therapy_fit_analysis(profile: Dict[str, Any], level: str, is_preview: bool = False) -> Dict[str, Any]:
+    orchestrator = EfficacyOrchestrator()
+    mutations = build_mutations_for_api(profile)
+    tumor_context = build_tumor_context_for_api(profile)
+    # HGVS → GRCh38 resolution (receipt-backed) happens here if chrom/pos/ref/alt missing
+    request = EfficacyRequest(..., mutations=mutations, tumor_context=tumor_context, ...)
+    response = await orchestrator.predict(request)
+    # Attach provenance.variant_resolution receipts
+    return {"drugs": response.drugs, "pathway_scores": ..., "provenance": response.provenance, ...}
+```
+
+### 2.3 Synthetic Lethality component (`_run_sl_bundle`)
+
+The SL block in the payload is produced here (note `true_scoring_required=True` and `resolve_hgvs_to_grch38=True`):
+
+```286:312:oncology-coPilot/oncology-backend-minimal/api/services/ayesha_fit/service.py
+async def _run_sl_bundle(profile: Dict[str, Any], include_explanations: bool) -> Dict[str, Any]:
+    req = SyntheticLethalityRequest(
+        disease=profile.get("disease", "ovarian_cancer"),
+        mutations=sl_muts,
+        options=SLOptions(
+            include_explanations=include_explanations,
+            true_scoring_required=True,
+            resolve_hgvs_to_grch38=True,
+        )
+    )
+    agent = SyntheticLethalityAgent(api_base=os.getenv("API_BASE_URL", "http://127.0.0.1:8000"))
+    res = await agent.analyze(req)
+    return _as_dict(res)
+```
+
+---
+
+## 3) Why the payload changed over time (root causes + fixes)
+
+### 3.1 The key failure mode we had to fix
+
+**Symptom**: `efficacy.drugs` returned empty (or very sparse) for L1 even though SL had strong recommendations.  
+**Cause**: Some L1 mutations were HGVS-only (no `chrom/pos/ref/alt`) so the sequence pipeline could not score them; downstream confidence gates then removed drug rows → “empty panel”.
+
+### 3.2 The P0 fix that made the payload “receipt-backed” again
+
+In `run_therapy_fit_analysis()`, we added HGVS→GRCh38 resolution (using the same primitive the SL agent uses) and stored receipts under:
+
+- `efficacy.provenance.variant_resolution.attempted_count`
+- `efficacy.provenance.variant_resolution.resolved_count`
+- `efficacy.provenance.variant_resolution.receipts[]`
+
+This prevents UI/docs from inventing coordinates and provides auditability.
+
+The implementation is here:
+
+```47:159:oncology-coPilot/oncology-backend-minimal/api/services/ayesha_fit/service.py
+# P0 FIX (Jan 2026): HGVS → GRCh38 resolution for WIWFM (receipt-backed)
+variant_resolution_receipts: List[Dict[str, Any]] = []
+from api.services.variant_resolution import resolve_hgvs_to_grch38, left_pad_single_base_deletion
+...
+prov["variant_resolution"] = {
+  "resolved_count": ...,
+  "attempted_count": ...,
+  "receipts": variant_resolution_receipts,
+}
+```
+
+### 3.3 Why PARP vs ATR/WEE1 appeared contradictory
+
+This contradiction was usually **not biology**; it was **pipeline state**:
+
+- **SL** (Synthetic Lethality) could return checkpoint-axis opportunities (ATR/WEE1) based on TP53 + context because it forces “true scoring” and resolves HGVS internally.
+- **WIWFM/Efficacy** could return **empty** or overly generic panels when mutations lacked allele-complete coordinates and were filtered out.
+
+Once L1 coordinate resolution was added + receipts attached, WIWFM became consistent enough to compare against SL in the same bundle.
+
+---
+
+## 4) Where the receipts are (the “ground truth trail”)
+
+### 4.1 Runtime payload (preferred)
+
+The **runtime** output from:
+
+- `POST /api/ayesha/therapy-fit/bundle?level=l1`
+
+is the single best artifact to quote into doctor-review docs, because it includes:
+
+- the inputs actually used (`inputs_used`)
+- the engine provenance (`efficacy.provenance`)
+- any resolution receipts (`variant_resolution`)
+- the SL results as returned by the agent (not UI-derived)
+
+### 4.2 Transcript (forensic fallback when chat history is missing)
+
+If chat history was lost, the “what the agent did” record is the transcript:
+
+- **Path**:
+  - `/Users/fahadkiani/.cursor/projects/Users-fahadkiani-Desktop-development-crispr-assistant-main/agent-transcripts/35ae7005-3826-459e-a410-b2ecebfc469f.txt`
+
+**How to mine it quickly** (don’t scroll manually):
+
+- Search terms:
+  - `POST /api/ayesha/therapy-fit/bundle`
+  - `run_therapy_fit_analysis`
+  - `resolve_hgvs_to_grch38`
+  - `variant_resolution`
+  - `recommended_drugs`
+  - `fda_approved`
+  - `uvicorn api.main:app`
+  - `lsof -nP -iTCP:8000`
+
+This transcript includes ApplyPatch blocks showing when endpoints were created/modified and Shell blocks showing which commands were executed.
+
+---
+
+## 4.3 Runtime artifacts (local receipts captured during the work)
+
+Besides live `POST /bundle`, there are already saved payload artifacts on disk:
+
+- `artifacts/cache_audit_2026_02_12/L1_payload.json`
+- `artifacts/cache_audit_2026_02_12/L2_payloads.json`
+- `artifacts/cache_audit_2026_02_12/L3_combinations_payloads.json`
+
+Use these as “known-good payload snapshots” when comparing regressions (they’re faster than rerunning expensive pipelines).
+
+---
+
+## 5) How to reproduce the payload today (recovery runbook)
+
+### 5.1 Start backend (repeatable)
+
+Run from `oncology-coPilot/oncology-backend-minimal`:
+
+```bash
+python3 -m uvicorn api.main:app --host 127.0.0.1 --port 8000
+```
+
+Verify:
+
+```bash
+curl -sS http://127.0.0.1:8000/healthz
+```
+
+### 5.2 Generate bundle payload (L1)
+
+```bash
+curl -sS -X POST "http://127.0.0.1:8000/api/ayesha/therapy-fit/bundle?level=l1" \
+  -H "Content-Type: application/json" \
+  -d "{}"
+```
+
+### 5.3 Print the exact summary fields (to match “last output” style)
+
+Use a one-liner parser (example):
+
+```bash
+curl -sS -X POST "http://127.0.0.1:8000/api/ayesha/therapy-fit/bundle?level=l1" \
+  -H "Content-Type: application/json" -d "{}" \
+| python3 -c "import sys,json; d=json.load(sys.stdin); l1=(d.get('levels') or {}).get('L1') or {}; eff=(l1.get('efficacy') or {}); drugs=eff.get('drugs') or []; prov=eff.get('provenance') or {}; vr=(prov.get('variant_resolution') or {}); sl=l1.get('synthetic_lethality') or {}; rec=(sl.get('recommended_drugs') or []); print('WIWFM drugs:', len(drugs)); print('Top names:', [x.get('name') for x in drugs[:8] if isinstance(x,dict)]); print('Variant resolution attempted/resolved:', vr.get('attempted_count'), vr.get('resolved_count')); print('SL detected:', (sl.get('decision') or {}).get('synthetic_lethality_detected')); print('SL recommended:', [(x.get('drug_name') or x.get('name'), x.get('fda_approved')) for x in rec[:5] if isinstance(x,dict)])"
+```
+
+This avoids relying on any UI logic and keeps the summary derived only from the backend response.
+
+---
+
+## 5.4 The “debug queries” the agent used (copy/paste)
+
+These are the kinds of commands that were repeatedly used to stabilize runs and explain outputs.
+
+### Server/port sanity
+
+```bash
+curl -sS http://127.0.0.1:8000/healthz || true
+lsof -nP -iTCP:8000 -sTCP:LISTEN
+pgrep -fl "uvicorn.*api\\.main:app" || true
+```
+
+### Hard restart (when an old process is hanging)
+
+```bash
+PID=$(lsof -n -iTCP:8000 -sTCP:LISTEN | awk 'NR==2{print $2}') && echo PID=$PID && kill $PID 2>/dev/null || true
+```
+
+### Boot with explicit Evo2 1B URL + persisted cache
+
+```bash
+cd oncology-coPilot/oncology-backend-minimal && \
+EVO_URL_1B="https://crispro--evo-service-evoservice1b-api-1b.modal.run" \
+EVO_CACHE_PERSIST=1 EVO_CACHE_TTL_SECONDS=604800 EVO_CACHE_DIR="$HOME/.cache/oncology_evo" \
+python3 -m uvicorn api.main:app --host 127.0.0.1 --port 8000
+```
+
+### Direct Evo2 proxy check (prove the engine is alive)
+
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/evo/score_variant_multi \
+  -H 'Content-Type: application/json' \
+  -d '{"assembly":"GRCh38","chrom":"7","pos":140453136,"ref":"T","alt":"A","model_id":"evo2_1b","windows":[1024]}' \
+| python3 -c "import sys,json; d=json.load(sys.stdin); print('status', d.get('status')); print('min_delta', d.get('min_delta')); print('cache_hit', (d.get('provenance') or {}).get('cache_hit'))"
+```
+
+### Route existence check (prove `/bundle` is registered)
+
+```bash
+cd oncology-coPilot/oncology-backend-minimal && \
+python3 -c "from api.main import app; print(any(getattr(r,'path','')=='/api/ayesha/therapy-fit/bundle' for r in app.routes))"
+```
+
+---
+
+## 6) “How we recover” when docs were truncated or overwritten
+
+### 6.1 Doctrine
+
+If a clinician-facing MDC file (e.g., `AK_SL_WIWFM_DOCTOR_REVIEW_FEB10_2026.mdc`) is truncated or has hallucinated drug text:
+
+1) **Do not reconstruct from memory**.  
+2) Re-run `POST /api/ayesha/therapy-fit/bundle?level=l1`.  
+3) Copy only **receipt-backed** fields:
+   - `levels.L1.inputs_used`
+   - `levels.L1.efficacy.drugs` (and provenance)
+   - `levels.L1.synthetic_lethality.*` (including provenance)
+4) Paste into the document with an explicit “Generated at” timestamp and a `run_id` if present in provenance.
+
+### 6.2 Why this is necessary
+
+Because we do not have a reliable “chat memory” source of truth, and this repo may not be a clean git history, **the runtime payload + transcript** are the durable artifacts.
+
+---
+
+## 7) Minimal “core work” to preserve (what future agents must not break)
+
+If you touch this pipeline, preserve these invariants:
+
+- **Bundle contract** remains stable: `levels.{L1,L2,L3}.efficacy + synthetic_lethality + inputs_used`
+- **HGVS→GRCh38 resolution receipts** remain attached to provenance
+- **SL output in the UI** must render **backend `recommended_drugs`**, not frontend-hardcoded drug lists
+- **RUO posture**: never claim FDA approval unless a deterministic field says so; never infer label status
+
+---
+
+## 8) Cache + provenance takeaways (what to look for when outputs differ)
+
+When “the same request” seems to produce different results, you should check these first (in order):
+
+1) **Was Evo2 reachable?**
+   - Evidence: `/api/evo/score_variant_multi` returns `status=ok`
+2) **Was the run served from cache?**
+   - Evidence: Evo2 proxy provenance shows `cache_hit` and `cache_layer`
+3) **Which Evo2 base URL/model was used?**
+   - Evidence: env (`EVO_URL_1B`, `EVO_FORCE_MODEL`) and/or provenance fields in scoring
+4) **Were mutations allele-complete at scoring time?**
+   - Evidence: `efficacy.provenance.variant_resolution` receipts; and `inputs_used.mutations` includes chrom/pos/ref/alt
+5) **Did the pipeline fall back to heuristics?**
+   - Evidence: `options.allow_heuristic_sequence` and any provenance flag indicating heuristic scoring was used
+
+If we want “Memento-grade stability,” we should make sure the payload always surfaces:
+
+- which engines were used (Fusion vs Evo2 vs heuristic)
+- cache hit/miss status
+- any exclusion reasons (e.g., indel normalization required)
+
+---
+
+## 8) Next forensic automation (planned)
+
+We will run separate AI/NLP extraction on:
+
+- `agent-transcripts/35ae7005-...txt`
+
+Goal:
+
+- Extract a **clean timeline** (patches, commands, outputs) into structured JSON:
+  - `patch_events[]` (file, diff summary, intent)
+  - `run_events[]` (endpoint, query params, response keys)
+  - `claims[]` (statements that must be backed by receipts)
+
+This document is the “manual seed” for that automation: it identifies the canonical endpoints, files, and grep anchors.
+

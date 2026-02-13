@@ -14,6 +14,15 @@ VENV_PYTHON = sys.executable
 # More robust way to get the path to the current script
 LLM_API_SCRIPT_PATH = os.path.abspath(__file__)
 
+# --- Load .env file at top level ---
+try:
+    from dotenv import load_dotenv
+    dotenv_path = os.path.join(PROJECT_ROOT, '.env')
+    if os.path.exists(dotenv_path):
+        load_dotenv(dotenv_path=dotenv_path, override=True)
+except ImportError:
+    pass
+
 # --- Simplified function for modules that directly import query_llm ---
 def query_llm(prompt, provider="gemini", image_path=None, endpoint_url=None):
     """
@@ -74,6 +83,13 @@ def get_llm_chat_response(conversation_history, provider="gemini", model_name=No
     Returns:
         str: The LLM's text response, or an error message.
     """
+    # Use default provider from environment if not specified or is default "gemini"
+    # This allows easy switching via .env
+    if provider == "gemini": # "gemini" is often the default value in call sites
+        env_default = os.environ.get("LLM_DEFAULT_PROVIDER")
+        if env_default:
+            provider = env_default
+
     # Format the conversation history into a single prompt string for the CLI
     # The system message and alternating user/assistant turns should be handled here.
     cli_prompt = format_history_for_cli_prompt(conversation_history)
@@ -114,25 +130,9 @@ def get_llm_chat_response(conversation_history, provider="gemini", model_name=No
 
 # --- CLI Argument Parsing and Main Logic --- 
 def main_cli():
-    # --- Load .env file if it exists --- START
-    try:
-        from dotenv import load_dotenv
-        dotenv_path = os.path.join(PROJECT_ROOT, '.env')
-        if os.path.exists(dotenv_path):
-            load_dotenv(dotenv_path=dotenv_path)
-            # print("DEBUG: Loaded .env file.") # Optional debug message
-        else:
-            # print("DEBUG: .env file not found, relying on environment variables.") # Optional debug message
-            pass
-    except ImportError:
-        # dotenv not installed, proceed without it, relying on environment vars
-        # print("DEBUG: python-dotenv not installed. Relying on environment variables.") # Optional debug message
-        pass
-    # --- Load .env file if it exists --- END
-
     parser = argparse.ArgumentParser(description="Interact with various LLM providers. Outputs LLM response to stdout.")
     parser.add_argument("--prompt", type=str, required=True, help="The prompt to send to the LLM.")
-    parser.add_argument("--provider", type=str, required=True, choices=["gemini", "openai", "anthropic", "deepseek", "azure_openai", "local_llm"], help="The LLM provider.")
+    parser.add_argument("--provider", type=str, required=True, choices=["gemini", "openai", "anthropic", "cohere", "deepseek", "azure_openai", "local_llm"], help="The LLM provider.")
     parser.add_argument("--model", type=str, help="Optional: Specific model name for the provider.")
     parser.add_argument("--image", type=str, help="Optional: Path to an image for multimodal LLMs.")
     parser.add_argument("--endpoint", type=str, help="Optional: Explicitly provide the endpoint URL for local_llm.")
@@ -285,6 +285,42 @@ pip install anthropic>=0.5.0"""
         except Exception as e:
             return f"Error calling Anthropic API: {e}"
 
+    elif args.provider == "cohere":
+        try:
+            import cohere
+            
+            api_key = os.environ.get("COHERE_API_KEY")
+            if not api_key:
+                return """⚠️ COHERE_API_KEY not properly configured!
+1. Get your API key from https://dashboard.cohere.com/api-keys
+2. Add to your .env file:
+   COHERE_API_KEY=your_actual_key_here
+3. Restart the application"""
+            
+            client = cohere.Client(api_key=api_key)
+            
+            # Use Command R+ as default model (updated to supported version)
+            model_name_to_use = args.model if args.model else "command-r-plus-08-2024"
+            
+            # Format history for Cohere
+            # For simplicity, we'll send the prompt text directly. 
+            # Cohere's chat endpoint handles history well if passed as 'chat_history'
+            response = client.chat(
+                message=args.prompt,
+                model=model_name_to_use,
+                connectors=[{"id": "web-search"}] if "search" in args.prompt.lower() else []
+            )
+            
+            return response.text
+            
+        except ImportError:
+            return """Error: cohere library not found.
+            
+Please run the following command to install it:
+pip install cohere"""
+        except Exception as e:
+            return f"Error calling Cohere API: {e}"
+
     elif args.provider == "local_llm":
         try:
             # Prioritize the explicitly passed endpoint, then fall back to environment variable
@@ -373,7 +409,4 @@ Please add the appropriate API key to your .env file."""
 if __name__ == "__main__":
     result = main_cli()
     if result:
-        print(result) 
-        print(result) 
-        print(result) 
-        print(result) 
+        print(result)

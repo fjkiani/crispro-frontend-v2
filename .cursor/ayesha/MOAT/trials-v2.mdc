@@ -1,0 +1,71 @@
+---
+description: Trials V2 Doctrine - Fixing the Ayesha Trials Pipeline
+alwaysApply: true
+---
+
+# Trials V2: Fixing the Ayesha Trials Pipeline
+
+> **Context**: The current trials system is "broken" due to router ambiguity, broad discovery, and weak filtering. This doctrine outlines the 5-Phase Plan to fix it.
+
+## 🚨 The Problem (Why it feels "off")
+
+1.  **Router Ambiguity**: Both `api/routers/ayesha_trials.py` (monolith) and `api/routers/ayesha_trials/` (package) exist. Python's import resolution is ambiguous.
+2.  **Broad Discovery**: SQLite discovery is too loose ("ovarian" keyword), leaking irrelevant trials (endometrial, benign cysts).
+3.  **Weak Filters**: "NY Metro" and "Line of Therapy" are not enforced as hard gates.
+4.  **Missing Tags**: MoA tagging relies on offline JSONs that are often missing.
+5.  **Holistic Scoring Failure**: Defaults to 0.5 because it lacks structured inputs (mechanism vector, eligibility signals).
+
+---
+
+## 🛠️ The Plan (Agent Runbook)
+
+### Phase 0: Deterministic Router (P0)
+**Goal**: Eliminate ambiguity.
+- [ ] **Deliverable 0.1**: Choose ONE router.
+    - Rename/Delete `api/routers/ayesha_trials.py` (Legacy Monolith).
+    - Enforce usage of `api/routers/ayesha_trials/` (Package).
+    - Update `api/main.py`.
+
+### Phase 1: Fix Candidate Discovery (P0)
+**Goal**: Get relevant candidates, not just "more".
+- [ ] **Deliverable 1.1**: Strict "Ayesha Intent" Query (`discovery.py`).
+    - Prioritize: HGSOC, Epithelial, Stage III/IV.
+    - Exclude: Endometrial-only, PCOS, Infertility.
+- [ ] **Deliverable 1.2**: Live Fetch Fallback.
+    - Script: `scripts/trials/refresh_ovarian_trials.py`.
+    - Fetch from CT.gov v2 -> Upsert to SQLite.
+
+### Phase 2: Real Filters (P0)
+**Goal**: Match Ayesha's reality (NY + Stage + Line).
+- [ ] **Deliverable 2.1**: Real NY Metro Filter.
+    - Enforce `location_state="NY"` using `locations_full_json`.
+- [ ] **Deliverable 2.2**: Treatment Line Bucketing.
+    - Derive `trial_line_bucket` (Frontline, Maintenance, Recurrent, Platinum-Resistant).
+
+### Phase 3: Auditable Tagging (P0/P1)
+**Goal**: "Whatever it takes" to get tags.
+- [ ] **Deliverable 3.1**: Expand Offline MoA Vectors.
+    - Target Top 500 Ovarian Trials.
+    - Map Drug Names -> Mechanism DB.
+- [ ] **Deliverable 3.2**: Extract Eligibility Gates.
+    - Extract: FRα (FOLR1), HRD, Cyclin E1, PD-L1, platinum-status.
+
+### Phase 4: Honest Ranking (P1)
+**Goal**: Stable, explainable sorting.
+- [ ] **Deliverable 4.1**: Real Eligibility Gates.
+    - Start with Hard Gates (Recruiting, NY, Line).
+    - Add Soft Gates (Biomarker match).
+- [ ] **Deliverable 4.2**: Fix Holistic Score Service.
+    - Ensure `patient_profile` includes mechanism/germline/SAE.
+
+### Phase 5: "Opportunities" UX (P1)
+**Goal**: Actionable funnel.
+- [ ] **Deliverable 5.1**: Tabbed UI (Now vs Later).
+- [ ] **Deliverable 5.2**: "Unlock Checklist" (e.g., "Order FOLR1 IHC").
+
+---
+
+## ✅ Smoke Tests
+1.  **Router Identity**: `python -c "import api.routers.ayesha_trials..."` points to single source.
+2.  **Leakage Check**: No "Endometrial" or "Infertility" trials in top 20.
+3.  **Gate Extraction**: Verify NCT05445778 shows `requires_folr1_high: true`.

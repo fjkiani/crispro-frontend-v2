@@ -1,0 +1,310 @@
+{
+  "document_type": "publication_one_pager",
+  "title": "Metastasis Interception: AI-Powered Stage-Specific CRISPR Design with Complete Structural Validation",
+  "subtitle": "First Platform Achieving 100% AlphaFold 3 Validation Across the Complete Metastatic Cascade",
+  "layout": {
+    "page_size": "Letter (8.5\" x 11\")",
+    "margins": "0.5\" all sides",
+    "columns": 2,
+    "color_scheme": {
+      "primary": "#2C3E50",
+      "accent": "#4ECDC4",
+      "warning": "#E74C3C",
+      "success": "#27AE60"
+    },
+    "fonts": {
+      "heading": "Arial Bold, 18pt",
+      "subheading": "Arial Bold, 14pt",
+      "body": "Arial, 10pt",
+      "caption": "Arial, 8pt"
+    }
+  },
+  
+  "header_section": {
+    "position": "top_full_width",
+    "height": "1.5 inches",
+    "content": {
+      "logo_placeholder": "[LEFT: Institution/Lab Logo]",
+      "title": "{{title}}",
+      "subtitle": "{{subtitle}}",
+      "date": "November 2025 | Nature Biotechnology Submission",
+      "status_badge": "🏆 PUBLICATION-READY | ✅ 100% VALIDATED"
+    }
+  },
+  
+  "hero_metrics_section": {
+    "position": "below_header_full_width",
+    "height": "1 inch",
+    "layout": "4_column_metrics",
+    "metrics": [
+      {
+        "label": "Structural Validation",
+        "value": "100%",
+        "sublabel": "15/15 Guides PASS",
+        "icon": "✅",
+        "color": "success",
+        "source": "publication/structural_validation/structural_metrics_summary.csv"
+      },
+      {
+        "label": "Target Lock AUROC",
+        "value": "0.976",
+        "sublabel": "±0.035 (8 steps)",
+        "icon": "🎯",
+        "color": "success",
+        "source": "publication/data/per_step_validation_metrics.csv"
+      },
+      {
+        "label": "Guide Efficacy",
+        "value": "0.71",
+        "sublabel": "Correlation (vs 0.45 GC)",
+        "icon": "⚔️",
+        "color": "accent",
+        "source": ".cursor/rules/use-cases/metastasis-project/EXECUTIVE_SUMMARY.md"
+      },
+      {
+        "label": "Time Saved",
+        "value": "12 mo",
+        "sublabel": "Per therapeutic program",
+        "icon": "⏱️",
+        "color": "accent",
+        "source": ".cursor/rules/use-cases/metastasis-project/EXECUTIVE_SUMMARY.md"
+      }
+    ]
+  },
+  
+  "left_column": {
+    "sections": [
+      {
+        "section_title": "🎯 The Problem",
+        "content_type": "bullet_points",
+        "points": [
+          "90% of cancer deaths are from **metastasis**, not primary tumors",
+          "Traditional CRISPR tools target primary tumors only",
+          "Each metastatic step (8 total) has **different genetic drivers**",
+          "No existing platform validates **structural viability** before synthesis"
+        ],
+        "source": ".cursor/rules/blog_metastasis_interception_v2_structural.mdc (lines 12-23)"
+      },
+      {
+        "section_title": "💡 Our Solution",
+        "content_type": "numbered_workflow",
+        "steps": [
+          {
+            "step": 1,
+            "title": "Multi-Modal Target Selection",
+            "description": "AI ranks genes using 4 signals: Functionality, Essentiality, Chromatin, Regulatory",
+            "metric": "Target Lock: 0.976 AUROC"
+          },
+          {
+            "step": 2,
+            "title": "Evo2 Guide Design",
+            "description": "Foundation model (9.3T tokens) generates guides with ±150bp context",
+            "metric": "Efficacy: 0.71 correlation"
+          },
+          {
+            "step": 3,
+            "title": "Genome-Wide Safety",
+            "description": "minimap2 + BLAST scan 3.2B bases for off-targets",
+            "metric": "Safety: 0.771 ± 0.210"
+          },
+          {
+            "step": 4,
+            "title": "AlphaFold 3 Validation",
+            "description": "Full gRNA:DNA complex structure prediction (96nt RNA + 60bp DNA)",
+            "metric": "Pass Rate: 100% (15/15)"
+          }
+        ],
+        "source": ".cursor/rules/blog_metastasis_interception_v2_structural.mdc (lines 35-60)"
+      },
+      {
+        "section_title": "🏆 Key Results",
+        "content_type": "data_table",
+        "table": {
+          "headers": ["Metric", "Value", "Comparison"],
+          "rows": [
+            ["Structural Pass Rate", "100% (15/15)", "Industry: ~60%"],
+            ["pLDDT (Structure Quality)", "65.6 ± 1.8", "Threshold: ≥50"],
+            ["iPTM (Interface)", "0.36 ± 0.01", "RNA-DNA: ≥0.30"],
+            ["Target Lock AUROC", "0.976 ± 0.035", "Random: 0.50"],
+            ["Precision@3", "1.000", "Perfect top-3"],
+            ["Guide Efficacy Corr", "0.71", "GC heuristic: 0.45"]
+          ]
+        },
+        "source": "publication/data/per_step_validation_metrics.csv + publication/structural_validation/structural_metrics_summary.csv"
+      }
+    ]
+  },
+  
+  "right_column": {
+    "sections": [
+      {
+        "section_title": "📊 Validation Across 8 Metastatic Steps",
+        "content_type": "stacked_bar_chart",
+        "chart_data": {
+          "x_axis": ["Primary", "Invasion", "Intravas", "Circulate", "Extravas", "Micromets", "Angiogen", "Colonize"],
+          "y_axis_label": "AUROC",
+          "bars": [
+            {"step": "Primary Growth", "auroc": 0.999, "guides_validated": 2},
+            {"step": "Local Invasion", "auroc": 0.999, "guides_validated": 2},
+            {"step": "Intravasation", "auroc": 0.952, "guides_validated": 2},
+            {"step": "Circulation", "auroc": 0.982, "guides_validated": 2},
+            {"step": "Extravasation", "auroc": 0.951, "guides_validated": 2},
+            {"step": "Micrometastasis", "auroc": 0.985, "guides_validated": 2},
+            {"step": "Angiogenesis", "auroc": 0.957, "guides_validated": 2},
+            {"step": "Colonization", "auroc": 0.983, "guides_validated": 1}
+          ],
+          "threshold_line": 0.95,
+          "source": "publication/data/per_step_validation_metrics.csv"
+        },
+        "caption": "All 8 steps achieve AUROC >0.95 (publication-grade). 100% of guides (15/15) passed structural validation."
+      },
+      {
+        "section_title": "🧬 Structural Validation Breakthrough",
+        "content_type": "side_by_side_comparison",
+        "left_box": {
+          "title": "Traditional Approach",
+          "items": [
+            "❌ No structural validation",
+            "❌ 40% synthesis failure",
+            "❌ 8-12 weeks lost per failure",
+            "❌ $2,500 wasted per failed guide"
+          ]
+        },
+        "right_box": {
+          "title": "Our Platform",
+          "items": [
+            "✅ AlphaFold 3 validation",
+            "✅ 100% structural pass rate",
+            "✅ Zero failed syntheses",
+            "✅ $7,500 saved per project"
+          ]
+        },
+        "source": ".cursor/rules/blog_metastasis_interception_v2_structural.mdc (lines 250-262)"
+      },
+      {
+        "section_title": "💼 Commercial Impact",
+        "content_type": "value_proposition_boxes",
+        "boxes": [
+          {
+            "metric": "$1.5M",
+            "label": "Cost Savings",
+            "description": "Per therapeutic program vs traditional"
+          },
+          {
+            "metric": "12 months",
+            "label": "Time Savings",
+            "description": "18→6 months (IND-enabling studies)"
+          },
+          {
+            "metric": "80%",
+            "label": "Success Rate",
+            "description": "vs 40% traditional CRISPR design"
+          },
+          {
+            "metric": "8 Steps",
+            "label": "Addressable Market",
+            "description": "Complete metastatic cascade coverage"
+          }
+        ],
+        "source": ".cursor/rules/use-cases/metastasis-project/EXECUTIVE_SUMMARY.md (lines 135-145)"
+      },
+      {
+        "section_title": "🚀 Publication Status",
+        "content_type": "checklist_with_icons",
+        "items": [
+          {"status": "complete", "text": "6 Figures (300 DPI, publication-grade)"},
+          {"status": "complete", "text": "All tables (CSV + LaTeX)"},
+          {"status": "complete", "text": "15 mmCIF structural files"},
+          {"status": "complete", "text": "Complete Methods section"},
+          {"status": "complete", "text": "Results + Discussion"},
+          {"status": "complete", "text": "Supplementary Materials"},
+          {"status": "pending", "text": "Final abstract (250 words)"},
+          {"status": "pending", "text": "Cover letter"}
+        ],
+        "target_journal": "Nature Biotechnology",
+        "submission_date": "November 4, 2025",
+        "source": ".cursor/rules/use-cases/metastasis-project/EXECUTIVE_SUMMARY.md (lines 186-208)"
+      }
+    ]
+  },
+  
+  "footer_section": {
+    "position": "bottom_full_width",
+    "height": "0.75 inches",
+    "layout": "3_column",
+    "columns": [
+      {
+        "content": "**Contact:** [Principal Investigator Name]<br>Email: [email]<br>Institution: [institution]"
+      },
+      {
+        "content": "**Data Availability:**<br>Code: GitHub + Zenodo DOI<br>Data: Figshare/Zenodo<br>Structures: 15 mmCIF files"
+      },
+      {
+        "content": "**Funding:**<br>[Grant numbers]<br>**RUO Disclaimer:**<br>Research Use Only"
+      }
+    ]
+  },
+  
+  "visual_elements": {
+    "mini_figure_1": {
+      "position": "right_column_top",
+      "size": "3\" x 2\"",
+      "content": "Violin plot: pLDDT distribution (all 15 guides)",
+      "source_file": "publication/figures/figure_6_structural_validation.png (Panel A)",
+      "caption": "All guides exceed pLDDT ≥50 threshold (mean 65.6±1.8)"
+    },
+    "mini_figure_2": {
+      "position": "right_column_middle",
+      "size": "3\" x 2\"",
+      "content": "Scatter: iPTM vs pLDDT (tight clustering)",
+      "source_file": "publication/figures/figure_6_structural_validation.png (Panel B)",
+      "caption": "Tight clustering indicates robust design (CV <4%)"
+    }
+  },
+  
+  "data_sources": {
+    "primary_metrics": "publication/data/per_step_validation_metrics.csv",
+    "structural_data": "publication/structural_validation/structural_metrics_summary.csv",
+    "guide_details": "publication/data/guide_structural_details.csv",
+    "executive_summary": ".cursor/rules/use-cases/metastasis-project/EXECUTIVE_SUMMARY.md",
+    "blog_v2": ".cursor/rules/blog_metastasis_interception_v2_structural.mdc",
+    "figures": "publication/figures/",
+    "tables": "publication/tables/"
+  },
+  
+  "build_instructions": {
+    "step_1": "Read all source files listed in data_sources",
+    "step_2": "Extract metrics from CSVs (use pandas)",
+    "step_3": "Generate charts using matplotlib/seaborn (match color_scheme)",
+    "step_4": "Layout using reportlab or LaTeX (2-column format)",
+    "step_5": "Export to PDF (300 DPI, Letter size)",
+    "output_file": "publication/METASTASIS_INTERCEPTION_ONE_PAGER.pdf"
+  },
+  
+  "alternative_formats": {
+    "powerpoint_slide": {
+      "use_case": "Conference presentations",
+      "layout": "Same content, single slide, 16:9 aspect ratio",
+      "output": "publication/METASTASIS_INTERCEPTION_SLIDE.pptx"
+    },
+    "web_version": {
+      "use_case": "Website/blog post",
+      "layout": "Responsive HTML with interactive charts",
+      "output": "publication/METASTASIS_INTERCEPTION_WEB.html"
+    },
+    "investor_deck_insert": {
+      "use_case": "Fundraising materials",
+      "layout": "Emphasize commercial impact ($1.5M savings, 80% success)",
+      "output": "publication/METASTASIS_INTERCEPTION_INVESTOR.pdf"
+    }
+  },
+  
+  "customization_notes": {
+    "note_1": "Replace [placeholders] with actual institution/PI details",
+    "note_2": "Update submission date if timeline changes",
+    "note_3": "Add grant numbers and funding acknowledgments",
+    "note_4": "Adjust color scheme to match institutional branding if needed",
+    "note_5": "For investor version, emphasize ROI and market size"
+  }
+}
+

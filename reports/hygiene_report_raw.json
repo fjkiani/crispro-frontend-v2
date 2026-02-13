@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run_001",
+  "generated_at": "2026-01-29T01:29:25.636799",
+  "inputs": {
+    "source_workbook": "SupplementaryTables.xlsx",
+    "source_workbook_sha256": null,
+    "sheets": [
+      "S1 - Coverage",
+      "S2 - Tumor Fractions",
+      "S3 - Clone frequencies (SVs)",
+      "S4 - Clone frequencies (SNVs)",
+      "S5 - Clone features",
+      "S6 - Error rates & LOD",
+      "S7 - SV read counts",
+      "S8 - SNV read counts",
+      "S9 - SV metadata",
+      "S10 - SNV metadata",
+      "S11 - clinical data",
+      "S12 - recurrence data",
+      "S13 - CA125",
+      "S14 - surgeries"
+    ]
+  },
+  "patient_id_normalization": {
+    "target_format": "OV-###",
+    "rules": [
+      "Regex extraction"
+    ]
+  },
+  "checks": [
+    {
+      "check_id": "RAW_CA125_DEDUP",
+      "description": "Verify CA-125 Uniqueness in Source (S13 - CA125)",
+      "status": "WARN",
+      "metrics": {
+        "duplicates": 2
+      },
+      "artifacts": [
+        {
+          "path": "reports/ca125_duplicates_raw.csv",
+          "description": "Duplicate Rows Raw"
+        }
+      ],
+      "notes": [
+        "Duplicates expected in raw source (e.g. OV-139)."
+      ]
+    },
+    {
+      "check_id": "RAW_CLONE_FREQ_SUM",
+      "description": "Sum of Clone Frequencies = 1.0 (Non-zero groups)",
+      "status": "PASS",
+      "metrics": {
+        "clonefreq_groups_sum_nonzero_not1": 0,
+        "clonefreq_groups_sum_zero": 50
+      },
+      "notes": [
+        "Validated on S3"
+      ]
+    }
+  ],
+  "overall_status": "WARN"
+}

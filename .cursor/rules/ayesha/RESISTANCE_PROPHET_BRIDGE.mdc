@@ -1,0 +1,69 @@
+---
+description: Resistance Prophet Integration Bridge (Timing Engine <-> Prophet Service)
+globs: api/services/resistance_prophet/**, api/routers/ayesha.py, oncology-frontend/src/pages/ayesha/ResistanceLab.jsx
+---
+
+# Resistance Prophet Integration Bridge
+
+**Mission**: Integrate the **Timing & Chemosensitivity Engine** (Truth) with the **Resistance Prophet** (Inference) to eliminate heuristic drift and ensure clinical accuracy.
+
+## 1. The Core Contract (`PatientRegimenFeatureTable`)
+
+The integration relies on a strict Pydantic contract defined in `api/services/resistance_prophet/contracts.py`.
+The Prophet Service **does not calculate PFI/KELIM**. It consumes them from this table.
+
+```python
+class PatientRegimenFeatureTable(BaseModel):
+    schema_version: str = "patient_regimen_feature_table.v1"
+    regimens: List[RegimenFeatureRow] # Nested structure (Months, not Days)
+    provenance: TimingContextProvenance # Must cite "timing_chemosensitivity_engine"
+```
+
+## 2. Data Flow Architecture
+
+### A. Frontend Source of Truth (`ResistanceLab.jsx`)
+1.  **Fetch**: Component mounts -> calls `useTimingChemoFeatures` hook.
+2.  **Context**: Receives authoritative `timingFeatures` (engine output).
+3.  **Inject**: Passes `timing_context` into the `/simulate` payload.
+
+### B. Router Handoff (`api/routers/ayesha.py`)
+1.  **Extract**: Pops `timing_context` from the request body.
+2.  **Pass**: Forwards it to `ResistanceProphetService.predict_resistance`.
+
+### C. Service Adapter (`resistance_prophet_service.py`)
+1.  **Validation**: Checks if `timing_context` matches `PatientRegimenFeatureTable`.
+2.  **Adaptation**: The engine outputs "Flat Days" (e.g., `PFI_days`). The contract expects "Nested Months" (e.g., `timing_features.pfi_months`).
+3.  **Shim**: The method `_adapt_timing_context` handles this conversion transparently.
+
+### D. Signal Logic (`ovarian.py`)
+1.  **`detect_engine_pfi`**:
+    *   **Input**: `timing_context`
+    *   **Logic**:
+        *   `PFI < 6.0 months`: **Platinum Resistant** (High Risk, 95% Conf).
+        *   `PFI 6-12 months`: **Partially Sensitive** (Medium Risk).
+        *   `PFI > 12 months`: **Sensitive**.
+    *   **Priority**: This signal overrides any heuristic calculation.
+
+2.  **`detect_ca125_kinetics`**:
+    *   **Priority**: Uses `timing_context.chemosensitivity_features.kelim_ca125` if available.
+    *   **Logic**: `K < 0.1` or `KELIM` category = Resistant.
+
+## 3. Verification ("The Golden Path")
+
+A dedicated script `scripts/verify_prophet_bridge.py` verifies the entire chain without needing a frontend.
+
+**Usage:**
+```bash
+python3 scripts/verify_prophet_bridge.py
+```
+
+**Success Criteria:**
+*   Output contains: `✅ SUCCESS: Prophet used Engine PFI logic!`
+*   Rationale confirms: `PFI: X months` (derived from engine, not heuristic).
+
+## 4. Key Files
+
+*   **Contract**: `api/services/resistance_prophet/contracts.py`
+*   **Service**: `api/services/resistance_prophet_service.py`
+*   **Signals**: `api/services/resistance_prophet/signals/ovarian.py`
+*   **Verification**: `scripts/verify_prophet_bridge.py`

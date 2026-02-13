@@ -394,7 +394,13 @@ If essentiality ≥ 0.7:
 
 **Execution order:**
 ```
-Step 1: Essentiality Analysis (Phase 2) ← WE ARE HERE
+⚠️ HALLUCINATION AUDIT (Feb 10, 2026)
+> **STATUS**: DEBUNKED / LEGACY ARTIFACT
+> **CAUSE**: This plan executed a script (`ayesha_mbd4_tp53_hgsoc_analysis.py`) that relied on a hardcoded lookup table.
+> **REALITY**: The "Hybrid Approach" described below was actually a deterministic check: `If MBD4 -> Then PARP`.
+> **ACTION**: Treat as legacy.
+
+# AYESHA: Essentiality Analysis Plan (MBD4 + TP53) ← WE ARE HERE
         ↓
 Step 2: Full WIWFM S/P/E Drug Predictions (Phase 3)
         - Input: MBD4 + TP53 with essentiality scores

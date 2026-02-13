@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run_001_canon",
+  "generated_at": "2026-01-29T01:29:25.641876",
+  "inputs": {
+    "source_workbook": "SupplementaryTables.xlsx",
+    "canonical_exports": [
+      "cloneseqsv_ca125.csv",
+      "cloneseqsv_cfdna_samples.csv"
+    ]
+  },
+  "canonicalization": {
+    "patient_id_format": "OV-###",
+    "time_axis": "day_from_surgery",
+    "dedup": [
+      {
+        "dataset": "ca125",
+        "key": [
+          "patient_id",
+          "days_from_surgery"
+        ],
+        "method": "keep_last",
+        "rows_removed": 2,
+        "notes": [
+          "Removed OV-139 duplicate"
+        ]
+      }
+    ]
+  },
+  "checks": [
+    {
+      "check_id": "CANONICAL_CA125_DEDUP",
+      "description": "Verifying 0 duplicates after cleaning",
+      "status": "PASS",
+      "metrics": {
+        "duplicates": 0
+      },
+      "artifacts": []
+    },
+    {
+      "check_id": "CANONICAL_CFDNA_QC",
+      "description": "Verify QC flags",
+      "status": "PASS",
+      "metrics": {
+        "mismatches": 0
+      }
+    }
+  ],
+  "overall_status": "PASS"
+}

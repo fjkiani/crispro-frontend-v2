@@ -1,0 +1,70 @@
+{
+  "meta": {
+    "status": "active",
+    "ruo": true,
+    "scope": "therapy-fit bundle payload forensics and recovery"
+  },
+  "payload_definition": {
+    "endpoint": "POST /api/ayesha/therapy-fit/bundle",
+    "router": "oncology-coPilot/oncology-backend-minimal/api/routers/ayesha_therapy_fit.py",
+    "response_structure": {
+      "levels.L1.efficacy": "WIWFM S/P/E drug ranking (EfficacyOrchestrator)",
+      "levels.L1.synthetic_lethality": "SL agent output (SyntheticLethalityAgent)",
+      "levels.L1.inputs_used": "mutations + tumor_context actually used",
+      "levels.L1.efficacy.provenance": "receipts including variant_resolution (HGVS→GRCh38)"
+    }
+  },
+  "code_path": {
+    "router": "ayesha_therapy_fit.py → ayesha_analysis_bundle()",
+    "efficacy": "service.py → run_therapy_fit_analysis() → EfficacyOrchestrator.predict()",
+    "synthetic_lethality": "service.py → _run_sl_bundle() → SyntheticLethalityAgent.analyze()",
+    "sl_options": ["true_scoring_required=True", "resolve_hgvs_to_grch38=True"]
+  },
+  "failure_mode_and_fix": {
+    "symptom": "efficacy.drugs empty or sparse despite SL having strong recommendations",
+    "cause": "HGVS-only mutations lacked chrom/pos/ref/alt; sequence pipeline couldn't score; confidence gates removed drug rows",
+    "fix": "Added HGVS→GRCh38 resolution in run_therapy_fit_analysis(); store receipts under efficacy.provenance.variant_resolution",
+    "receipt_fields": ["attempted_count", "resolved_count", "receipts[]"]
+  },
+  "parp_vs_atr_wee1_contradiction": {
+    "explanation": "Pipeline state, not biology",
+    "sl": "Forces true scoring and resolves HGVS internally → can return ATR/WEE1",
+    "wiwfm_before_fix": "Returned empty/generic when mutations lacked coordinates"
+  },
+  "receipt_sources": {
+    "primary": "Runtime output from POST /api/ayesha/therapy-fit/bundle?level=l1",
+    "fallback_transcript": "agent-transcripts/35ae7005-3826-459e-a410-b2ecebfc469f.txt",
+    "transcript_search_terms": [
+      "POST /api/ayesha/therapy-fit/bundle",
+      "run_therapy_fit_analysis",
+      "resolve_hgvs_to_grch38",
+      "variant_resolution",
+      "recommended_drugs",
+      "fda_approved"
+    ]
+  },
+  "recovery_runbook": {
+    "start_backend": "cd oncology-coPilot/oncology-backend-minimal && python3 -m uvicorn api.main:app --host 127.0.0.1 --port 8000",
+    "verify": "curl -sS http://127.0.0.1:8000/healthz",
+    "generate_bundle": "curl -sS -X POST 'http://127.0.0.1:8000/api/ayesha/therapy-fit/bundle?level=l1' -H 'Content-Type: application/json' -d '{}'"
+  },
+  "doc_recovery_doctrine": {
+    "when": "Clinician-facing MDC truncated or hallucinated drug text",
+    "steps": [
+      "Do not reconstruct from memory",
+      "Re-run POST /api/ayesha/therapy-fit/bundle?level=l1",
+      "Copy only receipt-backed fields: inputs_used, efficacy.drugs, efficacy.provenance, synthetic_lethality.*",
+      "Paste with explicit 'Generated at' timestamp and run_id if present"
+    ]
+  },
+  "invariants": [
+    "Bundle contract: levels.{L1,L2,L3}.efficacy + synthetic_lethality + inputs_used",
+    "HGVS→GRCh38 resolution receipts must remain in provenance",
+    "SL UI must render backend recommended_drugs, not frontend-hardcoded lists",
+    "RUO: never claim FDA approval unless deterministic field says so; never infer label status"
+  ],
+  "planned_automation": {
+    "source": "agent-transcripts/35ae7005-...txt",
+    "output_schema": ["patch_events[]", "run_events[]", "claims[]"]
+  }
+}

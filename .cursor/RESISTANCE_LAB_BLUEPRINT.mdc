@@ -1,0 +1,82 @@
+---
+description: Blueprint for the "Resistance Lab" - A patient-facing Glass Box for Resistance Logic
+globs: ["src/pages/ayesha/ResistanceLab.jsx", "src/components/ayesha/resistance/*"]
+---
+
+# 🧪 RESISTANCE LAB: ZETA GLASS BOX DOCTRINE
+
+**Objective**: Give the patient (Ayesha) the "Kill Switch" controls.
+**Philosophy**: Transparency is a weapon. No "AI Magic." Show the math. Show the logic. Show the path to survival. "Glass Box" not "Black Box."
+
+## 1. THE CORE CONCEPT
+A dedicated "War Room" page (`/resistance-lab`) where the patient can:
+1.  **Simulate Scenarios**: "What if my CA-125 spikes?" "What if I have MBD4?"
+2.  **Trigger The Prophet**: Manually run the Resistance Prophet algorithms on demand.
+3.  **Watch the Logic**: A visual "Logic Stream" that shows *exactly* why a decision was made (e.g., "Step 1: MBD4 detected -> Step 2: Baseline set to 0.70 -> Step 3: Reversion Risk HIGH").
+4.  **View The Receipt**: The final "Next Test" recommendation with its explicit provenance.
+
+## 2. FRONTEND ARCHITECTURE (The Zeta Interface)
+
+### A. The Console Layout (Dark Mode / Terminal Aesthetic)
+- **Left Panel: The Variables (Inputs)**
+    - *Germline Status*: Toggle (Positive/Negative/Unknown) -> Highlighting MBD4 impact.
+    - *Current Treatment*: Chips (Carbo, Taxol, PARP).
+    - *Biomarkers*: Sliders for `HRD Score`, `CA-125 Velocity`.
+    - **Action Button**: `[ RUN SIMULATION ]` (Pulsing Red/Green).
+
+- **Center Panel: The Logic Stream (The "Glass Box")**
+    - A timestamped, scrolling feed of the backend "thought process" (mirroring our backend logs but beautified).
+    - *Example*:
+        - `00:01` 🧬 **Germline Input**: MBD4+ Positive.
+        - `00:02` ⚠️ **Override**: Standard Baseline discarded. MBD4 Baseline (0.70 deficiency) injected.
+        - `00:05` 🕵️ **Prophet Scan**: Analyzing treatment history...
+        - `00:08` 🚨 **DETECTION**: "DNA Repair Restoration" signal found (Prob: 95%).
+        - `00:10` 🛡️ **Counter-Measure**: Priority upgraded for `ctDNA` to detect Reversion.
+
+- **Right Panel: The Outcome (Visuals)**
+    - **Risk Gauges**: Visual circular gauges for `Restoration Risk`, `Escape Risk`.
+    - **The Prescription**: The finalized "Next Test" card with priority and rationale.
+
+## 3. BACKEND INTEGRATION (Already Built - Just Exposed)
+
+We utilize the `test_resistance_integration_full.py` flow but exposed via API:
+- **Endpoint**: `POST /api/ayesha/resistance/simulate`
+- **Payload**:
+  ```json
+  {
+    "patient_id": "AYESHA",
+    "simulate_germline": "positive",
+    "simulate_hrd": 58,
+    "simulate_treatment": ["carboplatin", "paclitaxel", "olaparib"]
+  }
+  ```
+- **Response**: The usage of `resistance_service` and `sae_service` we just validated.
+
+## 4. UI COMPONENTS (The Library)
+
+1.  **`ResistanceLogicStream.jsx`**:
+    - Takes a list of "Step" objects.
+    - Renders them as a vertical timeline.
+    - Color codes: Green (Safe), Yellow (Warning), Red (Critical/Resistance).
+
+2.  **`ProphetGauges.jsx`**:
+    - Animated D3/Recharts gauges.
+    - Shows the "Probability" score returned by the Prophet.
+
+3.  **`SimulationControls.jsx`**:
+    - The "What-If" control panel.
+
+## 5. EXECUTION PLAN (72 Hours)
+
+1.  **Frontend**: Build `/resistance-lab` page skeleton.
+2.  **API**: Expose the `simulate` endpoint in `orchestrator.py` (or a dedicated controller).
+3.  **Wiring**: Connect the "Run" button to the API.
+4.  **Polish**: Make it look like a sci-fi command deck.
+
+## 6. WHY THIS MATTERS (The Doctrine)
+Ayesha is not a statistic. She is a Commander.
+She deserves to know *why* we are telling her to take a test.
+When she sees "MBD4 Baseline Injected" -> "Restoration Risk", she trusts the "Liquid Biopsy" recommendation because she saw the math happen.
+
+**Status**: Ready for Construction.
+**Authorized by**: Zo / Alpha.

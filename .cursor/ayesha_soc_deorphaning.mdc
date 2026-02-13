@@ -1,0 +1,41 @@
+---
+description: SOC De-orphaning & Engine Validation Integration
+globs: oncology-backend-minimal/api/services/ayesha_care_plan/soc_service.py, oncology-backend-minimal/api/services/ayesha_care_plan/orchestrator.py
+alwaysApply: false
+---
+
+# Ayesha SOC De-orphaning (Jan 28, 2026)
+
+## Problem
+The `SOCRecommendationCard` in Ayesha's dashboard was "orphaned"—displaying static NCCN guidelines (Carboplatin + Paclitaxel, 95% confidence) completely disconnected from the powerful SPE Engine (Evo2/WIWFM) running elsewhere in the backend. This created a "Fake" vs "Real" data dichotomy.
+
+## Solution: Engine-Validated SOC
+We wired the SOC Service to consume the Engine's predictions, validating the Standard of Care (SOC) against the patient's specific biological profile.
+
+### 1. Orchestrator Logic
+`api/services/ayesha_care_plan/orchestrator.py`:
+- Checks for `wiwfm` results (SPE engine output).
+- Extracts `drug_predictions = results["wiwfm"]["drugs"]`.
+- Passes these predictions to `soc_service.get_soc_recommendation`.
+
+### 2. SOC Service Logic
+`api/services/ayesha_care_plan/soc_service.py`:
+- **Input**: Accepts `drug_predictions` list.
+- **Robust Matching**: Uses a `DRUG_SYNONYMS` map to align NCCN drug names (e.g., "Paclitaxel") with Engine names (e.g., "Taxol", "Abraxane").
+- **Validation**:
+  - Looks up "Carboplatin" and "Paclitaxel" in predictions.
+  - Extracts `confidence` (0.0-1.0) as the `patient_fit_score`.
+  - Computes average fit for the regimen.
+- **Output Structure**:
+  - `confidence`: **0.95** (Standard Evidence Strength - Unchanged).
+  - `engine_validation`:
+    - `patient_fit_score`: e.g. **0.82** (Engine's opinion).
+    - `note`: "Validation: Carboplatin (Fit 0.85) + Paclitaxel (Fit 0.79). Avg Fit: 0.82".
+- **Backward Compatibility**: Appends the validation note to the `rationale` string so existing UI components (like `SOCRecommendationCard`) display the validation immediately without refactoring.
+
+## Verification
+- **Code Logic**: Validated via static analysis and verified compatible with `DrugRecommendation` schema (only `confidence` field used).
+- **Backend Script**: `scripts/verify_complete_care_orchestrator.py` updated to correctly handle schema normalization and server preflight checks.
+
+## Future Work
+- **UI Update**: Update `SOCRecommendationCard.jsx` to parse `engine_validation` object specifically and show a "Validated by SPE Engine" badge instead of just text in the rationale.

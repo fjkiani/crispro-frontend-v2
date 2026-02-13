@@ -1,0 +1,41 @@
+Here are the precise questions to send an agent so they can pull the missing implementation details (and so we can sanity-check that this SL output is justified and won’t recreate the “L0-looking-but-confident” problem). I’m tailoring these to the specific behaviors in your log: Evo2 failing, “allele-complete variants” gating, DepMap lineage boost, and “evidence_tier=I / fda_approved=true” claims.
+
+1) Evo2 integration + gating
+“Show me the exact code path that decides evo2_called=false and the definition of ‘allele-complete variant’ (what fields must be present: chrom/pos/ref/alt? alt allowed empty for deletions?). Include the function name(s), file path(s), and the boolean condition.”
+
+“Where is EVO_URL_1B read from (env/config), and what endpoint is called (e.g., /api/evo)? Provide the request payload schema and expected response schema.”
+
+“When Evo2 is unavailable, what fallback is used to set sequence_disruption and why does it default to 0.0 even for a truncating variant (MBD4 frameshift)? Point to the scoring function and constants.”
+
+2) Essentiality scoring semantics
+“Define the range and directionality of essentiality_score in this system (is 1.0 more essential or less essential?), and how you map it to essentiality_level (‘moderate’ thresholds). Provide the threshold constants.”
+
+“How is per-gene confidence computed (e.g., 0.7 for MBD4 truncation, 0.6 for TP53 hotspot)? Please provide the formula and which features contribute (flags, ClinVar/classification, hotspot list, DepMap signal, Evo2 delta).”
+
+3) Pathway break / dependency logic
+“What exact rules declare a pathway non_functional vs compromised vs functional? Provide the pathway→gene membership table you’re using and the aggregation rule (max, sum, weighted).”
+
+“Explain the BER → ‘HR dependency’ inference: what is the dependency graph or rule base that turns BER non_functional into ‘HR functional but depended upon’ and adds PARP/HR as targetable. Where is this encoded?”
+
+“For TP53 → ‘ATR/CHK1’ and ‘WEE1’ dependency: is this rule-based, DepMap-derived, or both? Provide the exact mapping and any evidence thresholds.”
+
+4) DepMap lineage boost (+0.15)
+“Where does ‘DepMap lineage grounding (Ovary/Fallopian Tube): +0.15 confidence boost’ come from? Provide: the DepMap dataset/version, lineage mapping, how you compute the boost, and why it’s +0.15 specifically.”
+​
+
+“Is the boost applied per pathway, per drug, or per gene? Show the code location and an example calculation.”
+
+5) Drug recommendation claims (must be auditable)
+“How do you set fda_approved: true per drug (source-of-truth list)? Provide the file/table and whether it’s approval for ovarian cancer vs any indication.”
+
+“Define evidence_tier: 'I' in your system and show the rubric. What data causes Tier I vs II/III/insufficient? (Right now it looks ‘Tier I’ is being assigned without citations.)”
+
+“Where are citations stored/returned for SL outputs? If none, why does the system still emit Tier I and 0.85 confidence?”
+
+6) Reconciliation with L1 therapy-fit endpoint
+“How do SL recommended_drugs reconcile with efficacy_orchestrator outputs? Is SL intended as a booster, a separate lane, or a gate? Provide the merging logic (if any) and conflict resolution rules.”
+
+7) Provide concrete artifacts back
+“Please paste (a) the config/constants file(s), (b) the pathway membership JSON/CSV, (c) the drug metadata table, and (d) one debug trace for Ayesha showing intermediate scores at each pipeline step: essentiality → pathways → dependencies → drugs.”
+
+One clarifying question for you (so I ask the agent the right next thing): do you want SL to be allowed to output Tier I and 0.85 confidence when Evo2 is down and citations are empty, or should Evo2/citations be hard prerequisites for anything above ‘hypothesis / insufficient’?

@@ -1,0 +1,197 @@
+---
+alwaysApply: true
+---
+
+## Mission: Ayesha “Tests & Unlocks” Page (RUO) — Stop Squeezing, Make It First-Class
+
+**Owner:** Frontend agent (JR)  
+**Priority:** P0 (this page governs what to order next)  
+**Why now:** We currently “squeeze” next-test guidance into other pages (Therapy Fit / Digital Twin / Complete Care). That makes it easy to miss, and it blurs what we **know vs need**. This page becomes the single source of truth for: **what we have**, **what’s missing**, and **which tests unlock which capabilities** (mechanism, resistance, trials).
+
+> **Research Use Only (RUO)**: This page is decision support / care-coordination guidance. It must not infer clinical actionability beyond what is explicitly supported by structured inputs and provenance.
+
+---
+
+## Product intent (what this page is)
+
+### The core user story
+“I have partial data (pre‑NGS). Tell me the **minimum set of tests** to run next, and show exactly what each test unlocks in the platform (mechanism explanation, resistance early warning, trial matching, and therapy fit confidence).”
+
+### What this page must do (plain language)
+- **Show what we have right now** (L1 reality): germline + IHC + limited biomarkers.
+- **Show what we’re missing** (the bottlenecks): HRD, TMB/CGP coords, expression, kinetics.
+- **Recommend the next tests** (not a giant laundry list): the *minimal* path that unlocks the biggest gains.
+- **Explain why each test matters** (mechanism/resistance/etc) with honest constraints.
+
+---
+
+## Ground truth: What we have today for Ayesha (L1 baseline)
+
+Backend canonical L1 base profile is defined here:
+- `oncology-coPilot/oncology-backend-minimal/api/services/ayesha_fit/constants.py::AYESHA_BASE_PROFILE`
+
+Current L1 includes (typical):
+- **Germline**: `MBD4 p.K431Nfs*54 (pathogenic, homozygous)`, `PDGFRA p.S755P (VUS)`
+- **Somatic (pre‑NGS / IHC only)**: TP53 “mutant‑type favored” (no coordinates)
+- **Biomarkers**:
+  - `MSI = MSS`
+  - `PD‑L1 CPS = 10` (IHC)
+  - `ER = weakly positive (50%)` (IHC)
+- **Missing**:
+  - `HRD score` (None)
+  - `TMB` (None)
+  - `RNA expression` (None)
+  - `CA‑125 baseline` may be missing unless user supplied
+  - `Serial CA‑125 kinetics` missing by definition unless ≥2 timepoints
+
+---
+
+## The “why” (what tests are needed to capture mechanism + resistance)
+
+### Mechanism (pathway activation, MoA alignment)
+- DNA-only can’t reliably tell whether VEGF/MAPK/PI3K are **active**.
+- **RNA‑seq** (or another expression proxy) is the clean unlock for L3 “mechanism map” depth.
+
+### PARP / Platinum sensitivity (DDR biology)
+- Germline helps, but **HRD score** is the most important additive biomarker for confidence and mechanism narrative.
+
+### Immunotherapy axis
+- PD‑L1 helps, but **TMB** is a major missing driver for IO eligibility logic and confidence (where present).
+
+### Resistance early warning
+- Resistance is **longitudinal**.
+- Without kinetics, resistance prediction is necessarily capped and conservative.
+- Minimum unlock: **Serial CA‑125** (≥2 timepoints). Better unlock: **ctDNA trend** if available.
+
+---
+
+## Backend contract: where “tests needed” must come from
+
+### Source-of-truth function
+- `oncology-coPilot/oncology-backend-minimal/api/services/ayesha_fit/builder.py::determine_required_tests(profile)`
+
+This function emits structured test recommendations based on what’s missing:
+- HRD assay (if missing)
+- CGP for TMB (if missing)
+- RNA‑seq (if expression missing)
+- CA‑125 baseline (if missing)
+- Serial CA‑125 (if baseline exists but kinetics missing)
+
+### Primary API (preferred)
+Use the canonical bundle endpoint so the page can also show “what we have”:
+- `POST /api/ayesha/therapy-fit/bundle?level=l1`
+
+Read fields:
+- `tests_needed` (top-level)
+- `patient_context` (top-level, includes `completeness_score`)
+- `levels.L1.inputs_used` (mutations and tumor_context actually used)
+- `levels.L1.completeness` (missing fields list, confidence cap)
+
+> **Do NOT hardcode tests.** The page must render what backend recommends.
+
+---
+
+## UI requirements (what to build)
+
+### Route / page
+Add a dedicated page (choose one):
+- **Preferred path:** `/ayesha/tests` (simple and discoverable)
+- Alternative: `/ayesha/next-tests`
+
+Page file suggestion:
+- `oncology-coPilot/oncology-frontend/src/pages/ayesha/AyeshaTestsUnlocks.jsx`
+
+### Page layout (minimum)
+1) **Banner**: “Tests & Unlocks (RUO)” + short explanation (“this is what to order next and what it unlocks in the platform”)
+2) **What we have** (Current Inputs card)
+   - Germline variants (gene + hgvs_p + classification)
+   - Tumor context badges: MSI, PD‑L1 CPS, ER%, completeness score
+3) **What’s missing** (Bottlenecks card)
+   - Use `levels.L1.completeness.missing[]` for a truth-based list
+4) **Recommended tests** (Action checklist)
+   - Render `tests_needed[]` from backend
+   - Each test card must include:
+     - **Test name**
+     - **Why** (the “why” text from backend)
+     - **Unlocks** (list from backend)
+     - **Status** (missing/present)
+5) **Capability unlock map** (small explainer)
+   - Map the tests into platform outcomes:
+     - HRD → DDR/PARP confidence & mechanism
+     - CGP/TMB → IO eligibility + somatic coords for scoring
+     - RNA‑seq → pathway activation / mechanism layer
+     - Serial CA‑125 / ctDNA → resistance early warning
+6) **Copy-to-clipboard**: “Copy test orders” button
+   - Exports a simple markdown checklist with the tests + why + unlocks.
+
+### Non-negotiable UX rules
+- **No clinical claims** like “you should take drug X” from this page.
+- **No inference**: only render what backend says is missing/unlocks.
+- Always display **confidence caps / missingness** when present (L1 is capped by design).
+- Make it “fast”: this page should feel instant and readable.
+
+---
+
+## Implementation checklist (agent execution)
+
+### A) Backend usage (no new backend required)
+- [ ] Use `POST /api/ayesha/therapy-fit/bundle?level=l1` to fetch:
+  - `tests_needed`
+  - `levels.L1.inputs_used`
+  - `levels.L1.completeness`
+- [ ] Do not introduce new endpoints unless strictly necessary.
+
+### B) Frontend implementation
+- [ ] Create `AyeshaTestsUnlocks.jsx` page component (see layout above).
+- [ ] Add a small hook `useAyeshaTestsNeeded()` OR reuse existing therapy-fit bundle hook **if it already calls `/bundle`**.
+  - If current hook still calls `/analyze`, update it (or create a dedicated one) to call `/bundle` for this page.
+- [ ] Add route in `oncology-coPilot/oncology-frontend/src/routes/patientRoutes.jsx`.
+- [ ] Add sidebar navigation entry in `src/constants/moatNavigation.js` (Ayesha section).
+- [ ] Add an RUO disclaimer block at bottom.
+
+### C) Data rendering requirements
+- [ ] Render **all** tests returned (do not truncate to 2).
+- [ ] Group tests by “unlock tier”:
+  - **Unlock L2**: HRD, CGP/TMB
+  - **Unlock L3**: RNA‑seq, CA‑125 kinetics
+- [ ] Render “what we have” from `inputs_used` not from hardcoded assumptions.
+
+---
+
+## Acceptance criteria (must pass)
+
+- [ ] Page exists at `/ayesha/tests` (or chosen route) and is linked in sidebar.
+- [ ] Page shows:
+  - [ ] “What we have” from bundle `inputs_used`
+  - [ ] “What’s missing” from completeness
+  - [ ] Full `tests_needed[]` list (not truncated)
+  - [ ] “Copy test orders” exports deterministic markdown
+- [ ] Zero hardcoded test names for primary recommendations (backend-driven).
+- [ ] RUO labeling is visible.
+- [ ] No console errors.
+
+---
+
+## Manual test plan (local)
+
+1) Backend running on `127.0.0.1:8000`
+2) Call bundle:
+
+```bash
+curl -sS -X POST "http://127.0.0.1:8000/api/ayesha/therapy-fit/bundle?level=l1" \
+  -H "Content-Type: application/json" -d '{}' \
+  | jq '.tests_needed, .levels.L1.completeness'
+```
+
+3) In browser:
+- Navigate to `/ayesha/tests`
+- Verify the page renders 4–5 recommendations when L1 is missing HRD/TMB/expression/CA‑125.
+
+---
+
+## Notes / future enhancements (not required for v1)
+
+- Add a “timeline” view (days 0–14) aligned to operational constraints.
+- Add “upload results” CTA deep-links to Tumor Quick Intake / NGS ingest pages (if present).
+- Add ctDNA as an optional test if the backend begins recommending it (do not hardcode today).
+

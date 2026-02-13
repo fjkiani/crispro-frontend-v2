@@ -1,0 +1,230 @@
+---
+description: Master insights, architectural audits, and strategic roadmap for the Oncology Co-Pilot system.
+globs: ["**/*.py", "**/*.jsx", "**/*.ts", "**/*.js"]
+---
+
+# Oncology Co-Pilot: Master Insights & Strategic Roadmap
+
+## 1. System State & Recent Audits
+### **A. Patient Knowledge Base (RAG Agent)**
+*   **Status:** ✅ **Operational** (Code complete, Route fixed).
+*   **Architecture:** Autonomous Agent (`PatientKnowledgeBaseAgent`) -> Research Intelligence (PubMed/BioPython) -> RAG Storage (`knowledge_base/patients/`).
+*   **Fixes Applied:**
+    *   **Frontend:** Added missing `/patient/knowledge-base` route to `patientRoutes.jsx`.
+    *   **Backend:** Identified and added critical missing dependencies (`requirements.txt`).
+    *   **Data:** Confirmed `knowledge_base` folder structure exists.
+
+### **B. UI/UX Polishing**
+*   **Issue:** "Exploding SVGs" in `TrialMatchCard.jsx`.
+*   **Fix:** Replaced Tailwind sizing with explicit inline styles.
+
+### **C. Resistance Prophet & Playbook (Logic Core)**
+*   **Current State:** Split architecture.
+    *   **Prophet (`resistance_prophet_service.py`):** "Detector". Stratifies risk based on signals.
+    *   **Playbook (`resistance_playbook_service.py`):** "Actuator". Suggests next-line therapies.
+*   **Audit Result:** ⚠️ **CRITICAL LOGIC GAP IDENTIFIED**.
+
+---
+
+## 2. Deep Dive: The "Prophet vs. Playbook" Gap
+**The Issue:** The Detection logic ("Prophet") is **Myeloma-Biased**, while the Action logic ("Playbook") is **Ready for Ovarian**.
+
+1.  **The Playbook (`resistance_playbook_service.py`) is Ready:**
+    *   It contains `OV_RESISTANCE_PLAYBOOK` with specific logic for Ayesha's profile:
+    *   **MBD4:** "BER deficiency → PARP trapping + ATR/WEE1 dependency". Recommends Olaparib/Ceralasertib.
+    *   **BRCA1/2:** "HRD → PARP sensitivity".
+
+2.  **The Prophet (`resistance_prophet_service.py`) is Blind:**
+    *   It defines `MM_HIGH_RISK_GENES` (DIS3, TP53, etc.) but **LACKS** `OV_HIGH_RISK_GENES`.
+    *   **Result:** Even if Ayesha has `MBD4`, the Prophet will **fail to flag it** as a resistance signal (Signal 4).
+    *   **Consequence:** The Playbook is never triggered for MBD4 because the Prophet never detected it.
+
+3.  **The Fix (Short Term):**
+    *   Copy the gene keys from `OV_RESISTANCE_PLAYBOOK` and create `OV_HIGH_RISK_GENES` in `resistance_prophet_service.py`.
+
+---
+
+## 3. Key Architectural Insights: The Graph DB Trigger
+The disconnect above proves the need for a **Graph Database (Neo4j)** logic.
+
+1.  **Unified Schema:**
+    *   Instead of maintaining `MM_GENES` in File A and `OV_PLAYBOOK` in File B, a Graph unifies them:
+    *   `(Gene: MBD4)-[:ASSOCIATED_WITH]->(Disease: Ovarian)`
+    *   `(Gene: MBD4)-[:CONFERS_RISK]->(Type: DNA_Repair_Deficiency)`
+    *   `(Gene: MBD4)-[:VULNERABLE_TO]->(Drug: Olaparib)`
+
+2.  **Multi-Hop Inference:**
+    *   The Graph naturally handles Ayesha's complex logic:
+    *   `Match (p:Patient {id: "Ayesha"})-[:HAS]->(g:Gene)-[:VULNERABLE_TO]->(d:Drug)`
+    *   This query works regardless of whether the gene is "MM" or "OV", solving the siloing problem instantly.
+
+3.  **GraphRAG:**
+    *   New papers found by the Agent can upsert edges: `(Drug: Olaparib)-[:RESISTANCE_MECHANISM]->(Gene: Reversion_Mutation)`.
+
+---
+
+## 4. Strategic Roadmap (Plans & Ideas)
+
+### **Phase 1: Stabilization (Current)**
+*   [x] Fix UI glitches (SVGs).
+*   [x] Connect Frontend Routes.
+*   [x] Hydrate `requirements.txt`.
+*   [ ] **CRITICAL:** Patch `resistance_prophet_service.py` to include `OV_HIGH_RISK_GENES` (MBD4, BRCA, etc.) so Ayesha's signals are detected.
+
+### **Phase 2: Data Experience**
+*   **Dashboard Integration:** Link `AyeshaTrialExplorer` directly to `PatientKnowledgeBase`.
+*   **Visualization:** Visualizing the computed "Holistic Score" components.
+
+### **Phase 3: The "Graph Brain" (Resistance Prophet v2)**
+*   **Migration:** Ingest `playbook` and `prophet` constants into a Graph DB.
+*   **Expansion:** Add `OVARIAN_HIGH_RISK_GENES` and `OVARIAN_DRUG_TARGETS` to the graph for Ayesha.
+*   **GraphRAG:** Connect the `PatientKnowledgeBaseAgent` output (Research Results) to act as a *Graph Writer*.
+
+### Phase 4: Digital Twin Simulation
+*   Simulate "What if" scenarios: "If we treat with Olaparib, does the graph likely predict resistance via *Reversion Mutations*?"
+
+---
+
+## Mission: Ayesha Therapy Fit Frontend — Real Data Bundle Wiring (RUO)
+**Objective:** Wire the "Ayesha Therapy Fit" frontend to the real, backend-orchestrated `bundle` API (Level 1) to replace hardcoded mock data with live "Prophet" and "Synthetic Lethality" agent outputs.
+
+### **1. Core API Integration (Completed)**
+*   [x] **Hook Creation (`useAyeshaTherapyFitBundle.js`):**
+    *   Implemented `useAyeshaTherapyFitBundle` to call `POST /api/ayesha/therapy-fit/bundle` (params: `level=l1`, `include_sl=true`).
+    *   Implemented `useAyeshaScenarios` to fetch `GET /api/ayesha/therapy-fit/scenarios` (teasers).
+*   [x] **Page Rewrite (`AyeshaTherapyFit.jsx`):**
+    *   Replaced `useQuery` with custom hooks.
+    *   Added **RUO (Research Use Only)** Banner & Assembly info (GRCh38).
+    *   **Orchestration:** Fetches L1 Bundle + Scenario Teasers in parallel.
+
+### **2. Component "Brain Transplant" (Completed)**
+Refactored dumb components to accept real `synthetic_lethality` and `inputs_used` payloads.
+
+*   [x] **`MutationScoringPipeline.jsx` (The MOAT):**
+    *   **Input:** Accepts `inputs.mutations` (list) + `slData.essentiality_scores` (Evo2 inputs).
+    *   **Logic:** Iterates mutations, finds matching Evo2 delta/functional scores from bundle, renders "Genome -> Function" pipeline.
+*   [x] **`PathwayDisruptionMap.jsx` (The Biology):**
+    *   **Input:** Accepts `slData.pathways` (List of `PathwayAnalysis` objects).
+    *   **Logic:** Dynamic rendering of Intact vs. Disabled pathways (BER, HR, MMR) based on agent analysis.
+*   [x] **`SyntheticLethalityFlow.jsx` (The Crown Jewel):**
+    *   **Input:** Accepts `levels.L1.synthetic_lethality` slice.
+    *   **Logic:** Renders the "Mechanistic Flow" (e.g., BER Loss -> HR Dependency -> PARP Block -> Death) only when `synthetic_lethality_detected: true`.
+
+### **3. Validation Status**
+*   ✅ **L1 Bundle:** Successfully rendering Mutations, Pathway Status, and Top Drugs (Olaparib/Talazoparib).
+*   ✅ **Deep Logic:** "Why this drug?" logic now powered by backend `rationale` and `sl_provenance`.
+*   ✅ **Scenarios:** Future L2/L3 scenarios displayed as locked teasers waiting for data.
+
+---
+
+# 🛡️ Resistance Prophet: From Black Box to Glass Box
+**Audit Trail & Evolution Log (Jan 28, 2026)**
+
+This document captures the complete re-engineering journey of the Oncology Resistance Engine, tracing the path from the "0.71 Probability Paradox" to the "Glass Box" doctrine.
+
+---
+
+## 1. 🏁 The Origin: The "0.71 Paradox"
+**Context: The Patient Safety Risk**
+
+We discovered a critical alignment failure during the audit of high-grade serous ovarian cancer cases.
+
+### The Incident (Case: CCNE1-AMP)
+A patient on Platinum therapy was **responding clinically** (CA-125 dropping, tumor shrinking). However, the "Resistance Prophet" model flagged them as:
+> **Status**: 🔴 HIGH RISK 
+> **Probability**: 0.71
+> **Rationale**: "CCNE1 Amplification Detected"
+
+### The Interpretation Gap
+- **The Algorithm**: Correctly identified a *genomic mechanism* (Replication Stress) that causes resistance.
+- **The Clinician**: Saw a "False Alarm." *"The patient is responding. Why are you telling me to switch drugs?"*
+
+**The Danger**: If a clinician trusted the "Black Box" score blindly, they might prematurely switch a patient off a working therapy.
+
+---
+
+## 2. 🗺️ The Strategy: Closing the Market Gaps
+
+We didn't just patch the bug. We executed a strategic roadmap (Phases 1-9) to map specific "Market Gaps" to our code architecture.
+
+### Gap 1: "Live Function" vs "Static Mutation"
+*Problem: Treating dynamic evolution like a static test.*
+- **Solution (Phase 4)**: We implemented **Patient-Specific Baselines**.
+- **Change**: Instead of comparing to a "Population Average," we now compare the patient's *current* profile to their *own* germline baseline (e.g., MBD4 deficiency).
+- **Result**: We can detect "Restoration" (Reversion mutations) relative to *their* starting point.
+
+### Gap 2: "Dynamic Monitoring" (The Missing Signal)
+*Problem: Relying only on NGS (expensive, slow).*
+- **Solution (Phase 7)**: We built the **Resistance Engine** to integrate **CA-125 Kinetics** (Signal 3).
+- **Safety Cap Logic**: If CA-125 history is missing, the Engine *refuses* to issue a HIGH Confidence High Risk prediction.
+- **Result**: "No Data" does not equal "Safe," but it also doesn't equal "Certain Doom." It equals "Uncertainty (Medium Cap)."
+
+### Gap 3: "Threshold Optimization"
+*Problem: The binary "Resistant/Sensitive" flip.*
+- **Solution (Phase 5)**: **Split Output Strategy**.
+- **Alert**: `driver_alerts` (Biology) are now orthogonal. They persist even if `risk_level` (Clinical) is LOW.
+- **Result**: The clinician sees the warning ("Genomic Driver Present") but the Status remains GREEN ("Low Risk") if the patient is responding.
+
+---
+
+## 3. 🧪 Phase 7: The "Glass Box" (Resistance Lab)
+
+We realized that "Explainability" wasn't enough. We needed **Observability**.
+
+### The "Zeta Interface"
+We built a dedicated frontend (`/resistance-lab`) that acts as a cockpit for the engine.
+- **Input**: Clinicians can toggle "Germline Status" or "Treatment History" switches.
+- **Process**: A real-time "Logic Stream" prints the Engine's decision tree.
+- **Output**: Detailed provenance.
+
+This transformed the tool from a "Magic Oracle" into a **Clinical Instrument**.
+
+---
+
+## 4. 📜 Provenance Evolution: The Evidence
+
+The transformation is encoded in the JSON response itself.
+
+### Phase 1: The Black Box (Legacy)
+*Opaque. "Trust the math."*
+```json
+"provenance": {
+  "model": "resistance_prophet_v1",
+  "reason": "calculated_risk"
+}
+```
+
+### Phase 7: The Choice (V2 Final Payload)
+*Transparent. "Here is the math."*
+```json
+"provenance": {
+  "model_version": "resistance_prophet_v2.0_engine",
+  "engine": "deterministic",
+  
+  # The Resolution of the "0.71 Paradox"
+  "probability_components": {
+     "clinical_phenotype": 0.0,    // "Patient is responding clinically."
+     "genomic_driver": 0.71,       // "But their genetics are dangerous (CCNE1)."
+     "blended_score": 0.71         // "Weighted probability."
+  },
+  
+  # The Safety Guard
+  "risk_drivers": {
+     "driven_by": "blended_probability",
+     "clinical_signal_count": 0,   // "Zero clinical signals detected."
+     "note": "Risk strictly capped due to lack of phenotypic corroboration."
+  }
+}
+```
+
+---
+
+## 5. 🛳️ Final Status: Deployment Ready
+
+**Contract Established**:
+1.  **Genomic Drivers** are persistent warnings (Safety).
+2.  **Clinical Risk** requires corroboration (Precision).
+3.  **Missing Data** triggers uncertainty caps (Humility).
+4.  **Blended Probability** connects the two (Reality).
+
+The Resistance Prophet v2.0 is no longer guessing. It is calculating.

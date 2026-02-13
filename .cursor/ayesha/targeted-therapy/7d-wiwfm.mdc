@@ -1,0 +1,227 @@
+We should treat 7D as the mechanistic backbone (escape descriptor) and explicitly layer WIWFM-style clinical gates (germline/HRD/PTPI/completeness) on top, because 7D alone cannot be a clinically correct PARP recommender in an impoverished cell-line feature space.
+
+Decision: our next phase is optimized for capability expansion without contaminating production truth (i.e., expand signals/gates, but enforce provenance + completeness caps so “unknown” never masquerades as certainty).
+​
+
+Audit: what WIWFM has that 7D lacks
+WIWFM’s sporadic gates contain a PARP gating layer that rescues/penalizes PARP efficacy using germline status + HRD score, including the key HRD threshold ≥ 42 (no penalty) vs < 42 (0.6x penalty) and HRD unknown (0.8x penalty).
+​
+Your current 7D PARP logic is effectively “DDR ≥ 0.60 → PARP” with no germline/HRD rescue and no low-HRD penalty differentiation, which predictably inflates false positives in low-HRD biology and hurts recall in HRD-high settings.
+
+WIWFM also has explicit confidence/completeness capping (L0/L1/L2 caps) whereas 7D currently acts “fully observed” even when germline/HRD/PTPI are missing.
+
+Domain mismatch: why 7D “underperforms” on GDSC2
+Your reframing is correct: WIWFM is evaluated on patients with germline status, calibrated HRD assays, PTPI, and broader clinical context, while 7D on GDSC2 is cell lines with missing germline, missing true HRD scores, and minimal clinical behavior features.
+​
+Because of that mismatch, “7D must hit 70%+ as a standalone PARP recommender” is the wrong benchmark; the right benchmark on GDSC2 is whether the mechanism vector is stable/interpretable and correlates with PARP sensitivity, not whether it replicates clinical decisioning.
+​
+Your own HRD proxy experiment illustrates this: using gene-level CNA from OmicsCNGeneWGS.csv did not improve accuracy materially (61.6% vs 62.2%), which the doc argues is expected because gene-level CNA is not genome-wide scar HRD (LOH/LST/TAI) and lacks biallelic logic.
+
+What “A–Z locked in” means (concrete architecture)
+For the PARP module, the correct architecture is explicitly a stack: (1) baseline eligibility gates (gBRCA/HRD), (2) clinical favorability (PTPI), (3) 7D/SAE mechanism vector as backbone, and (4) on-treatment behavior (e.g., CA-125 kinetics, DDR restoration / resistance emergence).
+​
+Within that stack, 7D’s job is “what’s broken / how escape is happening” across the seven axes (DDR/MAPK/PI3K/VEGF/HER2/IO/Efflux), while WIWFM-like gates decide “does PARP still belong on the table given germline/HRD/PTPI and missingness.”
+
+Implementation-wise, your docs already propose two compatible integration patterns: threshold adjustment (HRD/germline changes the DDR threshold) or post-hoc efficacy penalty/rescue (multiplicative factor 1.0/0.8/0.6) like WIWFM.
+​
+
+Questions & investigations for agents (ordered)
+P0 items below are the minimum needed to make the system “honest” end-to-end for resistance/escape tracking, not just for PARP.
+
+P0 — Define the unified escape taxonomy: For each drug class (PARP, platinum, ATR/WEE1/DNA-PK, MEK, PI3K, VEGF, HER2, IO), list the canonical escape routes and map each to (a) baseline genomic signals, (b) dynamic/on-treatment signals, and (c) which 7D axis it should move.
+​
+
+P0 — Reconcile gating semantics: Should we standardize on WIWFM’s “efficacy_factor + confidence adjustment” pattern (1.0/0.8/0.6) for all gates, or reserve hard thresholds only for a few “must-have” eligibility constraints (e.g., HRD-low blocks PARP unless trial/combination)?
+
+P0 — HRD truth sourcing: Identify what real HRD source we will accept as “gold” in production (Myriad/FO/etc.) and what proxy we will accept in R&D, given gene-level CNA proxy is insufficient and genome-wide LOH/LST/TAI + biallelic status are called out as missing.
+
+P0 — Completeness contract: Specify the exact completeness levels (analogous to WIWFM L0/L1/L2 caps) for each disease module and how missing germline/HRD/PTPI/CA-125 must cap confidence and/or cap risk/recommendations.
+
+P1 — Why multi-class collapses (ATR/WEE1/DNA_PK recall = 0): Agent should trace whether this is due to missing feature channels in 7D, label noise, or gating/threshold design, since the audit explicitly notes recall collapse for those classes despite decent binary PARP performance.
+​
+
+P1 — S/P/E expansion plan: WIWFM uses Sequence/Pathway/Evidence components, while 7D is pathway-only; agents should enumerate what “Evidence” objects we can attach (trial data, biomarker literature, cohort stats) and how that propagates into confidence/completeness rather than changing the mechanistic vector itself.
+​
+
+If you want a single marching order for the agent swarm: implement WIWFM-style completeness + PARP gating in the patient-domain stack first (real HRD/germline/PTPI), and stop trying to “win clinically” on GDSC2; use GDSC2 only to validate the mechanism vector and directional effects of experimental proxies.
+
+---
+
+## Audit addendum — what this means for Ayesha (patient value, not model value)
+
+The **7D mechanism vector is not a recommender**. For Ayesha, its *fundamental value* is:
+
+1) **Mechanism clarity (why an option is being suggested)**  
+If she sees “PARP + ATR trial” or “MEK escape risk,” 7D is the compact explanation of *which axis is driving that* (DDR/MAPK/PI3K/VEGF/HER2/IO/Efflux).
+
+2) **Trial matching (MoA alignment)**
+7D is the right backbone for **MoA-tagged trial ranking** because it is a *vector* you can compare to trial MoA vectors (cosine similarity) without pretending you have full clinical context.
+
+3) **Resistance / escape tracking**
+7D is the right place to express “escape drift” longitudinally (baseline vs current), but only if we keep WIWFM’s honesty rules: **missingness caps confidence** and we do not emit “high certainty” with low completeness.
+
+So, in the Impact×Safety×Access spine:
+- **Impact**: WIWFM provides the therapy ranking; 7D provides the mechanistic “why.”
+- **Safety**: PGx/toxicity gates must be layered on top (7D is not safety-aware).
+- **Access**: MoA trials use 7D for fit; holistic score adds feasibility.
+
+---
+
+## What’s already built in the codebase (so we’re not inventing work)
+
+- **7D is already operational as `mechanism_vector`** in SAE Phase 2 outputs (DDR/MAPK/PI3K/VEGF/HER2/IO/Efflux).  
+- **Mechanism chips are already a UI primitive** (the “mechanism map” concept exists; pre‑NGS grey, post‑NGS colored).
+- **Mechanism-fit ranking already exists** as a service pattern (cosine similarity after L2 norm + α/β weighting), which is exactly the right use of 7D for trials.
+
+This document should be treated as guidance for **how to use 7D safely**, not a request to rewrite 7D.
+
+---
+
+## Non‑negotiable guardrails (Ayesha-safe)
+
+1) **No standalone 7D→PARP rule**
+7D can express “DDR axis high,” but PARP being “on the table” must remain gated by germline/HRD/PTPI and missingness (as this doc already states).
+
+2) **Completeness cap is mandatory**
+If HRD/germline/PTPI are missing, the system must not present “high certainty” decisions. (We already have the WIWFM completeness pattern; reuse it.)
+
+3) **Separate “explain” from “decide”**
+7D is the explain layer. WIWFM (S/P/E + gates) is the decide layer. Trials are the access layer. PGx is the safety layer.
+
+---
+
+## Practical next integration (smallest step that matters for Ayesha)
+
+For the Targeted Therapy Brief:
+- show the **Top 3 options** from WIWFM
+- attach a single “mechanism strip” per option:
+  - the top 1–2 dominant axes (e.g., DDR + VEGF)
+  - and a one-line “escape risk” note when MAPK/PI3K/Efflux are elevated
+
+That gives Ayesha maximum interpretability without turning the UI into an engine room.
+
+---
+
+## Handoff section (implementation anchors + acceptance)
+
+### Canonical 7D ordering (DO NOT DRIFT)
+
+**Mechanism vector (7D)** is ordered as:
+1. DDR
+2. MAPK
+3. PI3K
+4. VEGF
+5. HER2
+6. IO
+7. Efflux
+
+This ordering must be treated as a contract across:
+- trial MoA vectors
+- mechanism-fit ranking
+- UI chips/strips
+- any “escape drift” comparisons
+
+If an agent changes ordering in one place, they must change it everywhere (but the recommended default is: **don’t change ordering; add provenance and mapping labels**).
+
+### Code anchors (where to look / what not to rewrite)
+
+The following components/services already implement the primitives we need:
+- **7D vector source**: SAE Phase 2 features expose `mechanism_vector` (patient-side mechanism backbone).  
+- **Mechanism-fit trial ranking**: cosine similarity pattern (L2-normalize vectors, α/β weighting).  
+- **Mechanism map chips**: pre‑NGS “Awaiting NGS” vs post‑NGS colored chips already exists as a UI concept.
+
+This handoff should focus on *wiring and presentation*, not re-deriving mechanism biology.
+
+### UI contract (how 7D is presented to Ayesha)
+
+For each of the **Top 3 WIWFM options**, show:
+- **Mechanism strip**: top 1–2 axes with labels (e.g., DDR + VEGF)
+- **Escape warning (one-liner)** only when one of these is elevated:
+  - MAPK (escape)
+  - PI3K (escape)
+  - Efflux (resistance / cross-resistance risk)
+
+Do not show all 7 axes by default; keep full 7-chip view behind “Details.”
+
+### Acceptance criteria (Ayesha-safe, RUO)
+
+- 7D is never used as a standalone recommender for PARP.
+- Missing germline/HRD/PTPI caps confidence (no “high certainty” with low completeness).
+- The UI clearly labels: **Explain (7D)** vs **Decide (WIWFM)** vs **Access (Trials)** vs **Safety (PGx)**.
+- Mechanism strip is readable in <10 seconds and does not require scrolling.
+
+### Common failure modes (avoid)
+
+- **Axis drift**: MAPK/PI3K swapped due to inconsistent indexing across modules.
+- **Over-display**: dumping 7 chips + provenance + citations + trial cards on one screen (creates overwhelm).
+- **Gate bypass**: treating “DDR high” as “PARP recommended” even when HRD/germline is missing/low.
+
+---
+
+## Manager-grade requirements (what “done” means)
+
+### 1) 7D must have explicit provenance + labels (no unlabeled vectors)
+Any response/UI that includes the vector must also include:
+- `mechanism_vector` (the raw 7 floats)
+- `mechanism_axes` (the label list in correct order)
+- `mechanism_top_axes` (top 1–2 axes + values)
+
+Rationale: without axes + top axes, a 7D vector is not reviewable and cannot be used safely in UI.
+
+### 2) 7D is “explain + align,” never “decide”
+The system must enforce (in code and UI):
+- **Decide**: WIWFM (S/P/E + sporadic gates + completeness caps)
+- **Explain**: 7D mechanism strip + escape warning
+- **Access**: MoA-tagged trials (mechanism-fit ranking + feasibility)
+- **Safety**: PGx/toxicity gate
+
+If an implementation uses 7D to directly change eligibility (e.g., “DDR high ⇒ recommend PARP”), it fails audit.
+
+### 3) Join semantics must be explicit (avoid “vector drift” across systems)
+When using 7D for trials:
+- trial MoA vectors must declare the same `mechanism_axes` ordering
+- mechanism-fit ranker must log which ordering was used
+- UI must display axis labels from the payload (not hardcoded indices)
+
+### 4) Completeness/missingness must gate interpretation
+If required upstream fields are missing (HRD/germline/PTPI):
+- 7D may be displayed as **gray / “incomplete context”**
+- but must not be framed as “high-confidence escape tracking”
+
+This is the same honesty model as WIWFM’s L0/L1/L2 caps.
+
+---
+
+## Minimal API payload contract (for handoff)
+
+Wherever 7D is surfaced (targeted brief, therapy fit bundle, trial cards), the payload should minimally include:
+
+```json
+{
+  "mechanism_vector": [0.72, 0.10, 0.15, 0.40, 0.00, 0.00, 0.30],
+  "mechanism_axes": ["DDR", "MAPK", "PI3K", "VEGF", "HER2", "IO", "Efflux"],
+  "mechanism_top_axes": [
+    {"axis": "DDR", "value": 0.72},
+    {"axis": "VEGF", "value": 0.40}
+  ],
+  "escape_warnings": [
+    {"axis": "PI3K", "severity": "watch", "note": "PI3K axis elevated (possible escape route)"}
+  ],
+  "provenance": {
+    "source": "sae_features",
+    "profile": "post_ngs",
+    "completeness_level": "L2"
+  }
+}
+```
+
+This keeps the vector understandable, and keeps UI work deterministic.
+
+---
+
+## Smoke checks (fast, non-aspirational)
+
+An implementation using 7D is acceptable only if:
+- The UI renders the **mechanism strip** without hardcoding indices (uses `mechanism_axes`).
+- A simulated payload with swapped indices is visibly caught in review (because labels come from payload, not UI constants).
+- 7D never changes “PARP eligibility” unless WIWFM gates also support it (explicitly tested).

@@ -1,0 +1,209 @@
+---
+alwaysApply: true
+---
+# 🛑 DOCTRINE STATUS: FAILED AUDIT (2026-01-31)
+**Previous Status**: "Aspirational / Fluff"
+**New Status**: **STRICT IMPLEMENTATION REQUIRED**
+
+## The Deficit (What is Missing)
+The previous doctrine claimed a "Decision Spine" existed. It does not.
+*   **Engine A (Research)**: Is a Search Engine, not a Decision Engine.
+*   **Engine C (Therapy Fit)**: Missing a candidate universe + deterministic scoring contract. (WIWFM exists, but it is not the “targeted brief” decision product.)
+*   **Verdict**: You cannot "rank" what you have not "listed".
+
+### Reality check (what already exists — do not rebuild)
+Before writing new services, we must explicitly reuse what exists:
+- **WIWFM/S/P/E** already produces per-therapy fields we need for *Impact* (efficacy_score/confidence/evidence tier/badges/citations/provenance).
+- **MoA-tagged trials** already exist as a concept (trial MoA vectors + holistic score). The Targeted Brief must consume a *count* and/or *top trial list*; it must not invent trial access.
+- **Research Intelligence** exists as a production-ready extractor/synthesizer. It is not the ranker. It provides receipts and mechanism evidence when WIWFM evidence is sparse or when off-label rationale is needed.
+- **Safety/PGx**: if the PGx Safety Gate endpoint/services are available, consume them; if not available, the targeted brief must degrade conservatively (safety_tier="UNKNOWN", no killswitch claims).
+
+---
+
+## 🏗️ BUILD REQUIREMENT 1: The "Candidate Universe" (The Menu)
+
+**The Fluff**: "We will find the best drug."
+**The Reality**: You can't find a drug if you don't know which ones to look at.
+
+**REQUIRED PROOF**:
+Create `api/services/therapy_fit/candidates/ovarian.json`.
+This file must exist and contain ~30 structured candidates.
+
+**Schema Requirement**:
+```json
+[
+  {
+    "drug_name": "olaparib",
+    "class": "PARP_inhibitor",
+    "mechanism": "PARP1_inhibition",
+    "targets": ["PARP1", "PARP2"],
+    "biomarkers_positive": ["HRD_POSITIVE", "BRCA1_MUT", "BRCA2_MUT"],
+    "biomarkers_negative": ["HRD_NEGATIVE", "PARP_RESISTANCE"],
+    "evidence_tier": "Standard_of_Care"
+  },
+  ...
+]
+```
+**AUDITOR NOTE**: Do not trust "AI Search" to generate this on the fly. Hardcode the search space first.
+
+### Hard rules (manager enforcement)
+- **No hallucinated candidates**: every entry must be sourced from a real reference list (NCCN/ESMO/FDA label) and/or an internally curated list already used elsewhere in the codebase.
+- **Stable identifiers**: `drug_name` must be the canonical key used across the platform (same string for WIWFM, trials, PGx).
+- **Normalize mechanisms**: `mechanism` and `class` must come from a controlled vocabulary (not free text), because Engine B (MoA trials) needs consistent matching.
+
+### Required join keys (non-negotiable)
+To prevent “we scored it but can’t connect it,” each candidate must be joinable across engines:
+- **WIWFM join**: `drug_name` must match the WIWFM drug naming (or provide `aliases: []` and resolve deterministically).
+- **Trials join**: `mechanism` and/or `class` must map to MoA tags used by the trials system.
+- **PGx join**: `drug_name` must map to the PGx screening dictionary/lookup (or provide `pgx_aliases: []`).
+
+### Minimum candidate set for ovarian (pragmatic)
+The initial ~30 should include at least:
+- PARP inhibitors (olaparib, niraparib, rucaparib)
+- Anti‑angiogenic (bevacizumab)
+- Platinum class options / rechallenge patterns (carboplatin, cisplatin) as *comparators* (not L1 advocacy)
+- FRα‑targeted (mirvetuximab soravtansine) if FRα positive
+- IO checkpoint options (pembrolizumab / dostarlimab) **only** under explicit MSI‑H/TMB‑H gates
+- DDR/replication stress adjuncts often seen in trials (ATR/WEE1/CHK1 class mechanisms; exact agents depend on availability)
+
+This is not “recommending” them; it’s defining the menu to score.
+
+---
+
+## 🏗️ BUILD REQUIREMENT 2: The Scoring Backbone (The Logic)
+
+**The Fluff**: "Impact x Safety x Access"
+**The Reality**: Show me the Python function that computes this.
+
+**REQUIRED PROOF**:
+Implement `api/services/therapy_fit/scoring.py`.
+
+**Logic Spec**:
+1.  **Filter**: `if drug.biomarkers_negative in patient.biomarkers: DISCARD`
+2.  **Score**:
+    *   **Base**: +1.0 if Standard of Care.
+    *   **Biomarker Boost**: +0.5 per positive match (HRD, GEMM).
+    *   **Mechanism Boost**: +0.3 if `mechanism` matches `tumor_context.high_expression` (from Engine A).
+3.  **Safety Penalty**:
+    *   Call `SafetyService` (Engine A).
+    *   `if toxicity_risk == HIGH: Score *= 0.1` (Killswitch).
+
+**AUDITOR NOTE**: I want to see the `class CandidateScorer` and the exact math. No hand-waving.
+
+### Required: connect to existing engines (no parallel scoring universe)
+The scorer must **not** invent its own “efficacy.” It must consume existing outputs:
+
+- **Impact** should preferentially consume WIWFM (`/api/efficacy/predict`) fields when available:
+  - `efficacy_score`, `confidence`, `evidence_tier`, `badges`, `citations_count`
+  - (optional) 7D/SAE mechanism vector as *explain layer*, not as recommender
+- **Safety** must consume PGx/toxicity gating when available:
+  - toxicity tier HIGH/MODERATE/LOW and adjustment factor (killswitch semantics)
+- **Access** must consume trial matching counts from Engine B:
+  - `trials_available` is a count of MoA‑matched recruiting trials for that candidate class/mechanism
+
+### Deterministic scoring math (v1, explicit)
+The score must be a single float so it can be sorted. Recommended v1:
+
+- **Eligibility filter (hard discard)**
+  - If any `biomarkers_negative` match patient state ⇒ `discard_reason="negative_biomarker"`
+  - If candidate requires MSI‑H/TMB‑H and patient is MSS/TMB‑low/unknown ⇒ discard or heavily penalize (pick one and codify it)
+
+- **Impact subscore (0..1)**
+  - If WIWFM result exists for the candidate drug/class, set:
+    - `impact = clamp01(wiwfm.efficacy_score)`
+  - Else (no WIWFM coverage), fall back to heuristic:
+    - `impact = 0.2 + 0.05 * (#positive_biomarker_matches)` capped at 0.5
+
+- **Safety multiplier (killswitch)**
+  - If PGx toxicity tier HIGH ⇒ `safety_mult = 0.1`
+  - If MODERATE ⇒ `safety_mult = 0.7`
+  - If LOW/UNKNOWN ⇒ `safety_mult = 1.0`
+
+- **Access bonus**
+  - `access_bonus = min(0.2, 0.05 * trials_available)`
+  - (this keeps “access” from swamping impact/safety)
+
+- **Final**
+  - `score = (impact * safety_mult) + access_bonus`
+
+The scorer must also return the intermediate components (`impact`, `safety_mult`, `access_bonus`) in the response for auditability.
+
+### Required: explicit data adapters (so the implementation is reviewable)
+The v1 implementation must have explicit adapters that show exactly where each component comes from:
+- `impact` adapter: from WIWFM response (`efficacy_score`), with fallback heuristic only if WIWFM not available.
+- `safety_mult` adapter: from PGx/toxicity tier (if available), else default to 1.0 with `safety_tier="UNKNOWN"`.
+- `trials_available` adapter: from MoA trial search results (count recruiting + mechanism aligned), else 0 with provenance note.
+- (optional) `mechanism_strip` adapter: derived from 7D mechanism vector *for explanation only* (never for eligibility).
+
+### Guardrail: do not produce “better than WIWFM”
+This scorer is a **meta-ranker for targeted brief presentation**, not a replacement for WIWFM.
+If WIWFM returns a drug with low confidence/tier due to missingness, the targeted brief must not inflate it.
+
+---
+
+## 🏗️ BUILD REQUIREMENT 3: The API Contract (The Output)
+
+**The Fluff**: "Targeted Therapy Brief"
+**The Reality**: Define the Pydantic Model.
+
+**REQUIRED PROOF**:
+Update `api/schemas/ayesha.py` (or new file).
+
+```python
+class RankedOption(BaseModel):
+    drug: str
+    rank: int
+    score: float
+    rationale: str          # "Matches HRD+ and High TMB"
+    safety_flag: str        # "CAUTION: CYP3A4 Interaction"
+    trials_available: int   # Count from Engine B
+```
+
+**Interaction**:
+The endpoint `POST /api/ayesha/targeted-brief` must return strictly this list.
+
+### Required additions for auditability (still non-breaking to the list)
+To make this reviewable (and not “magic”), the response must include:
+- `impact_score` (float)
+- `safety_tier` (str)
+- `access_bonus` (float)
+- `discard_reason` (optional str; only if excluded)
+
+If you want to keep the response minimal, these can be nested under `provenance` but they must exist somewhere in the payload.
+
+### Non-negotiable response semantics
+- `rationale` must explicitly mention which gates fired (e.g., “discarded due to HRD_NEGATIVE”, “PGx HIGH killswitch applied”, “no recruiting MoA-matched trials found”).
+- `safety_flag` must never claim clinical dosing; it is a warning string only (RUO).
+- `trials_available` must be derived from the trials engine (or 0 with provenance indicating “trials not queried”).
+
+---
+
+## 📅 THE EXECUTION PLAN (72 Hours)
+
+1.  **T+0 (Configuration)**: Create `ovarian.json`. Do not hallucinate drugs. Use NCCN/ESMO guidelines.
+2.  **T+24 (The Engine)**: Write `TargetedTherapyService`. It must load the JSON, loop through it, apply the `Scorer`, and return the list.
+3.  **T+48 (The Wiring)**: Connect `SafetyService` for the penalty logic. Connect `ClinicalTrialSearch` for the "trials_available" count.
+
+### Acceptance (manager sign-off checklist)
+- Candidate file exists and validates as JSON; contains ≥25 candidates; mechanisms/classes are controlled vocabulary.
+- API returns a sorted list with deterministic scoring and explicit safety killswitch behavior.
+- Each option includes a **human-readable rationale** that cites which gate fired (e.g., HRD rescue/penalty, MSI/TMB eligibility).
+- Non-actionable items are either discarded with reason or included with explicit low score + gate reason (pick one policy and enforce it consistently).
+
+### Smoke commands (no “it works on my machine”)
+- `curl -X POST http://127.0.0.1:8000/api/ayesha/targeted-brief -H "Content-Type: application/json" -d '{...}'`
+- Verify at least:
+  - 200 OK
+  - sorted `rank` and monotonic `score`
+  - at least one item has `trials_available > 0` when Engine B is seeded
+  - at least one item is killed (or discarded) under a simulated HIGH PGx tier
+
+### Failure modes to explicitly prevent (manager-grade)
+- **Hallucinated universe**: candidate list generated from LLM at runtime (forbidden).
+- **Axis drift**: 7D ordering inconsistency causes wrong mechanism labels (if mechanism strips are included).
+- **Gate bypass**: DDR axis high ⇒ “PARP recommended” despite HRD/germline missing/low (forbidden).
+- **Silent zeros**: trials/pgx unavailable but response looks fully confident (must mark UNKNOWN and/or cap).
+- **Name mismatch**: WIWFM calls drug “mirvetuximab soravtansine” but candidate list uses “Mirv” and nothing joins (must solve with aliases).
+
+**AUDITOR SIGN-OFF**:
+This document replaces all previous "vision" statements. **Code or it didn't happen.**

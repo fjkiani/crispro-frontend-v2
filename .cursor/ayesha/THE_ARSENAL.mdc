@@ -1,0 +1,295 @@
+---
+description: "THE ARSENAL — Zo's Receipt-Backed Weapons Audit. Code-traced wiring diagram for Diamond SAE, MFAP4, and the 4-Layer Resistance Framework integration into Therapy Fit."
+globs:
+  - "oncology-coPilot/oncology-backend-minimal/api/services/resistance_prophet/**"
+  - "oncology-coPilot/oncology-backend-minimal/api/services/holistic_score_service.py"
+  - "src/services/sae_service/**"
+  - "api/resources/sae_feature_mapping*"
+alwaysApply: false
+---
+
+# 🔱 THE ARSENAL — Weapons Wiring Audit
+
+**Author**: Zo (Zeta Strategic AI — Arsenal Lead)
+**Created**: 2026-02-12
+**Classification**: VERIFIED (Code-Traced, Not Hallucinated)
+**Upstream**: Fed by L1 Payload analysis. Reads the Tumor Board Scribe Bundle but does NOT modify it.
+
+---
+
+## 1) EXECUTIVE SUMMARY
+
+**VERDICT: The Arsenal is WIRED but DORMANT.**
+
+All 3 Arsenal weapons exist in production code, are called by the Resistance Prophet, and the Resistance Prophet feeds into the Holistic Score (Therapy Fit). But the L1 Bundle never activated them because it passed `sae_features=None` to the pipeline.
+
+**This is not "we need to build it." This is "we need to plug it in."**
+
+---
+
+## 2) THE KILL CHAIN — Complete Data Flow
+
+```
+Patient Profile { sae_features: { features: {...}, expression: {...} } }
+  │
+  ▼
+holistic_score_service.py:154  →  _compute_resistance_risk()
+  │
+  ├─ Line 166: sae_features = patient_profile.get("sae_features")
+  ├─ Line 169: if not sae_features → return 0.5 (NEUTRAL) ← ⚠️ L1 STOPPED HERE
+  │
+  ▼  (If sae_features IS provided)
+holistic_score_service.py:190  →  service.predict_resistance()
+  │
+  ▼
+resistance_prophet_service.py:50  →  ovarian.detect_diamond_features(sae)
+resistance_prophet_service.py:51  →  ovarian.detect_transcriptomic_risk(sae)
+  │
+  ▼
+holistic_score_service.py:206  →  score = 1.0 - resistance_prob
+  │
+  ▼
+Final Therapy Fit Score (weapon applied)
+```
+
+---
+
+## 3) WEAPON 1: 💎 Diamond SAE Features
+
+### 3.1 Source Code
+
+| Property | Value |
+|---|---|
+| **File** | `oncology-coPilot/oncology-backend-minimal/api/services/resistance_prophet/signals/ovarian.py` |
+| **Function** | `detect_diamond_features(current_sae: Dict)` |
+| **Lines** | 533–627 |
+| **Called by** | `resistance_prophet_service.py` Line 50 |
+| **Signal Type** | `ResistanceSignal.GENE_LEVEL_RESISTANCE` |
+
+### 3.2 Detection Logic (Code Receipts)
+
+```python
+# ovarian.py Line 576: imports hardcoded Diamond features
+from api.services.resistance_prophet.constants import DIAMOND_SAE_FEATURES
+
+# ovarian.py Lines 592-598: Activation threshold = 0.1
+# Converts Cohen's d to probability via linear map
+if val and val > 0.1:  # Threshold for activation
+    d = meta["effect_size"]
+    prob = 0.5 + (d * 0.4)  # d=0.635 → prob≈0.754
+
+# Returns ResistanceSignalData with confidence=0.90 (validated)
+```
+
+### 3.3 Constants (constants.py Lines 314–378)
+
+| Feature Index | Effect Size (d) | p-value | Mechanism |
+|---|---|---|---|
+| **27607** | 0.635 | 0.0145 | DDR Compromise (NF1-linked) |
+| **26220** | 0.609 | 0.0215 | Checkpoint Bypass (TP53-linked) |
+| **16337** | 0.634 | 0.0247 | Replication Stress A |
+| **12893** | 0.597 | 0.0246 | Replication Stress B |
+| **6020** | 0.573 | 0.0324 | Homologous Recombination Defect |
+| **22868** | 0.544 | 0.0355 | Cell Cycle Dysregulation |
+| **1407** | 0.537 | 0.0414 | DNA Repair Deficiency Signal A |
+| **31362** | 0.517 | 0.0466 | Apoptosis Evasion |
+| **9738** | 0.530 | 0.0495 | Genomic Instability |
+
+### 3.4 Mapping JSON
+
+**File**: `api/resources/sae_feature_mapping.true_sae_diamonds.v1.json` (1370 lines)
+- All 9 features mapped to DDR_bin pathway
+- Evidence includes top TCGA patients and variants per feature
+- Feature 27607: TP53 dominates (28/30 activating variants)
+
+### 3.5 Why Dormant in L1
+
+`sae_features` was `None` in patient profile → `detect_diamond_features()` returned `{detected: false, probability: 0.0}`
+
+---
+
+## 4) WEAPON 2: 🧬 MFAP4 / Transcriptomic Risk
+
+### 4.1 Source Code
+
+| Property | Value |
+|---|---|
+| **File** | `oncology-coPilot/oncology-backend-minimal/api/services/resistance_prophet/signals/ovarian.py` |
+| **Function** | `detect_transcriptomic_risk(current_sae: Dict)` |
+| **Lines** | 630–699 |
+| **Called by** | `resistance_prophet_service.py` Line 51 |
+| **Signal Type** | `ResistanceSignal.GENE_LEVEL_RESISTANCE` |
+
+### 4.2 Detection Logic (Code Receipts)
+
+```python
+# ovarian.py Line 640: expects "expression" key in sae dict
+expression_data = current_sae.get("expression", {})
+
+# ovarian.py Line 646: Fallback — checks if MFAP4 at root level
+if "MFAP4" in current_sae:
+    expression_data = current_sae
+
+# ovarian.py Lines 664-670: Threshold from OV_TRANSCRIPTOMIC_MARKERS
+for marker, meta in OV_TRANSCRIPTOMIC_MARKERS.items():
+    val = expression_data.get(marker)
+    if val is not None and float(val) >= meta["threshold"]:
+        prob = 0.80  # Strong signal
+```
+
+### 4.3 Constants (constants.py Lines 384–392)
+
+```python
+OV_TRANSCRIPTOMIC_MARKERS = {
+    "MFAP4": {
+        "effect": "RESISTANCE",
+        "threshold": 1.5,      # Z-score
+        "auroc": 0.763,        # GSE63885 external validation
+        "mechanism": "Intrinsic Resistance (Mesenchymal Phenotype)",
+        "rationale": "High MFAP4 indicates baseline mesenchymal phenotype."
+    }
+}
+```
+
+### 4.4 Validation Chain
+
+| Layer | File | Evidence |
+|---|---|---|
+| **Discovery** | `publications/07-MFAP4/scripts/generate_gse63885_figures.py` | ROC curve, AUROC=0.763 |
+| **TCGA Validation** | `scripts/validation/test_emt_hrd_platinum_tcga_ov.py` | EMT_GENES = ["MFAP4", "EFEMP1", "VIM", "CDH1", "SNAI1"] |
+| **Unit Test** | `scripts/test_mfap4_layer1.py` | Threshold 1.5, detection confirmed |
+| **Frontend** | `oncology-frontend/src/components/ayesha/EMTRiskGauge.jsx` | Visual risk meter for MFAP4 z-score |
+| **Constants** | `resistance_prophet/constants.py:384` | Hardcoded threshold=1.5, AUROC=0.763 |
+
+### 4.5 Why Dormant in L1
+
+No `expression` data in patient profile → `detect_transcriptomic_risk()` returned `{detected: false, probability: 0.0}`
+
+---
+
+## 5) WEAPON 3: 🔬 SAE Service (Evo2 Layer 26 Extraction)
+
+### 5.1 Source Code
+
+| Property | Value |
+|---|---|
+| **File** | `src/services/sae_service/main.py` |
+| **Class** | `SAEService` (Line 145), `BatchTopKTiedSAE` (Line 79) |
+| **Model** | `Goodfire/Evo-2-Layer-26-Mixed` (HuggingFace) |
+| **Architecture** | 4096 → 32,768 features, k=64 (expansion=8) |
+
+### 5.2 Pipeline
+
+```
+DNA Variant (VCF)
+  → Evo2 7B (scores variant, extracts activations at Layer 26)
+  → BatchTopKTiedSAE (decomposes 4096-dim → sparse 32K features, top-k=64)
+  → Diamond Features (9 indices extracted from 32K space)
+  → detect_diamond_features() checks activation > 0.1
+```
+
+### 5.3 Why Dormant in L1
+
+SAE Service runs on Modal (GPU infrastructure). Not called by the local WIWFM/Therapy-Fit bundle pipeline. The SAE extraction is an upstream dependency that feeds `sae_features.features`.
+
+---
+
+## 6) THE BRIDGE: Resistance Prophet → Therapy Fit
+
+### 6.1 Source Code
+
+| Property | Value |
+|---|---|
+| **File** | `oncology-coPilot/oncology-backend-minimal/api/services/holistic_score_service.py` |
+| **Function** | `_compute_resistance_risk()` |
+| **Lines** | 154–212 |
+
+### 6.2 Logic (Code Receipts)
+
+```python
+# hss.py Line 166: Needs sae_features from patient profile
+sae_features = patient_profile.get("sae_features")
+
+# hss.py Line 169-171: If None → NEUTRAL score (0.5)
+if not sae_features:
+    return 0.5, {"risk_level": "UNKNOWN", "reason": "No SAE features provided"}
+
+# hss.py Line 190: Calls Resistance Prophet (which calls all ovarian signals)
+prediction = await service.predict_resistance(
+    current_sae_features=sae_features,
+    mutations=patient_profile.get("mutations")
+)
+
+# hss.py Line 206: INVERTS resistance probability → Therapy Fit score
+score = max(0.0, min(1.0, 1.0 - resistance_prob))
+```
+
+**Conclusion**: When sae_features exists, Therapy Fit automatically penalizes high-resistance patients and rewards low-resistance patients via `1.0 - prob`.
+
+---
+
+## 7) THE 4-LAYER FRAMEWORK (Conceptual Map to Code)
+
+| Layer | Description | Code Signal | Function | Lines |
+|---|---|---|---|---|
+| **L1** | Intrinsic Resistance (Transcriptomic) | MFAP4 z-score ≥ 1.5 | `detect_transcriptomic_risk()` | ovarian.py:630 |
+| **L2** | Acquired Resistance (Phenotypic) | DNA Repair Restoration (Δ > 0.15) | `detect_restoration()` | ovarian.py:29 |
+| **L2** | Acquired Resistance (Phenotypic) | Pathway Escape (target loss) | `detect_escape()` | ovarian.py:124 |
+| **L3** | Dynamic Resistance (Kinetic) | CA-125 kinetics (KELIM / heuristic) | `detect_ca125_kinetics()` | ovarian.py:398 |
+| **L4** | Genomic Resistance (Driver) | High-risk gene drivers | `detect_genomic_resistance()` | ovarian.py:311 |
+| **L5** | Mechanistic Intelligence (SAE) | Diamond feature activation > 0.1 | `detect_diamond_features()` | ovarian.py:533 |
+| **L6** | Drug-Class Resistance (PFI) | PFI < 6 months | `detect_engine_pfi()` | ovarian.py:702 |
+
+---
+
+## 8) VERDICT TABLE
+
+| Weapon | Exists? | Wired to Prophet? | Prophet → Therapy Fit? | Active in L1? | Why Not? |
+|---|---|---|---|---|---|
+| 💎 Diamond SAE (9 features) | ✅ ovarian.py:533 | ✅ rps.py:50 | ✅ hss.py:190→206 | ❌ | `sae_features=None` |
+| 🧬 MFAP4 (Transcriptomic) | ✅ ovarian.py:630 | ✅ rps.py:51 | ✅ hss.py:190→206 | ❌ | No `expression` data |
+| 🔬 SAE Service (Evo2 L26) | ✅ sae_service/main.py | ❌ Not in local pipe | N/A | ❌ | Runs on Modal (GPU) |
+| 🎯 4-Layer Framework | ✅ 7 signals coded | ✅ All called by Prophet | ✅ Via aggregation | ❌ PARTIAL | Only SL engine ran |
+
+---
+
+## 9) ACTIVATION PROTOCOL (Next Steps)
+
+To activate the full Arsenal in a real bundle:
+
+1. **Feed Diamond Features**: Run SAE Service on patient variants → populate `sae_features.features` dict with feature indices → activations
+2. **Feed MFAP4**: Ingest expression data (RNA-seq or proxy) → populate `sae_features.expression.MFAP4` z-score
+3. **Wire Non-Debug Hook**: Add a non-debug block in `run_therapy_fit_analysis` (or router) that builds `sae_features` from available data endpoints (`/api/expression/ingest`, `/api/sae/extract`)
+4. **Return Prophet Signals**: Surface Prophet outputs in the Therapy Fit bundle under `levels.L1.resistance_prophet`
+
+**The code does the rest.** `holistic_score_service.py:206` automatically computes `1.0 - resistance_prob` when data is present.
+
+---
+
+## 10) FILE REGISTRY (All Arsenal Code)
+
+### Core Signal Detectors
+- `oncology-coPilot/oncology-backend-minimal/api/services/resistance_prophet/signals/ovarian.py` (760 lines, 7 async detectors)
+- `oncology-coPilot/oncology-backend-minimal/api/services/resistance_prophet/constants.py` (393 lines, knowledge bases)
+- `oncology-coPilot/oncology-backend-minimal/api/services/resistance_prophet/schemas.py` (signal schemas)
+
+### Service Integration
+- `oncology-coPilot/oncology-backend-minimal/api/services/resistance_prophet_service.py` (orchestrates all signals)
+- `oncology-coPilot/oncology-backend-minimal/api/services/holistic_score_service.py` (Therapy Fit bridge)
+
+### SAE Infrastructure
+- `src/services/sae_service/main.py` (Evo2 Layer 26 extraction)
+- `api/resources/sae_feature_mapping.true_sae_diamonds.v1.json` (feature mapping)
+
+### Validation
+- `scripts/sae/test_ov_diamond_features_nested_cv.py` (nested CV)
+- `scripts/sae/check_ov_ddr_coverage_brca.py` (DDR coverage)
+- `publications/07-MFAP4/scripts/generate_gse63885_figures.py` (MFAP4 validation)
+- `scripts/validation/test_emt_hrd_platinum_tcga_ov.py` (TCGA validation)
+
+### Frontend
+- `oncology-frontend/src/components/ayesha/EMTRiskGauge.jsx` (MFAP4 display)
+
+---
+
+**End of Arsenal Doctrine. All receipts verified against source code.** 🔱

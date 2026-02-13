@@ -1,0 +1,90 @@
+{
+  "metadata": {
+    "version": "v1",
+    "last_updated": "2025-01-15",
+    "source": "Sprint 1 biomarker correlation analysis (mock data verification)",
+    "model": "Goodfire/Evo-2-Layer-26-Mixed",
+    "layer": "blocks-26",
+    "total_features": 32768,
+    "mapped_features": 13,
+    "validation_status": "preliminary_mock",
+    "note": "This mapping is based on mock data verification. Real mapping will be created after Sprint 1 real data analysis completes."
+  },
+  "pathways": {
+    "ddr": {
+      "name": "DNA Damage Response",
+      "description": "Homologous recombination, NHEJ, base excision repair. Features associated with platinum sensitivity.",
+      "feature_indices": [100, 101, 102],
+      "correlation_with_platinum": "positive",
+      "mean_pearson_r": 0.987,
+      "mean_cohen_d": 21.49,
+      "mean_cv_stability": 1.00,
+      "evidence": "Top features from mock data verification (Sprint 1). Strong positive correlation with sensitive outcome. Real mapping pending real data analysis.",
+      "confidence": "high_mock",
+      "biological_plausibility": "High - DDR deficiency (BRCA1/2, HRD) predicts platinum sensitivity in ovarian cancer"
+    },
+    "mapk": {
+      "name": "MAPK/RAS Signaling",
+      "description": "RAS→RAF→MEK→ERK cascade, oncogenic signaling. Features associated with platinum resistance.",
+      "feature_indices": [200, 201, 202],
+      "correlation_with_platinum": "negative",
+      "mean_pearson_r": -0.990,
+      "mean_cohen_d": 21.15,
+      "mean_cv_stability": 1.00,
+      "evidence": "Top features from mock data verification (Sprint 1). Strong negative correlation (higher in resistant/refractory). Real mapping pending real data analysis.",
+      "confidence": "high_mock",
+      "biological_plausibility": "High - MAPK activation (KRAS, BRAF) associated with platinum resistance in ovarian cancer"
+    },
+    "io": {
+      "name": "Immune/Inflammatory",
+      "description": "Immune checkpoint, T-cell infiltration, cytokine signaling. Features with moderate correlation to outcome.",
+      "feature_indices": [300, 301, 302],
+      "correlation_with_platinum": "moderate_positive",
+      "mean_pearson_r": 0.936,
+      "mean_cohen_d": 9.85,
+      "mean_cv_stability": 1.00,
+      "evidence": "Top features from mock data verification (Sprint 1). Moderate positive correlation. Real mapping pending real data analysis.",
+      "confidence": "high_mock",
+      "biological_plausibility": "Medium - Immune signatures (MSI-H, TMB) can predict IO response, but relationship to platinum is complex"
+    },
+    "pi3k_akt": {
+      "name": "PI3K/AKT/mTOR",
+      "description": "Growth signaling, apoptosis resistance",
+      "feature_indices": [],
+      "correlation_with_platinum": "unknown",
+      "mean_pearson_r": null,
+      "mean_cohen_d": null,
+      "mean_cv_stability": null,
+      "evidence": "To be determined from Sprint 1 real data analysis",
+      "confidence": "unknown",
+      "biological_plausibility": "Medium - PI3K/AKT activation can drive resistance, but specific SAE features not yet identified"
+    },
+    "tp53": {
+      "name": "TP53 Pathway",
+      "description": "Cell cycle checkpoint, apoptosis",
+      "feature_indices": [],
+      "correlation_with_platinum": "unknown",
+      "mean_pearson_r": null,
+      "mean_cohen_d": null,
+      "mean_cv_stability": null,
+      "evidence": "To be determined from Sprint 1 real data analysis",
+      "confidence": "unknown",
+      "biological_plausibility": "High - TP53 mutations are common in ovarian cancer, but specific SAE features not yet identified"
+    }
+  },
+  "provenance": {
+    "creation_method": "manual_curation_from_sprint1_mock_results",
+    "curator": "Zo (Lead Commander)",
+    "timestamp": "2025-01-15T23:52:00Z",
+    "validation_status": "preliminary_mock",
+    "manager_approval": "pending",
+    "next_steps": [
+      "Run Sprint 1 biomarker analysis on real TCGA-OV SAE features",
+      "Update mapping with real top features",
+      "Literature review for biological plausibility",
+      "Manager review and approval"
+    ]
+  }
+}
+
+

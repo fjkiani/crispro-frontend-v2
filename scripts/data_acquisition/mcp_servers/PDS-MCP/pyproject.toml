@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pds-mcp"
+version = "0.1.0"
+description = "MCP server for Project Data Sphere (SAS CAS) — ZETA Strategic Asset"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastmcp>=2.10.0",
+    "swat",
+    "python-dotenv",
+    "pydantic>=2.0.0",
+]
+
+[project.scripts]
+pds-mcp = "pds_server.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["pds_server*"]

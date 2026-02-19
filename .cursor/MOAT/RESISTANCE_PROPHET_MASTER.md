@@ -2,7 +2,9 @@
 
 **Status:** ✅ Production Ready (Validated)
 **Version:** 2.0 (Consolidated)
-**Last Updated:** January 2025
+**Last Updated:** February 2025
+
+**Supersedes:** `.cursor/ayesha/RESISTANCE_PREDICTION_VALIDATED.md`, `RESISTANCE_PROPHET_AUDIT.md`, `RESISTANCE_PROPHET_INTEGRATION_AUDIT.md`, `RESISTANCE_PROPHET_INTEGRATION_COMPLETE.md`, `RESISTANCE_PROPHET_REFACTOR_PLAN.md`, `RESISTANCE_PROPHET_REFACTOR_PLAN_FINAL.md` (archived)
 
 ---
 
@@ -33,6 +35,8 @@ The following claims are strictly validated with reproducibility receipts.
 | **MAPK** | TCGA-OV (n=469) | **1.97** | <0.05 | Predicts Platinum Resistance |
 | **PI3K** | TCGA-OV (n=469) | **1.39** | 0.02 | Predicts Platinum Resistance |
 
+**DDR (DNA repair) for outcome prediction:** Not validated as a standalone prognostic marker in our cohorts. Do not claim DDR for outcome prediction. MAPK and NF1 are the validated OV resistance signals.
+
 ### Production Reliability
 *   **Resistance E2E Fixtures:** 100% Pass (5/5). Validated handling of L0/L1/L2 input completeness and confidence caps.
 *   **Gating Logic:** Validated deterministic behavior (penalty vs rescue).
@@ -42,13 +46,25 @@ The following claims are strictly validated with reproducibility receipts.
 ## 3. Implementation Status
 
 ### Core Components
-*   **Service:** `ResistanceProphetService` (~1,500 lines). Fully implemented.
+*   **Service:** `ResistanceProphetService` (wrapper) + modular package `api/services/resistance_prophet/`:
+    *   `engine.py` – main prediction logic; `aggregation.py` – risk aggregation
+    *   `signals/ovarian.py` – OV signals (MAPK, NF1, PI3K); `signals/mm.py` – MM signals (DIS3, TP53)
+    *   `actions.py`, `shim.py`, `constants.py`, `schemas.py`, `spine.py`, `timing_engine.py`, `prognosis.py`
 *   **Playbook:** `ResistancePlaybookService`. Implemented.
 *   **Endpoints:** `/api/resistance/predict`, `/api/care/resistance_playbook`.
 
 ### Integration
 *   **Orchestrator:** Fully wired into `AGENT_03`.
 *   **Frontend:** `ResistancePlaybook.jsx` (Placeholder/Partial) - *See Remaining Work*.
+
+### Mars Protocol Refactor (Complete)
+Modular package layout implemented. Logic moved from monolithic `resistance_prophet_service.py` into `api/services/resistance_prophet/` with engine, signals (ovarian, mm), aggregation, actions, shim, spine, timing_engine, and prognosis.
+
+### Baseline Artifact Fix (Ayesha HIGH-Risk Overcall)
+**Root cause:** When baseline SAE features are missing, the system used population average instead, which inflated resistance probability and produced spurious HIGH risk.
+**Fix:**
+*   Apply a **30% probability penalty** when baseline is missing (population average used).
+*   Require **≥3 signals** for HIGH risk when baseline is missing (prevents single-signal HIGH overcall).
 
 ---
 

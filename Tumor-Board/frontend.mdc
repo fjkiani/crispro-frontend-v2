@@ -1,0 +1,135 @@
+Present the Tumor Board view as a single, boardroom-ready page that answers (1) “What do we know?”, (2) “What do we recommend?”, and (3) “How trustworthy is it?”, using only what the /bundle actually contains (inputs used, completeness/tests needed, efficacy panel, SL panel, and—once wired—resistance gating).
+
+Page structure (top-to-bottom)
+Patient + run header
+Show patient ID, timestamp, requested level(s), and “Research Use Only” status so screenshots stand alone.
+​
+
+Data readiness banner (always visible)
+Render completeness score, confidence cap, and the explicit missing fields list (HRD, TMB, RNA expression, CA‑125) as a “What’s missing / What to order next” strip.
+​
+
+Resistance Gate banner (first clinical gate)
+Place a green/amber/red gate above the therapy hero so clinicians see “Go-forward / Veto / Inconclusive” before interpreting SL or drug cards; when sae_features/expression are absent, show “NOT EVALUATED: missing SAE features / expression” rather than implying “all clear.”
+​
+
+Main board content (two-column)
+Left column: “Actionable recommendation”
+
+“Top recommendation(s)” card that can cite the SL suggested therapy (e.g., Ceralasertib) and confidence, but label it as “Synthetic Lethality panel” to avoid confusion with WIWFM efficacy ranking.
+​
+
+A short “Why” list that mirrors the bundle objects: broken pathways, essential backups, and the DepMap grounding note (when present) as one-line receipts.
+​
+
+Right column: “Therapy options table” (WIWFM efficacy)
+
+Sortable list of drug cards showing efficacy score, confidence, evidence tier, and badges (e.g., PathwayAligned).
+​
+
+Each card should expose the rationale breakdown already present in the payload (sequence percentile, pathway percentile, evidence strength), and explicitly display when evidence is zeroed (evidencestrength 0.0; citationscount 0; pubmedquery null) so clinicians don’t assume you hid citations.
+​
+
+“Receipts” drill-down (tabbed)
+Add tabs below the main view so the board can audit without clutter:
+
+Inputs actually used
+Show levels.L1.inputs_used.mutations + tumor context, and highlight exclusions from Evo2 scoring (variantsexcluded reasons like missing chrom/pos or non‑SNV normalization).
+​
+
+Synthetic Lethality details
+Broken pathways, essential backups (ATR/WEE1), recommended drugs with confidence, and provenance receipts (HGVS resolution + Evo2 receipts).
+​
+
+Resistance Lab (Arsenal)
+Diamond/MFAP4 signals and probability when available, plus the explanation that the resistance stack is dormant unless SAE features + expression are present.
+​
+
+Tests needed → unlocks
+Render testsneeded.test, unlocks, why as clickable orderable items (HRD assay, CGP/TMB, RNA-seq, CA‑125 baseline).
+​
+
+Level navigation (L1 vs L2/L3 previews)
+Use a simple level switcher: L1 “current data” vs L2/L3 “preview scenarios,” and show scenario cards as “locked” with “requires” (L2: NGS coords + HRD + TMB; L3: RNA expression + CA‑125), matching what the backend exposes for frontend scenario catalogs.
+​
+
+If you tell me whether your tumor board audience is mostly oncologists (minimal provenance) or mixed clinical+engineering (wants receipts on-screen), I’ll give you the exact component list and the default collapsed/expanded states.
+
+Prepared using GPT-5.2 Thinking
+give full instructions on how it connects - the agent is new and doens't have context like the previous one
+Use the Tumor Board frontend as a thin renderer over one canonical backend object: POST /api/ayesha/therapy-fit/bundle, which returns a “single truth” payload per level (L1/L2/L3) containing inputsused, completeness, efficacy, and (optionally) syntheticlethality.
+
+1) Backend endpoints (what to call)
+Bundle (main Tumor Board payload): POST /api/ayesha/therapy-fit/bundle with query params level (l1|l2|l3|all), optional scenarioid (L2 scenario, and L2 base for L3), optional l3scenarioid, includesyntheticlethality (default true), and includeslexplanations (default false). 
+​
+
+Scenario catalog (to populate L2/L3 preview cards): GET /api/ayesha/therapy-fit/scenarios, which returns L2/L3 scenario cards marked “locked” plus “requires” strings and a preview cache (TTL, generatedAt, errors).
+​
+
+Optional drilldowns: POST /api/ayesha/therapy-fit/analyze (analysis with optional drugfilter) and GET /api/ayesha/therapy-fit/drug/{drugname} (drug-centric view across levels) if you want separate “deep dive” modals.
+​
+
+Example request (L1, with SL panel):
+
+bash
+curl -X POST "http://<host>/api/ayesha/therapy-fit/bundle?level=l1&includesyntheticlethality=true&includeslexplanations=false"
+[ file:962]
+
+2) Bundle response shape (what the UI receives)
+At the top level, the bundle returns: patientid, requestedlevels, generatedat, scenariocontext (scenario IDs if used), and levels keyed by L1, L2, L3.
+
+Each levels.<LK> object includes: ispreview, effectiveassembly, inputsused (mutations + tumor context actually used), efficacy (drug rows), pathwayscores, provenance, optional syntheticlethality, and completeness.
+
+Concrete field paths your renderer should rely on (these are what the Tumor Board Scribe document uses):
+
+Inputs: levels.L1.inputsused.mutations, levels.L1.inputsused.tumorcontext.
+​
+
+Completeness: levels.L1.completeness.completenessscore, levels.L1.completeness.missing, levels.L1.completeness.confidencecap.
+​
+
+Efficacy table: levels.L1.efficacy.drugs plus evidence fields like evidencestrength, citationscount, and evidencemanifest.pubmedquery.
+​
+
+Efficacy provenance/audit: levels.L1.efficacy.provenance.sequencescoring.variantssenttoengine and ...variantsexcluded.
+​
+
+SL panel: levels.L1.syntheticlethality.suggestedtherapy, ...recommendeddrugs, ...brokenpathways, ...essentialpathways, ...provenance.
+​
+
+3) Frontend wiring (step-by-step)
+On page load, call GET /scenarios to build the “Preview Scenarios” drawer (L2 + L3 cards, defaults, and preview cache metadata).
+​
+
+Then call POST /bundle for the default view (usually level=l1), and store the response as your single source of truth for the page.
+
+Render strictly from the payload (no derived assumptions): show “What was used” from inputsused, “Data readiness” from completeness.missing/confidencecap, “Efficacy options” from efficacy.drugs, and “SL recommendation” from syntheticlethality.* when present.
+​
+
+Implementation rule that prevents Tumor Board distrust: always display the “audit receipts” for why something is missing (e.g., variantsexcluded reasons), because the payload explicitly tracks exclusions and engine inputs.
+​
+
+4) Preview scenarios (how L2/L3 connect)
+L2 and L3 are scenario-driven preview layers managed by the router, and the frontend should treat them as “what-if” overlays rather than new patients.
+​
+
+To run L2: POST /bundle?level=l2&scenarioid=<L2_ID> and render levels.L2.ispreview=true plus the returned previewcontext/“dataneeded” messaging from scenarios UI.
+​
+
+To run L3: POST /bundle?level=l3&scenarioid=<L2_BASE_ID>&l3scenarioid=<L3_ID>, because L3 is built on a chosen L2 base scenario.
+​
+
+The router enforces “tripwires” (it errors if scenarios produce empty mutationsused or missing expression/CA-125 in L3), so the frontend should surface these as configuration/data issues, not “model failures.”
+​
+
+5) Resistance/Arsenal connection (what exists vs what’s surfaced)
+Right now, the “Arsenal” (Diamond SAE features, MFAP4 transcriptomic risk, SAE service) is wired in production code via Resistance Prophet → Holistic Score → Therapy Fit, but it stays dormant when saefeatures and expression aren’t provided.
+​
+Specifically, the bridge expects patientprofile.saefeatures; if it’s missing, the system returns a neutral resistance score (0.5) and stops before calling the Resistance Prophet signals.
+​
+If you want Tumor Board to show those signals, you need to (a) populate saefeatures.features from the SAE service and saefeatures.expression (e.g., MFAP4) from RNA, and (b) surface Prophet outputs into the bundle (e.g., add levels.<LK>.resistanceprophet) as the Arsenal doc recommends.
+​
+
+---
+alwaysApply: true
+---

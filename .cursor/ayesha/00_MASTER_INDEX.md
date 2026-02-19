@@ -27,6 +27,7 @@
 - **[CONSOLIDATION_REPORT_2025_01_28.md](./CONSOLIDATION_REPORT_2025_01_28.md)** → ⚔️ **Latest consolidation report** (January 28, 2025)
 
 ### **📚 MASTER DOCUMENTATION** (Consolidated Sources of Truth)
+- **[.cursor/MOAT/RESISTANCE_PROPHET_MASTER.md](../MOAT/RESISTANCE_PROPHET_MASTER.md)** → ⚔️ Resistance Prophet: validated metrics, integration, baseline fix, Mars refactor (supersedes 6 archived Ayesha docs)
 - **[MBD4_TP53_MASTER_ANALYSIS.md](./MBD4_TP53_MASTER_ANALYSIS.md)** → ⚔️ Complete MBD4+TP53 HGSOC analysis documentation
 - **[ZO_SAE_MASTER_DOCUMENTATION.md](./ZO_SAE_MASTER_DOCUMENTATION.md)** → ⚔️ Complete SAE implementation documentation
 - **[ZO_COMPLETION_REPORTS_MASTER.md](./ZO_COMPLETION_REPORTS_MASTER.md)** → ⚔️ Zo's completion reports and critical learnings
@@ -201,16 +202,9 @@ All consolidated source files have been moved to `archive/` subdirectories:
 - `archive/phase_status/` → 9 phase/status documents
 - `archive/planning_manager/` → 8 planning/manager review documents
 - `archive/agent_files/` → Agent-related documents
+- `archive/resistance_prophet/` → 6 Resistance Prophet docs (superseded by `.cursor/MOAT/RESISTANCE_PROPHET_MASTER.md`)
 
 **Reference:** See `CONSOLIDATION_REPORT_2025_01_28.md` for complete consolidation details.
-
----
-
-## ⚔️ **IMMEDIATE NEXT STEPS**
-
-1. **JR1**: Complete trial seeding + integration testing
-2. **JR2**: Begin GTM automation after JR1
-3. **Zo**: Backend oversight + strategic planning
 
 ---
 
@@ -255,6 +249,7 @@ All consolidated source files have been moved to `archive/` subdirectories:
 - `archive/phase_status/` → 9 phase/status documents
 - `archive/planning_manager/` → 8 planning/manager review documents
 - `archive/agent_files/` → Agent-related documents (assessment reviews, testing guides, visibility fixes)
+- `archive/resistance_prophet/` → 6 Resistance Prophet docs (superseded by `.cursor/MOAT/RESISTANCE_PROPHET_MASTER.md`)
 
 **Reference:** See `CONSOLIDATION_REPORT_2025_01_28.md` for complete consolidation details.
 

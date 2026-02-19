@@ -1,0 +1,197 @@
+# 🧬 MEMENTO BIOHACKING AUDIT — `ZO_BIOHACKING_OPPORTUNITIES.md` (Forward Proof)
+
+**Date:** 2026-02-14  
+**Scope:** Audit claims in `.cursor/ayesha/ZO_BIOHACKING_OPPORTUNITIES.md` (L1–L232) by working forward: find existing engine outputs, run endpoints, and save receipts.  
+**Ground truth hierarchy (strict):**
+1. **Bundle receipts**: `Tumor-Board/artifacts/payload.extracted.json` (captured tumor-board bundle)
+2. **Runtime receipts**: JSON artifacts created during this audit in `Tumor-Board/artifacts/`
+3. **Everything else**: flagged as “not proven here”
+
+---
+
+## 0) Source documents
+
+- **Opportunities doc (claims source):** `.cursor/ayesha/ZO_BIOHACKING_OPPORTUNITIES.md` (L1–L232)
+- **Tumor-board bundle (captured):** `Tumor-Board/artifacts/payload.extracted.json`
+
+---
+
+## 1) Opportunity 1 — MBD4-specific treatment intelligence (IO)
+
+### 1.1 Claims (from opportunities doc)
+- **C1**: “We detect MBD4, but we don’t leverage MBD4-specific literature.”
+- **C2**: “MBD4 loss may predict immunotherapy response (hypermutation).”
+- **C3**: Specific paper: “PMID 32661420 — MBD4 and immunotherapy response.”
+
+### 1.2 Bundle alignment (payload-only)
+- **MBD4 is present**: `levels.L1.inputs_used.mutations[*].gene == "MBD4"`  
+- **MSI is MSS**: `levels.L1.inputs_used.tumor_context.msi_status == "MSS"`
+- **PD-L1 is positive**: `patient_context.pd_l1_status == "POSITIVE"` and `patient_context.pd_l1_cps == 10`
+- **TMB is missing**: `levels.L1.completeness.has_tmb == false`
+- **IO boost did NOT trigger** (in efficacy gates): pembrolizumab includes “No IO boost signals detected”
+  - `levels.L1.efficacy.drugs[?name=="pembrolizumab"].sporadic_gates_provenance.rationale[0].verdict == "NO_BOOST"`
+
+### 1.3 Runtime reproduction (this audit)
+- **Receipt (literature query attempt):** `Tumor-Board/artifacts/receipt__evidence_literature_mbd4_query_2026-02-14.json`
+  - Observed: `agent_fallback == true`, `top_results == []`
+  - Root error captured: `agent_error == "cannot import name 'genai' from 'google' ..."`
+
+- **Receipt (PMID existence / title check):** `Tumor-Board/artifacts/receipt__pubmed_32661420_2026-02-14.json`
+  - Observed: PMID `32661420` exists but is **not** an MBD4 immunotherapy paper.
+
+### 1.4 Audit verdict (as of 2026-02-14)
+- **C1**: **Partially supported** (bundle shows MBD4 detected; citations list empty for IO drugs).
+- **C2**: **Not proven** (bundle lacks TMB; no hypermutation metric computed).
+- **C3**: **Contradicted** (PMID `32661420` is a condensin cryo-EM paper; not MBD4/IO).
+
+### 1.5 Missing fields / next proofs
+- Need a receipt that either:
+  - confirms PMID exists + relevance (literature endpoint / PubMed query), or
+  - computes a proxy hypermutation signal from MBD4 signature (requires an implemented engine feature).
+
+---
+
+## 2) Opportunity 2 — Resistance Prophet pre-treatment baseline
+
+### 2.1 Claims (from opportunities doc)
+- **C1**: “Resistance Prophet shows ‘insufficient data’ because Ayesha is treatment-naive.”
+- **C2**: We could compute a pre-treatment resistance risk profile (HR restoration / MAPK escape / ABCB1 upregulation etc.)
+
+### 2.2 Runtime reproduction (this audit)
+- **Receipt (gene toggles simulation):** `Tumor-Board/artifacts/receipt__ayesha_resistance_simulate_gene_toggles_mbd4_tp53_2026-02-14.json`
+- **Observed behavior (runtime):**
+  - `prediction.risk_level == "NOT_APPLICABLE"`
+  - `prediction.probability == 0.0`
+  - `prediction.prognosis.rationale[0]` explicitly states pre-treatment skip (validated post-tx only)
+  - A single action is returned: `recommended_actions[0].action == "ESTABLISH_BASELINE"`
+  - The signal list includes:
+    - `CA125_KINETICS` marked insufficient due to needing ≥2 points
+    - `GENE_LEVEL_RESISTANCE` containing an **MBD4 sensitivity marker** (“BER deficiency → PARP trapping”)
+
+**Important note (engine contract):** `/api/ayesha/resistance/simulate` uses `gene_toggles` to construct simulated mutations; it does **not** consume an arbitrary `mutations` array from the request body.
+
+### 2.3 Bundle alignment (payload-only)
+- The tumor-board bundle does NOT include resistance-prophet output fields; it only includes `tests_needed` that mention CA-125 baseline and HRD/TMB/RNA.
+
+### 2.4 Audit verdict (as of 2026-02-14)
+- **C1**: **Contradicted by runtime** (engine returns NOT_APPLICABLE rather than “insufficient data” as a final status).
+  - Reality: it *does* explicitly skip (pre-treatment) and requests baseline establishment.
+- **C2**: **Not implemented** in current engine behavior (no pre-treatment risk forecasting; outputs are intentionally suppressed).
+
+### 2.5 Missing fields / next proofs
+- Decide if we want an explicit “pre-treatment forecast” mode (new contract) vs current skip behavior.
+
+---
+
+## 3) Opportunity 3 — BER pathway deep dive (DDR subcomponents)
+
+### 3.1 Claims (from opportunities doc)
+- **C1**: “We have DDR = 0.88 on mechanism vector, but all DDR genes treated equally.”
+- **C2**: Propose splitting DDR into HRR/BER/NER/MMR components; BER=1.0 (MBD4 loss), HRR=0.0, etc.
+
+### 3.2 Bundle alignment (payload-only)
+- **BER is explicitly broken**:
+  - `levels.L1.synthetic_lethality.broken_pathways[?pathway_id=="BER"].status == "non_functional"`
+  - `...genes_affected includes "MBD4"`
+- **No “DDR = 0.88 mechanism vector”** is present in this bundle:
+  - Efficacy pathway scores show only `tp53: 0.4` (`levels.L1.efficacy.pathway_scores`)
+  - SAE mechanism vector is not included in this L1 payload.
+
+### 3.3 Runtime reproduction (this audit)
+- **Status:** Not reproduced (no runtime receipt yet computing an HRR/BER/NER/MMR vector).
+
+### 3.4 Audit verdict (as of 2026-02-14)
+- **C1**: **Not supported** by tumor-board bundle (the numeric DDR=0.88 isn’t present here).
+- **C2**: **Conceptually consistent** with current SL output (BER broken), but **not implemented** as a surfaced sub-vector.
+
+---
+
+## 4) Opportunity 4 — CA-125 KELIM forecasting (pre-treatment)
+
+### 4.1 Claims (from opportunities doc)
+- **C1**: Previously “can’t forecast without baseline value.”
+- **C2**: With CA-125=2,842 U/mL we can set cycle milestones (cycle3 <854, cycle6 <284).
+
+### 4.2 Runtime reproduction (this audit)
+- **Receipt:** `Tumor-Board/artifacts/receipt__ca125_intelligence_baseline_inference_2026-02-14.json`
+- **Observed behavior (runtime):**
+  - `burden_class == "EXTENSIVE"`
+  - `forecast.baseline_inferred_from_current == true`
+  - `forecast.cycle3_expected_value == 852.6`
+  - `forecast.cycle6_expected_value == 284.2`
+
+### 4.3 Audit verdict (as of 2026-02-14)
+- **C1**: **Resolved** (engine now supports pre-treatment milestone targets by inferring baseline from first value).
+- **C2**: **Proven** (numbers align to the opportunity doc’s targets within rounding).
+
+---
+
+## 5) Opportunity 5 — PARP + ATR combination rationale (Ayesha-specific)
+
+### 5.1 Claims (from opportunities doc)
+- **C1**: “Resistance Playbook recommends PARP+ATR, but doesn’t explain why for Ayesha.”
+- **C2**: Mechanistic story: MBD4 (BER deficiency) + TP53 (checkpoint failure) → dependence on ATR checkpoint; PARP+ATR doubly lethal.
+- **C3**: Trials: NCT04284969, NCT02655016
+
+### 5.2 Bundle alignment (payload-only)
+- SL bundle does encode **exactly the two broken pillars**:
+  - BER broken via MBD4: `levels.L1.synthetic_lethality.broken_pathways[BER]`
+  - checkpoint compromised via TP53: `levels.L1.synthetic_lethality.broken_pathways[CHECKPOINT]`
+- SL bundle also encodes **ATR as an essential backup** with explicit lineage boost language:
+  - `levels.L1.synthetic_lethality.essential_pathways[?pathway_id=="ATR"].description` includes “DepMap lineage grounding … +0.15 confidence boost.”
+- SL recommended drugs include both:
+  - ATR inhibitor (`Ceralasertib`) confidence 0.85
+  - PARP inhibitor(s) (e.g., `Olaparib`) confidence 0.7
+  - `levels.L1.synthetic_lethality.recommended_drugs[*]`
+
+### 5.3 Runtime reproduction (this audit)
+- **Trial presence check receipt (our trials pipeline):**
+  - `Tumor-Board/artifacts/receipt__ayesha_trials_search_nct_presence_2026-02-14.json`
+  - Result: Neither `NCT04284969` nor `NCT02655016` appeared in returned `nct_ids` for Ayesha’s search request in this environment.
+
+### 5.4 Audit verdict (as of 2026-02-14)
+- **C1**: **Partially supported** (bundle proves ATR and PARP are both recommended, but does not generate a dedicated “combo rationale” narrative).
+- **C2**: **Partially supported** (the pathway logic is present; the “PARP+ATR is better” comparative claim is not computed as such).
+- **C3**: **Not supported by our current trials index** (runtime receipt shows those NCT IDs were not returned by `/api/ayesha/trials/search` under the Ayesha-like request used).
+
+---
+
+## 6) Opportunity 6 — HRD score prediction from MBD4
+
+### 6.1 Claims (from opportunities doc)
+- **C1**: HRD score unknown today.
+- **C2**: We could estimate HRD range from MBD4 loss (35–55) with medium confidence.
+
+### 6.2 Bundle alignment (payload-only)
+- Bundle explicitly flags HRD missing:
+  - `levels.L1.completeness.has_hrd == false`
+  - `levels.L1.completeness.missing includes "HRD score"`
+
+### 6.3 Runtime reproduction (this audit)
+- **Status:** Not reproduced (no HRD estimator output exists in receipts).
+
+### 6.4 Audit verdict (as of 2026-02-14)
+- **C1**: **Proven** (bundle says HRD missing).
+- **C2**: **Not implemented / not proven** (no estimator receipts).
+
+---
+
+## 7) Current “what’s real today” map (tumor-board aligned)
+
+### 7.1 What is proven by bundle receipts (already shipped for tumor board)
+- **SL logic is working for MBD4+TP53** (BER broken + checkpoint compromised → essential backups + recommended drugs).
+- **Efficacy ranking exists but is limited** (L1 cap + missing coords for MBD4 indel and PDGFRA in WIWFM path).
+- **Tests needed list is explicit** (HRD, TMB, RNA, CA-125).
+
+### 7.2 What is proven by runtime receipts (this audit)
+- **CA-125 pre-treatment milestones are now computed** via baseline inference.
+- **Resistance Prophet currently skips pre-treatment** and returns NOT_APPLICABLE, requesting baseline establishment.
+
+---
+
+## 8) Next proofs to run (to finish auditing the remaining claims)
+
+- **Evidence/PMID validation for Opportunity 1** (needs a deterministic receipt: PMID existence + retrieval path).
+- **Trial-ID verification for Opportunity 5** (NCT checks + whether our trials pipeline surfaces these).
+- **Any implemented BER-subvector / HRD estimator outputs** (if they exist, capture receipts; if not, mark “not implemented”).
+

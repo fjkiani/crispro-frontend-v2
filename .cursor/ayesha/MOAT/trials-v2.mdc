@@ -1,71 +1,152 @@
----
-description: Trials V2 Doctrine - Fixing the Ayesha Trials Pipeline
-alwaysApply: true
----
-
-# Trials V2: Fixing the Ayesha Trials Pipeline
-
-> **Context**: The current trials system is "broken" due to router ambiguity, broad discovery, and weak filtering. This doctrine outlines the 5-Phase Plan to fix it.
-
-## 🚨 The Problem (Why it feels "off")
-
-1.  **Router Ambiguity**: Both `api/routers/ayesha_trials.py` (monolith) and `api/routers/ayesha_trials/` (package) exist. Python's import resolution is ambiguous.
-2.  **Broad Discovery**: SQLite discovery is too loose ("ovarian" keyword), leaking irrelevant trials (endometrial, benign cysts).
-3.  **Weak Filters**: "NY Metro" and "Line of Therapy" are not enforced as hard gates.
-4.  **Missing Tags**: MoA tagging relies on offline JSONs that are often missing.
-5.  **Holistic Scoring Failure**: Defaults to 0.5 because it lacks structured inputs (mechanism vector, eligibility signals).
-
----
-
-## 🛠️ The Plan (Agent Runbook)
-
-### Phase 0: Deterministic Router (P0)
-**Goal**: Eliminate ambiguity.
-- [ ] **Deliverable 0.1**: Choose ONE router.
-    - Rename/Delete `api/routers/ayesha_trials.py` (Legacy Monolith).
-    - Enforce usage of `api/routers/ayesha_trials/` (Package).
-    - Update `api/main.py`.
-
-### Phase 1: Fix Candidate Discovery (P0)
-**Goal**: Get relevant candidates, not just "more".
-- [ ] **Deliverable 1.1**: Strict "Ayesha Intent" Query (`discovery.py`).
-    - Prioritize: HGSOC, Epithelial, Stage III/IV.
-    - Exclude: Endometrial-only, PCOS, Infertility.
-- [ ] **Deliverable 1.2**: Live Fetch Fallback.
-    - Script: `scripts/trials/refresh_ovarian_trials.py`.
-    - Fetch from CT.gov v2 -> Upsert to SQLite.
-
-### Phase 2: Real Filters (P0)
-**Goal**: Match Ayesha's reality (NY + Stage + Line).
-- [ ] **Deliverable 2.1**: Real NY Metro Filter.
-    - Enforce `location_state="NY"` using `locations_full_json`.
-- [ ] **Deliverable 2.2**: Treatment Line Bucketing.
-    - Derive `trial_line_bucket` (Frontline, Maintenance, Recurrent, Platinum-Resistant).
-
-### Phase 3: Auditable Tagging (P0/P1)
-**Goal**: "Whatever it takes" to get tags.
-- [ ] **Deliverable 3.1**: Expand Offline MoA Vectors.
-    - Target Top 500 Ovarian Trials.
-    - Map Drug Names -> Mechanism DB.
-- [ ] **Deliverable 3.2**: Extract Eligibility Gates.
-    - Extract: FRα (FOLR1), HRD, Cyclin E1, PD-L1, platinum-status.
-
-### Phase 4: Honest Ranking (P1)
-**Goal**: Stable, explainable sorting.
-- [ ] **Deliverable 4.1**: Real Eligibility Gates.
-    - Start with Hard Gates (Recruiting, NY, Line).
-    - Add Soft Gates (Biomarker match).
-- [ ] **Deliverable 4.2**: Fix Holistic Score Service.
-    - Ensure `patient_profile` includes mechanism/germline/SAE.
-
-### Phase 5: "Opportunities" UX (P1)
-**Goal**: Actionable funnel.
-- [ ] **Deliverable 5.1**: Tabbed UI (Now vs Later).
-- [ ] **Deliverable 5.2**: "Unlock Checklist" (e.g., "Order FOLR1 IHC").
-
----
-
-## ✅ Smoke Tests
-1.  **Router Identity**: `python -c "import api.routers.ayesha_trials..."` points to single source.
-2.  **Leakage Check**: No "Endometrial" or "Infertility" trials in top 20.
-3.  **Gate Extraction**: Verify NCT05445778 shows `requires_folr1_high: true`.
+What’s broken today (end-to-end) — why Ayesha trials feel “off”
+Here’s the pipeline as it exists, with the specific failure modes:
+1) Two competing Ayesha trials routers (name collision + behavior mismatch)
+You have BOTH:
+api/routers/ayesha_trials.py (monolith) — richer logic (hybrid search fallback, hard filters, soft boosts, mechanism-fit re-rank, reasoning generation).
+api/routers/ayesha_trials/ package (routes.py, discovery.py, etc.) — currently SQLite-only + minimal filtering + stub reasoning.
+And api/main.py does from .routers import ayesha_trials as ayesha_trials_router, which is ambiguous in Python import resolution when both a module and a package share the same name. This is a P0 reliability issue: we can’t guarantee which behavior is deployed.
+2) Candidate discovery is too broad (leaks irrelevant trials)
+SQLite discovery (ayesha_trials/discovery.py) is basically: ovarian/fallopian/peritoneal keyword + recruiting/active. That’s why we saw obviously irrelevant entries (e.g. endometrial “ovarian preservation” trial). We need stricter disease intent.
+3) Location filtering is not actually enforced
+We store locations_full_json and we refresh top trials, but the router does not enforce “NY metro” as a hard gate. So you can get “opportunities” that are not actionable geographically.
+4) Line-of-therapy is not enforced
+We’re not reliably tagging trials as: frontline vs maintenance vs recurrent vs platinum-resistant, so the list blends “future-state” trials into “now” decisions.
+5) MoA tagging exists, but coverage is weak
+api/services/trial_data_enricher.py prefers offline tags in api/resources/trial_moa_vectors.json. If those tags are missing, runtime keyword fallback is conservative, but it only works when explicitly enabled—and in some flows you’re not enabling it or not extracting interventions consistently.
+6) Holistic scoring depends on inputs we usually don’t have
+HolisticScoreService can do something powerful, but it needs:
+patient 7D mechanism vector
+structured trial MoA vector
+eligibility signal (currently weak)
+PGx info (often absent)
+resistance risk (needs SAE features)
+So “holistic” often degenerates into defaults (0.5s), which makes ranking unstable.
+The plan (end-to-end) — what the other agent should implement
+Below is an explicit “agent runbook”: deliverables, file paths, and acceptance tests.
+Phase 0 (P0): Make the pipeline deterministic (no more router ambiguity)
+Deliverable 0.1 — Choose ONE router and delete the ambiguity
+Goal: POST /api/ayesha/trials/search must run exactly one implementation.
+Action:
+Rename one of them to eliminate collision:
+Option A (preferred): keep package api/routers/ayesha_trials/ and rename monolith to ayesha_trials_legacy.py (or delete).
+Option B: keep monolith and rename package to ayesha_trials_v2/.
+Update api/main.py import to target the chosen router explicitly.
+Acceptance
+Running python -c "import api.routers.ayesha_trials as m; print(m.__file__)" prints the expected file path.
+/api/ayesha/trials/health returns a router version string that matches the chosen implementation.
+Phase 1 (P0): Fix candidate discovery (get more relevant trials, not just more trials)
+Deliverable 1.1 — Add a strict “Ayesha intent” discovery query
+Where: api/routers/ayesha_trials/discovery.py
+What to do
+Tighten the SQLite query to prioritize:
+high grade serous / epithelial ovarian
+stage III/IV, “newly diagnosed”, “frontline”, “interval debulking”, “neoadjuvant”, “maintenance”
+AND still keep platinum-resistant/recurrent as a separate bucket.
+Add exclusion keywords to avoid common leakage:
+endometrial-only, PCOS, infertility, benign cysts, etc.
+Acceptance
+For the “frontline/maintenance” view, irrelevant non-ovarian oncology trials drop to near-zero.
+A quick report shows counts per bucket: frontline, maintenance, recurrent, platinum_resistant, other.
+Deliverable 1.2 — Add a “fetch more” fallback (ClinicalTrials.gov API v2 → SQLite upsert)
+Goal: when SQLite is sparse/stale, fetch new candidates and cache them locally.
+Where
+New script: oncology-backend-minimal/scripts/trials/refresh_ovarian_trials.py (or similar)
+Reuse existing refresh stack in api/services/trial_refresh/ (api_client.py, parser.py, filters.py).
+What it does
+Query ClinicalTrials.gov v2 for ovarian/fallopian/peritoneal trials (recruiting/active).
+Upsert into data/clinical_trials.db with:
+id, title, status, phases, conditions, interventions_json, locations_full_json, inclusion_criteria, plus last_updated.
+Run daily (cron/manual for now).
+Acceptance
+After one run, SQLite row count increases (or last_updated refreshes).
+discover_ayesha_candidates() returns more (and more relevant) candidates.
+Phase 2 (P0): Real filters that match Ayesha’s reality (NY + stage + line)
+Deliverable 2.1 — Real NY metro filter using locations_full_json
+Where: api/routers/ayesha_trials/routes.py (or shared helper)
+What to do
+Implement a deterministic filter:
+location_state == "NY" means at least one site in NY (or NYC metro list).
+If request.location_state given, apply as hard filter by default (with an override flag to widen).
+Acceptance
+“NY-only” view contains only trials with NY sites (verified via the stored JSON).
+Add a response field like location_match: {matched: true, matched_sites_count: n} for transparency.
+Deliverable 2.2 — Treatment-line bucketing and filter
+Where: enrichment step (new helper) + ranking
+What to do
+Add trial_line_bucket derived from title/conditions/eligibility:
+frontline, maintenance, recurrent, platinum_resistant, unknown
+If request.treatment_line is first-line → show frontline + maintenance by default.
+If recurrent → show recurrent + platinum_resistant.
+Acceptance
+AyeshaTrialSearchResponse.trials[*].trial_line_bucket is always populated.
+Switching treatment_line materially changes the results set.
+Phase 3 (P0/P1): Tagging: “whatever it takes” but auditable
+Deliverable 3.1 — Expand offline MoA tagging coverage to the top N trials
+Where
+Output store: api/resources/trial_moa_vectors.json
+Tagger script: scripts/trials/build_trial_moa_vectors.py
+What to do
+For the top 500 ovarian trials (or top 200 + “most shown”), compute a 7D MoA vector.
+Priority order:
+1) Deterministic mapping from parsed drug names → mechanism DB (DRUG_MECHANISM_DB)
+2) Deterministic keyword mapping (word-boundary regex; avoid “ATR” false hits)
+3) Only if needed: LLM tagger with strict provenance saved per NCT (model, prompt hash, extracted spans)
+Acceptance
+trial_data_enricher.extract_moa_vector_for_trial() returns offline tags for ≥80% of displayed trials.
+Every tagged trial has provenance (source, tagged_at, confidence, and if LLM used: provider/model).
+Deliverable 3.2 — Extract “eligibility gates” from inclusion text (FRα, HRD, Cyclin E1, etc.)
+Where
+New module: api/services/trials/eligibility_feature_extractor.py (or under api/routers/ayesha_trials/)
+Called during enrichment.
+What to extract (structured)
+FRα/FOLR1 required + “Ventana” mention
+HRD required, BRCA germline required
+Cyclin E1 IHC required
+PD-L1 CPS thresholds
+MSI-H / dMMR requirements
+ECOG max allowed (0–1, 0–2, etc.)
+Acceptance
+Trials like NCT05445778 clearly show requires_folr1_high: true.
+Trials like NCT05128825 show requires_cyclinE1_positive: true.
+Phase 4 (P1): Ranking that is stable and “honest”
+Deliverable 4.1 — Replace stub eligibility scoring with real, explainable gates
+Right now, modular router stubs eligibility_checklist. Replace with:
+hard gates: recruiting, NY match (if strict), disease intent, line bucket
+soft gates: phase, biomarker match, mechanism fit (if SAE vector exists), freshness
+Acceptance
+Response includes scoring_breakdown with each component and the exact reason strings (no hallucinated claims).
+Deliverable 4.2 — Make HolisticScoreService actually usable
+Key fix
+Ensure we pass patient_profile with:
+mechanism_vector (if available)
+germline_variants (if available)
+sae_features (if available)
+Ensure trial["moa_vector"] is always present (offline tags or conservative fallback).
+Acceptance
+For a request with SAE vector, at least the top 10 trials have non-null holistic_score, mechanism_fit_score.
+Phase 5 (P1): Frontend “opportunities” UX (so it feels like a real funnel)
+(So Ayesha sees “what is actionable now” vs “what to unlock”)
+Deliverable 5.1 — Two tabs/filters in UI by default
+Now (frontline / surgery / maintenance): default
+If recurrence / platinum-resistant: secondary tab
+Deliverable 5.2 — “Unlock checklist” driven by trial gates
+If top trials require FRα or Cyclin E1 etc, show:
+“Order Ventana FOLR1 IHC”
+“Order Cyclin E1 IHC”
+“HRD score”
+with a CTA to upload results.
+Smoke tests (copy/paste) the agent must run
+1) Backend endpoint returns clean, line-bucketed, NY-filtered results
+curl -sS -X POST http://127.0.0.1:8000/api/ayesha/trials/search \  -H "Content-Type: application/json" \  -d '{    "stage":"IVB",    "germline_status":"negative",    "location_state":"NY",    "treatment_line":"first-line",    "max_results":10,    "tumor_context": {}  }' | python -m json.tool
+2) Confirm no endometrial/PCOS leakage in the top list
+(Agent should add a quick script assertion as part of validation.)
+3) Confirm eligibility gates extraction works (FRα / Cyclin E1 examples)
+Verify NCT05445778 includes FRα gate.
+Verify NCT05128825 includes Cyclin E1 gate.
+The “whatever it takes” priority order (so the agent doesn’t thrash)
+1) Deterministic router selection (no ambiguity)
+2) Better discovery query + live fetch→upsert (more + cleaner candidates)
+3) Hard location + line-of-therapy buckets (actionable list)
+4) Offline MoA tagging at scale (stable mechanism fit)
+5) Eligibility gate extraction (FRα, HRD, CyclinE1, etc.)
+6) Then refine scoring weights / UI polish

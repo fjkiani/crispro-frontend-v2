@@ -28,7 +28,7 @@ MBD4 is a **Base Excision Repair (BER)** gene. It's different from BRCA/HRR gene
 
 **What We Could Build:**  
 1. **MBD4-specific drug sensitivity profile**
-   - Literature: PMID 32661420 - MBD4 and immunotherapy response
+   - Literature (validated PMID): PMID 29760383 - MBD4 mutations in hypermutated tumors with outlier anti-PD-1 response (uveal melanoma)
    - MBD4 loss may predict immunotherapy response (hypermutation)
    
 2. **MBD4 + IO analysis**
@@ -37,6 +37,23 @@ MBD4 is a **Base Excision Repair (BER)** gene. It's different from BRCA/HRR gene
    - Current: We don't surface this connection
 
 **Value:** Could identify IO eligibility pathway we're missing
+
+#### ✅ Validation status (as of 2026-02-14)
+
+**What we have (receipt-backed):**
+- **MBD4 is detected in the Tumor Board bundle** (`Tumor-Board/artifacts/payload.extracted.json` → `levels.L1.inputs_used.mutations[*].gene`)
+- **PD‑L1 CPS present** (CPS=10, POSITIVE) and **MSI is MSS** in the same bundle (`patient_context`)
+- **TMB is missing** in the bundle (explicitly listed as missing)
+- **The literature endpoint is currently blocked** (returns 0 PMIDs) due to `google.genai` import error  
+  - Receipt: `Tumor-Board/artifacts/receipt__evidence_literature_mbd4_query_2026-02-14.json`
+
+**What we do NOT have (yet):**
+- A computed **hypermutation/TMB** signal in the bundle (needed to justify IO via “hypermutation” pathway)
+- A working **MBD4‑specific evidence packet** (PMIDs + ranked papers) from our evidence engine
+
+**What we need to do next (concrete):**
+1. Fix `/api/evidence/literature` so it deterministically returns PMIDs again (then re-run MBD4 IO query and store receipt).
+2. Add a “**MBD4 → CpG>TpG hypermutation**” proxy signal only if we can compute/receipt it (or keep it as Unknown until TMB is available).
 
 ---
 
@@ -66,6 +83,20 @@ Monitoring Recommendations:
 
 **Value:** Proactive resistance planning BEFORE treatment starts
 
+#### ✅ Validation status (as of 2026-02-14)
+
+**What we have (receipt-backed):**
+- The Resistance Lab simulation endpoint runs, but **pre-treatment is currently short-circuited** as `NOT_APPLICABLE` with “Assessment Skipped: Patient is Pre‑Treatment/Naive”  
+  - Receipt: `Tumor-Board/artifacts/receipt__ayesha_resistance_simulate_gene_toggles_mbd4_tp53_2026-02-14.json`
+- Even in the same output, the engine surfaces **MBD4 as a sensitivity marker** (BER deficiency → PARP trapping) under gene-level markers (not a forecast).
+
+**What we do NOT have (yet):**
+- A real **pre-treatment “Resistance Forecast” mode** that produces the narrative risk profile in this section (HR restoration / MAPK escape / ABCB1 etc.)
+
+**What we need to do next (concrete):**
+1. Decide whether Resistance Prophet should have a **pre-treatment forecast mode** (separate from post-treatment validated mode), or keep “NOT_APPLICABLE” and move forecast into a different module.
+2. If forecast mode is added, require receipts showing: input → computed risks → explanation.
+
 ---
 
 ### 3. 🧬 BER Pathway Deep Dive
@@ -91,6 +122,17 @@ Proposed:
 ```
 
 **Value:** More precise drug matching (some drugs target HRR, some BER)
+
+#### ✅ Validation status (as of 2026-02-14)
+
+**What we have (receipt-backed):**
+- Synthetic Lethality bundle explicitly marks **BER as NON‑FUNCTIONAL due to MBD4** (`payload.extracted.json` → `levels.L1.synthetic_lethality.broken_pathways[BER]`)
+
+**What we do NOT have (yet):**
+- A surfaced **DDR sub-vector** (HRR vs BER vs NER vs MMR) in the tumor-board bundle or in WIWFM outputs
+
+**What we need to do next (concrete):**
+1. Implement a DDR decomposition object (HRR/BER/NER/MMR) and ensure it is computed from explicit variant → pathway mappings (with receipts).
 
 ---
 
@@ -123,6 +165,20 @@ Target: <35 U/mL (complete response)
 ```
 
 **Value:** Personalized response trajectory with early warning triggers
+
+#### ✅ Validation status (as of 2026-02-14)
+
+**What we have (receipt-backed):**
+- CA‑125 Intelligence now **does** compute pre-treatment cycle milestone targets by inferring baseline from the first measurement:
+  - Cycle 3 expected value: **852.6**
+  - Cycle 6 expected value: **284.2**
+  - Receipt: `Tumor-Board/artifacts/receipt__ca125_intelligence_baseline_inference_2026-02-14.json`
+
+**What we do NOT have (yet):**
+- A true “KELIM” slope model (this is milestone guidance, not an inferred kinetic parameter from serial labs)
+
+**What we need to do next (concrete):**
+1. Add KELIM-style kinetics only if we have ≥2 CA‑125 points (and store receipts showing detection of rise/insufficient response).
 
 ---
 
@@ -161,6 +217,26 @@ Clinical trials to consider:
 
 **Value:** Mechanistic justification for combination therapy
 
+#### ✅ Validation status (as of 2026-02-14)
+
+**What we have (receipt-backed):**
+- Tumor Board bundle shows the **two broken pillars** this rationale depends on:
+  - BER broken (MBD4)
+  - checkpoint compromised (TP53)
+- The Synthetic Lethality module recommends both:
+  - ATR inhibitor (Ceralasertib) and
+  - PARP inhibitors (Olaparib/Niraparib/Rucaparib)
+  - Source: `Tumor-Board/artifacts/payload.extracted.json` → `levels.L1.synthetic_lethality.recommended_drugs`
+
+**What we do NOT have (yet):**
+- A dedicated “PARP+ATR synergy” explanation object emitted by an engine (today this is human-prose)
+- The cited trial IDs appearing in our local Ayesha trials search results in this environment:
+  - Receipt: `Tumor-Board/artifacts/receipt__ayesha_trials_search_nct_presence_2026-02-14.json` (neither `NCT04284969` nor `NCT02655016` returned)
+
+**What we need to do next (concrete):**
+1. Build a **structured combo rationale** (inputs: broken pathways + essential backups; output: combo explanation + citations).
+2. Ensure our trial index includes the specific combo trials we cite (or stop citing them until they show up in our pipeline).
+
 ---
 
 ### 6. 🧪 HRD Score Prediction from MBD4
@@ -186,6 +262,17 @@ Recommendation: Order MyChoice HRD assay to confirm
 ```
 
 **Value:** Guide testing prioritization, set expectations
+
+#### ✅ Validation status (as of 2026-02-14)
+
+**What we have (receipt-backed):**
+- The Tumor Board bundle explicitly flags **HRD as missing** and recommends ordering an HRD assay.
+
+**What we do NOT have (yet):**
+- Any implemented “HRD score estimator” output (the 35–55 range here is still a hypothesis unless we build and validate it)
+
+**What we need to do next (concrete):**
+1. Either implement an estimator with explicit receipts (data + method + error bars), or keep HRD as Unknown until assay returns.
 
 ---
 

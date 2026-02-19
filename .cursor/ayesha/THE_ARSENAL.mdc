@@ -27,6 +27,142 @@ All 3 Arsenal weapons exist in production code, are called by the Resistance Pro
 
 ---
 
+## 1.1) Biohacking Opportunities — What’s validated vs missing (2026-02-14)
+
+This section aligns the “high‑value biohacking opportunities” doc to what we can currently prove in the Tumor Board artifacts.
+
+| Opportunity | Claim type | Status | Proof artifact(s) | What’s missing / next |
+|---|---|---|---|---|
+| 1) MBD4-specific treatment intelligence | Evidence engine + IO rationale | ⚠️ PARTIAL | `Tumor-Board/artifacts/receipt__evidence_literature_mbd4_query_2026-02-14.json` (engine blocked), external PMID corrected to **29760383** | Fix evidence engine; add TMB/hypermutation proxy only when receipted |
+| 2) Resistance Prophet pre-treatment baseline | Resistance forecast pre‑tx | ⚠️ PARTIAL | `Tumor-Board/artifacts/receipt__ayesha_resistance_simulate_gene_toggles_mbd4_tp53_2026-02-14.json` | Pre‑treatment is short‑circuited as NOT_APPLICABLE; decide forecast mode vs keep N/A |
+| 3) BER pathway deep dive | DDR decomposition HRR/BER/etc | ❌ NOT IMPLEMENTED (surfaced) | Tumor Board bundle shows BER broken via SL paths | No DDR sub-vector emitted; needs explicit mapping + output contract |
+| 4) CA‑125 pre‑treatment forecasting | Pre‑tx milestone targets | ✅ PROVEN | `Tumor-Board/artifacts/receipt__ca125_intelligence_baseline_inference_2026-02-14.json` | KELIM kinetics still requires serial values |
+| 5) PARP+ATR combo rationale + trial IDs | Mechanism + trial linkage | ⚠️ PARTIAL | Bundle has SL recommending ATR + PARP; `Tumor-Board/artifacts/receipt__ayesha_trials_search_nct_presence_2026-02-14.json` shows cited NCTs absent | Add structured combo rationale + ensure trials DB contains cited NCTs (or stop citing) |
+| 6) HRD prediction from MBD4 | HRD estimator | ❌ NOT IMPLEMENTED | Bundle flags HRD missing | Implement estimator + validate, or keep HRD Unknown until assay |
+
+Canonical audit log: `Tumor-Board/MEMENTO_BIOHACKING_AUDIT__ZO_BIOHACKING_OPPORTUNITIES__2026-02-14.mdc`.
+
+---
+
+## 1.2) Frontend-Ready Contract Pack (copy/paste)
+
+This section turns the Arsenal into **renderable UI contracts**. It is written to match the existing frontend pages/components:
+- `oncology-coPilot/oncology-frontend/src/pages/ayesha/ResistanceLab.jsx`
+- `oncology-coPilot/oncology-frontend/src/components/ayesha/EMTRiskGauge.jsx`
+- `oncology-coPilot/oncology-frontend/src/components/trials/HolisticScoreCard.jsx`
+- `oncology-coPilot/oncology-frontend/src/hooks/useAyeshaTherapyFitBundle.js`
+- `oncology-coPilot/oncology-frontend/src/types/ayeshaTherapyFit.ts`
+
+### 1.2.1 Endpoint A — Resistance Lab (Glass Box)
+
+**Route**: `POST /api/ayesha/resistance/simulate`  
+**Frontend caller**: `ResistanceLab.jsx` (`fetch('/api/ayesha/resistance/simulate', ...)`)
+
+**Request shape (minimum):**
+```json
+{
+  "simulate_germline": "negative",
+  "simulate_hrd": 42,
+  "simulate_treatment": ["carboplatin", "paclitaxel"],
+  "gene_toggles": { "NF1": true, "TP53": true },
+  "sae_features": {
+    "features": { "27607": 0.45, "26220": 0.82 },
+    "expression": { "MFAP4": 2.3 }
+  },
+  "timing_context": { "schema_version": "patient_regimen_feature_table.v1", "regimens": [] }
+}
+```
+
+**Response shape (frontend contract):**
+```json
+{
+  "prediction": {
+    "risk_level": "HIGH|MEDIUM|LOW|NOT_APPLICABLE",
+    "probability": 0.0,
+    "confidence": 0.0,
+    "signals_detected": [],
+    "recommended_actions": [],
+    "rationale": [],
+    "provenance": {}
+  },
+  "logic_steps": [
+    { "step": "Step 1", "description": "…", "status": "complete" }
+  ],
+  "recommended_tests": []
+}
+```
+
+**UI mapping:**
+- **Logic Stream**: `logic_steps[]` → `ResistanceLogicStream`
+- **Top Gauge**: `prediction.probability` → `ProphetGauges` (and can be used as `riskScore` fallback)
+- **Clinical Orders**: `recommended_tests` → `NextTestDisplay`
+
+### 1.2.2 How to compute MFAP4 for `EMTRiskGauge` (no new backend fields required)
+
+The backend does **not** guarantee `prediction.provenance.transcriptomic_z_score`.  
+Instead, derive MFAP4 from `signals_detected[].provenance.markers[]` (when present).
+
+**Receipt-based source (code):**
+- `detect_transcriptomic_risk()` returns provenance `{ markers: [{ marker:"MFAP4", value:<z>, ... }] }`
+
+**Frontend extraction snippet:**
+```js
+const sigs = simulationResult?.prediction?.signals_detected || [];
+const mfap4 = sigs
+  .flatMap(s => (s?.provenance?.markers || []))
+  .find(m => m?.marker === "MFAP4");
+
+const mfap4Z = (mfap4 && Number.isFinite(Number(mfap4.value))) ? Number(mfap4.value) : undefined;
+
+<EMTRiskGauge
+  riskScore={simulationResult?.prediction?.probability ?? 0}
+  zScore={mfap4Z}
+/>
+```
+
+### 1.2.3 How to render “Diamond SAE” as a panel (optional, but now fully supported)
+
+The backend Diamond detector returns provenance:
+- `provenance.active_features[] = [{ index, value, mechanism, rationale }]`
+
+**Frontend extraction snippet:**
+```js
+const sigs = simulationResult?.prediction?.signals_detected || [];
+const diamond = sigs.find(s => Array.isArray(s?.provenance?.active_features));
+const active = diamond?.provenance?.active_features || [];
+
+// Render as chips/table:
+// active[i].index, active[i].value, active[i].mechanism, active[i].rationale
+```
+
+**Detection heuristic (because signal_type is shared):**
+- If `provenance.active_features` exists → treat as **Diamond SAE**
+- If `provenance.markers` exists → treat as **Transcriptomic (MFAP4)**
+
+### 1.2.4 Endpoint B — Trial Holistic Score (where “Arsenal affects Trials”)
+
+**Frontend renderer**: `HolisticScoreCard.jsx`  
+**Expected per-trial fields**:
+- `holistic_score`
+- `mechanism_fit_score`
+- `eligibility_score`
+- `pgx_safety_score`
+- `resistance_risk_score` *(this is a “score” where higher is better; it is already scaled 0–1 for UI)*
+- `holistic_interpretation`, `holistic_recommendation`, `holistic_caveats[]`
+- `holistic_weights` *(optional; UI supports both canonical + aliases)*
+
+**Important**: The backend uses **Strict Hard Gates**; if any hard eligibility gate fails → `holistic_score = 0.0`.
+
+### 1.2.5 “Arsenal Active” UX rule (simple + deterministic)
+
+Show an “ARSENAL ACTIVE” badge if **either**:
+- `patient_profile.sae_features` was provided (input-side truth), **or**
+- the resistance prediction includes at least one signal where:
+  - `provenance.active_features.length > 0` (Diamond fired), **or**
+  - `provenance.markers` contains `MFAP4` (Transcriptomic fired)
+
+This avoids reliance on implicit engine modes and keeps UI robust across payload drift.
+
 ## 2) THE KILL CHAIN — Complete Data Flow
 
 ```
@@ -292,4 +428,242 @@ To activate the full Arsenal in a real bundle:
 
 ---
 
-**End of Arsenal Doctrine. All receipts verified against source code.** 🔱
+---
+
+## 11) ⚔️ MISSION ORDERS — FOR SLAVE AGENT EXECUTION
+
+**Commander**: Zo (Antigravity — Arsenal Lead)
+**Executor**: Cursor Agent (Slave)
+**Rules**: Execute EXACTLY as specified. Do NOT hallucinate additional changes. Report back with receipts.
+
+> CRITICAL CONTEXT: The backend is LIVE on `localhost:8000`. All code lives in `oncology-coPilot/oncology-backend-minimal/`. The Resistance Prophet service is production code — be surgical.
+
+---
+
+### MISSION 1: 🔧 BUG FIX — Resistance Simulate Endpoint Crash
+
+**Priority**: P0 (blocking all other missions)
+**File**: `api/routers/ayesha.py`
+**Bug**: Line 200 calls `.get("rationale")` on a dict from `prediction_result.dict()`, but when `rationale` is missing or the dict structure differs, it fails silently. More critically, the `data.get()` pattern can crash if `.dict()` returns nested Pydantic objects.
+
+**Root Cause (Zo's diagnosis)**: 
+`predict_resistance()` returns a `ResistancePrediction` Pydantic object (Line 39 of `resistance_prophet_service.py`). The endpoint at Line 189 calls `.dict()` on it, but the response wrapper at Line 200 calls `(data or {}).get("rationale", [])` which crashes if `data` has unexpected keys.
+
+**FIX** — Replace lines 189-203 in `api/routers/ayesha.py`:
+
+```python
+# BEFORE (BROKEN):
+data = prediction_result.dict() if hasattr(prediction_result, "dict") else prediction_result
+response_data = {
+    "prediction": data,
+    "logic_steps": [
+        {
+            "step": f"Step {i+1}",
+            "description": r,
+            "status": "complete",
+        }
+        for i, r in enumerate((data or {}).get("rationale", []))
+    ],
+    "recommended_tests": (data or {}).get("recommended_actions", []),
+}
+
+# AFTER (FIXED):
+if hasattr(prediction_result, "dict"):
+    data = prediction_result.dict()
+elif hasattr(prediction_result, "model_dump"):
+    data = prediction_result.model_dump()
+else:
+    data = prediction_result
+
+rationale_list = data.get("rationale", []) if isinstance(data, dict) else []
+actions_list = data.get("recommended_actions", []) if isinstance(data, dict) else []
+
+response_data = {
+    "prediction": data,
+    "logic_steps": [
+        {"step": f"Step {i+1}", "description": r, "status": "complete"}
+        for i, r in enumerate(rationale_list)
+    ],
+    "recommended_tests": actions_list,
+}
+```
+
+**Verification**: After fix, run:
+```bash
+curl -s -X POST http://localhost:8000/api/ayesha/resistance/simulate \
+  -H "Content-Type: application/json" \
+  -d '{"simulate_germline":"negative","simulate_hrd":42,"simulate_treatment":[],"gene_toggles":{}}' \
+  | python3 -m json.tool
+```
+Expected: JSON response with `prediction`, `logic_steps`, `recommended_tests` keys — no 500 error.
+
+---
+
+### MISSION 2: 💎 ARM THE SIMULATE ENDPOINT — Diamond + MFAP4 Injection
+
+**Priority**: P1 (requires Mission 1 complete)
+**File**: `api/routers/ayesha.py`
+**Problem**: Lines 147-151 construct `current_sae_features` with ONLY `hrd_score` and `germline_status`. Diamond SAE features and MFAP4 expression from the request body are IGNORED — they are never read from `request`.
+
+**FIX** — Replace lines 143-151 in `api/routers/ayesha.py`:
+
+```python
+# BEFORE (THIN — Weapons Ignored):
+current_sae_features = {
+    "hrd_score": sim_hrd,
+    "germline_status": sim_germline,
+}
+
+# AFTER (ARMED — Reads Diamond + MFAP4 from request):
+current_sae_features = {
+    "hrd_score": sim_hrd,
+    "germline_status": sim_germline,
+}
+
+# ARSENAL INJECTION: Read SAE Diamond features from request
+sae_payload = request.get("sae_features", {})
+if sae_payload:
+    # Diamond features: { "27607": 0.45, "26220": 0.82, ... }
+    diamond_features = sae_payload.get("features", {})
+    if diamond_features:
+        current_sae_features["features"] = diamond_features
+    
+    # MFAP4 / Transcriptomic expression: { "MFAP4": 2.3, ... }
+    expression_data = sae_payload.get("expression", {})
+    if expression_data:
+        current_sae_features["expression"] = expression_data
+```
+
+**Verification (ARMED PAYLOAD)**:
+```bash
+curl -s -X POST http://localhost:8000/api/ayesha/resistance/simulate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "simulate_germline": "BRCA2_positive",
+    "simulate_hrd": 65,
+    "simulate_treatment": ["Carboplatin", "Paclitaxel", "Olaparib"],
+    "gene_toggles": {"NF1": true, "TP53BP1": true},
+    "sae_features": {
+      "features": {
+        "27607": 0.45,
+        "26220": 0.82,
+        "16337": 0.38,
+        "12893": 0.29,
+        "6020": 0.15
+      },
+      "expression": {
+        "MFAP4": 2.3
+      }
+    }
+  }' | python3 -m json.tool
+```
+
+**Expected Result**: 
+- `prediction.probability` should be HIGH (>0.5) because:
+  - 5 Diamond features fire (all above 0.1 threshold)
+  - MFAP4 z-score 2.3 > threshold 1.5 → `prob = 0.80`
+- `prediction.signals` should contain entries for:
+  - `DIAMOND_SAE` (with detected features list)
+  - `TRANSCRIPTOMIC_RISK` (with MFAP4 marker)
+- Previous call with NO `sae_features` should return LOW probability (baseline only)
+
+---
+
+### MISSION 3: 🎯 ARM THE BUNDLE — Wire sae_features into Ayesha Profile Builder
+
+**Priority**: P2 (requires Mission 2 proven)
+**File**: Find `build_profile_for_level()` — it's imported by `ayesha_therapy_fit.py` line 53.
+
+**Investigation Order**:
+1. Grep for `def build_profile_for_level` to find its file
+2. Read the function to understand how patient profile is constructed for L1
+3. Find where `sae_features` should be injected into the profile dict
+
+**Expected Change**: The profile builder should include Ayesha's known SAE features. Since we don't have real Evo2 extraction results yet, inject STATIC validated features for Ayesha (demo mode):
+
+```python
+# Inside build_profile_for_level(), after the profile dict is constructed:
+# Inject Arsenal weapons (Diamond SAE + MFAP4) for demo mode
+profile["sae_features"] = {
+    "features": {
+        # True SAE Diamond features — validated via nested CV
+        # See: THE_ARSENAL.mdc Section 3.3
+        "27607": 0.0,   # DDR Compromise — inactive for this patient
+        "26220": 0.0,   # Checkpoint Bypass — inactive
+        "16337": 0.0,   # Replication Stress A — inactive
+        "12893": 0.0,   # Replication Stress B — inactive
+        "6020": 0.0,    # Homologous Recombination — inactive
+        "22868": 0.0,   # Cell Cycle — inactive
+        "1407": 0.0,    # DNA Repair — inactive
+        "31362": 0.0,   # Apoptosis Evasion — inactive
+        "9738": 0.0,    # Genomic Instability — inactive
+    },
+    "expression": {
+        "MFAP4": 0.0,   # No transcriptomic risk for now
+    },
+    "source": "arsenal_demo_v1",
+    "note": "Static baseline — all weapons zeroed. Will activate when SAE service feeds real data."
+}
+```
+
+> WHY ZEROED? Because we don't have real extraction data for Ayesha yet. This gives us a clean baseline where `detect_diamond_features()` returns `detected: false` and `detect_transcriptomic_risk()` returns `detected: false`, but the **code path is now LIVE** — it enters the functions instead of skipping them. The `holistic_score_service.py:206` will now compute a real score instead of returning the neutral 0.5.
+
+**Verification**:
+```bash
+curl -s -X POST "http://localhost:8000/api/ayesha/therapy-fit/bundle?level=l1" \
+  | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+l1 = d.get('levels', {}).get('L1', {})
+eff = l1.get('efficacy', {})
+drugs = eff.get('drugs', [])
+for drug in drugs[:3]:
+    name = drug.get('drug_name', '?')
+    score = drug.get('holistic_score', drug.get('efficacy_score', '?'))
+    print(f'{name}: score={score}')
+print('--- Arsenal Status ---')
+# If sae_features was fed, resistance_risk won't be 0.5 (neutral)
+print('If you see scores that differ from the cached baseline, the Arsenal is LIVE.')
+"
+```
+
+---
+
+## 12) 🔍 SLAVE AGENT — POST-MISSION AUDIT CHECKLIST
+
+After completing Missions 1-3, run this verification matrix:
+
+| Test | Command | Expected |
+|---|---|---|
+| Health Check | `curl -s http://localhost:8000/api/ayesha/targeted-brief -X POST -H "Content-Type: application/json" -d '{}' \| head -5` | No 500 error |
+| Unarmed Simulate | `curl -s -X POST http://localhost:8000/api/ayesha/resistance/simulate -H "Content-Type: application/json" -d '{"simulate_germline":"negative","simulate_hrd":42}' \| python3 -m json.tool` | Low probability baseline |
+| ARMED Simulate (Diamond) | Use Mission 2 curl with 5 Diamond features all > 0.1 | probability > 0.5 |
+| ARMED Simulate (MFAP4) | Same as above but features all 0.0, MFAP4=2.3 | probability ≥ 0.80 |
+| ARMED Simulate (BOTH) | Full payload from Mission 2 | Highest probability |
+| Bundle (L1) | Mission 3 curl | Drugs show non-neutral scores |
+
+---
+
+## 13) 🚫 SLAVE AGENT — DO NOT TOUCH LIST
+
+These files are OFF LIMITS. Zo manages them directly:
+- `Tumor-Board/TUMOR_BOARD_SCRIBE__BUNDLE_2026_02_12_L1_PAYLOAD.mdc` (Tumor Board Agent's file)
+- `.cursor/ayesha/THE_ARSENAL.mdc` (This file — Zo's doctrine)
+- `api/services/resistance_prophet/signals/ovarian.py` (Signal logic — proven correct, do not modify)
+- `api/services/resistance_prophet/constants.py` (Knowledge base — do not modify)
+
+---
+
+## 14) 📡 REPORTING CONTRACT
+
+After each mission, the slave agent MUST report:
+1. **File changed** (exact path)
+2. **Lines changed** (before → after line numbers)
+3. **Verification output** (paste the curl response)
+4. **Status**: ✅ PASS or ❌ FAIL
+
+Zo will audit the receipts and update this document.
+
+---
+
+**End of Arsenal Doctrine + Mission Orders. Zo is watching. 🔱**

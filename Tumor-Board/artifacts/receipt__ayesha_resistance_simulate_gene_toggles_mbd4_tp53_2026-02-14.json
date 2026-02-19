@@ -1,0 +1,187 @@
+{
+  "logic_steps": [
+    {
+      "description": "Overall resistance probability: 0.0% (NOT_APPLICABLE risk)",
+      "status": "complete",
+      "step": "Step 1"
+    },
+    {
+      "description": "• No resistance signals detected.",
+      "status": "complete",
+      "step": "Step 2"
+    }
+  ],
+  "prediction": {
+    "alert_level": "NONE",
+    "baseline_penalty_applied": false,
+    "baseline_source": "unknown",
+    "confidence": 0.0,
+    "confidence_cap": null,
+    "driver_alerts": [],
+    "genomic_alert_context": {},
+    "hrd_components": null,
+    "integrated_guidance": null,
+    "next_line_options": [],
+    "probability": 0.0,
+    "prognosis": {
+      "action_recommendation": "ROUTINE_SURVEILLANCE",
+      "confidence": "LOW",
+      "rationale": [
+        "Assessment Skipped: Patient is Pre-Treatment/Naive (BriTROC validated on Post-Tx only)."
+      ],
+      "state": "UNCERTAIN"
+    },
+    "provenance": {
+      "certified_by": "Zo_Audit_2026_01_29",
+      "engine": "ClinicalHeuristicEngine",
+      "model_version": "resistance_prophet_v2.0_engine",
+      "probability_components": {
+        "blended": 0.0,
+        "clinical": 0.0,
+        "driver": 0.0
+      },
+      "risk_drivers": {
+        "clinical_signal_count": 0,
+        "driven_by": "blended_probability"
+      },
+      "sae_mode": "heuristic",
+      "timestamp": "2026-02-14T04:38:32.027939"
+    },
+    "rationale": [
+      "Overall resistance probability: 0.0% (NOT_APPLICABLE risk)",
+      "• No resistance signals detected."
+    ],
+    "recommended_actions": [
+      {
+        "action": "ESTABLISH_BASELINE",
+        "priority": 1,
+        "rationale": "Patient is treatment naive. Establish baseline SAE profile.",
+        "timeframe": "at initiation"
+      }
+    ],
+    "risk_level": "NOT_APPLICABLE",
+    "run_metadata": {},
+    "signal_count": 0,
+    "signals_detected": [
+      {
+        "baseline_reliability": 1.0,
+        "confidence": 0.0,
+        "detected": false,
+        "escaped_pathways": null,
+        "mechanism_alignment": null,
+        "mechanism_breakdown": null,
+        "probability": 0.0,
+        "provenance": {
+          "status": "missing_sae_features"
+        },
+        "rationale": "SAE features unavailable for restoration analysis",
+        "signal_type": "DNA_REPAIR_RESTORATION"
+      },
+      {
+        "baseline_reliability": 1.0,
+        "confidence": 0.0,
+        "detected": false,
+        "escaped_pathways": null,
+        "mechanism_alignment": null,
+        "mechanism_breakdown": null,
+        "probability": 0.0,
+        "provenance": {
+          "status": "missing_sae_features"
+        },
+        "rationale": "SAE features unavailable for escape analysis",
+        "signal_type": "PATHWAY_ESCAPE"
+      },
+      {
+        "baseline_reliability": 1.0,
+        "confidence": 0.0,
+        "detected": false,
+        "escaped_pathways": null,
+        "mechanism_alignment": null,
+        "mechanism_breakdown": null,
+        "probability": 0.0,
+        "provenance": {
+          "resistance_genes": [],
+          "sensitivity_genes": [
+            {
+              "effect": "SENSITIVITY",
+              "gene": "MBD4",
+              "mechanism": "BER deficiency → PARP trapping",
+              "rationale": "MBD4 loss confers PARP sensitivity; Reversion confers resistance"
+            }
+          ],
+          "validation_source": "OV_Knowledge_Base"
+        },
+        "rationale": "Sensitivity marker(s) detected: MBD4 (Positive Prognosis).",
+        "signal_type": "GENE_LEVEL_RESISTANCE"
+      },
+      {
+        "baseline_reliability": 1.0,
+        "confidence": 0.0,
+        "detected": false,
+        "escaped_pathways": null,
+        "mechanism_alignment": null,
+        "mechanism_breakdown": null,
+        "probability": 0.0,
+        "provenance": {
+          "status": "insufficient_data"
+        },
+        "rationale": "Insufficient CA-125 history (need >= 2 points) and no Engine KELIM.",
+        "signal_type": "CA125_KINETICS"
+      },
+      {
+        "baseline_reliability": 1.0,
+        "confidence": 0.0,
+        "detected": false,
+        "escaped_pathways": null,
+        "mechanism_alignment": null,
+        "mechanism_breakdown": null,
+        "probability": 0.0,
+        "provenance": {
+          "active_features": [],
+          "diamond_source": "Phase 2 Postmortem"
+        },
+        "rationale": "No Diamond SAE features detected.",
+        "signal_type": "GENE_LEVEL_RESISTANCE"
+      },
+      {
+        "baseline_reliability": 1.0,
+        "confidence": 0.0,
+        "detected": false,
+        "escaped_pathways": null,
+        "mechanism_alignment": null,
+        "mechanism_breakdown": null,
+        "probability": 0.0,
+        "provenance": {
+          "status": "missing_expression_data"
+        },
+        "rationale": "Expression data unavailable",
+        "signal_type": "GENE_LEVEL_RESISTANCE"
+      },
+      {
+        "baseline_reliability": 1.0,
+        "confidence": 0.0,
+        "detected": false,
+        "escaped_pathways": null,
+        "mechanism_alignment": null,
+        "mechanism_breakdown": null,
+        "probability": 0.0,
+        "provenance": {
+          "status": "missing_context"
+        },
+        "rationale": "Engine timing context unavailable",
+        "signal_type": "DRUG_CLASS_RESISTANCE"
+      }
+    ],
+    "urgency": "ROUTINE",
+    "warnings": []
+  },
+  "recommended_tests": [
+    {
+      "action": "ESTABLISH_BASELINE",
+      "priority": 1,
+      "rationale": "Patient is treatment naive. Establish baseline SAE profile.",
+      "timeframe": "at initiation"
+    }
+  ]
+}
+
